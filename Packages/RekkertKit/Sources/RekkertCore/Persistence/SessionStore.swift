@@ -87,17 +87,8 @@ public struct SessionStore: Sendable {
 
     // MARK: - Plumbing
 
-    private var encoder: JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        return encoder
-    }
-
-    private var decoder: JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
-    }
+    private var encoder: JSONEncoder { JSONCoding.encoder }
+    private var decoder: JSONDecoder { JSONCoding.decoder }
 
     private func write(_ data: Data, to url: URL) throws {
         try FileManager.default.createDirectory(

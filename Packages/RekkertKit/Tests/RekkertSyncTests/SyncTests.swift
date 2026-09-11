@@ -140,24 +140,67 @@ struct SyncTests {
         #expect(points(watch) == BySide(a: 0, b: 2))
     }
 
-    @Test func twoLiveSessionsSurfaceAConflictInsteadOfMerging() async throws {
+    @Test func anEmptyPeerIsNotAConflict() async throws {
         let (phoneLink, watchLink) = LoopbackTransport.pair()
         let phone = MatchStore(device: DeviceID(), transport: phoneLink, snapshotInterval: 0)
         let watch = MatchStore(device: DeviceID(), transport: watchLink, snapshotInterval: 0)
 
         phone.configure(setup)
-        watch.configure(setup)
-        #expect(phone.log.sessionID != watch.log.sessionID)
+        phone.tap(team: .a)
 
         let tasks = [Task { await phone.run() }, Task { await watch.run() }]
         defer { tasks.forEach { $0.cancel() } }
         try await settle()
 
-        #expect(watch.conflictingPeerSession != nil || phone.conflictingPeerSession != nil)
-
-        watch.adoptPeerSession()
-        try await settle()
+        #expect(phone.replacedSessionTitle == nil, "a watch with no session displaces nothing")
+        #expect(watch.replacedSessionTitle == nil)
         #expect(watch.log.sessionID == phone.log.sessionID)
+        #expect(points(watch) == BySide(a: 1, b: 0))
+    }
+
+    @Test func theMoreRecentlyStartedSessionWins() async throws {
+        let (phoneLink, watchLink) = LoopbackTransport.pair()
+        let old = ActiveSession(log: MatchLog(createdAt: .now.addingTimeInterval(-3600)))
+        let watch = MatchStore(device: DeviceID(), transport: watchLink, session: old, snapshotInterval: 0)
+        watch.configure(setup)
+        watch.tap(team: .a)
+
+        let phone = MatchStore(device: DeviceID(), transport: phoneLink, snapshotInterval: 0)
+        phone.configure(setup)
+        phone.tap(team: .b)
+        phone.tap(team: .b)
+
+        let tasks = [Task { await phone.run() }, Task { await watch.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        #expect(watch.log.sessionID == phone.log.sessionID, "the stale watch session gives way")
+        #expect(points(watch) == BySide(a: 0, b: 2))
+        #expect(points(phone) == BySide(a: 0, b: 2))
+    }
+
+    @Test func aReplacedSessionIsArchivedNotLost() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appending(path: "rekkert-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessionStore = SessionStore(directory: directory)
+
+        let (phoneLink, watchLink) = LoopbackTransport.pair()
+        let old = ActiveSession(log: MatchLog(createdAt: .now.addingTimeInterval(-3600)))
+        let watch = MatchStore(device: DeviceID(), transport: watchLink, store: sessionStore, session: old, snapshotInterval: 0)
+        watch.configure(setup)
+        watch.tap(team: .a)
+
+        let phone = MatchStore(device: DeviceID(), transport: phoneLink, snapshotInterval: 0)
+        phone.configure(setup)
+        phone.tap(team: .b)
+
+        let tasks = [Task { await phone.run() }, Task { await watch.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        #expect(watch.replacedSessionTitle == "Us vs Them")
+        #expect(try sessionStore.history().count == 1, "the discarded match went to history")
     }
 
     @Test func tournamentCourtsSyncIndependently() async throws {

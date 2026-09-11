@@ -1,5 +1,18 @@
 import Foundation
 
+/// One canonical coder. `.sortedKeys` matters: JSONEncoder does not otherwise guarantee
+/// key order, and the application-context channel silently skips a payload identical to
+/// the last one — so the bytes must be stable for equal state and differ for unequal.
+public enum JSONCoding {
+    public static var encoder: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return encoder
+    }
+
+    public static var decoder: JSONDecoder { JSONDecoder() }
+}
+
 public enum Wire: Codable, Sendable, Hashable {
     /// "Here is what I have" — the reply carries whatever the sender is missing.
     case hello(sessionID: UUID, vector: VersionVector)
@@ -16,11 +29,11 @@ public enum Wire: Codable, Sendable, Hashable {
     }
 
     public func encoded() throws -> Data {
-        try JSONEncoder().encode(self)
+        try JSONCoding.encoder.encode(self)
     }
 
     public static func decode(_ data: Data) throws -> Wire {
-        try JSONDecoder().decode(Wire.self, from: data)
+        try JSONCoding.decoder.decode(Wire.self, from: data)
     }
 }
 

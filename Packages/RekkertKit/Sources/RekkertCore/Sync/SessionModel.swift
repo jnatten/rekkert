@@ -42,6 +42,15 @@ public enum SessionState: Codable, Sendable, Hashable {
         }
     }
 
+    public var title: String {
+        switch self {
+        case .traditional(let session):
+            "\(session.teams.a.name) vs \(session.teams.b.name)"
+        case .tournament(let tournament):
+            tournament.name.isEmpty ? tournament.format.displayName : tournament.name
+        }
+    }
+
     /// Courts the user can score right now: always one for a traditional match, and one
     /// per filled court in the current tournament round.
     public var courtCount: Int {

@@ -28,7 +28,7 @@ let project = Project(
                 "UILaunchScreen": [:],
                 "CFBundleDisplayName": "Rekkert",
             ]),
-            sources: ["App/Sources/**"],
+            sources: ["App/Sources/**", "Shared/**"],
             resources: ["App/Resources/**"],
             dependencies: [
                 .package(product: "RekkertCore"),
@@ -47,7 +47,7 @@ let project = Project(
             bundleId: "\(iosBundleID).watchkitapp",
             deploymentTargets: .watchOS("26.0"),
             infoPlist: nil,
-            sources: ["WatchApp/Sources/**"],
+            sources: ["WatchApp/Sources/**", "Shared/**"],
             resources: ["WatchApp/Resources/**"],
             dependencies: [
                 .package(product: "RekkertCore"),

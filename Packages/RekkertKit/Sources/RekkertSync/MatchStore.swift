@@ -7,8 +7,9 @@ public final class MatchStore {
     public private(set) var log: MatchLog
     public private(set) var state: SessionState?
     public private(set) var isReachable = false
-    /// A session the peer is running that we did not adopt, because we have one of our own.
-    public private(set) var conflictingPeerSession: MatchLog?
+    /// Set when a peer's session replaced ours and the discarded one had real scores in
+    /// it. It was archived to history first; this just lets the UI say so.
+    public private(set) var replacedSessionTitle: String?
 
     private var outbox: Outbox
     private let device: DeviceID
@@ -51,25 +52,15 @@ public final class MatchStore {
         record(.undo(target.id))
     }
 
-    /// Abandons the local session and takes the peer's instead.
-    public func adoptPeerSession() {
-        guard let peer = conflictingPeerSession else { return }
-        log = peer
-        outbox = Outbox()
-        conflictingPeerSession = nil
-        refresh()
-    }
-
-    public func keepLocalSession() {
-        conflictingPeerSession = nil
-        publishSnapshot(force: true)
-    }
-
     public func startNewSession() {
         log = MatchLog()
         outbox = Outbox()
-        conflictingPeerSession = nil
+        replacedSessionTitle = nil
         refresh()
+    }
+
+    public func acknowledgeReplacedSession() {
+        replacedSessionTitle = nil
     }
 
     // MARK: - Sync
@@ -164,16 +155,33 @@ public final class MatchStore {
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.vector)))
 
         case .snapshot(let incoming):
-            if log.isEmpty {
+            if incoming.isEmpty {
+                // A peer that has not started anything yet is not a competing session;
+                // our own snapshot will reach it and it will adopt ours.
+                break
+            } else if log.isEmpty {
                 log = incoming
                 refresh()
             } else if incoming.sessionID == log.sessionID {
                 if log.merge(incoming.ordered) { refresh() }
-            } else {
-                conflictingPeerSession = incoming
+            } else if incoming.createdAt > log.createdAt {
+                adopt(incoming)
             }
+            // Otherwise ours is the newer session and wins; our own snapshot tells them so.
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.vector)))
         }
+    }
+
+    /// Replaces the local session with the peer's. Anything already scored locally is
+    /// archived first, so a session is never silently destroyed.
+    private func adopt(_ incoming: MatchLog) {
+        if log.hasProgress, let state = SessionReducer.state(of: log) {
+            try? store?.archive(HistoryRecord(title: state.title, state: state))
+            replacedSessionTitle = state.title
+        }
+        log = incoming
+        outbox = Outbox()
+        refresh()
     }
 
     private func requestSnapshot(_ packet: InboundPacket) {

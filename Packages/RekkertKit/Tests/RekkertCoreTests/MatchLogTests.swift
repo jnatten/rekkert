@@ -133,6 +133,20 @@ struct MatchLogTests {
         #expect(log.lastUndoableEvent() == nil, "the only scoring event was taken back")
     }
 
+    @Test func encodingRoundTripsAndIsStable() throws {
+        var log = configuredLog()
+        log.append(.point(court: 0, team: .a), from: deviceB)
+        log.append(.point(court: 0, team: .b), from: deviceA)
+
+        let data = try JSONCoding.encoder.encode(log)
+        let decoded = try JSONCoding.decoder.decode(MatchLog.self, from: data)
+
+        #expect(decoded.ordered == log.ordered)
+        #expect(decoded.sessionID == log.sessionID)
+        #expect(SessionReducer.state(of: decoded) == SessionReducer.state(of: log))
+        #expect(try JSONCoding.encoder.encode(log) == data, "same log encodes to the same bytes")
+    }
+
     @Test func replayIsDeterministicUnderShufflingAndDuplication() {
         var source = configuredLog()
         var generator = SeededGenerator(seed: 99)

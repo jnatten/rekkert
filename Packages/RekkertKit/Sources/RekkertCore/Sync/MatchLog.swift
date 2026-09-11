@@ -2,11 +2,25 @@ import Foundation
 
 public struct MatchLog: Codable, Sendable, Hashable {
     public let sessionID: UUID
+    /// When this session was started. Decides which session wins if a phone and a watch
+    /// each have one: the most recently started match is the one both devices show.
+    public let createdAt: Date
     public private(set) var events: [EventID: MatchEvent]
 
-    public init(sessionID: UUID = UUID(), events: [MatchEvent] = []) {
+    public init(sessionID: UUID = UUID(), createdAt: Date = Date(), events: [MatchEvent] = []) {
         self.sessionID = sessionID
+        self.createdAt = createdAt
         self.events = Dictionary(uniqueKeysWithValues: events.map { ($0.id, $0) })
+    }
+
+    /// Whether anything has actually been scored, as opposed to only being configured.
+    public var hasProgress: Bool {
+        effectiveEvents.contains { event in
+            switch event.kind {
+            case .point, .setScore, .confirmRound, .nextRound, .finish: true
+            case .configure, .undo: false
+            }
+        }
     }
 
     /// The total order both devices agree on. Lamport first, device id to break ties.
@@ -78,5 +92,27 @@ public struct MatchLog: Codable, Sendable, Hashable {
     /// The most recent still-effective event that an undo should target.
     public func lastUndoableEvent() -> MatchEvent? {
         effectiveEvents.last { $0.isUndoable }
+    }
+
+    /// Encoded as an ordered array rather than a dictionary: half the bytes over the wire
+    /// (a struct-keyed dictionary encodes as alternating key/value), and stable output,
+    /// which matters because the application-context channel skips unchanged payloads.
+    private enum CodingKeys: String, CodingKey {
+        case sessionID, createdAt, events
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sessionID = try container.decode(UUID.self, forKey: .sessionID)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        let list = try container.decode([MatchEvent].self, forKey: .events)
+        events = Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(sessionID, forKey: .sessionID)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(ordered, forKey: .events)
     }
 }

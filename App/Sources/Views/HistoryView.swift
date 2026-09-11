@@ -1,0 +1,43 @@
+import RekkertCore
+import SwiftUI
+
+struct HistoryView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        List {
+            ForEach(model.history) { record in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(record.title).font(.headline)
+                    Text(record.finishedAt, format: .dateTime.day().month().year().hour().minute())
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    summary(for: record.state)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 2)
+            }
+            .onDelete { offsets in
+                for index in offsets { model.deleteHistory(model.history[index].id) }
+            }
+        }
+        .navigationTitle("History")
+        .overlay {
+            if model.history.isEmpty {
+                ContentUnavailableView("No matches yet", systemImage: "clock", description: Text("Finished matches show up here."))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func summary(for state: SessionState) -> some View {
+        switch state {
+        case .traditional(let session):
+            Text(session.score.completedSets.map { "\($0.games.a)-\($0.games.b)" }.joined(separator: "  "))
+        case .tournament(let tournament):
+            let standings = Leaderboard.standings(for: tournament)
+            Text(standings.prefix(3).enumerated().map { "\($0.offset + 1). \($0.element.player.name) \($0.element.total)" }.joined(separator: " · "))
+        }
+    }
+}
