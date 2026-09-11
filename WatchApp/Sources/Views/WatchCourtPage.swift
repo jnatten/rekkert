@@ -22,9 +22,15 @@ struct WatchCourtPage: View {
                     .frame(height: 108)
 
                     if snapshot.isSuddenDeath {
-                        Text("Sudden death")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.orange)
+                        VStack(spacing: 3) {
+                            Text("Sudden death · receivers pick")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.orange)
+                            HStack(spacing: 4) {
+                                serveSideButton("Right", court: .deuce, snapshot: snapshot)
+                                serveSideButton("Left", court: .ad, snapshot: snapshot)
+                            }
+                        }
                     }
 
                     Button("Undo", systemImage: "arrow.uturn.backward", action: undo)
@@ -38,6 +44,13 @@ struct WatchCourtPage: View {
                 ProgressView()
             }
         }
+    }
+
+    private func serveSideButton(_ title: String, court: ServeCourt, snapshot: ScoreboardSnapshot) -> some View {
+        Button(title) { model.store.chooseServeSide(court) }
+            .font(.system(size: 12))
+            .buttonStyle(.bordered)
+            .tint(snapshot.suddenDeathCourt == court ? .orange : .gray)
     }
 
     private func undo() {

@@ -41,6 +41,7 @@ public final class MatchStore {
     public func configure(_ setup: SessionSetup) { record(.configure(setup)) }
     public func tap(court: Int = 0, team: TeamSide) { record(.point(court: court, team: team)) }
     public func setScore(court: Int, points: BySide<Int>) { record(.setScore(court: court, points: points)) }
+    public func chooseServeSide(_ court: ServeCourt) { record(.chooseServeSide(court)) }
     public func confirmRound() { record(.confirmRound) }
     public func nextRound() { record(.nextRound) }
     public func finish() { record(.finish) }

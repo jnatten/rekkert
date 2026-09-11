@@ -4,6 +4,9 @@ public enum EventKind: Codable, Sendable, Hashable {
     case configure(SessionSetup)
     case point(court: Int, team: TeamSide)
     case setScore(court: Int, points: BySide<Int>)
+    /// On a golden/star sudden-death point the receiving team picks which side it is
+    /// served to.
+    case chooseServeSide(ServeCourt)
     case confirmRound
     case nextRound
     case finish
@@ -26,7 +29,7 @@ public struct MatchEvent: Codable, Sendable, Hashable, Identifiable {
     public var isUndoable: Bool {
         switch kind {
         case .point, .setScore, .confirmRound, .nextRound, .finish: true
-        case .configure, .undo: false
+        case .configure, .undo, .chooseServeSide: false
         }
     }
 }

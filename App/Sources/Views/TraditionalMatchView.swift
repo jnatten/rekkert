@@ -16,7 +16,7 @@ struct TraditionalMatchView: View {
                             onUndo: { model.store.undoLast() }
                         )
                         if snapshot.isSuddenDeath {
-                            suddenDeathBanner
+                            suddenDeathBanner(snapshot)
                         }
                         if snapshot.isFinished {
                             finishedBanner(snapshot)
@@ -46,12 +46,24 @@ struct TraditionalMatchView: View {
         }
     }
 
-    private var suddenDeathBanner: some View {
-        Text("Sudden death — receivers choose the side")
-            .font(.footnote.weight(.semibold))
-            .frame(maxWidth: .infinity)
-            .padding(10)
-            .background(.orange.opacity(0.2))
+    private func suddenDeathBanner(_ snapshot: ScoreboardSnapshot) -> some View {
+        VStack(spacing: 8) {
+            Text("Sudden death — receivers choose the side")
+                .font(.footnote.weight(.semibold))
+            Picker("Serve to", selection: Binding(
+                get: { snapshot.suddenDeathCourt ?? .deuce },
+                set: { model.store.chooseServeSide($0) }
+            )) {
+                Text("Right (deuce)").tag(ServeCourt.deuce)
+                Text("Left (ad)").tag(ServeCourt.ad)
+            }
+            .pickerStyle(.segmented)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 12)
+        .padding(.top, 12)
+        .padding(.bottom, 30)
+        .background(.orange.opacity(0.2))
     }
 
     private func finishedBanner(_ snapshot: ScoreboardSnapshot) -> some View {
@@ -61,7 +73,9 @@ struct TraditionalMatchView: View {
                 .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity)
-        .padding()
+        .padding(.horizontal)
+        .padding(.top)
+        .padding(.bottom, 30)
         .background(.thinMaterial)
     }
 }

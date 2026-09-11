@@ -88,6 +88,29 @@ struct DeuceRuleTests {
         #expect(state.deuceCount == 0, "deuce count resets with the game")
     }
 
+    @Test func theServeSideChoiceSurvivesReplayAndClearsAfterThePoint() {
+        let device = DeviceID()
+        var log = MatchLog()
+        log.append(.configure(.traditional(
+            rules: TraditionalRules(deuceRule: .goldenPoint),
+            teams: BySide(a: .home, b: .away)
+        )), from: device)
+        for team in toDeuce { log.append(.point(court: 0, team: team), from: device) }
+        log.append(.chooseServeSide(.ad), from: device)
+
+        guard case .traditional(let atDeuce)? = SessionReducer.state(of: log) else {
+            Issue.record("no session")
+            return
+        }
+        #expect(atDeuce.engine.serve(atDeuce.score).court == .ad)
+        #expect(log.lastUndoableEvent()?.kind != .chooseServeSide(.ad), "undo still targets the last point")
+
+        log.append(.point(court: 0, team: .a), from: device)
+        guard case .traditional(let after)? = SessionReducer.state(of: log) else { return }
+        #expect(after.score.suddenDeathCourt == nil)
+        #expect(after.score.games.a == 1)
+    }
+
     @Test func receiversPickSideOnlyOnTheSuddenDeathPoint() {
         let e = engine(.goldenPoint)
         var state = e.play(toDeuce)

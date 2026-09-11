@@ -60,6 +60,7 @@ struct ScoreboardView: View {
                 .fontWeight(.semibold)
         }
         .font(compact ? .system(size: 12).monospacedDigit() : .callout.monospacedDigit())
-        .padding(.vertical, compact ? 2 : 8)
+        .padding(.top, compact ? 2 : 8)
+        .padding(.bottom, compact ? 2 : 28)
     }
 }

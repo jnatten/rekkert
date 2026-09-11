@@ -24,6 +24,11 @@ public enum SessionReducer {
                 match.state = engine.settingScore(points, in: match.state)
             } traditional: { _ in }
 
+        case .chooseServeSide(let court):
+            guard case .traditional(var session) = state else { return }
+            session.score.suddenDeathCourt = court
+            state = .traditional(session)
+
         case .confirmRound:
             guard case .tournament(var tournament) = state,
                   let index = tournament.rounds.indices.last else { return }

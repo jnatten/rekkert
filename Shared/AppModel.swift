@@ -69,6 +69,13 @@ final class AppModel {
                 store.tap(court: 0, team: index.isMultiple(of: 3) ? .b : .a)
             }
         }
+        if arguments.contains("-rekkert-demo-deuce") {
+            // Five exchanges reaches the third 40-40, which is where star point decides.
+            for _ in 0 ..< 5 {
+                store.tap(court: 0, team: .a)
+                store.tap(court: 0, team: .b)
+            }
+        }
     }
     #endif
 

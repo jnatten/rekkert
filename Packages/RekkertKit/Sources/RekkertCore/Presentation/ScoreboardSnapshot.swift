@@ -13,6 +13,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
     public var serving: TeamSide?
     public var servingPlayer: String?
     public var isSuddenDeath: Bool
+    public var suddenDeathCourt: ServeCourt?
     public var isLocked: Bool
     public var isFinished: Bool
     public var winner: TeamSide?
@@ -41,6 +42,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             serving: score.isFinished ? nil : serve.slot.team,
             servingPlayer: playerName(at: serve.slot, teams: session.teams),
             isSuddenDeath: engine.isSuddenDeathPoint(score),
+            suddenDeathCourt: score.suddenDeathCourt,
             isLocked: score.isFinished,
             isFinished: score.isFinished,
             winner: score.winner
@@ -71,6 +73,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             serving: engine.isFinished(match.state) ? nil : serve.slot.team,
             servingPlayer: servingID.flatMap { tournament.player($0) }?.name,
             isSuddenDeath: false,
+            suddenDeathCourt: nil,
             isLocked: match.isConfirmed,
             isFinished: engine.isFinished(match.state),
             winner: engine.winner(match.state)
