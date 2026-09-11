@@ -10,3 +10,6 @@ Derived/
 # SwiftPM
 .swiftpm/
 Packages/*/.build/
+
+# local-only mise overrides (e.g. TUIST_DEVELOPMENT_TEAM)
+mise.local.toml

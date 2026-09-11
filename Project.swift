@@ -2,6 +2,17 @@ import ProjectDescription
 
 private let iosBundleID = "dev.natten.rekkert"
 
+/// Set `TUIST_DEVELOPMENT_TEAM` to run on a real iPhone and Apple Watch. Simulator builds
+/// need no team, so it stays unset by default. Put it in a gitignored `mise.local.toml`:
+///
+///     [env]
+///     TUIST_DEVELOPMENT_TEAM = "ABCDE12345"
+private let developmentTeam = Environment.developmentTeam.getString(default: "")
+
+private var signingSettings: SettingsDictionary {
+    developmentTeam.isEmpty ? [:] : ["DEVELOPMENT_TEAM": .string(developmentTeam)]
+}
+
 let project = Project(
     name: "Rekkert",
     organizationName: "natten.dev",
@@ -15,7 +26,7 @@ let project = Project(
             "CODE_SIGN_STYLE": "Automatic",
             "MARKETING_VERSION": "1.0",
             "CURRENT_PROJECT_VERSION": "1",
-        ]
+        ].merging(signingSettings) { _, signing in signing }
     ),
     targets: [
         .target(

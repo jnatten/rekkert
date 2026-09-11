@@ -41,6 +41,29 @@ open Rekkert.xcworkspace
 
 Re-run `tuist generate` after adding a file — Tuist globs sources at generation time.
 
+## Running on a real iPhone and Watch
+
+Simulator builds need no signing. For hardware you need an Apple ID added to Xcode
+(Settings → Accounts); a free personal team works, with profiles that expire after 7 days.
+
+Find your team id and make it stick across `tuist generate`:
+
+```sh
+# Xcode → Settings → Accounts → your team → the 10-character ID in the Team column
+cat > mise.local.toml <<'TOML'
+[env]
+TUIST_DEVELOPMENT_TEAM = "ABCDE12345"
+TOML
+
+tuist generate
+```
+
+`mise.local.toml` is gitignored. Then plug the iPhone in, pick it as the run destination
+and run the `Rekkert` scheme — the watch app is embedded, so it installs onto the paired
+Apple Watch by itself (give it a minute, or push it manually from the Watch app on the
+iPhone). To iterate on the watch alone, run the `RekkertWatch` scheme with the watch as
+the destination.
+
 ## Layout
 
 ```
