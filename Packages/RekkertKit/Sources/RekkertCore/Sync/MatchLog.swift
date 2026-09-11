@@ -18,10 +18,10 @@ public struct MatchLog: Codable, Sendable, Hashable {
 
     /// Highest sequence number seen per device — what the other side needs in order to
     /// work out which events we are missing.
-    public var vector: [DeviceID: UInt32] {
-        var result: [DeviceID: UInt32] = [:]
+    public var vector: VersionVector {
+        var result = VersionVector()
         for event in events.values {
-            result[event.id.device] = max(result[event.id.device] ?? 0, event.id.seq)
+            result[event.id.device] = event.id.seq
         }
         return result
     }
@@ -33,7 +33,7 @@ public struct MatchLog: Codable, Sendable, Hashable {
     @discardableResult
     public mutating func append(_ kind: EventKind, from device: DeviceID) -> MatchEvent {
         let event = MatchEvent(
-            id: EventID(device: device, seq: (vector[device] ?? 0) + 1),
+            id: EventID(device: device, seq: vector[device] + 1),
             lamport: nextLamport,
             kind: kind
         )
@@ -53,8 +53,8 @@ public struct MatchLog: Codable, Sendable, Hashable {
         return changed
     }
 
-    public func events(missingRelativeTo remote: [DeviceID: UInt32]) -> [MatchEvent] {
-        ordered.filter { $0.id.seq > (remote[$0.id.device] ?? 0) }
+    public func events(missingRelativeTo remote: VersionVector) -> [MatchEvent] {
+        ordered.filter { $0.id.seq > remote[$0.id.device] }
     }
 
     /// Events that still count. An undo is a tombstone rather than a deletion, so an undo
