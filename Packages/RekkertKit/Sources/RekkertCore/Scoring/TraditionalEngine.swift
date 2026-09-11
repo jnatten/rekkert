@@ -1,0 +1,130 @@
+public struct TraditionalEngine: Sendable, Hashable {
+    public let rules: TraditionalRules
+
+    public init(rules: TraditionalRules) {
+        self.rules = rules
+    }
+
+    public func initialState(firstServerIndex: Int = 0) -> TraditionalState {
+        TraditionalState(firstServerIndex: firstServerIndex)
+    }
+
+    // MARK: - Derived
+
+    public func isDecidingSet(_ state: TraditionalState) -> Bool {
+        let won = state.setsWon
+        return won.a == rules.setsToWin - 1 && won.b == rules.setsToWin - 1
+    }
+
+    public func phase(_ state: TraditionalState) -> GamePhase {
+        if state.isFinished { return .finished }
+        if isDecidingSet(state), case .superTiebreak(let target) = rules.decidingSet {
+            return .tiebreak(target: target)
+        }
+        if let at = rules.tiebreakAtGames, state.games.a == at, state.games.b == at {
+            return .tiebreak(target: rules.tiebreakPoints)
+        }
+        return .game
+    }
+
+    /// True when the very next point decides the game outright.
+    public func isSuddenDeathPoint(_ state: TraditionalState) -> Bool {
+        guard case .game = phase(state) else { return false }
+        guard let limit = rules.deuceRule.deucesBeforeSuddenDeath else { return false }
+        return state.points.isLevel && state.points.a >= 3 && state.deuceCount > limit
+    }
+
+    public func pointDisplay(_ state: TraditionalState) -> BySide<PointDisplay> {
+        if case .tiebreak = phase(state) {
+            return BySide(a: .count(state.points.a), b: .count(state.points.b))
+        }
+        guard state.points.a >= 3, state.points.b >= 3 else {
+            return BySide(a: .ladder(state.points.a), b: .ladder(state.points.b))
+        }
+        guard let leader = state.points.leader else {
+            return BySide(a: .forty, b: .forty)
+        }
+        var display = BySide<PointDisplay>(both: .forty)
+        display[leader] = .advantage
+        return display
+    }
+
+    public func totalGamesPlayed(_ state: TraditionalState) -> Int {
+        state.completedSets.reduce(0) { $0 + $1.games.total } + state.games.total
+    }
+
+    public func serve(_ state: TraditionalState) -> ServeState {
+        var index = state.firstServerIndex + totalGamesPlayed(state)
+        var court: ServeCourt = state.points.total.isMultiple(of: 2) ? .deuce : .ad
+
+        if case .tiebreak = phase(state) {
+            index += (state.points.total + 1) / 2
+        } else if isSuddenDeathPoint(state), let chosen = state.suddenDeathCourt {
+            court = chosen
+        }
+        return ServeState(slot: ServeRotation.slot(at: index), court: court)
+    }
+
+    public func shouldChangeEnds(_ state: TraditionalState) -> Bool {
+        switch phase(state) {
+        case .finished: false
+        case .tiebreak: state.points.total > 0 && state.points.total.isMultiple(of: 6)
+        case .game: state.points.total == 0 && !totalGamesPlayed(state).isMultiple(of: 2)
+        }
+    }
+
+    // MARK: - Mutation
+
+    public func scoringPoint(_ side: TeamSide, in state: TraditionalState) -> TraditionalState {
+        guard !state.isFinished else { return state }
+        var next = state
+
+        switch phase(state) {
+        case .finished:
+            return state
+
+        case .tiebreak(let target):
+            next.points[side] += 1
+            if next.points[side] >= target, next.points.lead(side) >= 2 {
+                let tiebreak = next.points
+                next.games[side] += 1
+                completeSet(&next, winner: side, tiebreak: tiebreak)
+            }
+
+        case .game:
+            let suddenDeath = isSuddenDeathPoint(state)
+            next.points[side] += 1
+            next.suddenDeathCourt = nil
+
+            if suddenDeath || (next.points[side] >= 4 && next.points.lead(side) >= 2) {
+                winGame(&next, side: side)
+            } else if next.points.isLevel, next.points.a >= 3 {
+                next.deuceCount += 1
+            }
+        }
+        return next
+    }
+
+    private func winGame(_ state: inout TraditionalState, side: TeamSide) {
+        state.games[side] += 1
+        state.points = BySide(both: 0)
+        state.deuceCount = 0
+        state.suddenDeathCourt = nil
+
+        if state.games[side] >= rules.gamesPerSet, state.games.lead(side) >= 2 {
+            completeSet(&state, winner: side, tiebreak: nil)
+        }
+    }
+
+    private func completeSet(_ state: inout TraditionalState, winner: TeamSide, tiebreak: BySide<Int>?) {
+        state.completedSets.append(SetResult(games: state.games, tiebreak: tiebreak, winner: winner))
+        state.games = BySide(both: 0)
+        state.points = BySide(both: 0)
+        state.deuceCount = 0
+        state.suddenDeathCourt = nil
+
+        if state.setsWon[winner] >= rules.setsToWin {
+            state.winner = winner
+        }
+    }
+}
