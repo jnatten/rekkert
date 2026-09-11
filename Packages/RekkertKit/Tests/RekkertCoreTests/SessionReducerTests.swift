@@ -1,0 +1,132 @@
+import Foundation
+import Testing
+@testable import RekkertCore
+
+private let device = DeviceID(UUID(uuidString: "CCCCCCCC-0000-0000-0000-000000000003")!)
+
+private func tournamentLog(players: Int = 8, courts: Int = 2, target: Int = 16) -> MatchLog {
+    let tournament = Tournament(
+        id: TournamentID(UUID(uuidString: "00000000-0000-0000-0000-0000000000AB")!),
+        name: "Thursday",
+        format: .americano,
+        players: (0 ..< players).map { Player(name: "P\($0)") },
+        config: TournamentConfig(pointRules: PointCountRules(target: target), courtCount: courts)
+    )
+    var log = MatchLog(sessionID: UUID(uuidString: "22222222-0000-0000-0000-000000000000")!)
+    log.append(.configure(.tournament(tournament)), from: device)
+    log.append(.nextRound, from: device)
+    return log
+}
+
+private func tournament(_ log: MatchLog) -> Tournament? {
+    guard case .tournament(let value) = SessionReducer.state(of: log) else { return nil }
+    return value
+}
+
+@Suite("Session reducer")
+struct SessionReducerTests {
+    @Test func emptyLogHasNoState() {
+        #expect(SessionReducer.state(of: MatchLog()) == nil)
+    }
+
+    @Test func pointsLandOnTheAddressedCourt() {
+        var log = tournamentLog()
+        log.append(.point(court: 1, team: .b), from: device)
+        log.append(.point(court: 1, team: .b), from: device)
+        log.append(.point(court: 0, team: .a), from: device)
+
+        let round = tournament(log)?.rounds[0]
+        #expect(round?.matches[0].state.points == BySide(a: 1, b: 0))
+        #expect(round?.matches[1].state.points == BySide(a: 0, b: 2))
+    }
+
+    @Test func settingAScoreOverwritesAndClamps() {
+        var log = tournamentLog(target: 16)
+        log.append(.point(court: 0, team: .a), from: device)
+        log.append(.setScore(court: 0, points: BySide(a: 11, b: 99)), from: device)
+
+        #expect(tournament(log)?.rounds[0].matches[0].state.points == BySide(a: 11, b: 5))
+    }
+
+    @Test func undoingASetScoreRestoresTheTappedScore() {
+        var log = tournamentLog()
+        log.append(.point(court: 0, team: .a), from: device)
+        let correction = log.append(.setScore(court: 0, points: BySide(a: 11, b: 5)), from: device)
+        log.append(.undo(correction.id), from: device)
+
+        #expect(tournament(log)?.rounds[0].matches[0].state.points == BySide(a: 1, b: 0))
+    }
+
+    @Test func confirmingARoundLocksItsCourts() {
+        var log = tournamentLog()
+        log.append(.confirmRound, from: device)
+        log.append(.point(court: 0, team: .a), from: device)
+
+        let round = tournament(log)?.rounds[0]
+        #expect(round?.matches.allSatisfy(\.isConfirmed) == true)
+        #expect(round?.matches[0].state.points == BySide(a: 0, b: 0), "a locked court ignores points")
+    }
+
+    @Test func nextRoundUsesResultsSoFar() {
+        var log = tournamentLog()
+        log.append(.setScore(court: 0, points: BySide(a: 12, b: 4)), from: device)
+        log.append(.setScore(court: 1, points: BySide(a: 9, b: 7)), from: device)
+        log.append(.confirmRound, from: device)
+        log.append(.nextRound, from: device)
+
+        let value = tournament(log)
+        #expect(value?.rounds.count == 2)
+        #expect(value?.rounds[1].matches.count == 2)
+        #expect(value?.rounds[0].matches[0].state.points == BySide(a: 12, b: 4), "round 1 is untouched")
+    }
+
+    @Test func undoingNextRoundTakesTheRoundBack() {
+        var log = tournamentLog()
+        log.append(.confirmRound, from: device)
+        let advance = log.append(.nextRound, from: device)
+        #expect(tournament(log)?.rounds.count == 2)
+
+        log.append(.undo(advance.id), from: device)
+        #expect(tournament(log)?.rounds.count == 1)
+    }
+
+    @Test func reconfiguringKeepsProgress() {
+        var log = tournamentLog(target: 16)
+        log.append(.setScore(court: 0, points: BySide(a: 10, b: 6)), from: device)
+
+        var updated = tournament(log)!
+        updated.config.pointRules.target = 24
+        log.append(.configure(.tournament(updated)), from: device)
+
+        #expect(tournament(log)?.config.pointRules.target == 24)
+        #expect(tournament(log)?.rounds[0].matches[0].state.points == BySide(a: 10, b: 6))
+    }
+
+    @Test func finishMarksTheTournamentDone() {
+        var log = tournamentLog()
+        log.append(.finish, from: device)
+        #expect(tournament(log)?.isFinished == true)
+        #expect(SessionReducer.state(of: log)?.isFinished == true)
+    }
+
+    @Test func courtCountReflectsTheCurrentRound() {
+        #expect(SessionReducer.state(of: tournamentLog(players: 8, courts: 2))?.courtCount == 2)
+        #expect(SessionReducer.state(of: tournamentLog(players: 6, courts: 2))?.courtCount == 1)
+    }
+
+    @Test func concurrentPointsOnDifferentCourtsBothLand() {
+        let base = tournamentLog()
+        var phone = base
+        var watch = base
+        let other = DeviceID(UUID(uuidString: "DDDDDDDD-0000-0000-0000-000000000004")!)
+
+        let one = phone.append(.point(court: 0, team: .a), from: device)
+        let two = watch.append(.point(court: 1, team: .b), from: other)
+        phone.merge([two])
+        watch.merge([one])
+
+        #expect(tournament(phone)?.rounds[0].matches[0].state.points == BySide(a: 1, b: 0))
+        #expect(tournament(phone)?.rounds[0].matches[1].state.points == BySide(a: 0, b: 1))
+        #expect(SessionReducer.state(of: phone) == SessionReducer.state(of: watch))
+    }
+}
