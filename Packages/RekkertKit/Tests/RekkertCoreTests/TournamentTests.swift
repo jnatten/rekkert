@@ -1,0 +1,180 @@
+import Foundation
+import Testing
+@testable import RekkertCore
+
+private func makeTournament(
+    _ format: TournamentFormat,
+    players: Int,
+    courts: Int = 1,
+    compensation: SitOutCompensation = .half,
+    target: Int = 16
+) -> Tournament {
+    Tournament(
+        id: TournamentID(UUID(uuidString: "00000000-0000-0000-0000-0000000000FF")!),
+        name: "Test",
+        format: format,
+        players: (0 ..< players).map { Player(name: "P\($0)") },
+        config: TournamentConfig(
+            pointRules: PointCountRules(target: target),
+            courtCount: courts,
+            sitOutCompensation: compensation
+        )
+    )
+}
+
+private func playRounds(_ tournament: Tournament, count: Int, score: (Int) -> BySide<Int> = { _ in BySide(a: 9, b: 7) }) throws -> Tournament {
+    var current = tournament
+    for round in 0 ..< count {
+        current = try TournamentEngine.appendingRound(to: current)
+        for index in current.rounds[round].matches.indices {
+            current.rounds[round].matches[index].state.points = score(round)
+            current.rounds[round].matches[index].isConfirmed = true
+        }
+    }
+    return current
+}
+
+@Suite("Tournament scheduling")
+struct TournamentTests {
+    @Test func fourPlayersOneCourtNobodySitsOut() throws {
+        let t = try TournamentEngine.appendingRound(to: makeTournament(.americano, players: 4))
+        #expect(t.rounds.count == 1)
+        #expect(t.rounds[0].sitOuts.isEmpty)
+        #expect(t.rounds[0].matches.count == 1)
+        #expect(Set(t.rounds[0].matches[0].allPlayers).count == 4)
+    }
+
+    @Test func eightPlayersFillTwoCourts() throws {
+        let t = try TournamentEngine.appendingRound(to: makeTournament(.americano, players: 8, courts: 2))
+        #expect(t.rounds[0].matches.count == 2)
+        #expect(t.rounds[0].sitOuts.isEmpty)
+        let all = t.rounds[0].matches.flatMap(\.allPlayers)
+        #expect(Set(all).count == 8, "no player is on two courts")
+    }
+
+    @Test func tooFewPlayersThrows() {
+        #expect(throws: TournamentError.notEnoughPlayers(needed: 4, have: 3)) {
+            try TournamentEngine.appendingRound(to: makeTournament(.americano, players: 3))
+        }
+    }
+
+    @Test func spareCourtsAreLeftEmptyRatherThanHalfFilled() throws {
+        let t = try TournamentEngine.appendingRound(to: makeTournament(.americano, players: 6, courts: 2))
+        #expect(t.rounds[0].matches.count == 1, "6 players only fills one court")
+        #expect(t.rounds[0].sitOuts.count == 2)
+    }
+
+    @Test func sitOutsRotateEvenly() throws {
+        let t = try playRounds(makeTournament(.americano, players: 6), count: 6)
+        let counts = t.players.map { player in
+            t.rounds.count { $0.sitOuts.contains(player.id) }
+        }
+        #expect(counts.allSatisfy { $0 == 2 }, "6 players, 6 rounds, 2 bench slots each round: got \(counts)")
+    }
+
+    @Test func americanoAvoidsRepeatingPartners() throws {
+        let t = try playRounds(makeTournament(.americano, players: 8, courts: 2), count: 7)
+        var partnered: [PairKey: Int] = [:]
+        for round in t.rounds {
+            for match in round.matches {
+                for side in TeamSide.allCases {
+                    partnered[PairKey(match.teams[side][0], match.teams[side][1]), default: 0] += 1
+                }
+            }
+        }
+        #expect(partnered.count == 28, "8 players have 28 possible partnerships")
+        #expect(partnered.values.allSatisfy { $0 == 1 }, "each pairing happens exactly once")
+    }
+
+    @Test func americanoSpreadsPartnersWithOddPlayerCounts() throws {
+        let t = try playRounds(makeTournament(.americano, players: 7), count: 7)
+        var partnered: [PairKey: Int] = [:]
+        for round in t.rounds {
+            for match in round.matches {
+                for side in TeamSide.allCases {
+                    partnered[PairKey(match.teams[side][0], match.teams[side][1]), default: 0] += 1
+                }
+            }
+        }
+        #expect(partnered.values.max() ?? 0 <= 2, "no pairing repeats more than twice")
+    }
+
+    @Test func schedulingIsDeterministic() throws {
+        let base = makeTournament(.americano, players: 11, courts: 2)
+        let one = try playRounds(base, count: 5)
+        let two = try playRounds(base, count: 5)
+        #expect(one.rounds == two.rounds, "same tournament id must yield the same schedule on both devices")
+    }
+
+    @Test func mexicanoPairsTopFourAsOneAndFour() throws {
+        var t = try playRounds(makeTournament(.mexicano, players: 8, courts: 2), count: 1)
+        let ranking = Leaderboard.standings(for: t, onlyConfirmed: true).map(\.player.id)
+
+        t = try TournamentEngine.appendingRound(to: t)
+        let court = t.rounds[1].matches[0]
+        #expect(Set(court.allPlayers) == Set(ranking.prefix(4)), "court 1 gets the top four")
+        #expect(Set(court.teams.a) == Set([ranking[0], ranking[3]]))
+        #expect(Set(court.teams.b) == Set([ranking[1], ranking[2]]))
+    }
+
+    @Test func mexicanoHonoursTheAlternativePairing() throws {
+        var base = makeTournament(.mexicano, players: 4)
+        base.config.mexicanoPairing = .topWithThird
+        var t = try playRounds(base, count: 1)
+        let ranking = Leaderboard.standings(for: t, onlyConfirmed: true).map(\.player.id)
+
+        t = try TournamentEngine.appendingRound(to: t)
+        #expect(Set(t.rounds[1].matches[0].teams.a) == Set([ranking[0], ranking[2]]))
+    }
+}
+
+@Suite("Leaderboard")
+struct LeaderboardTests {
+    @Test func pointsAccumulateForBothTeams() throws {
+        let t = try playRounds(makeTournament(.americano, players: 4), count: 1)
+        let standings = Leaderboard.standings(for: t)
+        #expect(standings.map(\.total) == [9, 9, 7, 7])
+        #expect(standings.allSatisfy { $0.roundsPlayed == 1 })
+    }
+
+    @Test func sitOutsAreCompensatedWithHalfTheTarget() throws {
+        let t = try playRounds(makeTournament(.americano, players: 5, compensation: .half, target: 16), count: 1)
+        let benched = t.rounds[0].sitOuts[0]
+        let standing = Leaderboard.standings(for: t).first { $0.id == benched }
+        #expect(standing?.compensation == 8)
+        #expect(standing?.total == 8)
+        #expect(standing?.roundsPlayed == 0)
+    }
+
+    @Test(arguments: [
+        (SitOutCompensation.none, 0),
+        (SitOutCompensation.half, 8),
+        (SitOutCompensation.full, 16),
+        (SitOutCompensation.fixed(5), 5),
+    ])
+    func compensationModes(mode: SitOutCompensation, expected: Int) throws {
+        let t = try playRounds(makeTournament(.americano, players: 5, compensation: mode, target: 16), count: 1)
+        let benched = t.rounds[0].sitOuts[0]
+        #expect(Leaderboard.standings(for: t).first { $0.id == benched }?.total == expected)
+    }
+
+    @Test func differentialBreaksTiesOnPoints() throws {
+        var t = try playRounds(makeTournament(.americano, players: 4), count: 0)
+        t = try TournamentEngine.appendingRound(to: t)
+        t.rounds[0].matches[0].state.points = BySide(a: 12, b: 4)
+        t.rounds[0].matches[0].isConfirmed = true
+
+        let standings = Leaderboard.standings(for: t)
+        #expect(standings.prefix(2).allSatisfy { $0.total == 12 && $0.differential == 8 })
+        #expect(standings.suffix(2).allSatisfy { $0.total == 4 && $0.differential == -8 })
+    }
+
+    @Test func unconfirmedRoundsAreExcludedWhenAsked() throws {
+        var t = try playRounds(makeTournament(.americano, players: 4), count: 0)
+        t = try TournamentEngine.appendingRound(to: t)
+        t.rounds[0].matches[0].state.points = BySide(a: 10, b: 6)
+
+        #expect(Leaderboard.standings(for: t, onlyConfirmed: false).first?.total == 10)
+        #expect(Leaderboard.standings(for: t, onlyConfirmed: true).allSatisfy { $0.total == 0 })
+    }
+}
