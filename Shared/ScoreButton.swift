@@ -7,6 +7,7 @@ struct ScoreButton: View {
     let value: String
     let teamName: String
     let isServing: Bool
+    let servingCourt: ServeCourt?
     let isEnabled: Bool
     var compact = false
     let onTap: () -> Void
@@ -18,10 +19,11 @@ struct ScoreButton: View {
                 Color.team(side)
                 VStack(spacing: compact ? 0 : 6) {
                     if !compact {
-                        Label {
+                        HStack(spacing: 6) {
+                            if isServing {
+                                Image(systemName: "circle.fill").font(.system(size: 7))
+                            }
                             Text(teamName)
-                        } icon: {
-                            if isServing { Image(systemName: "circle.fill").font(.system(size: 7)) }
                         }
                         .font(.headline)
                         .foregroundStyle(.white.opacity(0.85))
@@ -35,10 +37,14 @@ struct ScoreButton: View {
                         .foregroundStyle(.white)
                         .contentTransition(.numericText())
 
-                    if compact, isServing {
-                        Image(systemName: "circle.fill")
-                            .font(.system(size: 6))
-                            .foregroundStyle(.white.opacity(0.85))
+                    if isServing, let servingCourt {
+                        ServeSideBadge(
+                            court: servingCourt,
+                            height: compact ? 10 : 13,
+                            showsLabel: !compact
+                        )
+                        .foregroundStyle(.white.opacity(0.9))
+                        .padding(.top, compact ? 1 : 6)
                     }
                 }
                 .padding(compact ? 4 : 12)

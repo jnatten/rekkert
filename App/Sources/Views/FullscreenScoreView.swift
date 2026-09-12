@@ -62,14 +62,19 @@ struct FullscreenScoreView: View {
         ZStack {
             Color.team(side)
             VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(.white.opacity(snapshot.serving == side ? 0.9 : 0))
-                        .frame(width: 12, height: 12)
-                    Text(snapshot.teamNames[side])
-                        .font(.system(size: min(size.height * 0.06, 34), weight: .semibold, design: .rounded))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.5)
+                VStack(spacing: 6) {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(.white.opacity(snapshot.serving == side ? 0.9 : 0))
+                            .frame(width: 12, height: 12)
+                        Text(snapshot.teamNames[side])
+                            .font(.system(size: min(size.height * 0.06, 34), weight: .semibold, design: .rounded))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                    }
+                    if snapshot.serving == side, let court = snapshot.servingCourt {
+                        ServeSideBadge(court: court, height: min(size.height * 0.028, 17))
+                    }
                 }
                 .foregroundStyle(.white.opacity(0.9))
                 // The colour bleeds under the island; the writing must not.

@@ -11,6 +11,8 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
     public var completedSets: [SetResult]
     public var detail: String
     public var serving: TeamSide?
+    /// Which half the serve is struck from, as the server sees it: deuce is their right.
+    public var servingCourt: ServeCourt?
     public var servingPlayer: String?
     public var isSuddenDeath: Bool
     public var suddenDeathCourt: ServeCourt?
@@ -43,6 +45,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             completedSets: score.completedSets,
             detail: detail(for: session, engine: engine),
             serving: score.isFinished ? nil : serve.slot.team,
+            servingCourt: score.isFinished ? nil : serve.court,
             servingPlayer: playerName(at: serve.slot, teams: session.teams),
             isSuddenDeath: engine.isSuddenDeathPoint(score),
             suddenDeathCourt: score.suddenDeathCourt,
@@ -68,6 +71,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
                 ? "Round \(session.roundNumber) · sudden death"
                 : "Round \(session.roundNumber)",
             serving: session.isFinished ? nil : serve.slot.team,
+            servingCourt: session.isFinished ? nil : serve.court,
             servingPlayer: session.teams[serve.slot.team].players[safe: serve.slot.playerIndex],
             isSuddenDeath: engine.isSuddenDeathPoint(score),
             suddenDeathCourt: score.suddenDeathCourt,
@@ -99,6 +103,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             completedSets: [],
             detail: "Round \(round.index + 1) · \(remaining) to play",
             serving: engine.isFinished(match.state) ? nil : serve.slot.team,
+            servingCourt: engine.isFinished(match.state) ? nil : serve.court,
             servingPlayer: servingID.flatMap { tournament.player($0) }?.name,
             isSuddenDeath: false,
             suddenDeathCourt: nil,

@@ -14,6 +14,11 @@ win, games per set, tiebreak, super-tiebreak deciding set, and what happens at 4
 | Golden point | The first 40–40 is a single deciding point; the receivers pick the side |
 | Star point | Two deuces are played out, the third 40–40 decides (current WPT rule) |
 
+Whoever is serving is marked with a dot, and beside it a small two-cell badge shows which
+half the serve is struck from — drawn from behind the server, so the lit cell is on the
+hand they will be standing on. It follows the receivers' choice on a golden or star point
+rather than just alternating.
+
 **Winner court** — you play games on a court until the organiser blows the whistle, then
 move up or down. A round is a set with no end: games just accumulate. The whistle banks
 them and the next round starts at nil-nil. Scoring is 15/30/40 with the same deuce options

@@ -1,6 +1,23 @@
-public enum ServeCourt: String, Codable, Sendable, Hashable {
+public enum ServeCourt: String, Codable, Sendable, Hashable, CaseIterable {
+    /// The server's right-hand half.
     case deuce
+    /// The server's left-hand half.
     case ad
+
+    public var displayName: String {
+        switch self {
+        case .deuce: "Deuce"
+        case .ad: "Ad"
+        }
+    }
+
+    /// Which hand it is on, from behind the server looking at the net.
+    public var sideName: String {
+        switch self {
+        case .deuce: "Right"
+        case .ad: "Left"
+        }
+    }
 }
 
 public struct ServeSlot: Codable, Sendable, Hashable {

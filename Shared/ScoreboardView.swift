@@ -17,6 +17,7 @@ struct ScoreboardView: View {
                         value: snapshot.primary[side],
                         teamName: snapshot.teamNames[side],
                         isServing: snapshot.serving == side,
+                        servingCourt: snapshot.servingCourt,
                         isEnabled: !snapshot.isLocked,
                         compact: compact,
                         onTap: { onTap(side) },
