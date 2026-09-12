@@ -59,6 +59,13 @@ nonisolated public final class LoopbackTransport: PeerTransport, @unchecked Send
         }
     }
 
+    /// Stands in for a durable queue: delivered even when the peer is "unreachable",
+    /// which is what transferUserInfo does on a real device.
+    public func queue(_ payload: Data) {
+        guard let peer = lock.withLock({ self.peer }) else { return }
+        peer.packets.yield(InboundPacket(payload: payload))
+    }
+
     public func publishSnapshot(_ payload: Data) {
         guard isReachable, let peer = lock.withLock({ self.peer }) else { return }
         peer.packets.yield(InboundPacket(payload: payload))

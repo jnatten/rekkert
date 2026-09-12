@@ -78,6 +78,11 @@ nonisolated private final class WCShim: NSObject, WCSessionDelegate, @unchecked 
         onPacket(InboundPacket(payload: data))
     }
 
+    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        guard let data = userInfo[Key.payload] as? Data else { return }
+        onPacket(InboundPacket(payload: data))
+    }
+
     #if os(iOS)
     func sessionDidBecomeInactive(_ session: WCSession) {}
 
@@ -149,6 +154,14 @@ nonisolated public final class WatchConnectivityTransport: PeerTransport, @unche
                 once.resume(nil)
             }
         }
+    }
+
+    /// Queued and guaranteed, and the only channel that reaches a watch whose app is not
+    /// running — a phone cannot wake its counterpart the way a watch can. Unsupported on
+    /// the Simulator, where it simply does nothing.
+    public func queue(_ payload: Data) {
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
+        WCSession.default.transferUserInfo([Key.payload: payload])
     }
 
     /// The application context is coalescing and is skipped entirely when the new

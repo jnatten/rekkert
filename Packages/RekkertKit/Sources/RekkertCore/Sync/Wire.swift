@@ -60,4 +60,7 @@ public protocol PeerTransport: Sendable {
     /// Returns the peer's reply, or `nil` if the message was not delivered.
     func sendLive(_ payload: Data) async -> Data?
     func publishSnapshot(_ payload: Data)
+    /// Hands the payload to a queue that survives the counterpart not running. Delivery is
+    /// eventual and unacknowledged, so it supplements the outbox rather than replacing it.
+    func queue(_ payload: Data)
 }

@@ -43,7 +43,10 @@ suggestions above the keyboard while typing; Return moves to the next name. Chev
 between rounds. Going back to an earlier round shows it as it was played;
 reopening it allows corrections. Later rounds keep the pairings they were drawn with,
 since they were seeded from the standings at the time. The watch shows one court at a
-time — swipe between them — and can score or correct any of them.
+time — swipe between them — and can score or correct any of them. Swiping left past the
+last page reaches a menu holding everything that ends something: end the round, draw the
+next one, undo, finish and save. They are kept off the scoring page so a stray tap during a
+rally cannot end a round.
 
 ## Getting started
 

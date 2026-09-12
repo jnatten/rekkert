@@ -18,6 +18,10 @@ public final class MatchStore {
     private var lastSnapshotPublished = Date.distantPast
     private var isFlushing = false
     private var needsFlush = false
+    private var snapshotPending = false
+    private var lastQueued: [EventID] = []
+    private let sendTimeout: Duration
+    private let retryInterval: Duration
     private let snapshotInterval: TimeInterval
 
     public init(
@@ -25,8 +29,12 @@ public final class MatchStore {
         transport: any PeerTransport,
         store: SessionStore? = nil,
         session: ActiveSession? = nil,
-        snapshotInterval: TimeInterval = 1
+        snapshotInterval: TimeInterval = 1,
+        sendTimeout: Duration = .seconds(6),
+        retryInterval: Duration = .seconds(4)
     ) {
+        self.sendTimeout = sendTimeout
+        self.retryInterval = retryInterval
         self.device = device
         self.transport = transport
         self.store = store
@@ -84,8 +92,9 @@ public final class MatchStore {
         // yet produce.
         async let packets: Void = consumeInbound()
         async let reachability: Void = consumeReachability()
+        async let retries: Void = retryUndelivered()
         async let initial: Void = synchronise()
-        _ = await (packets, reachability, initial)
+        _ = await (packets, reachability, retries, initial)
     }
 
     private func consumeInbound() async {
@@ -95,6 +104,32 @@ public final class MatchStore {
             // that only this loop can deliver.
             Task { await self.flush() }
         }
+    }
+
+    /// Reachability does not always change when a send fails, and a phone cannot wake the
+    /// watch app the way a watch can wake the phone — so without this the outbox could sit
+    /// full with nothing ever prompting another attempt.
+    private func retryUndelivered() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: retryInterval)
+            guard !outbox.isEmpty else { continue }
+
+            if transport.isReachable {
+                await flush()
+            } else {
+                queuePending()
+            }
+        }
+    }
+
+    /// Hands the backlog to the durable channel, which is the only one that reaches a
+    /// counterpart whose app is not running. Merging is idempotent, so a duplicate that
+    /// also arrives live costs nothing.
+    private func queuePending() {
+        let pending = outbox.pending.map(\.id)
+        guard !pending.isEmpty, pending != lastQueued else { return }
+        lastQueued = pending
+        transport.queue(encode(.events(sessionID: log.sessionID, events: outbox.pending)))
     }
 
     private func consumeReachability() async {
@@ -142,10 +177,31 @@ public final class MatchStore {
         guard !outbox.isEmpty, transport.isReachable else { return }
         guard let payload = try? Wire.events(sessionID: log.sessionID, events: outbox.pending).encoded() else { return }
 
-        guard let reply = await transport.sendLive(payload) else { return }
+        guard let reply = await sendLive(payload) else {
+            queuePending()
+            return
+        }
         if case .hello(_, let vector)? = try? Wire.decode(reply) {
             outbox.acknowledge(upTo: vector)
             persist()
+        }
+    }
+
+    /// WatchConnectivity does not promise to call back. A reply that never arrives would
+    /// otherwise leave `isFlushing` set for the life of the app and wedge the outbox
+    /// permanently — which looks exactly like one-way sync.
+    private func sendLive(_ payload: Data) async -> Data? {
+        let transport = transport
+        let timeout = sendTimeout
+        return await withTaskGroup(of: Data?.self) { group in
+            group.addTask { await transport.sendLive(payload) }
+            group.addTask {
+                try? await Task.sleep(for: timeout)
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
         }
     }
 
@@ -200,11 +256,31 @@ public final class MatchStore {
         packet.reply?(encode(.snapshot(log)))
     }
 
+    /// Throttled, but never dropped: a change that arrives inside the window is published
+    /// when the window closes. The application context holds one value, and it is the only
+    /// thing a counterpart sees at cold launch, so it must end up holding the newest state
+    /// rather than whichever update happened to win the race.
     private func publishSnapshot(force: Bool) {
-        let now = Date()
-        guard force || now.timeIntervalSince(lastSnapshotPublished) >= snapshotInterval else { return }
-        lastSnapshotPublished = now
+        let elapsed = Date().timeIntervalSince(lastSnapshotPublished)
+        guard force || elapsed >= snapshotInterval else {
+            scheduleSnapshot(after: snapshotInterval - elapsed)
+            return
+        }
+        snapshotPending = false
+        lastSnapshotPublished = Date()
         transport.publishSnapshot(encode(.snapshot(log)))
+    }
+
+    private func scheduleSnapshot(after delay: TimeInterval) {
+        guard !snapshotPending else { return }
+        snapshotPending = true
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(max(0, delay)))
+            guard let self, self.snapshotPending else { return }
+            self.snapshotPending = false
+            self.lastSnapshotPublished = Date()
+            self.transport.publishSnapshot(self.encode(.snapshot(self.log)))
+        }
     }
 
     private func encode(_ wire: Wire) -> Data {

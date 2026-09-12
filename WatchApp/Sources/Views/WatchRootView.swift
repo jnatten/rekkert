@@ -9,10 +9,15 @@ struct WatchRootView: View {
         switch model.store.state {
         case .none:
             WatchIdleView()
-        case .traditional:
-            WatchCourtPage(court: 0)
-        case .winnerCourt:
-            WatchCourtPage(court: 0)
+
+        case .traditional, .winnerCourt:
+            TabView(selection: $selection) {
+                WatchCourtPage(court: 0).tag(0)
+                WatchMenuView().tag(menuTag)
+            }
+            .tabViewStyle(.page)
+            .task { openDemoPage() }
+
         case .tournament(let tournament):
             if let round = tournament.currentRound {
                 TabView(selection: $selection) {
@@ -20,14 +25,26 @@ struct WatchRootView: View {
                         WatchCourtPage(round: round.index, court: match.courtIndex)
                             .tag(match.courtIndex)
                     }
-                    WatchStandingsView(tournament: tournament)
-                        .tag(-1)
+                    WatchStandingsView(tournament: tournament).tag(standingsTag)
+                    WatchMenuView().tag(menuTag)
                 }
                 .tabViewStyle(.page)
+                .task { openDemoPage() }
             } else {
                 WatchNoRoundView(tournament: tournament)
             }
         }
+    }
+
+    /// Fixed tags so the menu and standings keep their place whatever the court count.
+    private var standingsTag: Int { 1_000 }
+    private var menuTag: Int { 1_001 }
+
+    private func openDemoPage() {
+        #if DEBUG
+        if WatchDemoLaunch.page == "menu" { selection = menuTag }
+        if WatchDemoLaunch.page == "standings" { selection = standingsTag }
+        #endif
     }
 }
 
