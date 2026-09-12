@@ -25,7 +25,7 @@ let project = Project(
             "ENABLE_USER_SCRIPT_SANDBOXING": "YES",
             "CODE_SIGN_STYLE": "Automatic",
             "MARKETING_VERSION": "1.0",
-            "CURRENT_PROJECT_VERSION": "1",
+            "CURRENT_PROJECT_VERSION": "2",
         ].merging(signingSettings) { _, signing in signing }
     ),
     targets: [
@@ -38,6 +38,10 @@ let project = Project(
             infoPlist: .extendingDefault(with: [
                 "UILaunchScreen": [:],
                 "CFBundleDisplayName": "Rekkert",
+                // Tuist's default plist hard-codes these, which would pin the app at 1.0 (1)
+                // however the build settings are set.
+                "CFBundleShortVersionString": "$(MARKETING_VERSION)",
+                "CFBundleVersion": "$(CURRENT_PROJECT_VERSION)",
             ]),
             sources: ["App/Sources/**", "Shared/**"],
             resources: ["App/Resources/**"],
