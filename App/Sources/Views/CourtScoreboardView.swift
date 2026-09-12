@@ -10,6 +10,7 @@ struct CourtScoreboardView: View {
     /// What the text fields hold while they are being typed into. Committed on submit or
     /// when focus leaves, so a three-digit typo does not become three synced events.
     @State private var draft: BySide<Int>?
+    @State private var fullscreen = false
     @FocusState private var typing: TeamSide?
 
     var body: some View {
@@ -29,6 +30,9 @@ struct CourtScoreboardView: View {
                     ContentUnavailableView("Court not in play", systemImage: "sportscourt")
                 }
             }
+            .fullScreenCover(isPresented: $fullscreen) {
+                FullscreenScoreView(round: round, court: court)
+            }
             .navigationTitle("Round \(round + 1) · Court \(court + 1)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -41,6 +45,11 @@ struct CourtScoreboardView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Undo", systemImage: "arrow.uturn.backward") { model.store.undoLast() }
                         .disabled(!model.store.canUndo)
+                }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Full screen", systemImage: "arrow.up.left.and.arrow.down.right") {
+                        fullscreen = true
+                    }
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()

@@ -4,6 +4,7 @@ import SwiftUI
 struct WinnerCourtView: View {
     @Environment(AppModel.self) private var model
     @State private var showingEnd = false
+    @State private var fullscreen = false
 
     var body: some View {
         NavigationStack {
@@ -30,12 +31,23 @@ struct WinnerCourtView: View {
                     ConnectionBadge(isReachable: model.store.isReachable)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    Button("Full screen", systemImage: "arrow.up.left.and.arrow.down.right") {
+                        fullscreen = true
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("Undo", systemImage: "arrow.uturn.backward") { model.store.undoLast() }
                         .disabled(!model.store.canUndo)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Finish", systemImage: "stop.circle") { showingEnd = true }
                 }
+            }
+            .fullScreenCover(isPresented: $fullscreen) { FullscreenScoreView() }
+            .task {
+                #if DEBUG
+                if DemoLaunch.fullscreen { fullscreen = true }
+                #endif
             }
             .confirmationDialog("Finish this session?", isPresented: $showingEnd, titleVisibility: .visible) {
                 Button("Save to history", role: .destructive) {

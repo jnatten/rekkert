@@ -10,6 +10,11 @@ enum DemoLaunch {
     /// Opens the new-session sheet: -rekkert-demo-new americano
     static var newSession: String? { value(for: "-rekkert-demo-new") }
 
+    /// Opens straight into the full-screen scoreboard.
+    static var fullscreen: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-fullscreen")
+    }
+
     static var browseRound: Int? {
         value(for: "-rekkert-demo-browse-round").flatMap(Int.init)
     }

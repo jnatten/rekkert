@@ -48,6 +48,16 @@ last page reaches a menu holding everything that ends something: end the round, 
 next one, undo, finish and save. They are kept off the scoring page so a stray tap during a
 rally cannot end a round.
 
+## Full screen
+
+Any scoreboard has a full-screen button. It fills the display with the two numbers, turns
+the brightness up and stops the screen locking, so the phone can be propped at the side of
+the court and read from the far end. Turn it landscape and the digits get about half again
+as large. Tapping still scores; the controls dim after a few seconds but never vanish, so
+the way out is always there without having to tap a half and score a point by accident.
+Brightness and auto-lock are put back on the way out, and while the app is in the
+background.
+
 ## Presets
 
 Name a setup when you start it and it is saved as a preset. Presets sync to the Apple
@@ -151,5 +161,6 @@ Debug builds accept `-rekkert-demo traditional|winnercourt|americano|mexicano` (
 `-rekkert-demo-points N`, `-rekkert-demo-deuce`, `-rekkert-demo-rounds`,
 `-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N`,
 `-rekkert-demo-open-court R,C`, `-rekkert-demo-roster`, `-rekkert-demo-presets`,
-`-rekkert-demo-watch-page menu` or `-rekkert-demo-new <mode>`) as
+`-rekkert-demo-watch-page menu`, `-rekkert-demo-fullscreen` or
+`-rekkert-demo-new <mode>`) as
 launch arguments to put the app into a given state, since `simctl` cannot tap the screen.
