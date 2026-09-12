@@ -26,41 +26,20 @@ struct CourtListView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if let tournament = TournamentView.tournament(model), let round = tournament.currentRound {
+                if let tournament = TournamentView.tournament(model) {
                     List {
-                        Section {
-                            ForEach(round.matches) { match in
-                                CourtRow(tournament: tournament, match: match)
-                                    .contentShape(.rect)
-                                    .onTapGesture { editing = match.courtIndex }
-                            }
-                        } header: {
-                            Text("Round \(round.index + 1)")
-                        } footer: {
-                            Text("Tap a court to set its score, or open the scoreboard to count point by point.")
-                        }
-
-                        if !round.sitOuts.isEmpty {
-                            Section("Sitting out") {
-                                Text(round.sitOuts.compactMap { tournament.player($0)?.name }.joined(separator: ", "))
+                        if let round = tournament.currentRound {
+                            roundSections(tournament, round)
+                        } else {
+                            Section {
+                                Text("No round has been drawn yet.")
                                     .foregroundStyle(.secondary)
                             }
                         }
-
-                        Section {
-                            Button("Next round", systemImage: "arrow.right.circle.fill") {
-                                model.store.confirmRound()
-                                model.store.nextRound()
-                            }
-                            .disabled(!allCourtsDone(round, tournament: tournament))
-
-                            Button("Finish tournament", systemImage: "flag.checkered", role: .destructive) {
-                                showingEnd = true
-                            }
-                        }
+                        managementSection(tournament)
                     }
                 } else {
-                    ContentUnavailableView("No round yet", systemImage: "sportscourt")
+                    ContentUnavailableView("No tournament", systemImage: "sportscourt")
                 }
             }
             .navigationTitle(title)
@@ -76,12 +55,70 @@ struct CourtListView: View {
             .sheet(item: Binding(get: { editing.map(CourtRef.init) }, set: { editing = $0?.index })) { ref in
                 CourtScoreboardView(court: ref.index)
             }
-            .confirmationDialog("Finish the tournament?", isPresented: $showingEnd, titleVisibility: .visible) {
-                Button("Save to history", role: .destructive) {
-                    model.store.finish()
-                    model.archiveAndReset()
+            .confirmationDialog(endPrompt, isPresented: $showingEnd, titleVisibility: .visible) {
+                if hasResults {
+                    Button("Save to history", role: .destructive) {
+                        model.store.finish()
+                        model.archiveAndReset()
+                    }
+                } else {
+                    Button("Discard", role: .destructive) { model.discard() }
                 }
                 Button("Keep playing", role: .cancel) {}
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func roundSections(_ tournament: Tournament, _ round: Round) -> some View {
+        Section {
+            ForEach(round.matches) { match in
+                CourtRow(tournament: tournament, match: match)
+                    .contentShape(.rect)
+                    .onTapGesture { editing = match.courtIndex }
+            }
+        } header: {
+            Text("Round \(round.index + 1)")
+        } footer: {
+            Text("Tap a court to set its score, or open the scoreboard to count point by point.")
+        }
+
+        if !round.sitOuts.isEmpty {
+            Section("Sitting out") {
+                Text(round.sitOuts.compactMap { tournament.player($0)?.name }.joined(separator: ", "))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// Always present, whether or not a round exists — otherwise undoing the draw leaves
+    /// the screen with no way out.
+    @ViewBuilder
+    private func managementSection(_ tournament: Tournament) -> some View {
+        Section {
+            if let round = tournament.currentRound {
+                Button("Next round", systemImage: "arrow.right.circle.fill") {
+                    model.store.confirmRound()
+                    model.store.nextRound()
+                }
+                .disabled(!allCourtsDone(round, tournament: tournament))
+            } else {
+                Button("Draw the first round", systemImage: "dice") {
+                    model.store.nextRound()
+                }
+                .disabled(tournament.playableCourts < 1)
+            }
+
+            Button(
+                hasResults ? "Finish tournament" : "Discard tournament",
+                systemImage: hasResults ? "flag.checkered" : "trash",
+                role: .destructive
+            ) {
+                showingEnd = true
+            }
+        } footer: {
+            if tournament.playableCourts < 1 {
+                Text("A court needs four players — this tournament has \(tournament.players.count).")
             }
         }
     }
@@ -89,6 +126,18 @@ struct CourtListView: View {
     private var title: String {
         guard let tournament = TournamentView.tournament(model) else { return "Courts" }
         return tournament.name.isEmpty ? tournament.format.displayName : tournament.name
+    }
+
+    /// Nothing has been played, so there is nothing worth keeping in history.
+    private var hasResults: Bool {
+        guard let tournament = TournamentView.tournament(model) else { return false }
+        return tournament.rounds.contains { round in
+            round.matches.contains { $0.state.points.total > 0 } || !round.sitOuts.isEmpty
+        }
+    }
+
+    private var endPrompt: String {
+        hasResults ? "Finish the tournament?" : "Discard this tournament?"
     }
 
     private func allCourtsDone(_ round: Round, tournament: Tournament) -> Bool {

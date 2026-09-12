@@ -12,15 +12,19 @@ struct WatchRootView: View {
         case .traditional:
             WatchCourtPage(court: 0)
         case .tournament(let tournament):
-            TabView(selection: $selection) {
-                ForEach(tournament.currentRound?.matches ?? []) { match in
-                    WatchCourtPage(court: match.courtIndex)
-                        .tag(match.courtIndex)
+            if let round = tournament.currentRound {
+                TabView(selection: $selection) {
+                    ForEach(round.matches) { match in
+                        WatchCourtPage(court: match.courtIndex)
+                            .tag(match.courtIndex)
+                    }
+                    WatchStandingsView(tournament: tournament)
+                        .tag(-1)
                 }
-                WatchStandingsView(tournament: tournament)
-                    .tag(-1)
+                .tabViewStyle(.page)
+            } else {
+                WatchNoRoundView(tournament: tournament)
             }
-            .tabViewStyle(.page)
         }
     }
 }
@@ -50,6 +54,38 @@ struct WatchIdleView: View {
                     ))
                 }
                 .buttonStyle(.borderedProminent)
+            }
+            .padding(.horizontal, 4)
+        }
+    }
+}
+
+struct WatchNoRoundView: View {
+    @Environment(AppModel.self) private var model
+    let tournament: Tournament
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 10) {
+                Image(systemName: "sportscourt")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                Text(tournament.name.isEmpty ? tournament.format.displayName : tournament.name)
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
+
+                if tournament.playableCourts < 1 {
+                    Text("Needs four players — add them on your iPhone.")
+                        .font(.caption2)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("No round drawn yet.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Button("Draw round") { model.store.nextRound() }
+                        .buttonStyle(.borderedProminent)
+                }
             }
             .padding(.horizontal, 4)
         }

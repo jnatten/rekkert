@@ -69,6 +69,9 @@ final class AppModel {
                 store.tap(court: 0, team: index.isMultiple(of: 3) ? .b : .a)
             }
         }
+        if arguments.contains("-rekkert-demo-undo-draw") {
+            store.undoLast()
+        }
         if arguments.contains("-rekkert-demo-deuce") {
             // Five exchanges reaches the third 40-40, which is where star point decides.
             for _ in 0 ..< 5 {
@@ -92,6 +95,13 @@ final class AppModel {
         if let state = store.state {
             try? sessionStore?.archive(HistoryRecord(title: state.title, state: state))
         }
+        try? sessionStore?.clearActive()
+        store.startNewSession()
+    }
+
+    /// Throws the current session away without archiving it. Used when nothing has been
+    /// played, so there is nothing worth keeping.
+    func discard() {
         try? sessionStore?.clearActive()
         store.startNewSession()
     }

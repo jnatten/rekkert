@@ -114,6 +114,35 @@ struct SessionReducerTests {
         #expect(SessionReducer.state(of: tournamentLog(players: 6, courts: 2))?.courtCount == 1)
     }
 
+    @Test func undoingTheDrawLeavesNoRoundButStaysRecoverable() {
+        var log = tournamentLog()
+        #expect(tournament(log)?.rounds.count == 1)
+
+        // What the Undo button reaches for on a freshly drawn tournament.
+        let draw = try! #require(log.lastUndoableEvent())
+        #expect(draw.kind == .nextRound)
+        log.append(.undo(draw.id), from: device)
+
+        let stranded = try! #require(tournament(log))
+        #expect(stranded.currentRound == nil)
+        #expect(stranded.playableCourts >= 1, "the UI must still offer to draw a round")
+
+        log.append(.nextRound, from: device)
+        #expect(tournament(log)?.rounds.count == 1, "drawing again recovers")
+    }
+
+    @Test func aTournamentTooSmallToFillACourtReportsItRatherThanDrawing() {
+        let tiny = Tournament(name: "Two of us", format: .americano,
+                              players: (0 ..< 3).map { Player(name: "P\($0)") })
+        var log = MatchLog()
+        log.append(.configure(.tournament(tiny)), from: device)
+        log.append(.nextRound, from: device)
+
+        let state = try! #require(tournament(log))
+        #expect(state.playableCourts == 0, "the draw button is disabled on this")
+        #expect(state.currentRound == nil, "and no round is silently invented")
+    }
+
     @Test func concurrentPointsOnDifferentCourtsBothLand() {
         let base = tournamentLog()
         var phone = base

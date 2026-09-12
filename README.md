@@ -118,5 +118,5 @@ xcrun simctl boot <pair udid>
 ```
 
 Debug builds accept `-rekkert-demo traditional|americano|mexicano` (plus
-`-rekkert-demo-points N` or `-rekkert-demo-deuce`) as launch arguments to seed a session,
-since `simctl` cannot tap the screen.
+`-rekkert-demo-points N`, `-rekkert-demo-deuce` or `-rekkert-demo-undo-draw`) as launch
+arguments to seed a session, since `simctl` cannot tap the screen.
