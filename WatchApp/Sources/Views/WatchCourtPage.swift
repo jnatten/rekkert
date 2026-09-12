@@ -34,6 +34,16 @@ struct WatchCourtPage: View {
                         }
                     }
 
+                    if isWinnerCourt {
+                        Button("End round", systemImage: "flag.pattern.checkered") {
+                            WKInterfaceDevice.current().play(.success)
+                            model.store.endRound()
+                        }
+                        .font(.footnote)
+                        .tint(.orange)
+                        .disabled(snapshot.games?.total == 0 && snapshot.primary.a == "0" && snapshot.primary.b == "0")
+                    }
+
                     Button("Undo", systemImage: "arrow.uturn.backward", action: undo)
                         .disabled(!model.store.canUndo)
                         .font(.footnote)
@@ -52,6 +62,11 @@ struct WatchCourtPage: View {
             .font(.system(size: 12))
             .buttonStyle(.bordered)
             .tint(snapshot.suddenDeathCourt == court ? .orange : .gray)
+    }
+
+    private var isWinnerCourt: Bool {
+        if case .winnerCourt? = model.store.state { return true }
+        return false
     }
 
     private func undo() {

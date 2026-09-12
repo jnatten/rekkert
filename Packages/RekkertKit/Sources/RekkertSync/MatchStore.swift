@@ -53,6 +53,8 @@ public final class MatchStore {
         record(.setRoundConfirmed(round: round, isConfirmed: isConfirmed))
     }
     public func nextRound() { record(.nextRound) }
+    /// The whistle in winner court.
+    public func endRound() { record(.endRound) }
     public func finish() { record(.finish) }
 
     public var canUndo: Bool { log.lastUndoableEvent() != nil }

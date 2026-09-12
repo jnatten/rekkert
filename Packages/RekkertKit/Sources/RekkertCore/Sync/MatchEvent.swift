@@ -11,6 +11,8 @@ public enum EventKind: Codable, Sendable, Hashable {
     /// served to.
     case chooseServeSide(ServeCourt)
     case setRoundConfirmed(round: Int, isConfirmed: Bool)
+    /// The whistle in winner court: closes the round wherever it stands.
+    case endRound
     case nextRound
     case finish
     case undo(EventID)
@@ -31,7 +33,7 @@ public struct MatchEvent: Codable, Sendable, Hashable, Identifiable {
     /// "undo" always means "take back the last thing that changed the score".
     public var isUndoable: Bool {
         switch kind {
-        case .point, .setScore, .setRoundConfirmed, .nextRound, .finish: true
+        case .point, .setScore, .setRoundConfirmed, .nextRound, .finish, .endRound: true
         case .configure, .undo, .chooseServeSide: false
         }
     }

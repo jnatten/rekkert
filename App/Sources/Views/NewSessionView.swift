@@ -13,6 +13,7 @@ struct NewSessionView: View {
     @State private var playersB = ["", ""]
 
     @State private var tournamentName = ""
+    @State private var winnerCourtRules = WinnerCourtRules()
     @State private var config = TournamentConfig()
     @State private var players: [Player] = (0 ..< 4).map { _ in Player(name: "") }
     @FocusState private var focused: Field?
@@ -27,10 +28,10 @@ struct NewSessionView: View {
     var body: some View {
         NavigationStack {
             Form {
-                if mode == .traditional {
-                    traditionalSections
-                } else {
-                    tournamentSections
+                switch mode {
+                case .traditional: traditionalSections
+                case .winnerCourt: winnerCourtSections
+                case .americano, .mexicano: tournamentSections
                 }
             }
             .navigationTitle(mode.title)
@@ -127,11 +128,43 @@ struct NewSessionView: View {
         )
     }
 
-    private var deuceExplanation: String {
-        switch rules.deuceRule {
+    private var deuceExplanation: String { deuceExplanation(rules.deuceRule) }
+
+    private func deuceExplanation(_ rule: DeuceRule) -> String {
+        switch rule {
         case .advantage: "Deuces repeat until a team wins two points in a row."
         case .goldenPoint: "The first 40–40 is a single deciding point. The receiving team picks the side."
         case .starPoint: "Two deuces are played out; the third 40–40 is a deciding point."
+        }
+    }
+
+    // MARK: - Winner court
+
+    @ViewBuilder
+    private var winnerCourtSections: some View {
+        Section("Sport") {
+            Picker("Sport", selection: $winnerCourtRules.sport) {
+                ForEach(Sport.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+            .pickerStyle(.segmented)
+        }
+
+        Section("Teams") {
+            teamRows(name: $teamA, players: $playersA, side: .a)
+            teamRows(name: $teamB, players: $playersB, side: .b)
+        }
+
+        Section {
+            Picker("At 40–40", selection: $winnerCourtRules.deuceRule) {
+                ForEach(DeuceRule.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+            Text(deuceExplanation(winnerCourtRules.deuceRule))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } header: {
+            Text("Scoring")
+        } footer: {
+            Text("Games run on and on; there is no set to win. Blow the whistle to end a round and the games so far are banked, then a new round starts at nil-nil.")
         }
     }
 
@@ -337,6 +370,13 @@ struct NewSessionView: View {
         }
     }
 
+    private var teams: BySide<TeamInfo> {
+        BySide(
+            a: TeamInfo(name: teamA, players: playersA.filter { !$0.isEmpty }),
+            b: TeamInfo(name: teamB, players: playersB.filter { !$0.isEmpty })
+        )
+    }
+
     private var namedPlayers: [Player] {
         players.filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }
     }
@@ -353,20 +393,24 @@ struct NewSessionView: View {
     // MARK: - Start
 
     private var canStart: Bool {
-        mode == .traditional ? true : namedPlayers.count >= 4
+        switch mode {
+        case .traditional, .winnerCourt: true
+        case .americano, .mexicano: namedPlayers.count >= 4
+        }
     }
 
     private func start() {
+        if mode == .winnerCourt {
+            model.remember(players: (playersA + playersB).filter { !$0.isEmpty })
+            model.store.configure(.winnerCourt(rules: winnerCourtRules, teams: teams))
+            dismiss()
+            return
+        }
+
         switch mode.tournamentFormat {
         case .none:
             model.remember(players: (playersA + playersB).filter { !$0.isEmpty })
-            model.store.configure(.traditional(
-                rules: rules,
-                teams: BySide(
-                    a: TeamInfo(name: teamA, players: playersA.filter { !$0.isEmpty }),
-                    b: TeamInfo(name: teamB, players: playersB.filter { !$0.isEmpty })
-                )
-            ))
+            model.store.configure(.traditional(rules: rules, teams: teams))
         case .some(let format):
             model.remember(players: namedPlayers.map(\.name))
             model.store.configure(.tournament(Tournament(

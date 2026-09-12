@@ -11,6 +11,8 @@ struct WatchRootView: View {
             WatchIdleView()
         case .traditional:
             WatchCourtPage(court: 0)
+        case .winnerCourt:
+            WatchCourtPage(court: 0)
         case .tournament(let tournament):
             if let round = tournament.currentRound {
                 TabView(selection: $selection) {

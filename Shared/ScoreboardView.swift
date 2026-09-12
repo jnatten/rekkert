@@ -51,15 +51,20 @@ struct ScoreboardView: View {
     }
 
     private func gameLine(_ games: BySide<Int>) -> some View {
-        HStack(spacing: 10) {
-            ForEach(Array(snapshot.completedSets.enumerated()), id: \.offset) { _, set in
-                Text("\(set.games.a)-\(set.games.b)")
-                    .foregroundStyle(.secondary)
+        ScrollView(.horizontal) {
+            HStack(spacing: 10) {
+                ForEach(Array(snapshot.completedSets.enumerated()), id: \.offset) { _, set in
+                    Text("\(set.games.a)-\(set.games.b)")
+                        .foregroundStyle(.secondary)
+                }
+                Text("\(games.a)-\(games.b)")
+                    .fontWeight(.semibold)
             }
-            Text("\(games.a)-\(games.b)")
-                .fontWeight(.semibold)
+            .font(compact ? .system(size: 12).monospacedDigit() : .callout.monospacedDigit())
+            .padding(.horizontal, compact ? 4 : 16)
         }
-        .font(compact ? .system(size: 12).monospacedDigit() : .callout.monospacedDigit())
+        .scrollIndicators(.hidden)
+        .defaultScrollAnchor(.trailing)
         .padding(.top, compact ? 2 : 8)
         .padding(.bottom, compact ? 2 : 28)
     }

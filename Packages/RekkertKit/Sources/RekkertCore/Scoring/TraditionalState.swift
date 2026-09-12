@@ -1,9 +1,11 @@
 public struct SetResult: Codable, Sendable, Hashable {
     public var games: BySide<Int>
     public var tiebreak: BySide<Int>?
-    public var winner: TeamSide
+    /// `nil` when the two sides finished level, which a winner-court round allows because
+    /// it is ended by a whistle rather than by someone reaching a target.
+    public var winner: TeamSide?
 
-    public init(games: BySide<Int>, tiebreak: BySide<Int>? = nil, winner: TeamSide) {
+    public init(games: BySide<Int>, tiebreak: BySide<Int>? = nil, winner: TeamSide?) {
         self.games = games
         self.tiebreak = tiebreak
         self.winner = winner
@@ -39,7 +41,9 @@ public struct TraditionalState: Codable, Sendable, Hashable {
 
     public var setsWon: BySide<Int> {
         var result = BySide(both: 0)
-        for set in completedSets { result[set.winner] += 1 }
+        for set in completedSets {
+            if let winner = set.winner { result[winner] += 1 }
+        }
         return result
     }
 

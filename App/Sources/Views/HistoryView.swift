@@ -38,6 +38,8 @@ struct HistoryView: View {
         case .tournament(let tournament):
             let standings = Leaderboard.standings(for: tournament)
             Text(standings.prefix(3).enumerated().map { "\($0.offset + 1). \($0.element.player.name) \($0.element.total)" }.joined(separator: " · "))
+        case .winnerCourt(let session):
+            Text("\(session.completedRounds.count) rounds · games \(session.totalGames.a)–\(session.totalGames.b)")
         }
     }
 }

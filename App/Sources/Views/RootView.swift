@@ -13,6 +13,8 @@ struct RootView: View {
                 TraditionalMatchView()
             case .tournament:
                 TournamentView()
+            case .winnerCourt:
+                WinnerCourtView()
             }
         }
         .alert(

@@ -87,3 +87,30 @@ public struct PointCountRules: Codable, Sendable, Hashable {
         self.servesPerTeam = servesPerTeam
     }
 }
+
+extension TraditionalRules {
+    /// A set that never ends by itself, in a match that never ends by itself — the shape
+    /// winner court needs, where a whistle decides when a round is over.
+    public static func endless(deuceRule: DeuceRule, sport: Sport = .padel) -> TraditionalRules {
+        TraditionalRules(
+            sport: sport,
+            setsToWin: .max,
+            gamesPerSet: .max,
+            tiebreakAtGames: nil,
+            decidingSet: .normal,
+            deuceRule: deuceRule
+        )
+    }
+}
+
+public struct WinnerCourtRules: Codable, Sendable, Hashable {
+    public var sport: Sport
+    public var deuceRule: DeuceRule
+
+    public init(sport: Sport = .padel, deuceRule: DeuceRule = .goldenPoint) {
+        self.sport = sport
+        self.deuceRule = deuceRule
+    }
+
+    var scoring: TraditionalRules { .endless(deuceRule: deuceRule, sport: sport) }
+}

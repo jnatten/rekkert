@@ -24,6 +24,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
         switch state {
         case .traditional(let session): traditional(session)
         case .tournament(let tournament): tournamentCourt(tournament, round: round, court: court)
+        case .winnerCourt(let session): winnerCourt(session)
         }
     }
 
@@ -48,6 +49,31 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             isLocked: score.isFinished,
             isFinished: score.isFinished,
             winner: score.winner
+        )
+    }
+
+    private static func winnerCourt(_ session: WinnerCourtSession) -> ScoreboardSnapshot {
+        let engine = session.engine
+        let score = session.score
+        let serve = engine.serve(score)
+
+        return ScoreboardSnapshot(
+            courtIndex: 0,
+            courtLabel: nil,
+            teamNames: BySide(a: session.teams.a.name, b: session.teams.b.name),
+            primary: engine.pointDisplay(score).map(\.text),
+            games: score.games,
+            completedSets: score.completedSets,
+            detail: engine.isSuddenDeathPoint(score)
+                ? "Round \(session.roundNumber) · sudden death"
+                : "Round \(session.roundNumber)",
+            serving: session.isFinished ? nil : serve.slot.team,
+            servingPlayer: session.teams[serve.slot.team].players[safe: serve.slot.playerIndex],
+            isSuddenDeath: engine.isSuddenDeathPoint(score),
+            suddenDeathCourt: score.suddenDeathCourt,
+            isLocked: session.isFinished,
+            isFinished: session.isFinished,
+            winner: nil
         )
     }
 

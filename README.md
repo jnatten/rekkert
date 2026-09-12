@@ -14,6 +14,14 @@ win, games per set, tiebreak, super-tiebreak deciding set, and what happens at 4
 | Golden point | The first 40–40 is a single deciding point; the receivers pick the side |
 | Star point | Two deuces are played out, the third 40–40 decides (current WPT rule) |
 
+**Winner court** — you play games on a court until the organiser blows the whistle, then
+move up or down. A round is a set with no end: games just accumulate. The whistle banks
+them and the next round starts at nil-nil. Scoring is 15/30/40 with the same deuce options
+as a match. The app tracks only your own side of it — the round number and the games each
+side won — so there are no courts, partners or standings to keep up to date. The whistle
+usually interrupts a game, so the one in progress goes to whoever is ahead in it; level and
+it is discarded.
+
 **Americano / Mexicano** — club tournaments over one or more courts. Points count
 1, 2, 3, … to a configurable target (16 by default; 21, 24 and 32 are a tap away). A round
 either ends when both scores together reach the target — so every court finishes at the
@@ -125,7 +133,7 @@ xcrun simctl pair <watch udid> <phone udid>
 xcrun simctl boot <pair udid>
 ```
 
-Debug builds accept `-rekkert-demo traditional|americano|mexicano` (plus
+Debug builds accept `-rekkert-demo traditional|winnercourt|americano|mexicano` (plus
 `-rekkert-demo-points N`, `-rekkert-demo-deuce`, `-rekkert-demo-rounds`,
 `-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N`,
 `-rekkert-demo-open-court R,C`, `-rekkert-demo-roster` or `-rekkert-demo-new <mode>`) as

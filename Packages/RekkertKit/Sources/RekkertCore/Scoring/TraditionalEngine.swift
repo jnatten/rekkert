@@ -105,6 +105,20 @@ public struct TraditionalEngine: Sendable, Hashable {
         return next
     }
 
+    /// Closes the current set where it stands — the whistle in winner court. The game in
+    /// progress goes to whoever is ahead in it; if the two are level it is discarded.
+    public func endingRound(_ state: TraditionalState) -> TraditionalState {
+        guard !state.isFinished else { return state }
+        guard state.games.total > 0 || state.points.total > 0 else { return state }
+
+        var next = state
+        if let leading = next.points.leader {
+            next.games[leading] += 1
+        }
+        completeSet(&next, winner: next.games.leader, tiebreak: nil)
+        return next
+    }
+
     private func winGame(_ state: inout TraditionalState, side: TeamSide) {
         state.games[side] += 1
         state.points = BySide(both: 0)
@@ -116,14 +130,14 @@ public struct TraditionalEngine: Sendable, Hashable {
         }
     }
 
-    private func completeSet(_ state: inout TraditionalState, winner: TeamSide, tiebreak: BySide<Int>?) {
+    private func completeSet(_ state: inout TraditionalState, winner: TeamSide?, tiebreak: BySide<Int>?) {
         state.completedSets.append(SetResult(games: state.games, tiebreak: tiebreak, winner: winner))
         state.games = BySide(both: 0)
         state.points = BySide(both: 0)
         state.deuceCount = 0
         state.suddenDeathCourt = nil
 
-        if state.setsWon[winner] >= rules.setsToWin {
+        if let winner, state.setsWon[winner] >= rules.setsToWin {
             state.winner = winner
         }
     }

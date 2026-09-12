@@ -50,6 +50,23 @@ final class AppModel {
         store.startNewSession()
 
         switch arguments[flag + 1] {
+        case "winnercourt":
+            store.configure(.winnerCourt(
+                rules: WinnerCourtRules(deuceRule: .goldenPoint),
+                teams: BySide(
+                    a: TeamInfo(name: "Us", players: ["Jonas", "Ada"]),
+                    b: TeamInfo(name: "Them", players: ["Kim", "Sam"])
+                )
+            ))
+            // Two finished rounds and a third under way.
+            for _ in 0 ..< 2 { store.tap(team: .a) ; store.tap(team: .a); store.tap(team: .a); store.tap(team: .a) }
+            store.tap(team: .b); store.tap(team: .b); store.tap(team: .b); store.tap(team: .b)
+            store.endRound()
+            for _ in 0 ..< 3 { store.tap(team: .b); store.tap(team: .b); store.tap(team: .b); store.tap(team: .b) }
+            store.endRound()
+            store.tap(team: .a); store.tap(team: .a); store.tap(team: .a); store.tap(team: .a)
+            store.tap(team: .a); store.tap(team: .b)
+
         case "traditional":
             store.configure(.traditional(
                 rules: TraditionalRules(deuceRule: .starPoint),

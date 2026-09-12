@@ -25,9 +25,21 @@ public enum SessionReducer {
             } traditional: { _ in }
 
         case .chooseServeSide(let court):
-            guard case .traditional(var session) = state else { return }
-            session.score.suddenDeathCourt = court
-            state = .traditional(session)
+            switch state {
+            case .traditional(var session):
+                session.score.suddenDeathCourt = court
+                state = .traditional(session)
+            case .winnerCourt(var session):
+                session.score.suddenDeathCourt = court
+                state = .winnerCourt(session)
+            case .tournament, .none:
+                break
+            }
+
+        case .endRound:
+            guard case .winnerCourt(var session) = state, !session.isFinished else { return }
+            session.score = session.engine.endingRound(session.score)
+            state = .winnerCourt(session)
 
         case .setRoundConfirmed(let round, let isConfirmed):
             guard case .tournament(var tournament) = state,
@@ -47,6 +59,9 @@ public enum SessionReducer {
             case .tournament(var tournament):
                 tournament.isFinished = true
                 state = .tournament(tournament)
+            case .winnerCourt(var session):
+                session.isFinished = true
+                state = .winnerCourt(session)
             case .traditional, .none:
                 break
             }
@@ -76,6 +91,14 @@ public enum SessionReducer {
 
         case (.tournament(let incoming), _):
             state = .tournament(incoming)
+
+        case (.winnerCourt(let rules, let teams), .winnerCourt(var session)):
+            session.rules = rules
+            session.teams = teams
+            state = .winnerCourt(session)
+
+        case (.winnerCourt(let rules, let teams), _):
+            state = .winnerCourt(WinnerCourtSession(rules: rules, teams: teams))
         }
     }
 
@@ -90,6 +113,15 @@ public enum SessionReducer {
         case .traditional(var session):
             traditional(&session)
             state = .traditional(session)
+
+        case .winnerCourt(var session):
+            guard !session.isFinished else { return }
+            var asTraditional = TraditionalSession(
+                rules: session.rules.scoring, teams: session.teams, score: session.score
+            )
+            traditional(&asTraditional)
+            session.score = asTraditional.score
+            state = .winnerCourt(session)
 
         case .tournament(var current):
             guard current.rounds.indices.contains(round),

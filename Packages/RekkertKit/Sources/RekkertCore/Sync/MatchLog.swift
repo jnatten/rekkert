@@ -17,7 +17,7 @@ public struct MatchLog: Codable, Sendable, Hashable {
     public var hasProgress: Bool {
         effectiveEvents.contains { event in
             switch event.kind {
-            case .point, .setScore, .setRoundConfirmed, .nextRound, .finish: true
+            case .point, .setScore, .setRoundConfirmed, .nextRound, .finish, .endRound: true
             case .configure, .undo, .chooseServeSide: false
             }
         }
