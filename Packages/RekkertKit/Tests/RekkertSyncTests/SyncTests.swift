@@ -280,6 +280,53 @@ struct SyncTests {
         #expect(pair.phone.state == pair.watch.state)
     }
 
+    @Test func presetsSavedOnThePhoneReachTheWatch() async throws {
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        let preset = Preset(name: "Thursday", configuration: .winnerCourt(
+            rules: WinnerCourtRules(deuceRule: .goldenPoint),
+            teams: BySide(a: TeamInfo(name: "Us"), b: TeamInfo(name: "Them"))
+        ))
+        pair.phone.savePreset(preset)
+        try await settle()
+
+        #expect(pair.watch.presets.presets.map(\.name) == ["Thursday"])
+
+        pair.phone.removePreset(preset.id)
+        try await settle()
+        #expect(pair.watch.presets.isEmpty, "and a deletion travels too")
+    }
+
+    @Test func aSessionStartedFromAPresetOnTheWatchShowsOnThePhone() async throws {
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+
+        let preset = Preset(name: "Thursday", configuration: .tournament(
+            format: .americano,
+            name: "Thursday",
+            players: (0 ..< 4).map { Player(name: "P\($0)") },
+            config: TournamentConfig(courtCount: 1)
+        ))
+        pair.phone.savePreset(preset)
+        try await settle()
+
+        let onTheWatch = try #require(pair.watch.presets.presets.first)
+        pair.watch.start(onTheWatch)
+        try await settle()
+
+        guard case .tournament(let tournament)? = pair.phone.state else {
+            Issue.record("the phone did not pick up the session")
+            return
+        }
+        #expect(tournament.rounds.count == 1, "the first round was drawn without touching the phone")
+        #expect(pair.phone.state == pair.watch.state)
+        #expect(pair.phone.presets.presets.first?.useCount == 1, "and the phone sees it was used")
+    }
+
     @Test func stateSurvivesARestartFromDisk() async throws {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appending(path: "rekkert-tests-\(UUID().uuidString)")

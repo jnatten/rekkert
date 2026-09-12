@@ -19,14 +19,8 @@ public enum Wire: Codable, Sendable, Hashable {
     case events(sessionID: UUID, events: [MatchEvent])
     /// Whole-log backstop, used on the coalescing application-context channel.
     case snapshot(MatchLog)
-
-    public var sessionID: UUID {
-        switch self {
-        case .hello(let id, _): id
-        case .events(let id, _): id
-        case .snapshot(let log): log.sessionID
-        }
-    }
+    /// Saved configurations, so a session can be started from either device.
+    case presets(PresetLibrary)
 
     public func encoded() throws -> Data {
         try JSONCoding.encoder.encode(self)

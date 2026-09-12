@@ -109,6 +109,21 @@ public struct SessionStore: Sendable {
         try write(try encoder.encode(roster), to: rosterURL)
     }
 
+    // MARK: - Presets
+
+    private var presetsURL: URL { directory.appending(path: "presets.json") }
+
+    public func loadPresets() -> PresetLibrary {
+        guard let data = try? Data(contentsOf: presetsURL),
+              let library = try? decoder.decode(PresetLibrary.self, from: data)
+        else { return PresetLibrary() }
+        return library
+    }
+
+    public func save(_ library: PresetLibrary) throws {
+        try write(try encoder.encode(library), to: presetsURL)
+    }
+
     // MARK: - Plumbing
 
     private var encoder: JSONEncoder { JSONCoding.encoder }

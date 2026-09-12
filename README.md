@@ -48,6 +48,17 @@ last page reaches a menu holding everything that ends something: end the round, 
 next one, undo, finish and save. They are kept off the scoring page so a stray tap during a
 rally cannot end a round.
 
+## Presets
+
+Name a setup when you start it and it is saved as a preset. Presets sync to the Apple
+Watch, so the regular Thursday americano — players, courts, point target and all — starts
+from the wrist without reaching for the phone. Starting from a preset mints a fresh
+tournament each time, so standings never bleed from one evening into the next.
+
+Presets are edited on the phone and read on both, so the whole library travels together
+and the newer copy wins. That is what keeps a deletion from being resurrected by a stale
+copy on the other device.
+
 ## Getting started
 
 Requires Xcode 26 and [mise](https://mise.jdx.dev) (which pins Tuist via `mise.toml`).
@@ -139,5 +150,6 @@ xcrun simctl boot <pair udid>
 Debug builds accept `-rekkert-demo traditional|winnercourt|americano|mexicano` (plus
 `-rekkert-demo-points N`, `-rekkert-demo-deuce`, `-rekkert-demo-rounds`,
 `-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N`,
-`-rekkert-demo-open-court R,C`, `-rekkert-demo-roster` or `-rekkert-demo-new <mode>`) as
+`-rekkert-demo-open-court R,C`, `-rekkert-demo-roster`, `-rekkert-demo-presets`,
+`-rekkert-demo-watch-page menu` or `-rekkert-demo-new <mode>`) as
 launch arguments to put the app into a given state, since `simctl` cannot tap the screen.

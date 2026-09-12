@@ -42,6 +42,21 @@ final class AppModel {
     /// cannot tap, so this is how the watch/phone sync path gets verified headlessly.
     private func seedDemoIfRequested() {
         let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("-rekkert-demo-presets") {
+            store.savePreset(Preset(name: "Thursday americano", configuration: .tournament(
+                format: .americano, name: "Thursday",
+                players: ["Jonas", "Ada", "Kim", "Sam", "Ola", "Siri", "Tor", "Bjørn"].map { Player(name: $0) },
+                config: TournamentConfig(pointRules: PointCountRules(target: 16), courtCount: 2)
+            )))
+            store.savePreset(Preset(name: "Vinnerbane", configuration: .winnerCourt(
+                rules: WinnerCourtRules(deuceRule: .goldenPoint),
+                teams: BySide(a: TeamInfo(name: "Us"), b: TeamInfo(name: "Them"))
+            )))
+            store.savePreset(Preset(name: "Best of 3", configuration: .traditional(
+                rules: TraditionalRules(deuceRule: .starPoint),
+                teams: BySide(a: TeamInfo(name: "Us"), b: TeamInfo(name: "Them"))
+            )))
+        }
         if arguments.contains("-rekkert-demo-roster") {
             remember(players: ["Jonas", "Ada", "Kim", "Sam", "Bjørn", "Ola", "Siri", "Tor", "Håkon"])
             remember(players: ["Jonas", "Ada", "Kim"])

@@ -8,6 +8,36 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             List {
+                if !model.store.presets.isEmpty {
+                    Section {
+                        ForEach(model.store.presets.ordered) { preset in
+                            Button {
+                                model.store.start(preset)
+                            } label: {
+                                Label {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(preset.name).foregroundStyle(.primary)
+                                        Text(preset.configuration.summary)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                } icon: {
+                                    Image(systemName: preset.configuration.symbol)
+                                }
+                            }
+                        }
+                        .onDelete { offsets in
+                            for index in offsets {
+                                model.store.removePreset(model.store.presets.ordered[index].id)
+                            }
+                        }
+                    } header: {
+                        Text("Presets")
+                    } footer: {
+                        Text("Saved setups, ready on your Apple Watch too. Swipe to delete.")
+                    }
+                }
+
                 Section("Start") {
                     ForEach(GameMode.allCases) { mode in
                         Button {

@@ -10,6 +10,8 @@ public final class MatchStore {
     /// Set when a peer's session replaced ours and the discarded one had real scores in
     /// it. It was archived to history first; this just lets the UI say so.
     public private(set) var replacedSessionTitle: String?
+    /// Saved configurations. Edited on the phone, readable on both.
+    public private(set) var presets = PresetLibrary()
 
     private var outbox: Outbox
     private let device: DeviceID
@@ -41,6 +43,7 @@ public final class MatchStore {
         self.snapshotInterval = snapshotInterval
         self.log = session?.log ?? MatchLog()
         self.outbox = session?.outbox ?? Outbox()
+        self.presets = store?.loadPresets() ?? PresetLibrary()
         self.state = SessionReducer.state(of: self.log)
     }
 
@@ -64,6 +67,41 @@ public final class MatchStore {
     /// The whistle in winner court.
     public func endRound() { record(.endRound) }
     public func finish() { record(.finish) }
+
+    // MARK: - Presets
+
+    public func savePreset(_ preset: Preset) {
+        var updated = presets
+        updated.save(preset)
+        apply(updated, publish: true)
+    }
+
+    public func removePreset(_ id: UUID) {
+        var updated = presets
+        updated.remove(id)
+        apply(updated, publish: true)
+    }
+
+    /// Configures a session from a saved preset, drawing the first round when the mode
+    /// needs one, so starting from the watch takes a single tap.
+    public func start(_ preset: Preset) {
+        var updated = presets
+        updated.markUsed(preset.id)
+        apply(updated, publish: true)
+
+        startNewSession()
+        configure(preset.configuration.makeSetup())
+        if preset.configuration.drawsRounds { nextRound() }
+    }
+
+    private func apply(_ library: PresetLibrary, publish: Bool) {
+        presets = library
+        try? store?.save(library)
+        guard publish else { return }
+        let payload = encode(.presets(library))
+        transport.queue(payload)
+        Task { _ = await sendLive(payload) }
+    }
 
     public var canUndo: Bool { log.lastUndoableEvent() != nil }
 
@@ -149,6 +187,7 @@ public final class MatchStore {
         }
         await flush()
         publishSnapshot(force: true)
+        sharePresets()
     }
 
     private func record(_ kind: EventKind) {
@@ -214,12 +253,18 @@ public final class MatchStore {
 
         switch wire {
         case .hello(let sessionID, let vector):
+            sharePresets()
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
             packet.reply?(encode(.events(sessionID: log.sessionID, events: log.events(missingRelativeTo: vector))))
 
         case .events(let sessionID, let events):
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
             if log.merge(events) { refresh() }
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.vector)))
+
+        case .presets(let incoming):
+            let merged = presets.adopting(incoming)
+            if merged != presets { apply(merged, publish: false) }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.vector)))
 
         case .snapshot(let incoming):
@@ -250,6 +295,14 @@ public final class MatchStore {
         log = incoming
         outbox = Outbox()
         refresh()
+    }
+
+    /// Offered on every reconnect, so a watch that has never seen them catches up without
+    /// anyone having to think about it.
+    private func sharePresets() {
+        guard !presets.isEmpty else { return }
+        let payload = encode(.presets(presets))
+        Task { _ = await sendLive(payload) }
     }
 
     private func requestSnapshot(_ packet: InboundPacket) {

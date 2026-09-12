@@ -53,18 +53,30 @@ struct WatchIdleView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 12) {
-                Image(systemName: model.store.isReachable ? "iphone.radiowaves.left.and.right" : "iphone.slash")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-                Text("No match running")
-                    .font(.headline)
-                Text(model.store.isReachable
-                     ? "Start one on your iPhone, or tap below."
-                     : "iPhone not reachable. You can still start here — it syncs when they reconnect.")
-                    .font(.caption2)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
+            VStack(spacing: 8) {
+                if model.store.presets.isEmpty {
+                    empty
+                } else {
+                    Text("Start")
+                        .font(.headline)
+                    ForEach(model.store.presets.ordered) { preset in
+                        Button {
+                            model.store.start(preset)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(preset.name)
+                                    .font(.footnote.weight(.semibold))
+                                    .lineLimit(1)
+                                Text(preset.configuration.summary)
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
 
                 Button("Quick match") {
                     model.store.configure(.traditional(
@@ -72,10 +84,38 @@ struct WatchIdleView: View {
                         teams: BySide(a: .home, b: .away)
                     ))
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.bordered)
+                .font(.footnote)
+                .padding(.top, 2)
+
+                connection
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 2)
         }
+    }
+
+    private var empty: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "figure.tennis")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+            Text("No match running")
+                .font(.headline)
+            Text("Save a preset on your iPhone and it shows up here, ready to start.")
+                .font(.system(size: 10))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var connection: some View {
+        Label(
+            model.store.isReachable ? "iPhone connected" : "iPhone not reachable",
+            systemImage: model.store.isReachable ? "iphone.radiowaves.left.and.right" : "iphone.slash"
+        )
+        .font(.system(size: 10))
+        .foregroundStyle(model.store.isReachable ? .green : .secondary)
+        .padding(.top, 2)
     }
 }
 

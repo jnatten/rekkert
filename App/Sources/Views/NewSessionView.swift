@@ -14,11 +14,13 @@ struct NewSessionView: View {
 
     @State private var tournamentName = ""
     @State private var winnerCourtRules = WinnerCourtRules()
+    @State private var presetName = ""
     @State private var config = TournamentConfig()
     @State private var players: [Player] = (0 ..< 4).map { _ in Player(name: "") }
     @FocusState private var focused: Field?
 
     private enum Field: Hashable {
+        case presetName
         case tournamentName
         case player(PlayerID)
         case teamName(TeamSide)
@@ -33,6 +35,7 @@ struct NewSessionView: View {
                 case .winnerCourt: winnerCourtSections
                 case .americano, .mexicano: tournamentSections
                 }
+                presetSection
             }
             .navigationTitle(mode.title)
             .navigationBarTitleDisplayMode(.inline)
@@ -136,6 +139,47 @@ struct NewSessionView: View {
         case .goldenPoint: "The first 40–40 is a single deciding point. The receiving team picks the side."
         case .starPoint: "Two deuces are played out; the third 40–40 is a deciding point."
         }
+    }
+
+    // MARK: - Presets
+
+    @ViewBuilder
+    private var presetSection: some View {
+        Section {
+            TextField("Preset name", text: $presetName)
+                .textInputAutocapitalization(.words)
+                .focused($focused, equals: .presetName)
+                .submitLabel(.done)
+                .onSubmit { focused = nil }
+        } header: {
+            Text("Save as preset")
+        } footer: {
+            Text(presetName.trimmingCharacters(in: .whitespaces).isEmpty
+                 ? "Name this setup to save it. Saved presets can be started from your Apple Watch without reaching for the phone."
+                 : "“\(presetName)” will be saved and can be started from either device.")
+        }
+    }
+
+    private var configuration: PresetConfiguration {
+        switch mode {
+        case .traditional:
+            .traditional(rules: rules, teams: teams)
+        case .winnerCourt:
+            .winnerCourt(rules: winnerCourtRules, teams: teams)
+        case .americano, .mexicano:
+            .tournament(
+                format: mode == .mexicano ? .mexicano : .americano,
+                name: tournamentName,
+                players: namedPlayers,
+                config: config
+            )
+        }
+    }
+
+    private func savePresetIfNamed() {
+        let name = presetName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        model.store.savePreset(Preset(name: name, configuration: configuration))
     }
 
     // MARK: - Winner court
@@ -313,7 +357,7 @@ struct NewSessionView: View {
     private var suggestions: [KnownPlayer] {
         guard let focused else { return [] }
         switch focused {
-        case .tournamentName, .teamName:
+        case .tournamentName, .teamName, .presetName:
             return []
         case .player(let id):
             guard let player = players.first(where: { $0.id == id }) else { return [] }
@@ -329,7 +373,7 @@ struct NewSessionView: View {
     private func fill(_ name: String) {
         guard let focused else { return }
         switch focused {
-        case .tournamentName, .teamName:
+        case .tournamentName, .teamName, .presetName:
             break
         case .player(let id):
             guard let index = players.firstIndex(where: { $0.id == id }) else { return }
@@ -400,6 +444,8 @@ struct NewSessionView: View {
     }
 
     private func start() {
+        savePresetIfNamed()
+
         if mode == .winnerCourt {
             model.remember(players: (playersA + playersB).filter { !$0.isEmpty })
             model.store.configure(.winnerCourt(rules: winnerCourtRules, teams: teams))
