@@ -4,18 +4,19 @@ import WatchKit
 
 struct WatchCourtPage: View {
     @Environment(AppModel.self) private var model
+    var round = 0
     let court: Int
 
     var body: some View {
         ScrollView {
-            if let snapshot = model.store.state.flatMap({ ScoreboardSnapshot.make(from: $0, court: court) }) {
+            if let snapshot = model.store.state.flatMap({ ScoreboardSnapshot.make(from: $0, round: round, court: court) }) {
                 VStack(spacing: 6) {
                     ScoreboardView(
                         snapshot: snapshot,
                         compact: true,
                         onTap: { side in
                             WKInterfaceDevice.current().play(.click)
-                            model.store.tap(court: court, team: side)
+                            model.store.tap(round: round, court: court, team: side)
                         },
                         onUndo: undo
                     )
@@ -88,7 +89,7 @@ struct WatchCourtPage: View {
             set: { newValue in
                 var updated = points(snapshot)
                 updated[side] = newValue
-                model.store.setScore(court: court, points: updated)
+                model.store.setScore(round: round, court: court, points: updated)
             }
         )
     }

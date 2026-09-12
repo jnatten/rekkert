@@ -20,15 +20,18 @@ struct TournamentView: View {
 
 struct CourtListView: View {
     @Environment(AppModel.self) private var model
-    @State private var editing: Int?
+    @State private var editing: CourtRef?
     @State private var showingEnd = false
+    /// Which round is on screen. `nil` follows the newest one, so drawing a round moves
+    /// the view along with it; browsing back pins it until you return to the end.
+    @State private var browsing: Int?
 
     var body: some View {
         NavigationStack {
             Group {
                 if let tournament = TournamentView.tournament(model) {
                     List {
-                        if let round = tournament.currentRound {
+                        if let round = tournament.round(at: viewed(tournament)) {
                             roundSections(tournament, round)
                         } else {
                             Section {
@@ -52,8 +55,14 @@ struct CourtListView: View {
                         .disabled(!model.store.canUndo)
                 }
             }
-            .sheet(item: Binding(get: { editing.map(CourtRef.init) }, set: { editing = $0?.index })) { ref in
-                CourtScoreboardView(court: ref.index)
+            .sheet(item: $editing) { ref in
+                CourtScoreboardView(round: ref.round, court: ref.court)
+            }
+            .task {
+                #if DEBUG
+                if let round = DemoLaunch.browseRound { browsing = round }
+                if let ref = DemoLaunch.openCourt { editing = ref }
+                #endif
             }
             .confirmationDialog(endPrompt, isPresented: $showingEnd, titleVisibility: .visible) {
                 if hasResults {
@@ -69,18 +78,28 @@ struct CourtListView: View {
         }
     }
 
+    // MARK: - Rounds
+
+    private func viewed(_ tournament: Tournament) -> Int {
+        min(browsing ?? tournament.latestRoundIndex, tournament.latestRoundIndex)
+    }
+
     @ViewBuilder
     private func roundSections(_ tournament: Tournament, _ round: Round) -> some View {
         Section {
             ForEach(round.matches) { match in
                 CourtRow(tournament: tournament, match: match)
                     .contentShape(.rect)
-                    .onTapGesture { editing = match.courtIndex }
+                    .onTapGesture { editing = CourtRef(round: round.index, court: match.courtIndex) }
             }
         } header: {
-            Text("Round \(round.index + 1)")
+            roundSwitcher(tournament, round)
         } footer: {
-            Text("Tap a court to set its score, or open the scoreboard to count point by point.")
+            if round.matches.contains(where: \.isConfirmed) {
+                Text("This round is finished. Reopen it to change a score.")
+            } else {
+                Text("Tap a court to set its score, or open the scoreboard to count point by point.")
+            }
         }
 
         if !round.sitOuts.isEmpty {
@@ -91,22 +110,59 @@ struct CourtListView: View {
         }
     }
 
-    /// Always present, whether or not a round exists — otherwise undoing the draw leaves
-    /// the screen with no way out.
+    private func roundSwitcher(_ tournament: Tournament, _ round: Round) -> some View {
+        HStack {
+            Button("Previous round", systemImage: "chevron.left") {
+                browsing = round.index - 1
+            }
+            .disabled(round.index == 0)
+
+            Spacer()
+            Text("Round \(round.index + 1) of \(tournament.rounds.count)")
+            Spacer()
+
+            Button("Next round", systemImage: "chevron.right") {
+                let next = round.index + 1
+                browsing = next == tournament.latestRoundIndex ? nil : next
+            }
+            .disabled(round.index >= tournament.latestRoundIndex)
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.borderless)
+        .font(.body)
+        .textCase(nil)
+    }
+
+    // MARK: - Actions
+
+    /// Always rendered, whatever the tournament looks like — otherwise undoing the draw
+    /// leaves the screen with no way out.
     @ViewBuilder
     private func managementSection(_ tournament: Tournament) -> some View {
+        let index = viewed(tournament)
+        let round = tournament.round(at: index)
+
         Section {
-            if let round = tournament.currentRound {
-                Button("Next round", systemImage: "arrow.right.circle.fill") {
-                    model.store.confirmRound()
-                    model.store.nextRound()
+            if let round {
+                if round.matches.contains(where: \.isConfirmed) {
+                    Button("Reopen this round", systemImage: "lock.open") {
+                        model.store.setRoundConfirmed(round.index, false)
+                    }
+                } else if round.index < tournament.latestRoundIndex {
+                    Button("Back to the current round", systemImage: "forward.end") {
+                        browsing = nil
+                    }
+                } else {
+                    Button("Finish round and draw the next", systemImage: "arrow.right.circle.fill") {
+                        model.store.setRoundConfirmed(round.index, true)
+                        model.store.nextRound()
+                        browsing = nil
+                    }
+                    .disabled(!allCourtsDone(round, tournament: tournament))
                 }
-                .disabled(!allCourtsDone(round, tournament: tournament))
             } else {
-                Button("Draw the first round", systemImage: "dice") {
-                    model.store.nextRound()
-                }
-                .disabled(tournament.playableCourts < 1)
+                Button("Draw the first round", systemImage: "dice") { model.store.nextRound() }
+                    .disabled(tournament.playableCourts < 1)
             }
 
             Button(
@@ -119,6 +175,8 @@ struct CourtListView: View {
         } footer: {
             if tournament.playableCourts < 1 {
                 Text("A court needs four players — this tournament has \(tournament.players.count).")
+            } else if let round, round.index < tournament.latestRoundIndex {
+                Text("You are looking at an earlier round. Later rounds were drawn from the standings as they were, so changing a score here will not re-pair them.")
             }
         }
     }
@@ -146,9 +204,10 @@ struct CourtListView: View {
     }
 }
 
-struct CourtRef: Identifiable {
-    let index: Int
-    var id: Int { index }
+struct CourtRef: Identifiable, Hashable {
+    let round: Int
+    let court: Int
+    var id: Self { self }
 }
 
 private struct CourtRow: View {

@@ -69,6 +69,14 @@ final class AppModel {
                 store.tap(court: 0, team: index.isMultiple(of: 3) ? .b : .a)
             }
         }
+        if arguments.contains("-rekkert-demo-rounds") {
+            for round in 0 ..< 2 {
+                store.setScore(round: round, court: 0, points: BySide(a: 9, b: 7))
+                store.setScore(round: round, court: 1, points: BySide(a: 11, b: 5))
+                store.setRoundConfirmed(round, true)
+                store.nextRound()
+            }
+        }
         if arguments.contains("-rekkert-demo-undo-draw") {
             store.undoLast()
         }

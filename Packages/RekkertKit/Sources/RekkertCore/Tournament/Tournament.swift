@@ -75,6 +75,13 @@ public struct Tournament: Codable, Sendable, Hashable {
 
     public var currentRound: Round? { rounds.last }
 
+    public func round(at index: Int) -> Round? {
+        rounds.indices.contains(index) ? rounds[index] : nil
+    }
+
+    /// Index of the round the app opens on.
+    public var latestRoundIndex: Int { max(0, rounds.count - 1) }
+
     public func player(_ id: PlayerID) -> Player? {
         players.first { $0.id == id }
     }

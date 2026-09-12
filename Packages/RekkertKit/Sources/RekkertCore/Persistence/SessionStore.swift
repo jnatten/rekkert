@@ -49,9 +49,18 @@ public struct SessionStore: Sendable {
 
     // MARK: - Active session
 
+    /// A session written by an older build may no longer decode. Rather than failing every
+    /// launch on the same file, it is set aside once and the app starts clean.
     public func loadActive() throws -> ActiveSession? {
         guard let data = try? Data(contentsOf: activeURL) else { return nil }
-        return try decoder.decode(ActiveSession.self, from: data)
+        do {
+            return try decoder.decode(ActiveSession.self, from: data)
+        } catch {
+            let quarantine = directory.appending(path: "active-unreadable.json")
+            try? FileManager.default.removeItem(at: quarantine)
+            try? FileManager.default.moveItem(at: activeURL, to: quarantine)
+            return nil
+        }
     }
 
     public func save(_ session: ActiveSession) throws {

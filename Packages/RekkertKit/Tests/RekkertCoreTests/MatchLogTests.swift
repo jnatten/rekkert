@@ -25,22 +25,22 @@ private func score(_ log: MatchLog) -> BySide<Int>? {
 struct MatchLogTests {
     @Test func sequenceNumbersAreConsecutivePerDevice() {
         var log = configuredLog()
-        log.append(.point(court: 0, team: .a), from: deviceB)
-        log.append(.point(court: 0, team: .a), from: deviceB)
+        log.append(.point(round: 0, court: 0, team: .a), from: deviceB)
+        log.append(.point(round: 0, court: 0, team: .a), from: deviceB)
         #expect(log.vector[deviceA] == 1)
         #expect(log.vector[deviceB] == 2)
     }
 
     @Test func lamportStampsIncreaseAcrossDevices() {
         var log = configuredLog()
-        let one = log.append(.point(court: 0, team: .a), from: deviceB)
-        let two = log.append(.point(court: 0, team: .b), from: deviceA)
+        let one = log.append(.point(round: 0, court: 0, team: .a), from: deviceB)
+        let two = log.append(.point(round: 0, court: 0, team: .b), from: deviceA)
         #expect(one.lamport < two.lamport)
     }
 
     @Test func mergeIsIdempotent() {
         var log = configuredLog()
-        log.append(.point(court: 0, team: .a), from: deviceA)
+        log.append(.point(round: 0, court: 0, team: .a), from: deviceA)
         let snapshot = log.ordered
 
         #expect(log.merge(snapshot) == false)
@@ -50,8 +50,8 @@ struct MatchLogTests {
 
     @Test func mergeIsOrderIndependent() {
         var log = configuredLog()
-        log.append(.point(court: 0, team: .a), from: deviceA)
-        log.append(.point(court: 0, team: .b), from: deviceB)
+        log.append(.point(round: 0, court: 0, team: .a), from: deviceA)
+        log.append(.point(round: 0, court: 0, team: .b), from: deviceB)
         let events = log.ordered
 
         var forward = MatchLog(sessionID: log.sessionID)
@@ -65,8 +65,8 @@ struct MatchLogTests {
 
     @Test func missingEventsAreComputedFromTheVersionVector() {
         var mine = configuredLog()
-        mine.append(.point(court: 0, team: .a), from: deviceA)
-        mine.append(.point(court: 0, team: .a), from: deviceA)
+        mine.append(.point(round: 0, court: 0, team: .a), from: deviceA)
+        mine.append(.point(round: 0, court: 0, team: .a), from: deviceA)
 
         var theirs = MatchLog(sessionID: mine.sessionID)
         theirs.merge(Array(mine.ordered.prefix(2)))
@@ -80,8 +80,8 @@ struct MatchLogTests {
         var phone = configuredLog()
         var watch = phone
 
-        let fromPhone = phone.append(.point(court: 0, team: .a), from: deviceA)
-        let fromWatch = watch.append(.point(court: 0, team: .a), from: deviceB)
+        let fromPhone = phone.append(.point(round: 0, court: 0, team: .a), from: deviceA)
+        let fromWatch = watch.append(.point(round: 0, court: 0, team: .a), from: deviceB)
 
         phone.merge([fromWatch])
         watch.merge([fromPhone])
@@ -92,8 +92,8 @@ struct MatchLogTests {
 
     @Test func undoRemovesItsTargetButNotLaterPoints() {
         var log = configuredLog()
-        let first = log.append(.point(court: 0, team: .a), from: deviceA)
-        log.append(.point(court: 0, team: .a), from: deviceA)
+        let first = log.append(.point(round: 0, court: 0, team: .a), from: deviceA)
+        log.append(.point(round: 0, court: 0, team: .a), from: deviceA)
         log.append(.undo(first.id), from: deviceA)
 
         #expect(score(log) == BySide(a: 1, b: 0))
@@ -101,7 +101,7 @@ struct MatchLogTests {
 
     @Test func undoingAnUndoRestoresThePoint() {
         var log = configuredLog()
-        let point = log.append(.point(court: 0, team: .a), from: deviceA)
+        let point = log.append(.point(round: 0, court: 0, team: .a), from: deviceA)
         let undo = log.append(.undo(point.id), from: deviceA)
         #expect(score(log) == BySide(a: 0, b: 0))
 
@@ -111,11 +111,11 @@ struct MatchLogTests {
 
     @Test func undoOnOneDeviceAndAPointOnTheOtherConverge() {
         var phone = configuredLog()
-        let point = phone.append(.point(court: 0, team: .a), from: deviceA)
+        let point = phone.append(.point(round: 0, court: 0, team: .a), from: deviceA)
         var watch = phone
 
         let undo = phone.append(.undo(point.id), from: deviceA)
-        let extra = watch.append(.point(court: 0, team: .b), from: deviceB)
+        let extra = watch.append(.point(round: 0, court: 0, team: .b), from: deviceB)
 
         phone.merge([extra])
         watch.merge([undo])
@@ -126,7 +126,7 @@ struct MatchLogTests {
 
     @Test func lastUndoableEventSkipsConfigurationAndUndos() {
         var log = configuredLog()
-        let point = log.append(.point(court: 0, team: .a), from: deviceA)
+        let point = log.append(.point(round: 0, court: 0, team: .a), from: deviceA)
         #expect(log.lastUndoableEvent()?.id == point.id)
 
         log.append(.undo(point.id), from: deviceA)
@@ -135,8 +135,8 @@ struct MatchLogTests {
 
     @Test func encodingRoundTripsAndIsStable() throws {
         var log = configuredLog()
-        log.append(.point(court: 0, team: .a), from: deviceB)
-        log.append(.point(court: 0, team: .b), from: deviceA)
+        log.append(.point(round: 0, court: 0, team: .a), from: deviceB)
+        log.append(.point(round: 0, court: 0, team: .b), from: deviceA)
 
         let data = try JSONCoding.encoder.encode(log)
         let decoded = try JSONCoding.decoder.decode(MatchLog.self, from: data)
@@ -152,7 +152,7 @@ struct MatchLogTests {
         var generator = SeededGenerator(seed: 99)
         for index in 0 ..< 60 {
             let team: TeamSide = index.isMultiple(of: 3) ? .b : .a
-            source.append(.point(court: 0, team: team), from: index.isMultiple(of: 2) ? deviceA : deviceB)
+            source.append(.point(round: 0, court: 0, team: team), from: index.isMultiple(of: 2) ? deviceA : deviceB)
         }
         let expected = SessionReducer.state(of: source)
 
@@ -178,11 +178,11 @@ struct MatchLogTests {
 
         for round in 0 ..< 80 {
             if Bool.random(using: &generator) {
-                inFlightToWatch.append(phone.append(.point(court: 0, team: .a), from: deviceA))
+                inFlightToWatch.append(phone.append(.point(round: 0, court: 0, team: .a), from: deviceA))
                 tapped += 1
             }
             if Bool.random(using: &generator) {
-                inFlightToPhone.append(watch.append(.point(court: 0, team: .b), from: deviceB))
+                inFlightToPhone.append(watch.append(.point(round: 0, court: 0, team: .b), from: deviceB))
                 tapped += 1
             }
             // Deliver a random prefix; the rest stays queued in the outbox.

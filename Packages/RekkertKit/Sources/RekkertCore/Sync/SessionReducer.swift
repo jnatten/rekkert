@@ -12,15 +12,15 @@ public enum SessionReducer {
         case .configure(let setup):
             configure(setup, into: &state)
 
-        case .point(let court, let team):
-            mutateCourt(court, in: &state) { engine, match in
+        case .point(let round, let court, let team):
+            mutateCourt(round: round, court: court, in: &state) { engine, match in
                 match.state = engine.scoringPoint(team, in: match.state)
             } traditional: { session in
                 session.score = session.engine.scoringPoint(team, in: session.score)
             }
 
-        case .setScore(let court, let points):
-            mutateCourt(court, in: &state) { engine, match in
+        case .setScore(let round, let court, let points):
+            mutateCourt(round: round, court: court, in: &state) { engine, match in
                 match.state = engine.settingScore(points, in: match.state)
             } traditional: { _ in }
 
@@ -29,11 +29,11 @@ public enum SessionReducer {
             session.score.suddenDeathCourt = court
             state = .traditional(session)
 
-        case .confirmRound:
+        case .setRoundConfirmed(let round, let isConfirmed):
             guard case .tournament(var tournament) = state,
-                  let index = tournament.rounds.indices.last else { return }
-            for court in tournament.rounds[index].matches.indices {
-                tournament.rounds[index].matches[court].isConfirmed = true
+                  tournament.rounds.indices.contains(round) else { return }
+            for court in tournament.rounds[round].matches.indices {
+                tournament.rounds[round].matches[court].isConfirmed = isConfirmed
             }
             state = .tournament(tournament)
 
@@ -80,7 +80,8 @@ public enum SessionReducer {
     }
 
     private static func mutateCourt(
-        _ court: Int,
+        round: Int,
+        court: Int,
         in state: inout SessionState?,
         tournament change: (PointCountEngine, inout CourtMatch) -> Void,
         traditional: (inout TraditionalSession) -> Void
@@ -91,7 +92,7 @@ public enum SessionReducer {
             state = .traditional(session)
 
         case .tournament(var current):
-            guard let round = current.rounds.indices.last,
+            guard current.rounds.indices.contains(round),
                   let index = current.rounds[round].matches.firstIndex(where: { $0.courtIndex == court }),
                   !current.rounds[round].matches[index].isConfirmed
             else { return }

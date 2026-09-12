@@ -39,10 +39,19 @@ public final class MatchStore {
     // MARK: - Local mutations
 
     public func configure(_ setup: SessionSetup) { record(.configure(setup)) }
-    public func tap(court: Int = 0, team: TeamSide) { record(.point(court: court, team: team)) }
-    public func setScore(court: Int, points: BySide<Int>) { record(.setScore(court: court, points: points)) }
+    public func tap(round: Int = 0, court: Int = 0, team: TeamSide) {
+        record(.point(round: round, court: court, team: team))
+    }
+
+    public func setScore(round: Int = 0, court: Int, points: BySide<Int>) {
+        record(.setScore(round: round, court: court, points: points))
+    }
+
     public func chooseServeSide(_ court: ServeCourt) { record(.chooseServeSide(court)) }
-    public func confirmRound() { record(.confirmRound) }
+
+    public func setRoundConfirmed(_ round: Int, _ isConfirmed: Bool = true) {
+        record(.setRoundConfirmed(round: round, isConfirmed: isConfirmed))
+    }
     public func nextRound() { record(.nextRound) }
     public func finish() { record(.finish) }
 

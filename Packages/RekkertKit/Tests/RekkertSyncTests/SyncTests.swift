@@ -231,6 +231,55 @@ struct SyncTests {
         #expect(pair.phone.state == pair.watch.state)
     }
 
+    @Test func aSessionFromAnOlderBuildIsSetAsideRatherThanCrashing() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appending(path: "rekkert-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        // The shape events had before rounds were addressed explicitly.
+        let legacy = #"{"log":{"sessionID":"x","events":[{"kind":{"point":{"court":0}}}]},"outbox":{"pending":[]}}"#
+        try Data(legacy.utf8).write(to: directory.appending(path: "active.json"))
+
+        let store = SessionStore(directory: directory)
+        #expect(try store.loadActive() == nil)
+        #expect(FileManager.default.fileExists(atPath: directory.appending(path: "active-unreadable.json").path))
+        #expect(!FileManager.default.fileExists(atPath: directory.appending(path: "active.json").path))
+        #expect(try store.loadActive() == nil, "and the next launch is clean")
+    }
+
+    @Test func correctingAnOldRoundOnThePhoneDoesNotDisturbTheWatchsCurrentRound() async throws {
+        let tournament = Tournament(
+            name: "Thursday", format: .americano,
+            players: (0 ..< 8).map { Player(name: "P\($0)") },
+            config: TournamentConfig(courtCount: 2)
+        )
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+
+        pair.phone.configure(.tournament(tournament))
+        pair.phone.nextRound()
+        pair.phone.setScore(round: 0, court: 0, points: BySide(a: 9, b: 7))
+        pair.phone.setRoundConfirmed(0, true)
+        pair.phone.nextRound()
+        try await settle()
+
+        // The watch scores the live round while the phone fixes a typo in the old one.
+        pair.watch.tap(round: 1, court: 0, team: .a)
+        pair.phone.setRoundConfirmed(0, false)
+        pair.phone.setScore(round: 0, court: 0, points: BySide(a: 12, b: 4))
+        try await settle()
+
+        guard case .tournament(let synced) = pair.watch.state else {
+            Issue.record("watch has no tournament")
+            return
+        }
+        #expect(synced.rounds[0].matches[0].state.points == BySide(a: 12, b: 4), "correction landed")
+        #expect(synced.rounds[1].matches[0].state.points == BySide(a: 1, b: 0), "live round intact")
+        #expect(pair.phone.state == pair.watch.state)
+    }
+
     @Test func stateSurvivesARestartFromDisk() async throws {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appending(path: "rekkert-tests-\(UUID().uuidString)")

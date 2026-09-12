@@ -18,10 +18,12 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
     public var isFinished: Bool
     public var winner: TeamSide?
 
-    public static func make(from state: SessionState, court: Int = 0) -> ScoreboardSnapshot? {
+    /// `round` selects which round to render; `nil` means whichever is current. Ignored
+    /// by traditional matches.
+    public static func make(from state: SessionState, round: Int? = nil, court: Int = 0) -> ScoreboardSnapshot? {
         switch state {
         case .traditional(let session): traditional(session)
-        case .tournament(let tournament): tournamentCourt(tournament, court: court)
+        case .tournament(let tournament): tournamentCourt(tournament, round: round, court: court)
         }
     }
 
@@ -49,8 +51,8 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
         )
     }
 
-    private static func tournamentCourt(_ tournament: Tournament, court: Int) -> ScoreboardSnapshot? {
-        guard let round = tournament.currentRound,
+    private static func tournamentCourt(_ tournament: Tournament, round index: Int?, court: Int) -> ScoreboardSnapshot? {
+        guard let round = index.map({ tournament.round(at: $0) }) ?? tournament.currentRound,
               let match = round.matches.first(where: { $0.courtIndex == court })
         else { return nil }
 
