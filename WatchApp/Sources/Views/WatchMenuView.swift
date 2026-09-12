@@ -82,6 +82,7 @@ struct WatchMenuView: View {
     ) -> some View {
         Button(action: action) {
             Label(title, systemImage: systemImage)
+                .padding(.horizontal, 6)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(.bordered)

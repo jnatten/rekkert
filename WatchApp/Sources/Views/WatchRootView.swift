@@ -72,6 +72,9 @@ struct WatchIdleView: View {
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
                             }
+                            // The pill's corner radius eats into the leading edge, so the
+                            // text needs its own inset to stop looking pushed against it.
+                            .padding(.horizontal, 6)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.bordered)
