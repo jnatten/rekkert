@@ -36,8 +36,9 @@ public enum SessionReducer {
                 break
             }
 
-        case .endRound:
+        case .endRound(let round):
             guard case .winnerCourt(var session) = state, !session.isFinished else { return }
+            guard session.score.completedSets.count == round else { return }
             session.score = session.engine.endingRound(session.score)
             state = .winnerCourt(session)
 
@@ -49,8 +50,9 @@ public enum SessionReducer {
             }
             state = .tournament(tournament)
 
-        case .nextRound:
+        case .nextRound(let after):
             guard case .tournament(let tournament) = state,
+                  tournament.rounds.count == after + 1,
                   let next = try? TournamentEngine.appendingRound(to: tournament) else { return }
             state = .tournament(next)
 

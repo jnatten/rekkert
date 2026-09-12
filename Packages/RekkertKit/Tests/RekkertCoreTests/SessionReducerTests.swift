@@ -14,7 +14,7 @@ private func tournamentLog(players: Int = 8, courts: Int = 2, target: Int = 16) 
     )
     var log = MatchLog(sessionID: UUID(uuidString: "22222222-0000-0000-0000-000000000000")!)
     log.append(.configure(.tournament(tournament)), from: device)
-    log.append(.nextRound, from: device)
+    log.drawRound(from: device)
     return log
 }
 
@@ -72,7 +72,7 @@ struct SessionReducerTests {
         log.append(.setScore(round: 0, court: 0, points: BySide(a: 12, b: 4)), from: device)
         log.append(.setScore(round: 0, court: 1, points: BySide(a: 9, b: 7)), from: device)
         log.append(.setRoundConfirmed(round: 0, isConfirmed: true), from: device)
-        log.append(.nextRound, from: device)
+        log.drawRound(from: device)
 
         let value = tournament(log)
         #expect(value?.rounds.count == 2)
@@ -83,7 +83,7 @@ struct SessionReducerTests {
     @Test func undoingNextRoundTakesTheRoundBack() {
         var log = tournamentLog()
         log.append(.setRoundConfirmed(round: 0, isConfirmed: true), from: device)
-        let advance = log.append(.nextRound, from: device)
+        let advance = log.drawRound(from: device)
         #expect(tournament(log)?.rounds.count == 2)
 
         log.append(.undo(advance.id), from: device)
@@ -118,7 +118,7 @@ struct SessionReducerTests {
         var log = tournamentLog()
         log.append(.setScore(round: 0, court: 0, points: BySide(a: 9, b: 7)), from: device)
         log.append(.setRoundConfirmed(round: 0, isConfirmed: true), from: device)
-        log.append(.nextRound, from: device)
+        log.drawRound(from: device)
         log.append(.point(round: 1, court: 0, team: .a), from: device)
 
         // Round 0 is locked, so correcting it needs reopening first.
@@ -146,7 +146,7 @@ struct SessionReducerTests {
         )
 
         // The phone meanwhile moves the tournament on, and only then does it arrive.
-        log.append(.nextRound, from: device)
+        log.drawRound(from: device)
         log.merge([onTheWatch])
 
         let value = try! #require(tournament(log))
@@ -155,20 +155,41 @@ struct SessionReducerTests {
         #expect(value.rounds[1].matches[0].state.points == BySide(a: 0, b: 0))
     }
 
+    @Test func bothDevicesAdvancingAtOnceDrawsOneRound() {
+        var log = tournamentLog()
+        let watch = DeviceID()
+
+        var onPhone = log
+        var onWatch = log
+        let fromPhone = onPhone.drawRound(from: device)
+        let fromWatch = onWatch.drawRound(from: watch)
+
+        onPhone.merge([fromWatch])
+        onWatch.merge([fromPhone])
+
+        #expect(tournament(onPhone)?.rounds.count == 2, "one whistle, one new round")
+        #expect(SessionReducer.state(of: onPhone) == SessionReducer.state(of: onWatch))
+
+        // And the round that did get drawn is still the live one.
+        log = onPhone
+        log.drawRound(from: device)
+        #expect(tournament(log)?.rounds.count == 3, "advancing again still works")
+    }
+
     @Test func undoingTheDrawLeavesNoRoundButStaysRecoverable() {
         var log = tournamentLog()
         #expect(tournament(log)?.rounds.count == 1)
 
         // What the Undo button reaches for on a freshly drawn tournament.
         let draw = try! #require(log.lastUndoableEvent())
-        #expect(draw.kind == .nextRound)
+        #expect(draw.kind == .nextRound(after: -1))
         log.append(.undo(draw.id), from: device)
 
         let stranded = try! #require(tournament(log))
         #expect(stranded.currentRound == nil)
         #expect(stranded.playableCourts >= 1, "the UI must still offer to draw a round")
 
-        log.append(.nextRound, from: device)
+        log.drawRound(from: device)
         #expect(tournament(log)?.rounds.count == 1, "drawing again recovers")
     }
 
@@ -177,7 +198,7 @@ struct SessionReducerTests {
                               players: (0 ..< 3).map { Player(name: "P\($0)") })
         var log = MatchLog()
         log.append(.configure(.tournament(tiny)), from: device)
-        log.append(.nextRound, from: device)
+        log.drawRound(from: device)
 
         let state = try! #require(tournament(log))
         #expect(state.playableCourts == 0, "the draw button is disabled on this")

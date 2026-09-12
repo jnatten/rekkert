@@ -112,8 +112,7 @@ struct WatchMenuView: View {
             model.store.nextRound()
         case .finish:
             WKInterfaceDevice.current().play(.success)
-            model.store.finish()
-            model.archiveAndReset()
+            model.finishSession()
         case .none:
             break
         }

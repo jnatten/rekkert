@@ -94,6 +94,21 @@ public enum SessionState: Codable, Sendable, Hashable {
         }
     }
 
+    /// Whether anything was actually played, as opposed to merely set up. Decides whether
+    /// a finished session is worth keeping in history.
+    public var hasResults: Bool {
+        switch self {
+        case .traditional(let session):
+            !session.score.completedSets.isEmpty || session.score.games.total > 0 || session.score.points.total > 0
+        case .winnerCourt(let session):
+            !session.completedRounds.isEmpty || session.score.games.total > 0 || session.score.points.total > 0
+        case .tournament(let tournament):
+            tournament.rounds.contains { round in
+                round.matches.contains { $0.state.points.total > 0 } || !round.sitOuts.isEmpty
+            }
+        }
+    }
+
     /// Courts the user can score right now: always one for a traditional match, and one
     /// per filled court in the current tournament round.
     public var courtCount: Int {

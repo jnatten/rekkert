@@ -3,10 +3,23 @@ import Foundation
 public struct ActiveSession: Codable, Sendable, Hashable {
     public var log: MatchLog
     public var outbox: Outbox
+    /// Sessions that have been finished or replaced here. A counterpart that has not caught
+    /// up yet will keep offering them back, and without this they would be adopted again.
+    public var retired: [UUID]
 
-    public init(log: MatchLog, outbox: Outbox = Outbox()) {
+    public init(log: MatchLog, outbox: Outbox = Outbox(), retired: [UUID] = []) {
         self.log = log
         self.outbox = outbox
+        self.retired = retired
+    }
+
+    private enum CodingKeys: String, CodingKey { case log, outbox, retired }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        log = try container.decode(MatchLog.self, forKey: .log)
+        outbox = try container.decode(Outbox.self, forKey: .outbox)
+        retired = try container.decodeIfPresent([UUID].self, forKey: .retired) ?? []
     }
 }
 

@@ -22,6 +22,8 @@ public final class MatchStore {
     private var needsFlush = false
     private var snapshotPending = false
     private var lastQueued: [EventID] = []
+    private var retired: [UUID]
+    private let keepsHistory: Bool
     private let sendTimeout: Duration
     private let retryInterval: Duration
     private let snapshotInterval: TimeInterval
@@ -33,10 +35,13 @@ public final class MatchStore {
         session: ActiveSession? = nil,
         snapshotInterval: TimeInterval = 1,
         sendTimeout: Duration = .seconds(6),
-        retryInterval: Duration = .seconds(4)
+        retryInterval: Duration = .seconds(4),
+        keepsHistory: Bool = true
     ) {
         self.sendTimeout = sendTimeout
         self.retryInterval = retryInterval
+        self.keepsHistory = keepsHistory
+        self.retired = session?.retired ?? []
         self.device = device
         self.transport = transport
         self.store = store
@@ -63,9 +68,19 @@ public final class MatchStore {
     public func setRoundConfirmed(_ round: Int, _ isConfirmed: Bool = true) {
         record(.setRoundConfirmed(round: round, isConfirmed: isConfirmed))
     }
-    public func nextRound() { record(.nextRound) }
+    /// Draws the next round. Addressed to the round on screen now, so two devices tapping
+    /// at once still produce one round.
+    public func nextRound() {
+        guard case .tournament(let tournament)? = state else { return }
+        // -1 when nothing has been drawn yet, so the first round is "the one after none".
+        record(.nextRound(after: tournament.rounds.count - 1))
+    }
+
     /// The whistle in winner court.
-    public func endRound() { record(.endRound) }
+    public func endRound() {
+        guard case .winnerCourt(let session)? = state else { return }
+        record(.endRound(round: session.completedRounds.count))
+    }
     public func finish() { record(.finish) }
 
     // MARK: - Presets
@@ -111,10 +126,42 @@ public final class MatchStore {
     }
 
     public func startNewSession() {
+        retire(log.sessionID)
         log = MatchLog()
         outbox = Outbox()
         replacedSessionTitle = nil
         refresh()
+    }
+
+    /// A session is retired where it ends, and stays retired, so a counterpart that has not
+    /// caught up cannot hand it back.
+    private func retire(_ id: UUID) {
+        guard !log.isEmpty, !retired.contains(id) else { return }
+        retired.append(id)
+        if retired.count > 20 { retired.removeFirst(retired.count - 20) }
+    }
+
+    /// Finishing is one path on both devices: the `.finish` event travels, and wherever it
+    /// lands the session is archived if it is worth keeping and then cleared. Clearing
+    /// locally without that would leave the counterpart holding a live copy to resurrect.
+    private func concludeIfFinished() -> Bool {
+        guard let finished = state, finished.isFinished else { return false }
+        if keepsHistory, finished.hasResults {
+            try? store?.archive(HistoryRecord(title: finished.title, state: finished))
+        }
+
+        // The counterpart has to learn this before the log disappears from here, or it
+        // will keep offering the session back as though it were still live.
+        let farewell = encode(.snapshot(log))
+        transport.queue(farewell)
+        Task { _ = await sendLive(farewell) }
+
+        retire(log.sessionID)
+        log = MatchLog()
+        outbox = Outbox()
+        state = nil
+        persist()
+        return true
     }
 
     public func acknowledgeReplacedSession() {
@@ -254,10 +301,12 @@ public final class MatchStore {
         switch wire {
         case .hello(let sessionID, let vector):
             sharePresets()
+            guard !retired.contains(sessionID) else { return replyWithOurs(packet) }
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
             packet.reply?(encode(.events(sessionID: log.sessionID, events: log.events(missingRelativeTo: vector))))
 
         case .events(let sessionID, let events):
+            guard !retired.contains(sessionID) else { return replyWithOurs(packet) }
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
             if log.merge(events) { refresh() }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.vector)))
@@ -268,7 +317,9 @@ public final class MatchStore {
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.vector)))
 
         case .snapshot(let incoming):
-            if incoming.isEmpty {
+            if retired.contains(incoming.sessionID) {
+                replyWithOurs(packet)
+            } else if incoming.isEmpty {
                 // A peer that has not started anything yet is not a competing session;
                 // our own snapshot will reach it and it will adopt ours.
                 break
@@ -309,6 +360,12 @@ public final class MatchStore {
         packet.reply?(encode(.snapshot(log)))
     }
 
+    /// Tells the counterpart what we have instead, which is how it learns the session it is
+    /// offering is over.
+    private func replyWithOurs(_ packet: InboundPacket) {
+        packet.reply?(encode(.snapshot(log)))
+    }
+
     /// Throttled, but never dropped: a change that arrives inside the window is published
     /// when the window closes. The application context holds one value, and it is the only
     /// thing a counterpart sees at cold launch, so it must end up holding the newest state
@@ -342,10 +399,11 @@ public final class MatchStore {
 
     private func refresh() {
         state = SessionReducer.state(of: log)
+        if concludeIfFinished() { return }
         persist()
     }
 
     private func persist() {
-        try? store?.save(ActiveSession(log: log, outbox: outbox))
+        try? store?.save(ActiveSession(log: log, outbox: outbox, retired: retired))
     }
 }

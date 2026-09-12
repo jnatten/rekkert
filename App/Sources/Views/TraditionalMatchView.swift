@@ -40,7 +40,7 @@ struct TraditionalMatchView: View {
                 }
             }
             .confirmationDialog("End this match?", isPresented: $showingEnd, titleVisibility: .visible) {
-                Button("Save to history", role: .destructive) { model.archiveAndReset() }
+                Button("Save to history", role: .destructive) { model.finishSession() }
                 Button("Keep playing", role: .cancel) {}
             }
         }
@@ -69,7 +69,7 @@ struct TraditionalMatchView: View {
     private func finishedBanner(_ snapshot: ScoreboardSnapshot) -> some View {
         VStack(spacing: 10) {
             Text(snapshot.detail).font(.title3.bold())
-            Button("Save to history") { model.archiveAndReset() }
+            Button("Save to history") { model.finishSession() }
                 .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity)

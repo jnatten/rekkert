@@ -11,9 +11,13 @@ public enum EventKind: Codable, Sendable, Hashable {
     /// served to.
     case chooseServeSide(ServeCourt)
     case setRoundConfirmed(round: Int, isConfirmed: Bool)
-    /// The whistle in winner court: closes the round wherever it stands.
-    case endRound
-    case nextRound
+    /// The whistle in winner court: closes round `round` wherever it stands. Naming the
+    /// round makes it idempotent — if both devices whistle, the second is a no-op instead
+    /// of closing a second round.
+    case endRound(round: Int)
+    /// Draws the round after `after`, and only if that is still the last one — so two
+    /// devices advancing at once produce one new round, not two.
+    case nextRound(after: Int)
     case finish
     case undo(EventID)
 }

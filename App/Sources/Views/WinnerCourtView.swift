@@ -39,8 +39,7 @@ struct WinnerCourtView: View {
             }
             .confirmationDialog("Finish this session?", isPresented: $showingEnd, titleVisibility: .visible) {
                 Button("Save to history", role: .destructive) {
-                    model.store.finish()
-                    model.archiveAndReset()
+                    model.finishSession()
                 }
                 Button("Keep playing", role: .cancel) {}
             }

@@ -22,3 +22,23 @@ extension PointCountEngine {
 func repeated(_ pattern: [TeamSide], _ times: Int) -> [TeamSide] {
     (0 ..< times).flatMap { _ in pattern }
 }
+
+extension MatchLog {
+    /// Mirrors `MatchStore.nextRound()`: the draw is addressed to the round on screen now.
+    @discardableResult
+    mutating func drawRound(from device: DeviceID) -> MatchEvent {
+        guard case .tournament(let tournament)? = SessionReducer.state(of: self) else {
+            return append(.nextRound(after: -1), from: device)
+        }
+        return append(.nextRound(after: tournament.rounds.count - 1), from: device)
+    }
+
+    /// Mirrors `MatchStore.endRound()`.
+    @discardableResult
+    mutating func blowWhistle(from device: DeviceID) -> MatchEvent {
+        guard case .winnerCourt(let session)? = SessionReducer.state(of: self) else {
+            return append(.endRound(round: 0), from: device)
+        }
+        return append(.endRound(round: session.completedRounds.count), from: device)
+    }
+}

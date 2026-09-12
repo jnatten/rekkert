@@ -68,7 +68,7 @@ struct CourtListView: View {
                 if hasResults {
                     Button("Save to history", role: .destructive) {
                         model.store.finish()
-                        model.archiveAndReset()
+                        model.finishSession()
                     }
                 } else {
                     Button("Discard", role: .destructive) { model.discard() }

@@ -49,7 +49,7 @@ struct WinnerCourtTests {
         var value = log()
         score(&value, [.a, .a, .a, .a])   // 1-0 in games
         score(&value, [.a, .a, .b])       // 30-15 to A in the game under way
-        value.append(.endRound, from: device)
+        value.blowWhistle(from: device)
 
         let state = try! #require(session(value))
         #expect(state.completedRounds.count == 1)
@@ -63,7 +63,7 @@ struct WinnerCourtTests {
         var value = log()
         score(&value, [.a, .a, .a, .a])
         score(&value, [.a, .b, .a, .b])   // 30-30, nobody ahead
-        value.append(.endRound, from: device)
+        value.blowWhistle(from: device)
 
         #expect(session(value)?.completedRounds[0].games == BySide(a: 1, b: 0))
     }
@@ -72,7 +72,7 @@ struct WinnerCourtTests {
         var value = log()
         score(&value, [.a, .a, .a, .a])
         score(&value, [.b, .b, .b, .b])
-        value.append(.endRound, from: device)
+        value.blowWhistle(from: device)
 
         let round = try! #require(session(value)?.completedRounds.first)
         #expect(round.games == BySide(a: 1, b: 1))
@@ -81,7 +81,7 @@ struct WinnerCourtTests {
 
     @Test func theWhistleOnAnUntouchedRoundDoesNothing() {
         var value = log()
-        value.append(.endRound, from: device)
+        value.blowWhistle(from: device)
         #expect(session(value)?.completedRounds.isEmpty == true)
         #expect(session(value)?.roundNumber == 1)
     }
@@ -90,10 +90,10 @@ struct WinnerCourtTests {
         var value = log()
         score(&value, [.a, .a, .a, .a])
         score(&value, [.a, .a, .a, .a])
-        value.append(.endRound, from: device)      // round 1: 2-0 to us
+        value.blowWhistle(from: device)      // round 1: 2-0 to us
 
         score(&value, [.b, .b, .b, .b])
-        value.append(.endRound, from: device)      // round 2: 0-1 to them
+        value.blowWhistle(from: device)      // round 2: 0-1 to them
 
         score(&value, [.a, .a, .a, .a])            // round 3 under way
 
@@ -151,10 +151,47 @@ struct WinnerCourtTests {
         #expect(session(value)?.score.games == BySide(a: 1, b: 0), "a finished session ignores points")
     }
 
+    @Test func bothDevicesWhistlingAtOnceClosesOneRound() {
+        var value = log()
+        score(&value, [.a, .a, .a, .a])
+        let watch = DeviceID()
+
+        var onPhone = value
+        var onWatch = value
+        let fromPhone = onPhone.blowWhistle(from: device)
+        let fromWatch = onWatch.blowWhistle(from: watch)
+
+        onPhone.merge([fromWatch])
+        onWatch.merge([fromPhone])
+
+        #expect(session(onPhone)?.completedRounds.count == 1, "one whistle, one round")
+        #expect(session(onPhone)?.roundNumber == 2)
+        #expect(SessionReducer.state(of: onPhone) == SessionReducer.state(of: onWatch))
+    }
+
+    @Test func aPointThatLandsBetweenTwoWhistlesDoesNotCloseASecondRound() {
+        var value = log()
+        score(&value, [.a, .a, .a, .a])
+        let watch = DeviceID()
+
+        var onPhone = value
+        var onWatch = value
+        let fromPhone = onPhone.blowWhistle(from: device)
+        // The watch scores one more, then whistles too.
+        onWatch.append(.point(round: 0, court: 0, team: .b), from: watch)
+        let fromWatch = onWatch.blowWhistle(from: watch)
+
+        onPhone.merge([fromWatch] + onWatch.ordered)
+        onWatch.merge([fromPhone])
+
+        #expect(session(onPhone)?.completedRounds.count == 1, "still just the one round")
+        #expect(SessionReducer.state(of: onPhone) == SessionReducer.state(of: onWatch))
+    }
+
     @Test func undoingTheWhistleReopensTheRound() {
         var value = log()
         score(&value, [.a, .a, .a, .a])
-        let whistle = value.append(.endRound, from: device)
+        let whistle = value.blowWhistle(from: device)
         #expect(session(value)?.roundNumber == 2)
 
         value.append(.undo(whistle.id), from: device)

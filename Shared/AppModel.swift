@@ -16,9 +16,20 @@ final class AppModel {
             device: DeviceIdentity.current(),
             transport: AppModel.makeTransport(),
             store: persistence,
-            session: try? persistence?.loadActive()
+            session: try? persistence?.loadActive(),
+            keepsHistory: AppModel.keepsHistory
         )
         roster = persistence?.loadRoster() ?? PlayerRoster()
+    }
+
+    /// Only the phone keeps a history; the watch has nowhere to show it and less room to
+    /// store it.
+    private static var keepsHistory: Bool {
+        #if os(watchOS)
+        false
+        #else
+        true
+        #endif
     }
 
     private static func makeTransport() -> any PeerTransport {
@@ -152,20 +163,15 @@ final class AppModel {
         (try? sessionStore?.history()) ?? []
     }
 
-    /// Archives the finished session and clears the slate for the next one.
-    func archiveAndReset() {
-        if let state = store.state {
-            try? sessionStore?.archive(HistoryRecord(title: state.title, state: state))
-        }
-        try? sessionStore?.clearActive()
-        store.startNewSession()
+    /// Ends the session everywhere. The store archives it if it is worth keeping and
+    /// clears both devices, so there is a single path rather than one per device.
+    func finishSession() {
+        store.finish()
     }
 
-    /// Throws the current session away without archiving it. Used when nothing has been
-    /// played, so there is nothing worth keeping.
+    /// Nothing was played, so finishing keeps no record of it.
     func discard() {
-        try? sessionStore?.clearActive()
-        store.startNewSession()
+        store.finish()
     }
 
     func deleteHistory(_ id: UUID) {
