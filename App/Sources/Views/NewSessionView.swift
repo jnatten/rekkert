@@ -15,6 +15,14 @@ struct NewSessionView: View {
     @State private var tournamentName = ""
     @State private var config = TournamentConfig()
     @State private var players: [Player] = (0 ..< 4).map { _ in Player(name: "") }
+    @FocusState private var focused: Field?
+
+    private enum Field: Hashable {
+        case tournamentName
+        case player(PlayerID)
+        case teamName(TeamSide)
+        case teamPlayer(TeamSide, Int)
+    }
 
     var body: some View {
         NavigationStack {
@@ -33,6 +41,9 @@ struct NewSessionView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Start", action: start).disabled(!canStart)
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    suggestionBar
                 }
             }
         }
@@ -78,11 +89,28 @@ struct NewSessionView: View {
                 Circle().fill(Color.team(side)).frame(width: 10, height: 10)
                 TextField("Team name", text: name)
                     .font(.headline)
+                    .focused($focused, equals: .teamName(side))
+                    .submitLabel(.next)
+                    .onSubmit { focused = .teamPlayer(side, 0) }
             }
-            TextField("Player 1", text: players[0])
-            TextField("Player 2", text: players[1])
+            ForEach(0 ..< 2, id: \.self) { index in
+                TextField("Player \(index + 1)", text: players[index])
+                    .focused($focused, equals: .teamPlayer(side, index))
+                    .submitLabel(side == .b && index == 1 ? .done : .next)
+                    .onSubmit { advanceFromTeamPlayer(side, index) }
+            }
         }
         .textInputAutocapitalization(.words)
+    }
+
+    private func advanceFromTeamPlayer(_ side: TeamSide, _ index: Int) {
+        if index == 0 {
+            focused = .teamPlayer(side, 1)
+        } else if side == .a {
+            focused = .teamName(.b)
+        } else {
+            focused = nil
+        }
     }
 
     private var tiebreakBinding: Binding<Bool> {
@@ -111,8 +139,52 @@ struct NewSessionView: View {
 
     @ViewBuilder
     private var tournamentSections: some View {
+        Section {
+            ForEach($players) { $player in
+                TextField("Player name", text: $player.name)
+                    .textInputAutocapitalization(.words)
+                    .focused($focused, equals: .player(player.id))
+                    .submitLabel(.next)
+                    .onSubmit { advanceFromPlayer(player.id) }
+            }
+            .onDelete { players.remove(atOffsets: $0) }
+
+            Button("Add player", systemImage: "plus") { addPlayer() }
+        } header: {
+            Text("Players (\(namedPlayers.count))")
+        } footer: {
+            Text(playerFooter)
+        }
+
+        if !quickAdd.isEmpty {
+            Section {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(quickAdd) { known in
+                            Button(known.name) { add(known.name) }
+                                .buttonStyle(.bordered)
+                                .contextMenu {
+                                    Button("Forget \(known.name)", systemImage: "trash", role: .destructive) {
+                                        model.forgetPlayer(known.name)
+                                    }
+                                }
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                .scrollIndicators(.hidden)
+            } header: {
+                Text("Played before")
+            } footer: {
+                Text("Tap to add. Press and hold to forget someone.")
+            }
+        }
+
         Section("Tournament") {
             TextField("Name", text: $tournamentName)
+                .focused($focused, equals: .tournamentName)
+                .submitLabel(.next)
+                .onSubmit { focused = players.first.map { .player($0.id) } }
             Stepper("Courts: \(config.courtCount)", value: $config.courtCount, in: 1 ... 8)
         }
 
@@ -150,19 +222,89 @@ struct NewSessionView: View {
                 }
             }
         }
+    }
 
-        Section {
-            ForEach($players) { $player in
-                TextField("Player name", text: $player.name)
-                    .textInputAutocapitalization(.words)
+    // MARK: - Player entry
+
+    /// Enter moves to the next name, adding a row when there is not one yet, so a group
+    /// can be typed in without reaching for the screen between names.
+    private func advanceFromPlayer(_ id: PlayerID) {
+        guard let index = players.firstIndex(where: { $0.id == id }) else { return }
+        if index + 1 < players.count {
+            focused = .player(players[index + 1].id)
+        } else {
+            addPlayer()
+        }
+    }
+
+    private func addPlayer() {
+        let player = Player(name: "")
+        players.append(player)
+        focused = .player(player.id)
+    }
+
+    /// Familiar names not already in this tournament.
+    private var quickAdd: [KnownPlayer] {
+        model.roster.suggestions(excluding: players.map(\.name), limit: 12)
+    }
+
+    private func add(_ name: String) {
+        if let slot = players.firstIndex(where: { $0.name.trimmingCharacters(in: .whitespaces).isEmpty }) {
+            players[slot].name = name
+        } else {
+            players.append(Player(name: name))
+        }
+    }
+
+    /// Suggestions for whichever name field is being typed into, shown above the keyboard.
+    @ViewBuilder
+    private var suggestionBar: some View {
+        let matches = suggestions
+        if matches.isEmpty {
+            Spacer()
+            Button("Done") { focused = nil }
+        } else {
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(matches) { known in
+                        Button(known.name) { fill(known.name) }
+                            .buttonStyle(.bordered)
+                    }
+                }
             }
-            .onDelete { players.remove(atOffsets: $0) }
+            .scrollIndicators(.hidden)
+            Button("Done") { focused = nil }
+        }
+    }
 
-            Button("Add player") { players.append(Player(name: "")) }
-        } header: {
-            Text("Players (\(namedPlayers.count))")
-        } footer: {
-            Text(playerFooter)
+    private var suggestions: [KnownPlayer] {
+        guard let focused else { return [] }
+        switch focused {
+        case .tournamentName, .teamName:
+            return []
+        case .player(let id):
+            guard let player = players.first(where: { $0.id == id }) else { return [] }
+            return model.roster.suggestions(matching: player.name, excluding: players.map(\.name), limit: 8)
+        case .teamPlayer(let side, let index):
+            let entered = playersA + playersB
+            let typed = (side == .a ? playersA : playersB)[index]
+            return model.roster.suggestions(matching: typed, excluding: entered.filter { $0 != typed }, limit: 8)
+        }
+    }
+
+    /// Puts a chosen name into the field being typed into, then moves on.
+    private func fill(_ name: String) {
+        guard let focused else { return }
+        switch focused {
+        case .tournamentName, .teamName:
+            break
+        case .player(let id):
+            guard let index = players.firstIndex(where: { $0.id == id }) else { return }
+            players[index].name = name
+            advanceFromPlayer(id)
+        case .teamPlayer(let side, let index):
+            if side == .a { playersA[index] = name } else { playersB[index] = name }
+            advanceFromTeamPlayer(side, index)
         }
     }
 
@@ -217,6 +359,7 @@ struct NewSessionView: View {
     private func start() {
         switch mode.tournamentFormat {
         case .none:
+            model.remember(players: (playersA + playersB).filter { !$0.isEmpty })
             model.store.configure(.traditional(
                 rules: rules,
                 teams: BySide(
@@ -225,6 +368,7 @@ struct NewSessionView: View {
                 )
             ))
         case .some(let format):
+            model.remember(players: namedPlayers.map(\.name))
             model.store.configure(.tournament(Tournament(
                 name: tournamentName,
                 format: format,

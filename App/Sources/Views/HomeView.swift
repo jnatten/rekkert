@@ -39,6 +39,13 @@ struct HomeView: View {
             .sheet(item: $newMatch) { mode in
                 NewSessionView(mode: mode)
             }
+            .task {
+                #if DEBUG
+                if let raw = DemoLaunch.newSession {
+                    newMatch = GameMode(rawValue: raw)
+                }
+                #endif
+            }
         }
     }
 }

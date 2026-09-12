@@ -30,7 +30,9 @@ plus standings and round history. Scores can be tapped in point by point, typed,
 with a stepper, or picked from a list of results — in "total points played" mode both
 halves always add up to the target, so one tap settles a court.
 
-Chevrons move between rounds. Going back to an earlier round shows it as it was played;
+Players who have played before are remembered and offered back as one-tap chips and as
+suggestions above the keyboard while typing; Return moves to the next name. Chevrons move
+between rounds. Going back to an earlier round shows it as it was played;
 reopening it allows corrections. Later rounds keep the pairings they were drawn with,
 since they were seeded from the standings at the time. The watch shows one court at a
 time — swipe between them — and can score or correct any of them.
@@ -125,6 +127,6 @@ xcrun simctl boot <pair udid>
 
 Debug builds accept `-rekkert-demo traditional|americano|mexicano` (plus
 `-rekkert-demo-points N`, `-rekkert-demo-deuce`, `-rekkert-demo-rounds`,
-`-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N` or
-`-rekkert-demo-open-court R,C`) as launch arguments to put the app into a given state,
-since `simctl` cannot tap the screen.
+`-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N`,
+`-rekkert-demo-open-court R,C`, `-rekkert-demo-roster` or `-rekkert-demo-new <mode>`) as
+launch arguments to put the app into a given state, since `simctl` cannot tap the screen.

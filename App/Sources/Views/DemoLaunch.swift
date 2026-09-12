@@ -7,6 +7,9 @@ import Foundation
 ///     -rekkert-demo-browse-round 0
 ///     -rekkert-demo-open-court 0,1        // round, court
 enum DemoLaunch {
+    /// Opens the new-session sheet: -rekkert-demo-new americano
+    static var newSession: String? { value(for: "-rekkert-demo-new") }
+
     static var browseRound: Int? {
         value(for: "-rekkert-demo-browse-round").flatMap(Int.init)
     }

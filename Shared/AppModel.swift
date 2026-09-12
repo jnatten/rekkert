@@ -18,6 +18,7 @@ final class AppModel {
             store: persistence,
             session: try? persistence?.loadActive()
         )
+        roster = persistence?.loadRoster() ?? PlayerRoster()
     }
 
     private static func makeTransport() -> any PeerTransport {
@@ -41,6 +42,10 @@ final class AppModel {
     /// cannot tap, so this is how the watch/phone sync path gets verified headlessly.
     private func seedDemoIfRequested() {
         let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("-rekkert-demo-roster") {
+            remember(players: ["Jonas", "Ada", "Kim", "Sam", "Bjørn", "Ola", "Siri", "Tor", "Håkon"])
+            remember(players: ["Jonas", "Ada", "Kim"])
+        }
         guard let flag = arguments.firstIndex(of: "-rekkert-demo"), flag + 1 < arguments.count else { return }
         store.startNewSession()
 
@@ -92,6 +97,23 @@ final class AppModel {
 
     func becameActive() {
         Task { [store] in await store.synchronise() }
+    }
+
+    /// Everyone who has played before, for name suggestions.
+    private(set) var roster = PlayerRoster()
+
+    func remember(players names: [String]) {
+        var updated = roster
+        updated.remember(names)
+        roster = updated
+        try? sessionStore?.save(updated)
+    }
+
+    func forgetPlayer(_ name: String) {
+        var updated = roster
+        updated.forget(name)
+        roster = updated
+        try? sessionStore?.save(updated)
     }
 
     var history: [HistoryRecord] {

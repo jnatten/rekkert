@@ -94,6 +94,21 @@ public struct SessionStore: Sendable {
         try? FileManager.default.removeItem(at: historyDirectory.appending(path: "\(id.uuidString).json"))
     }
 
+    // MARK: - Player roster
+
+    private var rosterURL: URL { directory.appending(path: "players.json") }
+
+    public func loadRoster() -> PlayerRoster {
+        guard let data = try? Data(contentsOf: rosterURL),
+              let roster = try? decoder.decode(PlayerRoster.self, from: data)
+        else { return PlayerRoster() }
+        return roster
+    }
+
+    public func save(_ roster: PlayerRoster) throws {
+        try write(try encoder.encode(roster), to: rosterURL)
+    }
+
     // MARK: - Plumbing
 
     private var encoder: JSONEncoder { JSONCoding.encoder }
