@@ -62,19 +62,14 @@ struct FullscreenScoreView: View {
         ZStack {
             Color.team(side)
             VStack(spacing: 0) {
-                VStack(spacing: 6) {
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(.white.opacity(snapshot.serving == side ? 0.9 : 0))
-                            .frame(width: 12, height: 12)
-                        Text(snapshot.teamNames[side])
-                            .font(.system(size: min(size.height * 0.06, 34), weight: .semibold, design: .rounded))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.5)
-                    }
-                    if snapshot.serving == side, let court = snapshot.servingCourt {
-                        ServeSideBadge(court: court, height: min(size.height * 0.028, 17))
-                    }
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(.white.opacity(snapshot.serving == side ? 0.9 : 0))
+                        .frame(width: 12, height: 12)
+                    Text(snapshot.teamNames[side])
+                        .font(.system(size: min(size.height * 0.06, 34), weight: .semibold, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
                 }
                 .foregroundStyle(.white.opacity(0.9))
                 // The colour bleeds under the island; the writing must not.
@@ -82,12 +77,18 @@ struct FullscreenScoreView: View {
 
                 Spacer(minLength: 0)
 
+                // Above the number for them, below it for us, matching the court in front
+                // of you: their end is the far one.
+                serveSlot(snapshot, side: side, showing: side == .b, in: size)
+
                 Text(snapshot.primary[side])
                     .font(.system(size: numberSize(in: size), weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.2)
                     .contentTransition(.numericText())
+
+                serveSlot(snapshot, side: side, showing: side == .a, in: size)
 
                 Spacer(minLength: 0)
 
@@ -103,6 +104,20 @@ struct FullscreenScoreView: View {
             revealControls()
         }
         .animation(.snappy, value: snapshot.primary[side])
+    }
+
+    private func serveSlot(
+        _ snapshot: ScoreboardSnapshot,
+        side: TeamSide,
+        showing isThisEnd: Bool,
+        in size: CGSize
+    ) -> some View {
+        ServeSideSlot(
+            court: snapshot.serving == side && isThisEnd ? snapshot.servingCourt : nil,
+            height: min(size.height * 0.028, 17)
+        )
+        .foregroundStyle(.white.opacity(0.9))
+        .padding(.vertical, 4)
     }
 
     private func numberSize(in size: CGSize) -> CGFloat {

@@ -16,8 +16,9 @@ win, games per set, tiebreak, super-tiebreak deciding set, and what happens at 4
 
 Whoever is serving is marked with a dot, and beside it a small two-cell badge shows which
 half the serve is struck from — drawn from behind the server, so the lit cell is on the
-hand they will be standing on. It follows the receivers' choice on a golden or star point
-rather than just alternating.
+hand they will be standing on. It sits below your own score and above theirs, matching the
+court in front of you where their end is the far one. It follows the receivers' choice on a
+golden or star point rather than just alternating.
 
 **Winner court** — you play games on a court until the organiser blows the whistle, then
 move up or down. A round is a set with no end: games just accumulate. The whistle banks

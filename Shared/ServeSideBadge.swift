@@ -31,6 +31,26 @@ struct ServeSideBadge: View {
     }
 }
 
+/// A fixed-height place for the badge, filled only when this is where it belongs. Both
+/// sides reserve the space above and below the number so the two scores stay on the same
+/// line whoever happens to be serving.
+struct ServeSideSlot: View {
+    let court: ServeCourt?
+    var height: CGFloat = 12
+    var showsLabel = true
+
+    var body: some View {
+        Group {
+            if let court {
+                ServeSideBadge(court: court, height: height, showsLabel: showsLabel)
+            } else {
+                Color.clear
+            }
+        }
+        .frame(height: height * 1.45)
+    }
+}
+
 #Preview {
     HStack(spacing: 20) {
         ServeSideBadge(court: .deuce, height: 16)

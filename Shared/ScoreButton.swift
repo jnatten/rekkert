@@ -13,6 +13,15 @@ struct ScoreButton: View {
     let onTap: () -> Void
     let onUndo: () -> Void
 
+    private func serveSlot(showing isThisEnd: Bool) -> some View {
+        ServeSideSlot(
+            court: isServing && isThisEnd ? servingCourt : nil,
+            height: compact ? 10 : 13,
+            showsLabel: !compact
+        )
+        .foregroundStyle(.white.opacity(0.9))
+    }
+
     var body: some View {
         Button(action: onTap) {
             ZStack {
@@ -30,6 +39,10 @@ struct ScoreButton: View {
                         .lineLimit(1)
                     }
 
+                    // Above the number for them, below it for us — the same way round as
+                    // the court in front of you, where their end is the far one.
+                    serveSlot(showing: side == .b)
+
                     Text(value)
                         .font(.system(size: compact ? 64 : 120, weight: .bold, design: .rounded))
                         .minimumScaleFactor(0.4)
@@ -37,15 +50,7 @@ struct ScoreButton: View {
                         .foregroundStyle(.white)
                         .contentTransition(.numericText())
 
-                    if isServing, let servingCourt {
-                        ServeSideBadge(
-                            court: servingCourt,
-                            height: compact ? 10 : 13,
-                            showsLabel: !compact
-                        )
-                        .foregroundStyle(.white.opacity(0.9))
-                        .padding(.top, compact ? 1 : 6)
-                    }
+                    serveSlot(showing: side == .a)
                 }
                 .padding(compact ? 4 : 12)
             }
