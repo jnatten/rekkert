@@ -185,6 +185,27 @@ public enum SessionState: Codable, Sendable, Hashable {
         }
     }
 
+    /// What it was played as. A tournament is named by its format, since Americano and
+    /// Mexicano are what you would call them rather than "tournament".
+    public var modeName: String {
+        switch self {
+        case .traditional: "Match"
+        case .pointCount: "Points"
+        case .winnerCourt: "Winner court"
+        case .tournament(let tournament): tournament.format.displayName
+        }
+    }
+
+    public var modeSymbol: String {
+        switch self {
+        case .traditional: "figure.tennis"
+        case .pointCount: "number"
+        case .winnerCourt: "arrow.up.arrow.down"
+        case .tournament(let tournament):
+            tournament.format == .americano ? "arrow.triangle.2.circlepath" : "list.number"
+        }
+    }
+
     /// Whether this session could be picked up where it left off. One that was played to
     /// its end cannot: it has a winner, and there is no un-winning a match.
     public var canResume: Bool { resumed() != nil }

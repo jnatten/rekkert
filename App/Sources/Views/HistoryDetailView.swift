@@ -76,9 +76,14 @@ struct HistoryDetailView: View {
             if let detail = result.detail {
                 Text(detail).font(.footnote).foregroundStyle(.secondary)
             }
-            Text(record.finishedAt, format: .dateTime.weekday(.wide).day().month().hour().minute())
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            HStack(spacing: 4) {
+                Image(systemName: record.state.modeSymbol)
+                Text(record.state.modeName)
+                Text("·")
+                Text(record.finishedAt, format: .dateTime.weekday(.wide).day().month().hour().minute())
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 6)

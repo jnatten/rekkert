@@ -6,6 +6,26 @@ private let teams = BySide(a: TeamInfo(name: "Blue"), b: TeamInfo(name: "Orange"
 
 @Suite("Session results")
 struct SessionResultTests {
+    @Test func eachModeNamesItself() throws {
+        let match = SessionState.traditional(TraditionalSession(rules: TraditionalRules(), teams: teams))
+        #expect(match.modeName == "Match")
+
+        let points = SessionState.pointCount(PointCountSession(rules: PointCountRules(), teams: teams))
+        #expect(points.modeName == "Points")
+
+        let court = SessionState.winnerCourt(WinnerCourtSession(rules: WinnerCourtRules(), teams: teams))
+        #expect(court.modeName == "Winner court")
+
+        for format in TournamentFormat.allCases {
+            let tournament = SessionState.tournament(Tournament(
+                name: "Thursday", format: format,
+                players: (0 ..< 4).map { Player(name: "P\($0)") },
+                config: TournamentConfig()
+            ))
+            #expect(tournament.modeName == format.displayName, "named by its format, not \"tournament\"")
+        }
+    }
+
     @Test func aWonMatchNamesTheWinnerAndTheSets() {
         var session = TraditionalSession(rules: TraditionalRules(), teams: teams)
         let engine = session.engine

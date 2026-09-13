@@ -15,9 +15,14 @@ struct HistoryView: View {
                 NavigationLink(value: HistoryRoute.record(record)) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(record.title).font(.headline)
-                        Text(record.finishedAt, format: .dateTime.day().month().year().hour().minute())
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 4) {
+                            Image(systemName: record.state.modeSymbol)
+                            Text(record.state.modeName)
+                            Text("·")
+                            Text(record.finishedAt, format: .dateTime.day().month().year().hour().minute())
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                         summary(for: record.state)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -40,8 +45,10 @@ struct HistoryView: View {
     @ViewBuilder
     private func summary(for state: SessionState) -> some View {
         switch state {
-        case .traditional(let session):
-            Text(session.score.completedSets.map { "\($0.games.a)-\($0.games.b)" }.joined(separator: "  "))
+        case .traditional:
+            // The result's own score line, which counts the set in progress too — listing
+            // only completed sets leaves a match stopped part-way with nothing to show.
+            Text(SessionResult.make(from: state).score)
         case .tournament(let tournament):
             let standings = Leaderboard.standings(for: tournament)
             Text(standings.prefix(3).enumerated().map { "\($0.offset + 1). \($0.element.player.name) \($0.element.total)" }.joined(separator: " · "))
