@@ -115,10 +115,11 @@ struct FullscreenScoreView: View {
         let court = snapshot.serving == side ? snapshot.servingCourt : nil
         let servingFromTheTop = court.map { servesFromTheTop($0, side: side) }
         let radius = min(size.width * 0.05, 26)
+        let frame = max(8, min(size.width, size.height) * 0.022)
 
-        return VStack(spacing: max(3, size.height * 0.008)) {
-            cell(lit: servingFromTheTop == true, radius: radius, rounded: .top)
-            cell(lit: servingFromTheTop == false, radius: radius, rounded: .bottom)
+        return VStack(spacing: max(5, size.height * 0.014)) {
+            cell(state(top: true, serving: servingFromTheTop), radius: radius, frame: frame, rounded: .top)
+            cell(state(top: false, serving: servingFromTheTop), radius: radius, frame: frame, rounded: .bottom)
         }
         .padding(.horizontal, max(6, size.width * 0.014))
         .padding(.top, insets.top + size.height * 0.105)
@@ -135,7 +136,22 @@ struct FullscreenScoreView: View {
         layout.order.first == side ? court == .ad : court == .deuce
     }
 
-    private func cell(lit: Bool, radius: CGFloat, rounded: Edge) -> some View {
+    /// Lit, its partner sunk behind it, or neither when this team is not serving.
+    private enum ServeCell {
+        case lit
+        case shaded
+        case idle
+    }
+
+    private func state(top: Bool, serving: Bool?) -> ServeCell {
+        guard let serving else { return .idle }
+        return serving == top ? .lit : .shaded
+    }
+
+    /// A bold frame rather than a brighter wash. An edge carries much further across a
+    /// court than a low-contrast fill does, and it leaves the ground under the number
+    /// alone — washing the lit box paler is exactly what costs the score its contrast.
+    private func cell(_ state: ServeCell, radius: CGFloat, frame: CGFloat, rounded: Edge) -> some View {
         let shape = UnevenRoundedRectangle(
             topLeadingRadius: rounded == .top ? radius : 0,
             bottomLeadingRadius: rounded == .bottom ? radius : 0,
@@ -143,9 +159,18 @@ struct FullscreenScoreView: View {
             topTrailingRadius: rounded == .top ? radius : 0,
             style: .continuous
         )
+        let fill: Color = switch state {
+        case .lit, .idle: .clear
+        case .shaded: .black.opacity(0.28)
+        }
+        let edge: Color = switch state {
+        case .lit: .white.opacity(0.95)
+        case .shaded: .white.opacity(0.12)
+        case .idle: .white.opacity(0.3)
+        }
         return shape
-            .fill(.white.opacity(lit ? 0.28 : 0.07))
-            .overlay(shape.strokeBorder(.white.opacity(lit ? 0.55 : 0.14), lineWidth: lit ? 3 : 1))
+            .fill(fill)
+            .overlay(shape.strokeBorder(edge, lineWidth: state == .lit ? frame : 1.5))
     }
 
     private func numberSize(in size: CGSize) -> CGFloat {
