@@ -169,6 +169,60 @@ struct FinishTests {
         #expect(phone.lastResult == nil)
     }
 
+    @Test func aResumedSessionCarriesItsScoreToBothDevices() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SessionStore(directory: directory)
+        let (phone, watch, _, _) = pair(directory)
+        let tasks = [Task { await phone.run() }, Task { await watch.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+
+        phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+        for _ in 0 ..< 8 { phone.tap(team: .a) }   // two games
+        phone.finish()
+        try await settle()
+        #expect(phone.state == nil)
+        #expect(watch.state == nil, "cleared on both")
+
+        let archived = try #require(try store.history().first).state
+        phone.resume(archived)
+        try await settle()
+
+        guard case .traditional(let resumed)? = watch.state else {
+            Issue.record("the watch should be holding the resumed match")
+            return
+        }
+        #expect(resumed.score.games == BySide(a: 2, b: 0), "with the games it was stopped on")
+        #expect(watch.state == phone.state)
+        #expect(phone.lastResult == nil, "and the result screen steps aside")
+    }
+
+    @Test func aResumedSessionCanBeScoredOnFromTheOtherDevice() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SessionStore(directory: directory)
+        let (phone, watch, _, _) = pair(directory)
+        let tasks = [Task { await phone.run() }, Task { await watch.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+
+        phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+        for _ in 0 ..< 4 { phone.tap(team: .a) }
+        phone.finish()
+        try await settle()
+
+        phone.resume(try #require(try store.history().first).state)
+        try await settle()
+        watch.tap(team: .b)
+        try await settle()
+
+        guard case .traditional(let session)? = phone.state else {
+            Issue.record("expected a traditional session")
+            return
+        }
+        #expect(session.score.games == BySide(a: 1, b: 0))
+        #expect(session.score.points == BySide(a: 0, b: 1), "the watch's point landed on top")
+    }
+
     @Test func finishingOnOneDeviceClearsBoth() async throws {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }

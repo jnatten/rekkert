@@ -15,6 +15,15 @@ enum DemoLaunch {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-fullscreen")
     }
 
+    /// Opens History, and with a value the detail for that row: -rekkert-demo-history 0
+    static var openHistory: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-history")
+    }
+
+    static var openHistoryRecord: Int? {
+        value(for: "-rekkert-demo-history").flatMap(Int.init)
+    }
+
     static var browseRound: Int? {
         value(for: "-rekkert-demo-browse-round").flatMap(Int.init)
     }

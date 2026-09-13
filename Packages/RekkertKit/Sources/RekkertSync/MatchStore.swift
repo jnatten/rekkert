@@ -131,6 +131,14 @@ public final class MatchStore {
         if preset.configuration.drawsRounds { nextRound() }
     }
 
+    /// Picks an archived session back up as a fresh one, carrying its score across. The
+    /// copy in history stays where it is; this is a continuation, not a move.
+    public func resume(_ archived: SessionState) {
+        guard let resumable = archived.resumed() else { return }
+        startNewSession()
+        record(.restore(resumable))
+    }
+
     /// Flips which way round the phone's scoreboard reads, from either device. Sends the
     /// resulting value rather than a toggle, so a repeated delivery settles on the same
     /// answer instead of undoing itself.

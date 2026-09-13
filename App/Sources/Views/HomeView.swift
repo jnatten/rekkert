@@ -4,10 +4,11 @@ import SwiftUI
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     @State private var newMatch: GameMode?
+    @State private var path: [HistoryRoute] = []
 
     var body: some View {
         @Bindable var announcer = model.announcer
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 if !model.store.presets.isEmpty {
                     Section {
@@ -66,12 +67,16 @@ struct HomeView: View {
 
                 if !model.history.isEmpty {
                     Section("History") {
-                        NavigationLink {
-                            HistoryView()
-                        } label: {
+                        NavigationLink(value: HistoryRoute.list) {
                             Label("Past matches", systemImage: "clock.arrow.circlepath")
                         }
                     }
+                }
+            }
+            .navigationDestination(for: HistoryRoute.self) { route in
+                switch route {
+                case .list: HistoryView()
+                case .record(let record): HistoryDetailView(record: record)
                 }
             }
             .navigationTitle("Rekkert")
@@ -82,6 +87,12 @@ struct HomeView: View {
                 #if DEBUG
                 if let raw = DemoLaunch.newSession {
                     newMatch = GameMode(rawValue: raw)
+                }
+                if DemoLaunch.openHistory {
+                    path = [.list]
+                    if let index = DemoLaunch.openHistoryRecord, model.history.indices.contains(index) {
+                        path.append(.record(model.history[index]))
+                    }
                 }
                 #endif
             }

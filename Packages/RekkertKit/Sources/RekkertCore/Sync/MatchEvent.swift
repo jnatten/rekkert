@@ -24,6 +24,10 @@ public enum EventKind: Codable, Sendable, Hashable {
     /// Ends the session. `archive` is false when it is being thrown away rather than kept,
     /// and travels with the event so the other device does not file it either.
     case finish(archive: Bool)
+    /// Picks an archived session back up. It carries the whole state rather than the events
+    /// that built it, because the log a session was played from is not kept once it is
+    /// filed away — only what it came to.
+    case restore(SessionState)
     case undo(EventID)
 }
 
@@ -45,7 +49,7 @@ public struct MatchEvent: Codable, Sendable, Hashable, Identifiable {
         case .point, .setScore, .setRoundConfirmed, .nextRound, .finish, .endRound: true
         // A serve correction is its own undo — swapping again puts it back — and undo
         // should keep meaning "take back the last thing that changed the score".
-        case .configure, .undo, .chooseServeSide, .setFirstServer: false
+        case .configure, .restore, .undo, .chooseServeSide, .setFirstServer: false
         }
     }
 }

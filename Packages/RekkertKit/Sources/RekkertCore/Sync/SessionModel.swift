@@ -185,6 +185,35 @@ public enum SessionState: Codable, Sendable, Hashable {
         }
     }
 
+    /// Whether this session could be picked up where it left off. One that was played to
+    /// its end cannot: it has a winner, and there is no un-winning a match.
+    public var canResume: Bool { resumed() != nil }
+
+    /// The same session with whatever ended it lifted, or `nil` if it ran its course.
+    public func resumed() -> SessionState? {
+        switch self {
+        case .traditional(var session):
+            guard session.score.winner == nil else { return nil }
+            session.isStopped = false
+            return .traditional(session)
+
+        case .pointCount(var session):
+            guard !session.engine.isFinished(session.score) else { return nil }
+            session.isStopped = false
+            return .pointCount(session)
+
+        case .winnerCourt(var session):
+            // A round-after-round session never ends by itself, so there is always more
+            // of it to play.
+            session.isFinished = false
+            return .winnerCourt(session)
+
+        case .tournament(var tournament):
+            tournament.isFinished = false
+            return .tournament(tournament)
+        }
+    }
+
     /// Courts the user can score right now: always one for a traditional match, and one
     /// per filled court in the current tournament round.
     public var courtCount: Int {

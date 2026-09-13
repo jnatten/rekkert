@@ -1,22 +1,29 @@
 import RekkertCore
 import SwiftUI
 
+enum HistoryRoute: Hashable {
+    case list
+    case record(HistoryRecord)
+}
+
 struct HistoryView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         List {
             ForEach(model.history) { record in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(record.title).font(.headline)
-                    Text(record.finishedAt, format: .dateTime.day().month().year().hour().minute())
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    summary(for: record.state)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                NavigationLink(value: HistoryRoute.record(record)) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(record.title).font(.headline)
+                        Text(record.finishedAt, format: .dateTime.day().month().year().hour().minute())
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        summary(for: record.state)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 2)
                 }
-                .padding(.vertical, 2)
             }
             .onDelete { offsets in
                 for index in offsets { model.deleteHistory(model.history[index].id) }

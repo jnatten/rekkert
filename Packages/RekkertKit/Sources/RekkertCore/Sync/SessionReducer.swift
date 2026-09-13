@@ -12,6 +12,9 @@ public enum SessionReducer {
         case .configure(let setup):
             configure(setup, into: &state)
 
+        case .restore(let archived):
+            state = archived
+
         case .point(let round, let court, let team):
             mutateCourt(round: round, court: court, in: &state) { engine, match in
                 match.state = engine.scoringPoint(team, in: match.state)
