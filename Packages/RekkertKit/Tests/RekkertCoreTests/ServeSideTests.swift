@@ -42,6 +42,26 @@ struct ServeSideTests {
         #expect(ServeCourt.ad.displayName == "Ad")
     }
 
+    @Test func theFarEndIsSeenOnTheOppositeHand() {
+        // You face each other, so their deuce court — their right — is on your left.
+        #expect(ServeCourt.deuce.seenFromTheOtherEnd == .ad)
+        #expect(ServeCourt.ad.seenFromTheOtherEnd == .deuce)
+        #expect(ServeCourt.deuce.seenFromTheOtherEnd.sideName == "Left")
+        #expect(ServeCourt.ad.seenFromTheOtherEnd.sideName == "Right")
+    }
+
+    @Test func lookingFromTheOtherEndTwiceIsWhereYouStarted() {
+        for court in ServeCourt.allCases {
+            #expect(court.seenFromTheOtherEnd.seenFromTheOtherEnd == court)
+        }
+    }
+
+    @Test func aServiceBoxKeepsItsNameWhicheverEndYouWatchFrom() {
+        // The viewpoint changes which hand it appears on, not which box it is.
+        #expect(ServeCourt.deuce.displayName == "Deuce")
+        #expect(ServeCourt.deuce.seenFromTheOtherEnd.sideName != ServeCourt.deuce.sideName)
+    }
+
     @Test func aNewGameStartsFromTheRightAgain() {
         var log = traditional()
         score(&log, 3)

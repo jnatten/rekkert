@@ -16,7 +16,9 @@ win, games per set, tiebreak, super-tiebreak deciding set, and what happens at 4
 
 Whoever is serving is marked with a dot, and beside it a small two-cell badge shows which
 half the serve is struck from — drawn from behind the server, so the lit cell is on the
-hand they will be standing on. It sits below your own score and above theirs, matching the
+hand you will see it on. Your own serve is drawn as you stand; theirs is drawn from your
+side of the net, so their deuce court — their right — shows on your left, which is where
+you will actually see them. It sits below your own score and above theirs, matching the
 court in front of you where their end is the far one. It follows the receivers' choice on a
 golden or star point rather than just alternating.
 

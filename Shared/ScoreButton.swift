@@ -16,6 +16,8 @@ struct ScoreButton: View {
     private func serveSlot(showing isThisEnd: Bool) -> some View {
         ServeSideSlot(
             court: isServing && isThisEnd ? servingCourt : nil,
+            // Team B is the far end, so their court is drawn as you see it.
+            fromAcrossTheNet: side == .b,
             height: compact ? 10 : 13,
             showsLabel: !compact
         )

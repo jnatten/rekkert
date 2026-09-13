@@ -5,23 +5,38 @@ import SwiftUI
 /// behind the server — so the lit half is on the same hand they will be standing on.
 struct ServeSideBadge: View {
     let court: ServeCourt
+    /// True when the server is at the far end. You face each other, so their right is your
+    /// left: the court has to be drawn the way you see it, not the way they do.
+    var fromAcrossTheNet = false
     var height: CGFloat = 12
     var showsLabel = true
 
     var body: some View {
         HStack(spacing: height * 0.45) {
             HStack(spacing: 1.5) {
-                // Left cell first, because that is the server's left: the ad court.
-                half(lit: court == .ad)
-                half(lit: court == .deuce)
+                half(lit: asYouSeeIt == .ad)
+                half(lit: asYouSeeIt == .deuce)
             }
             if showsLabel {
-                Text(court.sideName)
+                Text(asYouSeeIt.sideName)
                     .font(.system(size: height * 0.95, weight: .semibold, design: .rounded))
             }
         }
         .accessibilityElement()
-        .accessibilityLabel("Serving from the \(court.sideName.lowercased()), the \(court.displayName.lowercased()) court")
+        .accessibilityLabel(spokenDescription)
+    }
+
+    /// The half of the screen the serve happens on from where you stand. For your own
+    /// serve that is simply the court you are in; for theirs it is the opposite hand,
+    /// though it is still their deuce or ad court.
+    private var asYouSeeIt: ServeCourt {
+        fromAcrossTheNet ? court.seenFromTheOtherEnd : court
+    }
+
+    private var spokenDescription: String {
+        fromAcrossTheNet
+            ? "Serving from your \(asYouSeeIt.sideName.lowercased()), their \(court.displayName.lowercased()) court"
+            : "Serving from your \(asYouSeeIt.sideName.lowercased()), the \(court.displayName.lowercased()) court"
     }
 
     private func half(lit: Bool) -> some View {
@@ -36,13 +51,19 @@ struct ServeSideBadge: View {
 /// line whoever happens to be serving.
 struct ServeSideSlot: View {
     let court: ServeCourt?
+    var fromAcrossTheNet = false
     var height: CGFloat = 12
     var showsLabel = true
 
     var body: some View {
         Group {
             if let court {
-                ServeSideBadge(court: court, height: height, showsLabel: showsLabel)
+                ServeSideBadge(
+                    court: court,
+                    fromAcrossTheNet: fromAcrossTheNet,
+                    height: height,
+                    showsLabel: showsLabel
+                )
             } else {
                 Color.clear
             }
@@ -52,10 +73,10 @@ struct ServeSideSlot: View {
 }
 
 #Preview {
-    HStack(spacing: 20) {
+    VStack(spacing: 16) {
+        // Your own serve, then the same serve seen from your side of the net.
         ServeSideBadge(court: .deuce, height: 16)
-        ServeSideBadge(court: .ad, height: 16)
-        ServeSideBadge(court: .deuce, height: 12, showsLabel: false)
+        ServeSideBadge(court: .deuce, fromAcrossTheNet: true, height: 16)
     }
     .foregroundStyle(.white)
     .padding()

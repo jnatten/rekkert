@@ -117,6 +117,7 @@ struct FullscreenScoreView: View {
     ) -> some View {
         ServeSideSlot(
             court: snapshot.serving == side && isThisEnd ? snapshot.servingCourt : nil,
+            fromAcrossTheNet: side == .b,
             height: min(size.height * 0.028, 17)
         )
         .foregroundStyle(.white.opacity(0.9))

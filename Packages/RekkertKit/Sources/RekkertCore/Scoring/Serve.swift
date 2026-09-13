@@ -18,6 +18,16 @@ public enum ServeCourt: String, Codable, Sendable, Hashable, CaseIterable {
         case .ad: "Left"
         }
     }
+
+    /// The same half of the court, named from the far end. The two players face each
+    /// other, so the server's right is the receiver's left. This is a change of viewpoint,
+    /// not a different service box: their deuce court is still their deuce court.
+    public var seenFromTheOtherEnd: ServeCourt {
+        switch self {
+        case .deuce: .ad
+        case .ad: .deuce
+        }
+    }
 }
 
 public struct ServeSlot: Codable, Sendable, Hashable {
