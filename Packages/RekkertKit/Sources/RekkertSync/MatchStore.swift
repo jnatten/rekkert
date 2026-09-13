@@ -14,6 +14,11 @@ public final class MatchStore {
     /// straight back to the start. Local to this device and deliberately not persisted — it
     /// is a curtain call, not state worth resuming.
     public private(set) var lastResult: SessionState?
+    /// The session as it stood one event before it ended, when that event can be taken
+    /// back. The escape hatch for a misclick that happened to win the match: by the time
+    /// the result is on screen the log has been filed away, so the way back has to be
+    /// worked out while it is still in hand.
+    public private(set) var resultRewind: RewindableResult?
     /// Saved configurations. Edited on the phone, readable on both.
     public private(set) var presets = PresetLibrary()
     /// How the phone draws its scoreboard. Shared so the watch can flip it from the wrist;
@@ -30,6 +35,9 @@ public final class MatchStore {
     private var snapshotPending = false
     private var lastQueued: [EventID] = []
     private var retired: [UUID]
+    /// Which session the result on screen came from, so taking it back can drop the record
+    /// filed for it.
+    private var concludedSessionID: UUID?
     private let keepsHistory: Bool
     private let sendTimeout: Duration
     private let retryInterval: Duration
@@ -182,6 +190,7 @@ public final class MatchStore {
         outbox = Outbox()
         replacedSessionTitle = nil
         lastResult = nil
+        resultRewind = nil
         refresh()
     }
 
@@ -209,10 +218,15 @@ public final class MatchStore {
         guard let finished = state, finished.isFinished else { return false }
         let keeping = finished.hasResults && wasAskedToArchive
         if keepsHistory, keeping {
-            try? store?.archive(HistoryRecord(title: finished.title, state: finished))
+            // Filed under the session's own id, so archiving twice replaces rather than
+            // duplicates — and so taking the result back knows which record to remove.
+            try? store?.archive(HistoryRecord(id: log.sessionID, title: finished.title, state: finished))
         }
         // Nothing to celebrate about a session that was called off or never played.
         lastResult = keeping ? finished : nil
+        // Tied to the result screen: the way back is a button on it, so offering one
+        // without the other would be a capability nothing can reach.
+        resultRewind = keeping ? rewinding(log) : nil
 
         // The counterpart has to learn this before the log disappears from here, or it
         // will keep offering the session back as though it were still live.
@@ -220,6 +234,7 @@ public final class MatchStore {
         transport.queue(farewell)
         Task { _ = await sendLive(farewell) }
 
+        concludedSessionID = log.sessionID
         retire(log.sessionID)
         log = MatchLog()
         outbox = Outbox()
@@ -235,6 +250,36 @@ public final class MatchStore {
     /// Dismisses the result screen.
     public func acknowledgeResult() {
         lastResult = nil
+        resultRewind = nil
+    }
+
+    /// Takes the result back: puts the session in play again as it stood before the event
+    /// that ended it, and drops the record that was filed for it.
+    ///
+    /// It comes back under a fresh session id rather than resurrecting the old one, which
+    /// both devices have already retired and would refuse to be handed back.
+    public func undoResult() {
+        guard let rewind = resultRewind else { return }
+        let filed = concludedSessionID
+        startNewSession()
+        record(.restore(rewind.state))
+        if keepsHistory, let filed { try? store?.deleteHistory(filed) }
+    }
+
+    /// The state one undo short of the end, or `nil` when there is nothing to take back or
+    /// taking it back would not actually reopen the session.
+    private func rewinding(_ ended: MatchLog) -> RewindableResult? {
+        guard let target = ended.lastUndoableEvent() else { return nil }
+        var rewound = ended
+        rewound.append(.undo(target.id), from: device)
+        guard let state = SessionReducer.state(of: rewound), !state.isFinished else { return nil }
+
+        let undoesAPoint: Bool
+        switch target.kind {
+        case .point, .setScore: undoesAPoint = true
+        default: undoesAPoint = false
+        }
+        return RewindableResult(state: state, undoesAPoint: undoesAPoint)
     }
 
     // MARK: - Sync
@@ -416,7 +461,7 @@ public final class MatchStore {
     /// archived first, so a session is never silently destroyed.
     private func adopt(_ incoming: MatchLog) {
         if log.hasProgress, let state = SessionReducer.state(of: log) {
-            try? store?.archive(HistoryRecord(title: state.title, state: state))
+            try? store?.archive(HistoryRecord(id: log.sessionID, title: state.title, state: state))
             replacedSessionTitle = state.title
         }
         log = incoming
@@ -483,6 +528,12 @@ public final class MatchStore {
 
     private func refresh() {
         state = SessionReducer.state(of: log)
+        // A session in play supersedes whatever result was on screen — including one the
+        // counterpart took back, which arrives here as a new session.
+        if state != nil {
+            lastResult = nil
+            resultRewind = nil
+        }
         if concludeIfFinished() { return }
         persist()
     }
@@ -490,4 +541,12 @@ public final class MatchStore {
     private func persist() {
         try? store?.save(ActiveSession(log: log, outbox: outbox, retired: retired))
     }
+}
+
+/// A finished session and the way back into it.
+public struct RewindableResult: Sendable {
+    /// The session as it stood before the event that ended it.
+    public let state: SessionState
+    /// True when what would be taken back is a score rather than a deliberate ending.
+    public let undoesAPoint: Bool
 }

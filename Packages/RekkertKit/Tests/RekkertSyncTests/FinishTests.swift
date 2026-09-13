@@ -223,6 +223,99 @@ struct FinishTests {
         #expect(session.score.points == BySide(a: 0, b: 1), "the watch's point landed on top")
     }
 
+    @Test func theWinningPointCanBeTakenBackFromTheResultScreen() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SessionStore(directory: directory)
+        let (phone, watch, _, _) = pair(directory)
+        let tasks = [Task { await phone.run() }, Task { await watch.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+
+        phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+        for _ in 0 ..< 48 { phone.tap(team: .a) }   // two straight sets, so it wins itself
+        try await settle()
+
+        #expect(phone.state == nil)
+        #expect(try store.history().count == 1, "filed on the way out")
+        let rewind = try #require(phone.resultRewind)
+        #expect(rewind.undoesAPoint, "it was a point that ended it, not a deliberate finish")
+
+        phone.undoResult()
+        try await settle()
+
+        guard case .traditional(let session)? = phone.state else {
+            Issue.record("the match should be in play again")
+            return
+        }
+        #expect(session.score.winner == nil, "nobody has won it any more")
+        #expect(session.score.completedSets.count == 1, "the first set still stands")
+        #expect(session.score.games == BySide(a: 5, b: 0))
+        #expect(session.score.points == BySide(a: 3, b: 0), "back to 40-love in the sixth game")
+        #expect(try store.history().isEmpty, "and the record it filed is taken back out")
+        #expect(phone.lastResult == nil)
+        #expect(watch.state == phone.state, "the watch is back in the match too")
+    }
+
+    @Test func takingBackADeliberateEndingReopensTheSession() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let (phone, _, _, _) = pair(directory)
+        let task = Task { await phone.run() }
+        defer { task.cancel() }
+
+        phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+        for _ in 0 ..< 5 { phone.tap(team: .a) }
+        phone.finish()
+        try await settle()
+
+        let rewind = try #require(phone.resultRewind)
+        #expect(rewind.undoesAPoint == false, "what ended it was the ending, not a point")
+
+        phone.undoResult()
+        try await settle()
+
+        guard case .traditional(let session)? = phone.state else {
+            Issue.record("the match should be in play again")
+            return
+        }
+        #expect(session.isStopped == false)
+        #expect(session.score.games == BySide(a: 1, b: 0))
+        #expect(session.score.points == BySide(a: 1, b: 0), "with every point it had")
+    }
+
+    @Test func aDiscardedSessionOffersNoWayBack() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let (phone, _, _, _) = pair(directory)
+        let task = Task { await phone.run() }
+        defer { task.cancel() }
+
+        phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+        for _ in 0 ..< 3 { phone.tap(team: .a) }
+        phone.discardSession()
+        try await settle()
+
+        #expect(phone.lastResult == nil, "nothing is shown for it")
+        #expect(phone.resultRewind == nil, "and so nothing offers a way back into it")
+    }
+
+    @Test func acknowledgingTheResultClosesTheWayBack() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let (phone, _, _, _) = pair(directory)
+        let task = Task { await phone.run() }
+        defer { task.cancel() }
+
+        phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+        for _ in 0 ..< 48 { phone.tap(team: .a) }
+        try await settle()
+
+        phone.acknowledgeResult()
+        #expect(phone.resultRewind == nil)
+        phone.undoResult()
+        #expect(phone.state == nil, "and undoing afterwards does nothing")
+    }
+
     @Test func finishingOnOneDeviceClearsBoth() async throws {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }

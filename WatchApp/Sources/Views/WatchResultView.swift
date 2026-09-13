@@ -1,5 +1,6 @@
 import RekkertCore
 import SwiftUI
+import WatchKit
 
 /// The watch's curtain call: how it finished, and a way to clear it.
 struct WatchResultView: View {
@@ -48,6 +49,15 @@ struct WatchResultView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(tint)
                     .padding(.top, 4)
+
+                if let rewind = model.store.resultRewind {
+                    Button(rewind.undoesAPoint ? "Undo last point" : "Back to it") {
+                        WKInterfaceDevice.current().play(.retry)
+                        model.store.undoResult()
+                    }
+                    .buttonStyle(.bordered)
+                    .font(.footnote)
+                }
             }
             .padding(.horizontal, 4)
         }

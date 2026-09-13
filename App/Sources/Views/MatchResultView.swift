@@ -105,10 +105,23 @@ struct MatchResultView: View {
             .controlSize(.large)
             .tint(tint)
 
+            if let rewind = model.store.resultRewind {
+                Button(
+                    rewind.undoesAPoint ? "Undo last point" : "Back to the match",
+                    systemImage: "arrow.uturn.backward"
+                ) {
+                    model.store.undoResult()
+                }
+                .font(.callout)
+            }
+
             if model.keepsFinishedSessions {
-                Text("Saved to History.")
+                Text(model.store.resultRewind == nil
+                     ? "Saved to History."
+                     : "Saved to History — undoing takes it back out.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
         }
         .padding(.horizontal)
