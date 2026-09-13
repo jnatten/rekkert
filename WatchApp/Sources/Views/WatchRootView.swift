@@ -25,8 +25,12 @@ struct WatchRootView: View {
             if let round = tournament.currentRound {
                 TabView(selection: $selection) {
                     ForEach(round.matches) { match in
-                        WatchCourtPage(round: round.index, court: match.courtIndex)
-                            .tag(match.courtIndex)
+                        WatchCourtPage(
+                            round: round.index,
+                            court: match.courtIndex,
+                            isActive: lastCourt == match.courtIndex
+                        )
+                        .tag(match.courtIndex)
                     }
                     WatchStandingsView(tournament: tournament).tag(standingsTag)
                     WatchMenuView(round: round.index, court: lastCourt).tag(menuTag)

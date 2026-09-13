@@ -9,7 +9,7 @@ struct TraditionalMatchView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if let snapshot = model.store.state.flatMap({ ScoreboardSnapshot.make(from: $0) }) {
+                if let snapshot {
                     VStack(spacing: 0) {
                         ScoreboardView(
                             snapshot: snapshot,
@@ -55,6 +55,7 @@ struct TraditionalMatchView: View {
                 if DemoLaunch.fullscreen { fullscreen = true }
                 #endif
             }
+            .announcesScore(snapshot)
             .confirmationDialog(endPrompt, isPresented: $showingEnd, titleVisibility: .visible) {
                 if hasResults {
                     Button("Save to history", role: .destructive) { model.finishSession() }
@@ -65,6 +66,10 @@ struct TraditionalMatchView: View {
                 Button("Keep playing", role: .cancel) {}
             }
         }
+    }
+
+    private var snapshot: ScoreboardSnapshot? {
+        model.store.state.flatMap { ScoreboardSnapshot.make(from: $0) }
     }
 
     /// Nothing played yet, so there is nothing worth filing.

@@ -6,10 +6,13 @@ struct WatchCourtPage: View {
     @Environment(AppModel.self) private var model
     var round = 0
     let court: Int
+    /// Every court page stays alive behind the one on screen, so only the one being looked
+    /// at should be talking.
+    var isActive = true
 
     var body: some View {
         ScrollView {
-            if let snapshot = model.store.state.flatMap({ ScoreboardSnapshot.make(from: $0, round: round, court: court) }) {
+            if let snapshot {
                 VStack(spacing: 6) {
                     ScoreboardView(
                         snapshot: snapshot,
@@ -45,6 +48,11 @@ struct WatchCourtPage: View {
                 ProgressView()
             }
         }
+        .announcesScore(snapshot, isActive: isActive)
+    }
+
+    private var snapshot: ScoreboardSnapshot? {
+        model.store.state.flatMap { ScoreboardSnapshot.make(from: $0, round: round, court: court) }
     }
 
     private func serveSideButton(_ title: String, court: ServeCourt, snapshot: ScoreboardSnapshot) -> some View {

@@ -1,11 +1,18 @@
 /// Everything a scoreboard needs to draw itself, derived from session state. Keeping this
 /// in the core means the phone and the watch render the same truth from the same code.
 public struct ScoreboardSnapshot: Sendable, Hashable {
+    public enum Kind: String, Sendable, Hashable {
+        case traditional
+        case winnerCourt
+        case tournament
+    }
+
+    public var kind: Kind
     public var courtIndex: Int
     public var courtLabel: String?
     public var teamNames: BySide<String>
     /// The two big numbers.
-    public var primary: BySide<String>
+    public var points: BySide<PointDisplay>
     /// Games in the current set. Traditional matches only.
     public var games: BySide<Int>?
     public var completedSets: [SetResult]
@@ -19,6 +26,9 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
     public var isLocked: Bool
     public var isFinished: Bool
     public var winner: TeamSide?
+
+    /// The two big numbers as drawn.
+    public var primary: BySide<String> { points.map(\.text) }
 
     /// `round` selects which round to render; `nil` means whichever is current. Ignored
     /// by traditional matches.
@@ -37,10 +47,11 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
         let names = BySide(a: session.teams.a.name, b: session.teams.b.name)
 
         return ScoreboardSnapshot(
+            kind: .traditional,
             courtIndex: 0,
             courtLabel: nil,
             teamNames: names,
-            primary: engine.pointDisplay(score).map(\.text),
+            points: engine.pointDisplay(score),
             games: score.games,
             completedSets: score.completedSets,
             detail: detail(for: session, engine: engine),
@@ -61,10 +72,11 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
         let serve = engine.serve(score)
 
         return ScoreboardSnapshot(
+            kind: .winnerCourt,
             courtIndex: 0,
             courtLabel: nil,
             teamNames: BySide(a: session.teams.a.name, b: session.teams.b.name),
-            primary: engine.pointDisplay(score).map(\.text),
+            points: engine.pointDisplay(score),
             games: score.games,
             completedSets: score.completedSets,
             detail: engine.isSuddenDeathPoint(score)
@@ -95,10 +107,11 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
         let servingID = match.teams[serve.slot.team][safe: serve.slot.playerIndex]
 
         return ScoreboardSnapshot(
+            kind: .tournament,
             courtIndex: court,
             courtLabel: "Court \(court + 1)",
             teamNames: names,
-            primary: match.state.points.map(String.init),
+            points: match.state.points.map { PointDisplay.count($0) },
             games: nil,
             completedSets: [],
             detail: "Round \(round.index + 1) · \(remaining) to play",

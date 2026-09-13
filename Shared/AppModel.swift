@@ -6,6 +6,7 @@ import RekkertSync
 @Observable
 final class AppModel {
     let store: MatchStore
+    let announcer = ScoreAnnouncer()
     private let sessionStore: SessionStore?
     private var runTask: Task<Void, Never>?
 

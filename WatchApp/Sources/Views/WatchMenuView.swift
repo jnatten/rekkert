@@ -66,6 +66,15 @@ struct WatchMenuView: View {
                     model.store.toggleScoreboardMirrored()
                 }
 
+                action(
+                    model.announcer.isEnabled ? "Calling score" : "Call score",
+                    systemImage: model.announcer.isEnabled ? "speaker.wave.2.fill" : "speaker.slash",
+                    tint: model.announcer.isEnabled ? .green : .gray
+                ) {
+                    WKInterfaceDevice.current().play(.click)
+                    model.announcer.isEnabled.toggle()
+                }
+
                 action("Undo", systemImage: "arrow.uturn.backward", tint: .gray) {
                     WKInterfaceDevice.current().play(.retry)
                     model.store.undoLast()

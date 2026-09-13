@@ -17,6 +17,27 @@ public enum PointDisplay: Hashable, Sendable {
         }
     }
 
+    /// How an umpire says it. Counts stay as digits: the synthesiser reads those
+    /// correctly and a spelled-out table would only be one more thing to keep in step.
+    public var spoken: String {
+        switch self {
+        case .love: "love"
+        case .fifteen: "fifteen"
+        case .thirty: "thirty"
+        case .forty: "forty"
+        case .advantage: "advantage"
+        case .count(let value): String(value)
+        }
+    }
+
+    public var isZero: Bool {
+        switch self {
+        case .love: true
+        case .count(let value): value == 0
+        default: false
+        }
+    }
+
     static func ladder(_ rawPoints: Int) -> PointDisplay {
         switch rawPoints {
         case 0: .love

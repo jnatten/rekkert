@@ -31,6 +31,7 @@ struct CourtScoreboardView: View {
                     ContentUnavailableView("Court not in play", systemImage: "sportscourt")
                 }
             }
+            .announcesScore(snapshot)
             .fullScreenCover(isPresented: $fullscreen) {
                 FullscreenScoreView(round: round, court: court, mirrored: model.store.display.isMirrored)
             }

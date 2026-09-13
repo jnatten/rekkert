@@ -6,6 +6,7 @@ struct HomeView: View {
     @State private var newMatch: GameMode?
 
     var body: some View {
+        @Bindable var announcer = model.announcer
         NavigationStack {
             List {
                 if !model.store.presets.isEmpty {
@@ -53,6 +54,14 @@ struct HomeView: View {
                             }
                         }
                     }
+                }
+
+                Section {
+                    Toggle(isOn: $announcer.isEnabled) {
+                        Label("Call the score", systemImage: "speaker.wave.2")
+                    }
+                } footer: {
+                    Text("Reads every point out loud, server first: \"thirty, fifteen\", \"deuce\", \"game\". This device only — set it separately on your Apple Watch.")
                 }
 
                 if !model.history.isEmpty {

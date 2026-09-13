@@ -40,6 +40,7 @@ struct FullscreenScoreView: View {
                 }
             }
         }
+        .announcesScore(snapshot)
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
         .preferredColorScheme(.dark)
