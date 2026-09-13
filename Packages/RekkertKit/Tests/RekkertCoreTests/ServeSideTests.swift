@@ -39,7 +39,7 @@ struct ServeSideTests {
         #expect(ServeCourt.deuce.sideName == "Right")
         #expect(ServeCourt.ad.sideName == "Left")
         #expect(ServeCourt.deuce.displayName == "Deuce")
-        #expect(ServeCourt.ad.displayName == "Ad")
+        #expect(ServeCourt.ad.displayName == "Adv")
     }
 
     @Test func theFarEndIsSeenOnTheOppositeHand() {

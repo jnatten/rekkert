@@ -18,7 +18,7 @@ struct ServeSideBadge: View {
                 half(lit: asYouSeeIt == .deuce)
             }
             if showsLabel {
-                Text(asYouSeeIt.sideName)
+                Text(court.displayName)
                     .font(.system(size: height * 0.95, weight: .semibold, design: .rounded))
             }
         }
@@ -35,8 +35,8 @@ struct ServeSideBadge: View {
 
     private var spokenDescription: String {
         fromAcrossTheNet
-            ? "Serving from your \(asYouSeeIt.sideName.lowercased()), their \(court.displayName.lowercased()) court"
-            : "Serving from your \(asYouSeeIt.sideName.lowercased()), the \(court.displayName.lowercased()) court"
+            ? "Serving from their \(court.spokenName) court, on your \(asYouSeeIt.sideName.lowercased())"
+            : "Serving from the \(court.spokenName) court, on your \(asYouSeeIt.sideName.lowercased())"
     }
 
     private func half(lit: Bool) -> some View {
