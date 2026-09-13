@@ -23,8 +23,33 @@ public struct TraditionalSession: Codable, Sendable, Hashable {
     public var rules: TraditionalRules
     public var teams: BySide<TeamInfo>
     public var score: TraditionalState
+    /// Called off before anyone won it. A match can end either by being played out or by
+    /// being stopped, and only the first shows up in the score.
+    public var isStopped: Bool
+
+    public init(
+        rules: TraditionalRules,
+        teams: BySide<TeamInfo>,
+        score: TraditionalState = TraditionalState(),
+        isStopped: Bool = false
+    ) {
+        self.rules = rules
+        self.teams = teams
+        self.score = score
+        self.isStopped = isStopped
+    }
 
     public var engine: TraditionalEngine { TraditionalEngine(rules: rules) }
+
+    private enum CodingKeys: String, CodingKey { case rules, teams, score, isStopped }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rules = try container.decode(TraditionalRules.self, forKey: .rules)
+        teams = try container.decode(BySide<TeamInfo>.self, forKey: .teams)
+        score = try container.decode(TraditionalState.self, forKey: .score)
+        isStopped = try container.decodeIfPresent(Bool.self, forKey: .isStopped) ?? false
+    }
 }
 
 /// Winner court: you play games on a court until the organiser's whistle ends the round,
@@ -77,7 +102,7 @@ public enum SessionState: Codable, Sendable, Hashable {
 
     public var isFinished: Bool {
         switch self {
-        case .traditional(let session): session.score.isFinished
+        case .traditional(let session): session.score.isFinished || session.isStopped
         case .tournament(let tournament): tournament.isFinished
         case .winnerCourt(let session): session.isFinished
         }

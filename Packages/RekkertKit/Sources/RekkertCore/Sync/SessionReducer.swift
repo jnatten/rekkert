@@ -71,7 +71,10 @@ public enum SessionReducer {
             case .winnerCourt(var session):
                 session.isFinished = true
                 state = .winnerCourt(session)
-            case .traditional, .none:
+            case .traditional(var session):
+                session.isStopped = true
+                state = .traditional(session)
+            case .none:
                 break
             }
 

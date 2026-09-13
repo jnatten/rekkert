@@ -11,7 +11,7 @@ struct WatchMenuView: View {
     @State private var confirming: Confirmation?
 
     private enum Confirmation: String, Identifiable {
-        case endRound, nextRound, finish
+        case endRound, nextRound, finish, discard
         var id: String { rawValue }
 
         var question: String {
@@ -19,6 +19,7 @@ struct WatchMenuView: View {
             case .endRound: "End this round?"
             case .nextRound: "Finish the round and draw the next?"
             case .finish: "Finish and save?"
+            case .discard: "Call this off without saving?"
             }
         }
 
@@ -27,6 +28,7 @@ struct WatchMenuView: View {
             case .endRound: "End round"
             case .nextRound: "Next round"
             case .finish: "Finish"
+            case .discard: "Discard"
             }
         }
     }
@@ -70,8 +72,14 @@ struct WatchMenuView: View {
                 }
                 .disabled(!model.store.canUndo)
 
-                action("Finish & save", systemImage: "stop.circle", tint: .red) {
-                    confirming = .finish
+                if hasResults {
+                    action("Finish & save", systemImage: "stop.circle", tint: .red) {
+                        confirming = .finish
+                    }
+                }
+
+                action(hasResults ? "Discard" : "Call it off", systemImage: "trash", tint: .red) {
+                    confirming = .discard
                 }
             }
             .padding(.horizontal, 2)
@@ -85,7 +93,10 @@ struct WatchMenuView: View {
             titleVisibility: .visible,
             presenting: confirming
         ) { pending in
-            Button(pending.confirmLabel, role: pending == .finish ? .destructive : nil) {
+            Button(
+                pending.confirmLabel,
+                role: pending == .finish || pending == .discard ? .destructive : nil
+            ) {
                 perform(pending)
             }
             Button("Cancel", role: .cancel) {}
@@ -133,9 +144,14 @@ struct WatchMenuView: View {
         case .finish:
             WKInterfaceDevice.current().play(.success)
             model.finishSession()
+        case .discard:
+            WKInterfaceDevice.current().play(.success)
+            model.discard()
         }
         confirming = nil
     }
+
+    private var hasResults: Bool { model.store.state?.hasResults ?? false }
 
     private var isWinnerCourt: Bool {
         if case .winnerCourt? = model.store.state { return true }

@@ -25,6 +25,99 @@ struct FinishTests {
         return (phone, watch, one, two)
     }
 
+    @Test func aTraditionalMatchCanBeStoppedBeforeAnyoneWinsIt() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SessionStore(directory: directory)
+        let (phone, watch, _, _) = pair(directory)
+        let tasks = [Task { await phone.run() }, Task { await watch.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+
+        phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+        for _ in 0 ..< 5 { phone.tap(team: .a) }
+        try await settle()
+        #expect(phone.state?.isFinished == false, "nobody has won it")
+
+        phone.finish()
+        try await settle()
+
+        #expect(phone.state == nil, "stopping it ends it all the same")
+        #expect(watch.state == nil)
+        #expect(try store.history().count == 1, "and how far it got is kept")
+    }
+
+    @Test func stoppingATraditionalMatchFromTheWatchEndsItOnBoth() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let (phone, watch, _, _) = pair(directory)
+        let tasks = [Task { await phone.run() }, Task { await watch.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+
+        phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+        for _ in 0 ..< 3 { phone.tap(team: .b) }
+        try await settle()
+
+        watch.finish()
+        try await settle()
+
+        #expect(watch.state == nil)
+        #expect(phone.state == nil)
+    }
+
+    @Test func aCancelledMatchIsNotKept() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SessionStore(directory: directory)
+        let (phone, _, _, _) = pair(directory)
+        let task = Task { await phone.run() }
+        defer { task.cancel() }
+
+        phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+        for _ in 0 ..< 5 { phone.tap(team: .a) }
+        try await settle()
+
+        phone.discardSession()
+        try await settle()
+
+        #expect(phone.state == nil)
+        #expect(try store.history().isEmpty, "cancelling throws it away rather than filing it")
+    }
+
+    @Test func cancellingFromTheWatchStopsThePhoneFilingItEither() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SessionStore(directory: directory)
+        let (phone, watch, _, _) = pair(directory)
+        let tasks = [Task { await phone.run() }, Task { await watch.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+
+        phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+        for _ in 0 ..< 5 { phone.tap(team: .a) }
+        try await settle()
+
+        watch.discardSession()
+        try await settle()
+
+        #expect(try store.history().isEmpty, "the decision travels with the event")
+        #expect(phone.state == nil)
+    }
+
+    @Test func aMatchPlayedOutIsKeptWithoutBeingAsked() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SessionStore(directory: directory)
+        let (phone, _, _, _) = pair(directory)
+        let task = Task { await phone.run() }
+        defer { task.cancel() }
+
+        phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+        for _ in 0 ..< 48 { phone.tap(team: .a) }   // two straight sets
+        try await settle()
+
+        #expect(phone.state == nil, "it ends itself")
+        #expect(try store.history().count == 1)
+    }
+
     @Test func finishingOnOneDeviceClearsBoth() async throws {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }

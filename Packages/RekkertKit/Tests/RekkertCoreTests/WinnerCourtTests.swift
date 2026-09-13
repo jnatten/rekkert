@@ -142,7 +142,7 @@ struct WinnerCourtTests {
     @Test func finishingLocksTheSession() {
         var value = log()
         score(&value, [.a, .a, .a, .a])
-        value.append(.finish, from: device)
+        value.append(.finish(archive: true), from: device)
 
         #expect(session(value)?.isFinished == true)
         #expect(SessionReducer.state(of: value)?.isFinished == true)

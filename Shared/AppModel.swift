@@ -169,9 +169,9 @@ final class AppModel {
         store.finish()
     }
 
-    /// Nothing was played, so finishing keeps no record of it.
+    /// Calls the session off without keeping a record of how far it got.
     func discard() {
-        store.finish()
+        store.discardSession()
     }
 
     func deleteHistory(_ id: UUID) {

@@ -104,7 +104,7 @@ struct SessionReducerTests {
 
     @Test func finishMarksTheTournamentDone() {
         var log = tournamentLog()
-        log.append(.finish, from: device)
+        log.append(.finish(archive: true), from: device)
         #expect(tournament(log)?.isFinished == true)
         #expect(SessionReducer.state(of: log)?.isFinished == true)
     }

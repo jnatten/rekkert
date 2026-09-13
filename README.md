@@ -56,6 +56,10 @@ last page reaches a menu holding everything that ends something: end the round, 
 next one, undo, finish and save. They are kept off the scoring page so a stray tap during a
 rally cannot end a round.
 
+A match can be played out or called off part way. Ending it offers to keep it in history
+or to discard it, and that decision travels with the event so the other device does not
+file something you threw away. A match played to its end is kept without being asked.
+
 ## Mid-match corrections
 
 Both apps carry two fixes for when reality and the app disagree. **Swap serving team**

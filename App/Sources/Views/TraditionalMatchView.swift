@@ -55,11 +55,23 @@ struct TraditionalMatchView: View {
                 if DemoLaunch.fullscreen { fullscreen = true }
                 #endif
             }
-            .confirmationDialog("End this match?", isPresented: $showingEnd, titleVisibility: .visible) {
-                Button("Save to history", role: .destructive) { model.finishSession() }
+            .confirmationDialog(endPrompt, isPresented: $showingEnd, titleVisibility: .visible) {
+                if hasResults {
+                    Button("Save to history", role: .destructive) { model.finishSession() }
+                    Button("Discard", role: .destructive) { model.discard() }
+                } else {
+                    Button("Discard", role: .destructive) { model.discard() }
+                }
                 Button("Keep playing", role: .cancel) {}
             }
         }
+    }
+
+    /// Nothing played yet, so there is nothing worth filing.
+    private var hasResults: Bool { model.store.state?.hasResults ?? false }
+
+    private var endPrompt: String {
+        hasResults ? "End this match?" : "Call this off?"
     }
 
     private func suddenDeathBanner(_ snapshot: ScoreboardSnapshot) -> some View {

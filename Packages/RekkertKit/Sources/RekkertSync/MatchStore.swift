@@ -94,7 +94,12 @@ public final class MatchStore {
         guard case .winnerCourt(let session)? = state else { return }
         record(.endRound(round: session.completedRounds.count))
     }
-    public func finish() { record(.finish) }
+    /// Ends the session and keeps it in history if anything was played.
+    public func finish() { record(.finish(archive: true)) }
+
+    /// Ends the session and throws it away — for calling a match off rather than recording
+    /// how far it got.
+    public func discardSession() { record(.finish(archive: false)) }
 
     // MARK: - Presets
 
@@ -178,9 +183,18 @@ public final class MatchStore {
     /// Finishing is one path on both devices: the `.finish` event travels, and wherever it
     /// lands the session is archived if it is worth keeping and then cleared. Clearing
     /// locally without that would leave the counterpart holding a live copy to resurrect.
+    /// A session played out to its end carries no `.finish`, and is worth keeping; one
+    /// that was stopped says on the event whether it should be.
+    private var wasAskedToArchive: Bool {
+        for event in log.effectiveEvents.reversed() {
+            if case .finish(let archive) = event.kind { return archive }
+        }
+        return true
+    }
+
     private func concludeIfFinished() -> Bool {
         guard let finished = state, finished.isFinished else { return false }
-        if keepsHistory, finished.hasResults {
+        if keepsHistory, finished.hasResults, wasAskedToArchive {
             try? store?.archive(HistoryRecord(title: finished.title, state: finished))
         }
 

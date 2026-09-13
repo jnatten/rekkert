@@ -21,7 +21,9 @@ public enum EventKind: Codable, Sendable, Hashable {
     /// Draws the round after `after`, and only if that is still the last one — so two
     /// devices advancing at once produce one new round, not two.
     case nextRound(after: Int)
-    case finish
+    /// Ends the session. `archive` is false when it is being thrown away rather than kept,
+    /// and travels with the event so the other device does not file it either.
+    case finish(archive: Bool)
     case undo(EventID)
 }
 
