@@ -9,8 +9,14 @@ struct HistoryDetailView: View {
     let record: HistoryRecord
 
     @State private var confirmingResume = false
+    @State private var startingAnother = false
 
     private var result: SessionResult { SessionResult.make(from: record.state) }
+
+    private var tournament: Tournament? {
+        guard case .tournament(let value) = record.state else { return nil }
+        return value
+    }
     private var tint: Color { result.winningSide.map(Color.team) ?? .accentColor }
 
     var body: some View {
@@ -49,6 +55,21 @@ struct HistoryDetailView: View {
         }
         .navigationTitle(record.title)
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            #if DEBUG
+            if DemoLaunch.rematch, case .tournament = record.state { startingAnother = true }
+            #endif
+        }
+        // Presented from the list itself: a sheet attached to a row goes with the row
+        // when it scrolls out of a lazy List, and then never opens.
+        .sheet(isPresented: $startingAnother) {
+            if let tournament {
+                NewSessionView(
+                    mode: tournament.format == .americano ? .americano : .mexicano,
+                    from: tournament
+                )
+            }
+        }
         .confirmationDialog(
             "Pick this up again?",
             isPresented: $confirmingResume,
@@ -160,16 +181,30 @@ struct HistoryDetailView: View {
     @ViewBuilder
     private var resumeSection: some View {
         Section {
+            if tournament != nil {
+                Button("New tournament, same players", systemImage: "person.2.badge.plus") {
+                    startingAnother = true
+                }
+            }
             if record.state.canResume {
                 Button("Resume this session", systemImage: "play.circle") {
                     confirmingResume = true
                 }
             }
         } footer: {
-            Text(record.state.canResume
-                 ? "This one never ran its course, so there is more of it to play."
-                 : "This one was played out to the end, so there is nothing left to resume.")
+            Text(resumeFooter)
         }
+    }
+
+    private var resumeFooter: String {
+        // A tournament can always take another round, so "never ran its course" would be
+        // the wrong thing to say about one you deliberately finished.
+        if case .tournament = record.state {
+            return "Resuming adds more rounds to this tournament. Starting a new one keeps the players and leaves this where it is."
+        }
+        return record.state.canResume
+            ? "This one never ran its course, so there is more of it to play."
+            : "This one was played out to the end, so there is nothing left to resume."
     }
 
     private func resume() {

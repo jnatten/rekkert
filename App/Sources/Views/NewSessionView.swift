@@ -6,6 +6,17 @@ struct NewSessionView: View {
     @Environment(\.dismiss) private var dismiss
     let mode: GameMode
 
+    /// Starts the form filled in from a tournament that has already been played, for
+    /// running the same group again. The players are copied by name only, so this is a new
+    /// tournament rather than a second handle on the old one.
+    init(mode: GameMode, from played: Tournament? = nil) {
+        self.mode = mode
+        guard let played else { return }
+        _players = State(initialValue: played.players.map { Player(name: $0.name) })
+        _tournamentName = State(initialValue: played.name)
+        _config = State(initialValue: played.config)
+    }
+
     @State private var rules = TraditionalRules()
     @State private var teamA = "Us"
     @State private var teamB = "Them"

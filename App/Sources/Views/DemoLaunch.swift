@@ -24,6 +24,11 @@ enum DemoLaunch {
         value(for: "-rekkert-demo-history").flatMap(Int.init)
     }
 
+    /// Opens the sheet for running a past tournament's players again.
+    static var rematch: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-rematch")
+    }
+
     static var browseRound: Int? {
         value(for: "-rekkert-demo-browse-round").flatMap(Int.init)
     }
