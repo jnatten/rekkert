@@ -66,10 +66,24 @@ public enum ScoreCaller {
         if let winner = gameWinner(from: previous, to: current) {
             return ["Game, \(current.teamNames[winner])", games(current)]
         }
-        if current.kind == .tournament, current.isFinished, !previous.isFinished {
-            return ["\(current.courtLabel ?? "Court") finished"]
+        if current.isFinished, !previous.isFinished {
+            return reachingTheTarget(current)
         }
         return []
+    }
+
+    /// Counted modes end by arriving at a number rather than by winning a game, so they
+    /// need saying out loud — the score alone does not sound like an ending.
+    private static func reachingTheTarget(_ snapshot: ScoreboardSnapshot) -> [String] {
+        switch snapshot.kind {
+        case .tournament:
+            return ["\(snapshot.courtLabel ?? "Court") finished"]
+        case .pointCount:
+            guard let winner = snapshot.winner else { return ["Finished, all square"] }
+            return ["Game to \(snapshot.teamNames[winner])"]
+        case .traditional, .winnerCourt:
+            return []
+        }
     }
 
     /// Only ever one more game than before, and only for one side — so an undo, which takes

@@ -40,6 +40,8 @@ struct HistoryView: View {
             Text(standings.prefix(3).enumerated().map { "\($0.offset + 1). \($0.element.player.name) \($0.element.total)" }.joined(separator: " · "))
         case .winnerCourt(let session):
             Text("\(session.completedRounds.count) rounds · games \(session.totalGames.a)–\(session.totalGames.b)")
+        case .pointCount(let session):
+            Text("\(session.score.points.a)–\(session.score.points.b) · to \(session.rules.target)")
         }
     }
 }

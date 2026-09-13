@@ -7,6 +7,7 @@ public enum PresetConfiguration: Codable, Sendable, Hashable {
     case traditional(rules: TraditionalRules, teams: BySide<TeamInfo>)
     case winnerCourt(rules: WinnerCourtRules, teams: BySide<TeamInfo>)
     case tournament(format: TournamentFormat, name: String, players: [Player], config: TournamentConfig)
+    case pointCount(rules: PointCountRules, teams: BySide<TeamInfo>)
 
     public func makeSetup() -> SessionSetup {
         switch self {
@@ -14,6 +15,8 @@ public enum PresetConfiguration: Codable, Sendable, Hashable {
             .traditional(rules: rules, teams: teams)
         case .winnerCourt(let rules, let teams):
             .winnerCourt(rules: rules, teams: teams)
+        case .pointCount(let rules, let teams):
+            .pointCount(rules: rules, teams: teams)
         case .tournament(let format, let name, let players, let config):
             .tournament(Tournament(
                 id: TournamentID(),
@@ -35,6 +38,7 @@ public enum PresetConfiguration: Codable, Sendable, Hashable {
         switch self {
         case .traditional: "figure.tennis"
         case .winnerCourt: "arrow.up.arrow.down"
+        case .pointCount: "number"
         case .tournament(let format, _, _, _):
             format == .americano ? "arrow.triangle.2.circlepath" : "list.number"
         }
@@ -46,6 +50,8 @@ public enum PresetConfiguration: Codable, Sendable, Hashable {
             "Best of \(rules.setsToWin * 2 - 1) · \(rules.deuceRule.displayName)"
         case .winnerCourt(let rules, _):
             "Winner court · \(rules.deuceRule.displayName)"
+        case .pointCount(let rules, _):
+            "Points · to \(rules.target)"
         case .tournament(let format, _, let players, let config):
             "\(format.displayName) · \(players.count) players · \(config.courtCount) court\(config.courtCount == 1 ? "" : "s") · to \(config.pointRules.target)"
         }

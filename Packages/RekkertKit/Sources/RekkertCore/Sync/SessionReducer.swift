@@ -32,7 +32,7 @@ public enum SessionReducer {
             case .winnerCourt(var session):
                 session.score.suddenDeathCourt = court
                 state = .winnerCourt(session)
-            case .tournament, .none:
+            case .tournament, .pointCount, .none:
                 break
             }
 
@@ -74,6 +74,9 @@ public enum SessionReducer {
             case .traditional(var session):
                 session.isStopped = true
                 state = .traditional(session)
+            case .pointCount(var session):
+                session.isStopped = true
+                state = .pointCount(session)
             case .none:
                 break
             }
@@ -111,6 +114,14 @@ public enum SessionReducer {
 
         case (.winnerCourt(let rules, let teams), _):
             state = .winnerCourt(WinnerCourtSession(rules: rules, teams: teams))
+
+        case (.pointCount(let rules, let teams), .pointCount(var session)):
+            session.rules = rules
+            session.teams = teams
+            state = .pointCount(session)
+
+        case (.pointCount(let rules, let teams), _):
+            state = .pointCount(PointCountSession(rules: rules, teams: teams))
         }
     }
 
@@ -134,6 +145,13 @@ public enum SessionReducer {
             traditional(&asTraditional)
             session.score = asTraditional.score
             state = .winnerCourt(session)
+
+        case .pointCount(var session):
+            guard !session.isFinished else { return }
+            var asCourt = CourtMatch(courtIndex: 0, teams: BySide(both: []), state: session.score)
+            change(session.engine, &asCourt)
+            session.score = asCourt.state
+            state = .pointCount(session)
 
         case .tournament(var current):
             guard current.rounds.indices.contains(round),

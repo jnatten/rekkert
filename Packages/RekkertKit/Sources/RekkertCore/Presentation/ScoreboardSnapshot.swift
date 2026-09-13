@@ -5,6 +5,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
         case traditional
         case winnerCourt
         case tournament
+        case pointCount
     }
 
     public var kind: Kind
@@ -37,6 +38,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
         case .traditional(let session): traditional(session)
         case .tournament(let tournament): tournamentCourt(tournament, round: round, court: court)
         case .winnerCourt(let session): winnerCourt(session)
+        case .pointCount(let session): pointCount(session)
         }
     }
 
@@ -91,6 +93,39 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             isFinished: session.isFinished,
             winner: nil
         )
+    }
+
+    private static func pointCount(_ session: PointCountSession) -> ScoreboardSnapshot {
+        let engine = session.engine
+        let serve = engine.serve(session.score)
+        let names = BySide(a: session.teams.a.name, b: session.teams.b.name)
+
+        return ScoreboardSnapshot(
+            kind: .pointCount,
+            courtIndex: 0,
+            courtLabel: nil,
+            teamNames: names,
+            points: session.score.points.map { PointDisplay.count($0) },
+            games: nil,
+            completedSets: [],
+            detail: detail(for: session, names: names),
+            serving: session.isFinished ? nil : serve.slot.team,
+            servingCourt: session.isFinished ? nil : serve.court,
+            servingPlayer: session.teams[serve.slot.team].players[safe: serve.slot.playerIndex],
+            isSuddenDeath: false,
+            suddenDeathCourt: nil,
+            isLocked: session.isFinished,
+            isFinished: session.isFinished,
+            winner: session.winner
+        )
+    }
+
+    private static func detail(for session: PointCountSession, names: BySide<String>) -> String {
+        guard session.isFinished else {
+            return "\(session.engine.pointsRemaining(session.score)) to play"
+        }
+        guard let winner = session.winner else { return "All square" }
+        return "\(names[winner]) won"
     }
 
     private static func tournamentCourt(_ tournament: Tournament, round index: Int?, court: Int) -> ScoreboardSnapshot? {

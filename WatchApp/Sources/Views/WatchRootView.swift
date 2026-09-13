@@ -13,7 +13,7 @@ struct WatchRootView: View {
         case .none:
             WatchIdleView()
 
-        case .traditional, .winnerCourt:
+        case .traditional, .winnerCourt, .pointCount:
             TabView(selection: $selection) {
                 WatchCourtPage(court: 0).tag(0)
                 WatchMenuView().tag(menuTag)

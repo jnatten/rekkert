@@ -14,6 +14,7 @@ struct NewSessionView: View {
 
     @State private var tournamentName = ""
     @State private var winnerCourtRules = WinnerCourtRules()
+    @State private var pointRules = PointCountRules()
     @State private var presetName = ""
     @State private var config = TournamentConfig()
     @State private var players: [Player] = (0 ..< 4).map { _ in Player(name: "") }
@@ -32,6 +33,7 @@ struct NewSessionView: View {
             Form {
                 switch mode {
                 case .traditional: traditionalSections
+                case .pointCount: pointCountSections
                 case .winnerCourt: winnerCourtSections
                 case .americano, .mexicano: tournamentSections
                 }
@@ -141,6 +143,43 @@ struct NewSessionView: View {
         }
     }
 
+    // MARK: - Points
+
+    @ViewBuilder
+    private var pointCountSections: some View {
+        Section("Teams") {
+            teamRows(name: $teamA, players: $playersA, side: .a)
+            teamRows(name: $teamB, players: $playersB, side: .b)
+        }
+
+        Section {
+            Picker("Play to", selection: $pointRules.target) {
+                ForEach(PointCountRules.commonTargets, id: \.self) { Text("\($0)").tag($0) }
+                if !PointCountRules.commonTargets.contains(pointRules.target) {
+                    Text("\(pointRules.target)").tag(pointRules.target)
+                }
+            }
+            Stepper("Target: \(pointRules.target)", value: $pointRules.target, in: 2 ... 99)
+            Picker("Ends when", selection: $pointRules.targetKind) {
+                ForEach(TargetKind.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+            Stepper("Serves each: \(pointRules.servesPerTeam)", value: $pointRules.servesPerTeam, in: 1 ... 5)
+        } header: {
+            Text("Points")
+        } footer: {
+            Text(pointExplanation)
+        }
+    }
+
+    private var pointExplanation: String {
+        switch pointRules.targetKind {
+        case .totalPointsPlayed:
+            "Both scores add up to \(pointRules.target), so the round always lasts exactly that many points."
+        case .firstToTarget:
+            "The round ends as soon as one team reaches \(pointRules.target)."
+        }
+    }
+
     // MARK: - Presets
 
     @ViewBuilder
@@ -164,6 +203,8 @@ struct NewSessionView: View {
         switch mode {
         case .traditional:
             .traditional(rules: rules, teams: teams)
+        case .pointCount:
+            .pointCount(rules: pointRules, teams: teams)
         case .winnerCourt:
             .winnerCourt(rules: winnerCourtRules, teams: teams)
         case .americano, .mexicano:
@@ -438,7 +479,7 @@ struct NewSessionView: View {
 
     private var canStart: Bool {
         switch mode {
-        case .traditional, .winnerCourt: true
+        case .traditional, .pointCount, .winnerCourt: true
         case .americano, .mexicano: namedPlayers.count >= 4
         }
     }
@@ -446,9 +487,13 @@ struct NewSessionView: View {
     private func start() {
         savePresetIfNamed()
 
-        if mode == .winnerCourt {
+        if mode == .winnerCourt || mode == .pointCount {
             model.remember(players: (playersA + playersB).filter { !$0.isEmpty })
-            model.store.configure(.winnerCourt(rules: winnerCourtRules, teams: teams))
+            model.store.configure(
+                mode == .winnerCourt
+                    ? .winnerCourt(rules: winnerCourtRules, teams: teams)
+                    : .pointCount(rules: pointRules, teams: teams)
+            )
             dismiss()
             return
         }

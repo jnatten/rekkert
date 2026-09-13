@@ -91,6 +91,7 @@ struct HomeView: View {
 
 enum GameMode: String, CaseIterable, Identifiable {
     case traditional
+    case pointCount
     case winnerCourt
     case americano
     case mexicano
@@ -100,6 +101,7 @@ enum GameMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .traditional: "Match"
+        case .pointCount: "Points"
         case .winnerCourt: "Winner court"
         case .americano: "Americano"
         case .mexicano: "Mexicano"
@@ -109,6 +111,7 @@ enum GameMode: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .traditional: "Games, sets and match"
+        case .pointCount: "One round, counted 1, 2, 3 to a target"
         case .winnerCourt: "Games until the whistle, round after round"
         case .americano: "Everyone partners everyone"
         case .mexicano: "Re-paired by standings each round"
@@ -118,6 +121,7 @@ enum GameMode: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .traditional: "figure.tennis"
+        case .pointCount: "number"
         case .winnerCourt: "arrow.up.arrow.down"
         case .americano: "arrow.triangle.2.circlepath"
         case .mexicano: "list.number"
@@ -126,7 +130,7 @@ enum GameMode: String, CaseIterable, Identifiable {
 
     var tournamentFormat: TournamentFormat? {
         switch self {
-        case .traditional, .winnerCourt: nil
+        case .traditional, .pointCount, .winnerCourt: nil
         case .americano: .americano
         case .mexicano: .mexicano
         }

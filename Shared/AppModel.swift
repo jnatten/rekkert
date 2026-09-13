@@ -94,6 +94,15 @@ final class AppModel {
             store.tap(team: .a); store.tap(team: .a); store.tap(team: .a); store.tap(team: .a)
             store.tap(team: .a); store.tap(team: .b)
 
+        case "points":
+            store.configure(.pointCount(
+                rules: PointCountRules(target: 16),
+                teams: BySide(
+                    a: TeamInfo(name: "Blues", players: ["Jonas", "Ada"]),
+                    b: TeamInfo(name: "Oranges", players: ["Kim", "Sam"])
+                )
+            ))
+
         case "traditional":
             store.configure(.traditional(
                 rules: TraditionalRules(deuceRule: .starPoint),

@@ -17,6 +17,7 @@ public enum SessionSetup: Codable, Sendable, Hashable {
     case traditional(rules: TraditionalRules, teams: BySide<TeamInfo>)
     case tournament(Tournament)
     case winnerCourt(rules: WinnerCourtRules, teams: BySide<TeamInfo>)
+    case pointCount(rules: PointCountRules, teams: BySide<TeamInfo>)
 }
 
 public struct TraditionalSession: Codable, Sendable, Hashable {
@@ -90,10 +91,41 @@ public struct WinnerCourtSession: Codable, Sendable, Hashable {
     public var roundsWon: BySide<Int> { score.setsWon }
 }
 
+/// One round of plain counting between two fixed teams — an americano round without the
+/// tournament around it. The scoring is the same engine the courts use, so a round played
+/// here and a round played in a tournament end on exactly the same rules.
+public struct PointCountSession: Codable, Sendable, Hashable {
+    public var rules: PointCountRules
+    public var teams: BySide<TeamInfo>
+    public var score: PointCountState
+    /// Called off before the target was reached.
+    public var isStopped: Bool
+
+    public init(
+        rules: PointCountRules,
+        teams: BySide<TeamInfo>,
+        score: PointCountState = PointCountState(),
+        isStopped: Bool = false
+    ) {
+        self.rules = rules
+        self.teams = teams
+        self.score = score
+        self.isStopped = isStopped
+    }
+
+    public var engine: PointCountEngine { PointCountEngine(rules: rules) }
+
+    public var isFinished: Bool { engine.isFinished(score) || isStopped }
+
+    /// `nil` for a draw, which a total-points target allows whenever it is even.
+    public var winner: TeamSide? { engine.winner(score) }
+}
+
 public enum SessionState: Codable, Sendable, Hashable {
     case traditional(TraditionalSession)
     case tournament(Tournament)
     case winnerCourt(WinnerCourtSession)
+    case pointCount(PointCountSession)
 
     public var isTournament: Bool {
         if case .tournament = self { return true }
@@ -105,6 +137,7 @@ public enum SessionState: Codable, Sendable, Hashable {
         case .traditional(let session): session.score.isFinished || session.isStopped
         case .tournament(let tournament): tournament.isFinished
         case .winnerCourt(let session): session.isFinished
+        case .pointCount(let session): session.isFinished
         }
     }
 
@@ -115,6 +148,8 @@ public enum SessionState: Codable, Sendable, Hashable {
         case .tournament(let tournament):
             tournament.name.isEmpty ? tournament.format.displayName : tournament.name
         case .winnerCourt(let session):
+            "\(session.teams.a.name) vs \(session.teams.b.name)"
+        case .pointCount(let session):
             "\(session.teams.a.name) vs \(session.teams.b.name)"
         }
     }
@@ -131,6 +166,8 @@ public enum SessionState: Codable, Sendable, Hashable {
             tournament.rounds.contains { round in
                 round.matches.contains { $0.state.points.total > 0 } || !round.sitOuts.isEmpty
             }
+        case .pointCount(let session):
+            session.score.points.total > 0
         }
     }
 
@@ -140,6 +177,7 @@ public enum SessionState: Codable, Sendable, Hashable {
         switch self {
         case .traditional(let session): session.score.firstServerIndex
         case .winnerCourt(let session): session.score.firstServerIndex
+        case .pointCount(let session): session.score.firstServerIndex
         case .tournament(let tournament):
             (round.map { tournament.round(at: $0) } ?? tournament.currentRound)?
                 .matches.first { $0.courtIndex == court }?
@@ -151,7 +189,7 @@ public enum SessionState: Codable, Sendable, Hashable {
     /// per filled court in the current tournament round.
     public var courtCount: Int {
         switch self {
-        case .traditional, .winnerCourt: 1
+        case .traditional, .winnerCourt, .pointCount: 1
         case .tournament(let tournament): tournament.currentRound?.matches.count ?? 0
         }
     }
