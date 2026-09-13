@@ -21,6 +21,14 @@ struct WatchMenuView: View {
             case .finish: "Finish and save?"
             }
         }
+
+        var confirmLabel: String {
+            switch self {
+            case .endRound: "End round"
+            case .nextRound: "Next round"
+            case .finish: "Finish"
+            }
+        }
     }
 
     var body: some View {
@@ -68,13 +76,19 @@ struct WatchMenuView: View {
             }
             .padding(.horizontal, 2)
         }
+        // `presenting:` hands the pending action to the builder, so the button closure
+        // captures it. Reading `confirming` inside the action instead would race the
+        // dialog's own dismissal, which clears it — and the button would do nothing.
         .confirmationDialog(
             confirming?.question ?? "",
             isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }),
-            titleVisibility: .visible
-        ) {
-            Button(confirmLabel, role: confirming == .finish ? .destructive : nil) { perform() }
-            Button("Cancel", role: .cancel) { confirming = nil }
+            titleVisibility: .visible,
+            presenting: confirming
+        ) { pending in
+            Button(pending.confirmLabel, role: pending == .finish ? .destructive : nil) {
+                perform(pending)
+            }
+            Button("Cancel", role: .cancel) {}
         }
     }
 
@@ -104,17 +118,8 @@ struct WatchMenuView: View {
         .font(.footnote)
     }
 
-    private var confirmLabel: String {
-        switch confirming {
-        case .endRound: "End round"
-        case .nextRound: "Next round"
-        case .finish: "Finish"
-        case .none: ""
-        }
-    }
-
-    private func perform() {
-        switch confirming {
+    private func perform(_ action: Confirmation) {
+        switch action {
         case .endRound:
             WKInterfaceDevice.current().play(.success)
             model.store.endRound()
@@ -128,8 +133,6 @@ struct WatchMenuView: View {
         case .finish:
             WKInterfaceDevice.current().play(.success)
             model.finishSession()
-        case .none:
-            break
         }
         confirming = nil
     }
