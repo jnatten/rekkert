@@ -367,6 +367,17 @@ struct SyncTests {
         #expect(pair.phone.display.isMirrored, "still mirrored, not flipped back")
     }
 
+    @Test func aFlipIsNotLostToATrailingClock() async throws {
+        // The phone flips, then the watch flips a moment later with a clock that reads
+        // slightly earlier. Ordering by revision rather than by the clock keeps the second
+        // press from being discarded as stale.
+        let phone = DisplayPreferences().setting(mirrored: true, at: Date(timeIntervalSince1970: 1_000))
+        let watch = phone.setting(mirrored: false, at: Date(timeIntervalSince1970: 995))
+
+        #expect(phone.adopting(watch).isMirrored == false, "the later press wins despite the earlier stamp")
+        #expect(phone.adopting(watch).revision == 2)
+    }
+
     @Test func stateSurvivesARestartFromDisk() async throws {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appending(path: "rekkert-tests-\(UUID().uuidString)")

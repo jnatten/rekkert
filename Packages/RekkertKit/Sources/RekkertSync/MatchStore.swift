@@ -126,6 +126,7 @@ public final class MatchStore {
     /// resulting value rather than a toggle, so a repeated delivery settles on the same
     /// answer instead of undoing itself.
     public func setScoreboardMirrored(_ isMirrored: Bool) {
+        guard isMirrored != display.isMirrored else { return }
         apply(display.setting(mirrored: isMirrored), publish: true)
     }
 
@@ -399,7 +400,7 @@ public final class MatchStore {
     /// Offered alongside the presets on reconnect, so the watch's flip button knows which
     /// way the phone is currently reading before it sends the opposite.
     private func shareDisplay() {
-        guard display.updatedAt > .distantPast else { return }
+        guard display.hasBeenSet else { return }
         let payload = encode(.display(display))
         Task { _ = await sendLive(payload) }
     }
