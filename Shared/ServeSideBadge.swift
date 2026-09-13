@@ -9,18 +9,11 @@ struct ServeSideBadge: View {
     /// left: the court has to be drawn the way you see it, not the way they do.
     var fromAcrossTheNet = false
     var height: CGFloat = 12
-    var showsLabel = true
 
     var body: some View {
-        HStack(spacing: height * 0.45) {
-            HStack(spacing: 1.5) {
-                half(lit: asYouSeeIt == .ad)
-                half(lit: asYouSeeIt == .deuce)
-            }
-            if showsLabel {
-                Text(court.displayName)
-                    .font(.system(size: height * 0.95, weight: .semibold, design: .rounded))
-            }
+        HStack(spacing: 1.5) {
+            half(lit: asYouSeeIt == .ad)
+            half(lit: asYouSeeIt == .deuce)
         }
         .accessibilityElement()
         .accessibilityLabel(spokenDescription)
@@ -35,8 +28,8 @@ struct ServeSideBadge: View {
 
     private var spokenDescription: String {
         fromAcrossTheNet
-            ? "Serving from their \(court.spokenName) court, on your \(asYouSeeIt.sideName.lowercased())"
-            : "Serving from the \(court.spokenName) court, on your \(asYouSeeIt.sideName.lowercased())"
+            ? "Serving from your \(asYouSeeIt.sideName.lowercased()), their \(court.displayName.lowercased()) court"
+            : "Serving from your \(asYouSeeIt.sideName.lowercased()), the \(court.displayName.lowercased()) court"
     }
 
     private func half(lit: Bool) -> some View {
@@ -53,7 +46,6 @@ struct ServeSideSlot: View {
     let court: ServeCourt?
     var fromAcrossTheNet = false
     var height: CGFloat = 12
-    var showsLabel = true
 
     var body: some View {
         Group {
@@ -61,8 +53,7 @@ struct ServeSideSlot: View {
                 ServeSideBadge(
                     court: court,
                     fromAcrossTheNet: fromAcrossTheNet,
-                    height: height,
-                    showsLabel: showsLabel
+                    height: height
                 )
             } else {
                 Color.clear

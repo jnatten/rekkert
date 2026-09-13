@@ -7,15 +7,7 @@ public enum ServeCourt: String, Codable, Sendable, Hashable, CaseIterable {
     public var displayName: String {
         switch self {
         case .deuce: "Deuce"
-        case .ad: "Adv"
-        }
-    }
-
-    /// Spelled out, for VoiceOver: "adv" is a label rather than a word.
-    public var spokenName: String {
-        switch self {
-        case .deuce: "deuce"
-        case .ad: "advantage"
+        case .ad: "Ad"
         }
     }
 

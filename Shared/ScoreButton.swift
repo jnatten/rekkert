@@ -18,8 +18,7 @@ struct ScoreButton: View {
             court: isServing && isThisEnd ? servingCourt : nil,
             // Team B is the far end, so their court is drawn as you see it.
             fromAcrossTheNet: side == .b,
-            height: compact ? 10 : 13,
-            showsLabel: !compact
+            height: compact ? 10 : 13
         )
         .foregroundStyle(.white.opacity(0.9))
     }

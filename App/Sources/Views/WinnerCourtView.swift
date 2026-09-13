@@ -135,7 +135,7 @@ struct WinnerCourtView: View {
                 set: { model.store.chooseServeSide($0) }
             )) {
                 Text("Right (deuce)").tag(ServeCourt.deuce)
-                Text("Left (adv)").tag(ServeCourt.ad)
+                Text("Left (ad)").tag(ServeCourt.ad)
             }
             .pickerStyle(.segmented)
         }
