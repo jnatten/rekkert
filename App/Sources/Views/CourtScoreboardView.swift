@@ -11,7 +11,6 @@ struct CourtScoreboardView: View {
     /// when focus leaves, so a three-digit typo does not become three synced events.
     @State private var draft: BySide<Int>?
     @State private var fullscreen = false
-    @AppStorage(ScoreboardLayout.storageKey) private var isMirrored = false
     @FocusState private var typing: TeamSide?
 
     var body: some View {
@@ -21,7 +20,7 @@ struct CourtScoreboardView: View {
                     VStack(spacing: 0) {
                         ScoreboardView(
                             snapshot: snapshot,
-                            layout: ScoreboardLayout(isMirrored: isMirrored),
+                            layout: ScoreboardLayout(isMirrored: model.store.display.isMirrored),
                             onTap: { model.store.tap(round: round, court: court, team: $0) },
                             onUndo: { model.store.undoLast() }
                         )
@@ -33,13 +32,13 @@ struct CourtScoreboardView: View {
                 }
             }
             .fullScreenCover(isPresented: $fullscreen) {
-                FullscreenScoreView(round: round, court: court, mirrored: isMirrored)
+                FullscreenScoreView(round: round, court: court, mirrored: model.store.display.isMirrored)
             }
             .navigationTitle("Round \(round + 1) · Court \(court + 1)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    MatchOptionsMenu(isMirrored: $isMirrored, round: round, court: court)
+                    MatchOptionsMenu(round: round, court: court)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {

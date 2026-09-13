@@ -21,6 +21,8 @@ public enum Wire: Codable, Sendable, Hashable {
     case snapshot(MatchLog)
     /// Saved configurations, so a session can be started from either device.
     case presets(PresetLibrary)
+    /// How the phone should draw its scoreboard, so the watch can flip it.
+    case display(DisplayPreferences)
 
     public func encoded() throws -> Data {
         try JSONCoding.encoder.encode(self)

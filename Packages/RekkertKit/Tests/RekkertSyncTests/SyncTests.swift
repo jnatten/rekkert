@@ -327,6 +327,46 @@ struct SyncTests {
         #expect(pair.phone.presets.presets.first?.useCount == 1, "and the phone sees it was used")
     }
 
+    @Test func theWatchFlipsThePhonesScoreboard() async throws {
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        #expect(pair.phone.display.isMirrored == false)
+
+        pair.watch.toggleScoreboardMirrored()
+        try await settle()
+
+        #expect(pair.phone.display.isMirrored, "pressed on the wrist, applied on the phone")
+
+        // And from the phone itself.
+        pair.phone.toggleScoreboardMirrored()
+        try await settle()
+        #expect(pair.phone.display.isMirrored == false)
+        #expect(pair.watch.display.isMirrored == false, "the watch follows so its next press is right")
+    }
+
+    @Test func aRepeatedFlipInstructionDoesNotUndoItself() async throws {
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        pair.watch.setScoreboardMirrored(true)
+        try await settle()
+        #expect(pair.phone.display.isMirrored)
+
+        // The durable queue can deliver the same payload again; an absolute value survives
+        // that where a toggle would cancel itself out.
+        pair.watch.setScoreboardMirrored(true)
+        await pair.watch.synchronise()
+        await pair.phone.synchronise()
+        try await settle()
+
+        #expect(pair.phone.display.isMirrored, "still mirrored, not flipped back")
+    }
+
     @Test func stateSurvivesARestartFromDisk() async throws {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appending(path: "rekkert-tests-\(UUID().uuidString)")

@@ -5,7 +5,6 @@ import SwiftUI
 /// scoreboard reads.
 struct MatchOptionsMenu: View {
     @Environment(AppModel.self) private var model
-    @Binding var isMirrored: Bool
     var round = 0
     var court = 0
 
@@ -15,7 +14,7 @@ struct MatchOptionsMenu: View {
                 model.store.swapServingTeam(round: round, court: court)
             }
             Button("Swap sides", systemImage: "rectangle.2.swap") {
-                isMirrored.toggle()
+                model.store.toggleScoreboardMirrored()
             }
         } label: {
             Image(systemName: "ellipsis.circle")

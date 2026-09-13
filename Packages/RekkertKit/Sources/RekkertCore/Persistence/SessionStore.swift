@@ -137,6 +137,21 @@ public struct SessionStore: Sendable {
         try write(try encoder.encode(library), to: presetsURL)
     }
 
+    // MARK: - Display
+
+    private var displayURL: URL { directory.appending(path: "display.json") }
+
+    public func loadDisplay() -> DisplayPreferences {
+        guard let data = try? Data(contentsOf: displayURL),
+              let preferences = try? decoder.decode(DisplayPreferences.self, from: data)
+        else { return DisplayPreferences() }
+        return preferences
+    }
+
+    public func save(_ preferences: DisplayPreferences) throws {
+        try write(try encoder.encode(preferences), to: displayURL)
+    }
+
     // MARK: - Plumbing
 
     private var encoder: JSONEncoder { JSONCoding.encoder }

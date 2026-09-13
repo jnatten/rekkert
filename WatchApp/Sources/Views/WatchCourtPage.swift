@@ -6,7 +6,6 @@ struct WatchCourtPage: View {
     @Environment(AppModel.self) private var model
     var round = 0
     let court: Int
-    @AppStorage(ScoreboardLayout.storageKey) private var isMirrored = false
 
     var body: some View {
         ScrollView {
@@ -15,7 +14,6 @@ struct WatchCourtPage: View {
                     ScoreboardView(
                         snapshot: snapshot,
                         compact: true,
-                        layout: ScoreboardLayout(isMirrored: isMirrored),
                         onTap: { side in
                             WKInterfaceDevice.current().play(.click)
                             model.store.tap(round: round, court: court, team: side)

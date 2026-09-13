@@ -16,7 +16,3 @@ struct ScoreboardLayout {
         isMirrored ? (value.b, value.a) : (value.a, value.b)
     }
 }
-
-extension ScoreboardLayout {
-    static let storageKey = "dev.natten.rekkert.mirroredScoreboard"
-}

@@ -61,9 +61,10 @@ rally cannot end a round.
 Both apps carry two fixes for when reality and the app disagree. **Swap serving team**
 moves service to the other side and carries through the rest of the rotation; it is match
 state, so it travels between the devices. **Swap sides** flips which half of the screen each
-team occupies, for when you have changed ends — that is a display preference, stored per
-device, so flipping the phone leaves the watch alone and the other way round. Flipping also
-turns the games line round, so it reads the same direction as the numbers above it.
+team occupies, for when you have changed ends. Only the phone mirrors — it is the one
+propped up with a side of the court in front of it — but the button is on both, so the
+watch flips the phone from the wrist without anyone walking over to it. Flipping also turns
+the games line round, so it reads the same direction as the numbers above it.
 
 ## Full screen
 

@@ -9,7 +9,6 @@ struct WatchMenuView: View {
     var round = 0
     var court = 0
     @State private var confirming: Confirmation?
-    @AppStorage(ScoreboardLayout.storageKey) private var isMirrored = false
 
     private enum Confirmation: String, Identifiable {
         case endRound, nextRound, finish
@@ -50,11 +49,11 @@ struct WatchMenuView: View {
                     model.store.swapServingTeam(round: round, court: court)
                 }
 
-                // Local to this watch: where you stand relative to the phone is not where
-                // you stand relative to your wrist.
-                action("Swap sides", systemImage: "rectangle.2.swap", tint: .gray) {
+                // Flips the phone, not this watch: it is the phone that is propped up
+                // somewhere with a side of the court in front of it.
+                action("Swap phone sides", systemImage: "rectangle.2.swap", tint: .gray) {
                     WKInterfaceDevice.current().play(.click)
-                    isMirrored.toggle()
+                    model.store.toggleScoreboardMirrored()
                 }
 
                 action("Undo", systemImage: "arrow.uturn.backward", tint: .gray) {

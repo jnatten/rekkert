@@ -12,6 +12,9 @@ public final class MatchStore {
     public private(set) var replacedSessionTitle: String?
     /// Saved configurations. Edited on the phone, readable on both.
     public private(set) var presets = PresetLibrary()
+    /// How the phone draws its scoreboard. Shared so the watch can flip it from the wrist;
+    /// only the phone acts on it.
+    public private(set) var display = DisplayPreferences()
 
     private var outbox: Outbox
     private let device: DeviceID
@@ -49,6 +52,7 @@ public final class MatchStore {
         self.log = session?.log ?? MatchLog()
         self.outbox = session?.outbox ?? Outbox()
         self.presets = store?.loadPresets() ?? PresetLibrary()
+        self.display = store?.loadDisplay() ?? DisplayPreferences()
         self.state = SessionReducer.state(of: self.log)
     }
 
@@ -116,6 +120,26 @@ public final class MatchStore {
         startNewSession()
         configure(preset.configuration.makeSetup())
         if preset.configuration.drawsRounds { nextRound() }
+    }
+
+    /// Flips which way round the phone's scoreboard reads, from either device. Sends the
+    /// resulting value rather than a toggle, so a repeated delivery settles on the same
+    /// answer instead of undoing itself.
+    public func setScoreboardMirrored(_ isMirrored: Bool) {
+        apply(display.setting(mirrored: isMirrored), publish: true)
+    }
+
+    public func toggleScoreboardMirrored() {
+        setScoreboardMirrored(!display.isMirrored)
+    }
+
+    private func apply(_ preferences: DisplayPreferences, publish: Bool) {
+        display = preferences
+        try? store?.save(preferences)
+        guard publish else { return }
+        let payload = encode(.display(preferences))
+        transport.queue(payload)
+        Task { _ = await sendLive(payload) }
     }
 
     private func apply(_ library: PresetLibrary, publish: Bool) {
@@ -244,6 +268,7 @@ public final class MatchStore {
         await flush()
         publishSnapshot(force: true)
         sharePresets()
+        shareDisplay()
     }
 
     private func record(_ kind: EventKind) {
@@ -310,6 +335,7 @@ public final class MatchStore {
         switch wire {
         case .hello(let sessionID, let vector):
             sharePresets()
+            shareDisplay()
             guard !retired.contains(sessionID) else { return replyWithOurs(packet) }
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
             packet.reply?(encode(.events(sessionID: log.sessionID, events: log.events(missingRelativeTo: vector))))
@@ -323,6 +349,11 @@ public final class MatchStore {
         case .presets(let incoming):
             let merged = presets.adopting(incoming)
             if merged != presets { apply(merged, publish: false) }
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.vector)))
+
+        case .display(let incoming):
+            let merged = display.adopting(incoming)
+            if merged != display { apply(merged, publish: false) }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.vector)))
 
         case .snapshot(let incoming):
@@ -362,6 +393,14 @@ public final class MatchStore {
     private func sharePresets() {
         guard !presets.isEmpty else { return }
         let payload = encode(.presets(presets))
+        Task { _ = await sendLive(payload) }
+    }
+
+    /// Offered alongside the presets on reconnect, so the watch's flip button knows which
+    /// way the phone is currently reading before it sends the opposite.
+    private func shareDisplay() {
+        guard display.updatedAt > .distantPast else { return }
+        let payload = encode(.display(display))
         Task { _ = await sendLive(payload) }
     }
 
