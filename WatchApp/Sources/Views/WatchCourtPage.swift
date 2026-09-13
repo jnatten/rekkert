@@ -23,7 +23,7 @@ struct WatchCourtPage: View {
                         },
                         onUndo: undo
                     )
-                    .frame(height: 108)
+                    .frame(height: snapshot.games == nil ? 132 : 150)
 
                     if snapshot.isSuddenDeath {
                         VStack(spacing: 3) {

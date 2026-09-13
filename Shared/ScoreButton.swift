@@ -13,6 +13,21 @@ struct ScoreButton: View {
     let onTap: () -> Void
     let onUndo: () -> Void
 
+    /// On the watch this is how you tell which pair you are — a tournament court names
+    /// the two teams by their players, and there is nothing else on screen that does.
+    private var teamLabel: some View {
+        HStack(spacing: 6) {
+            if isServing, !compact {
+                Image(systemName: "circle.fill").font(.system(size: 7))
+            }
+            Text(teamName)
+        }
+        .font(compact ? .system(size: 11, weight: .semibold) : .headline)
+        .foregroundStyle(.white.opacity(0.85))
+        .lineLimit(1)
+        .minimumScaleFactor(compact ? 0.5 : 1)
+    }
+
     private func serveSlot(showing isThisEnd: Bool) -> some View {
         ServeSideSlot(
             court: isServing && isThisEnd ? servingCourt : nil,
@@ -28,24 +43,14 @@ struct ScoreButton: View {
             ZStack {
                 Color.team(side)
                 VStack(spacing: compact ? 0 : 6) {
-                    if !compact {
-                        HStack(spacing: 6) {
-                            if isServing {
-                                Image(systemName: "circle.fill").font(.system(size: 7))
-                            }
-                            Text(teamName)
-                        }
-                        .font(.headline)
-                        .foregroundStyle(.white.opacity(0.85))
-                        .lineLimit(1)
-                    }
+                    teamLabel
 
                     // Above the number for them, below it for us — the same way round as
                     // the court in front of you, where their end is the far one.
                     serveSlot(showing: side == .b)
 
                     Text(value)
-                        .font(.system(size: compact ? 64 : 120, weight: .bold, design: .rounded))
+                        .font(.system(size: compact ? 54 : 120, weight: .bold, design: .rounded))
                         .minimumScaleFactor(0.4)
                         .lineLimit(1)
                         .foregroundStyle(.white)
