@@ -65,25 +65,18 @@ struct FullscreenScoreView: View {
     ) -> some View {
         ZStack {
             Color.team(side)
+            serveCourt(snapshot, side: side, in: size, insets: insets)
+
             VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(.white.opacity(snapshot.serving == side ? 0.9 : 0))
-                        .frame(width: 12, height: 12)
-                    Text(snapshot.teamNames[side])
-                        .font(.system(size: min(size.height * 0.06, 34), weight: .semibold, design: .rounded))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.5)
-                }
-                .foregroundStyle(.white.opacity(0.9))
-                // The colour bleeds under the island; the writing must not.
-                .padding(.top, insets.top + size.height * 0.02)
+                Text(snapshot.teamNames[side])
+                    .font(.system(size: min(size.height * 0.06, 34), weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .foregroundStyle(.white.opacity(0.9))
+                    // The colour bleeds under the island; the writing must not.
+                    .padding(.top, insets.top + size.height * 0.02)
 
                 Spacer(minLength: 0)
-
-                // Above the number for them, below it for us, matching the court in front
-                // of you: their end is the far one.
-                serveSlot(snapshot, side: side, showing: side == .b, in: size)
 
                 Text(snapshot.primary[side])
                     .font(.system(size: numberSize(in: size), weight: .heavy, design: .rounded))
@@ -92,8 +85,6 @@ struct FullscreenScoreView: View {
                     .minimumScaleFactor(0.2)
                     .contentTransition(.numericText())
 
-                serveSlot(snapshot, side: side, showing: side == .a, in: size)
-
                 Spacer(minLength: 0)
 
                 // Leaves room for the controls, which sit along the bottom.
@@ -101,6 +92,8 @@ struct FullscreenScoreView: View {
             }
             .padding(.horizontal, 8)
         }
+        .animation(.snappy, value: snapshot.serving)
+        .animation(.snappy, value: snapshot.servingCourt)
         .contentShape(.rect)
         .onTapGesture {
             guard !snapshot.isLocked else { return }
@@ -110,19 +103,49 @@ struct FullscreenScoreView: View {
         .animation(.snappy, value: snapshot.primary[side])
     }
 
-    private func serveSlot(
+    /// The team's two service boxes, drawn the size of the half itself so the lit one
+    /// carries across a court. The phone is propped at the side, so the court runs up and
+    /// down the screen rather than across it.
+    private func serveCourt(
         _ snapshot: ScoreboardSnapshot,
         side: TeamSide,
-        showing isThisEnd: Bool,
-        in size: CGSize
+        in size: CGSize,
+        insets: EdgeInsets
     ) -> some View {
-        ServeSideSlot(
-            court: snapshot.serving == side && isThisEnd ? snapshot.servingCourt : nil,
-            fromAcrossTheNet: side == .b,
-            height: min(size.height * 0.028, 17)
+        let court = snapshot.serving == side ? snapshot.servingCourt : nil
+        let servingFromTheTop = court.map { servesFromTheTop($0, side: side) }
+        let radius = min(size.width * 0.05, 26)
+
+        return VStack(spacing: max(3, size.height * 0.008)) {
+            cell(lit: servingFromTheTop == true, radius: radius, rounded: .top)
+            cell(lit: servingFromTheTop == false, radius: radius, rounded: .bottom)
+        }
+        .padding(.horizontal, max(6, size.width * 0.014))
+        .padding(.top, insets.top + size.height * 0.105)
+        .padding(.bottom, insets.bottom + 52)
+        .accessibilityElement()
+        .accessibilityHidden(court == nil)
+        .accessibilityLabel(court.map { "Serving from the \($0.displayName.lowercased()) court" } ?? "")
+    }
+
+    /// The two teams stand at opposite ends facing each other, so one team's right-hand
+    /// court is at the near end of the screen and the other's is at the far end. Which is
+    /// which follows where the half is drawn, so flipping the scoreboard flips this too.
+    private func servesFromTheTop(_ court: ServeCourt, side: TeamSide) -> Bool {
+        layout.order.first == side ? court == .ad : court == .deuce
+    }
+
+    private func cell(lit: Bool, radius: CGFloat, rounded: Edge) -> some View {
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: rounded == .top ? radius : 0,
+            bottomLeadingRadius: rounded == .bottom ? radius : 0,
+            bottomTrailingRadius: rounded == .bottom ? radius : 0,
+            topTrailingRadius: rounded == .top ? radius : 0,
+            style: .continuous
         )
-        .foregroundStyle(.white.opacity(0.9))
-        .padding(.vertical, 4)
+        return shape
+            .fill(.white.opacity(lit ? 0.28 : 0.07))
+            .overlay(shape.strokeBorder(.white.opacity(lit ? 0.55 : 0.14), lineWidth: lit ? 3 : 1))
     }
 
     private func numberSize(in size: CGSize) -> CGFloat {
