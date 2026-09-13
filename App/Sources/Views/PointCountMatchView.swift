@@ -19,7 +19,7 @@ struct PointCountMatchView: View {
                             onTap: { model.store.tap(team: $0) },
                             onUndo: { model.store.undoLast() }
                         )
-                        footer(session, snapshot: snapshot)
+                        footer(session)
                     }
                     .ignoresSafeArea(edges: .bottom)
                 }
@@ -84,18 +84,11 @@ struct PointCountMatchView: View {
         hasResults ? "End this round?" : "Call this off?"
     }
 
-    @ViewBuilder
-    private func footer(_ session: PointCountSession, snapshot: ScoreboardSnapshot) -> some View {
+    private func footer(_ session: PointCountSession) -> some View {
         VStack(spacing: 12) {
-            if snapshot.isFinished {
-                Text(snapshot.detail).font(.title3.bold())
-                Button("Save to history") { model.finishSession() }
-                    .buttonStyle(.borderedProminent)
-            } else {
-                Text(remaining(session))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
+            Text(remaining(session))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal)

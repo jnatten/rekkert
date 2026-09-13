@@ -29,7 +29,7 @@ private struct Pair {
 }
 
 private func settle() async throws {
-    try await Task.sleep(for: .milliseconds(60))
+    try await Task.sleep(for: .milliseconds(250))
 }
 
 private func points(_ store: MatchStore) -> BySide<Int>? {

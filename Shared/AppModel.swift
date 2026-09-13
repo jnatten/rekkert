@@ -23,6 +23,10 @@ final class AppModel {
         roster = persistence?.loadRoster() ?? PlayerRoster()
     }
 
+    /// Whether a finished session is filed away on this device, which is what the result
+    /// screen tells the user.
+    var keepsFinishedSessions: Bool { AppModel.keepsHistory }
+
     /// Only the phone keeps a history; the watch has nowhere to show it and less room to
     /// store it.
     private static var keepsHistory: Bool {
@@ -134,6 +138,9 @@ final class AppModel {
                 store.setRoundConfirmed(round, true)
                 store.nextRound()
             }
+        }
+        if arguments.contains("-rekkert-demo-finished") {
+            store.finish()
         }
         if arguments.contains("-rekkert-demo-undo-draw") {
             store.undoLast()

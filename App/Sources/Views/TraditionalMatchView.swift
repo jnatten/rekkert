@@ -20,9 +20,6 @@ struct TraditionalMatchView: View {
                         if snapshot.isSuddenDeath {
                             suddenDeathBanner(snapshot)
                         }
-                        if snapshot.isFinished {
-                            finishedBanner(snapshot)
-                        }
                     }
                     .ignoresSafeArea(edges: .bottom)
                 }
@@ -97,19 +94,6 @@ struct TraditionalMatchView: View {
         .padding(.top, 12)
         .padding(.bottom, 30)
         .background(.orange.opacity(0.2))
-    }
-
-    private func finishedBanner(_ snapshot: ScoreboardSnapshot) -> some View {
-        VStack(spacing: 10) {
-            Text(snapshot.detail).font(.title3.bold())
-            Button("Save to history") { model.finishSession() }
-                .buttonStyle(.borderedProminent)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal)
-        .padding(.top)
-        .padding(.bottom, 30)
-        .background(.thinMaterial)
     }
 }
 

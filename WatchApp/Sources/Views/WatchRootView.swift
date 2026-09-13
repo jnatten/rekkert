@@ -11,7 +11,11 @@ struct WatchRootView: View {
     var body: some View {
         switch model.store.state {
         case .none:
-            WatchIdleView()
+            if let result = model.store.lastResult {
+                WatchResultView(state: result)
+            } else {
+                WatchIdleView()
+            }
 
         case .traditional, .winnerCourt, .pointCount:
             TabView(selection: $selection) {

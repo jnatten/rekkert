@@ -8,7 +8,11 @@ struct RootView: View {
         Group {
             switch model.store.state {
             case .none:
-                HomeView()
+                if let result = model.store.lastResult {
+                    MatchResultView(state: result)
+                } else {
+                    HomeView()
+                }
             case .traditional:
                 TraditionalMatchView()
             case .tournament:

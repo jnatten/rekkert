@@ -9,7 +9,7 @@ private let winnerCourt = SessionSetup.winnerCourt(
 )
 
 private func settle() async throws {
-    try await Task.sleep(for: .milliseconds(120))
+    try await Task.sleep(for: .milliseconds(250))
 }
 
 @Suite("Finishing a session")
@@ -116,6 +116,57 @@ struct FinishTests {
 
         #expect(phone.state == nil, "it ends itself")
         #expect(try store.history().count == 1)
+    }
+
+    @Test func aFinishedMatchIsHeldOntoForTheResultScreen() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let (phone, watch, _, _) = pair(directory)
+        let tasks = [Task { await phone.run() }, Task { await watch.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+
+        phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+        for _ in 0 ..< 48 { phone.tap(team: .a) }
+        try await settle()
+
+        #expect(phone.state == nil, "the session is over")
+        #expect(phone.lastResult != nil, "but there is something to show for it")
+        #expect(watch.lastResult != nil, "on both devices")
+
+        phone.acknowledgeResult()
+        #expect(phone.lastResult == nil)
+    }
+
+    @Test func aCancelledMatchHasNoResultToShow() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let (phone, _, _, _) = pair(directory)
+        let task = Task { await phone.run() }
+        defer { task.cancel() }
+
+        phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+        for _ in 0 ..< 5 { phone.tap(team: .a) }
+        phone.discardSession()
+        try await settle()
+
+        #expect(phone.state == nil)
+        #expect(phone.lastResult == nil, "it was thrown away, so there is nothing to celebrate")
+    }
+
+    @Test func startingSomethingNewClearsTheResultScreen() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let (phone, _, _, _) = pair(directory)
+        let task = Task { await phone.run() }
+        defer { task.cancel() }
+
+        phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+        for _ in 0 ..< 48 { phone.tap(team: .a) }
+        try await settle()
+        #expect(phone.lastResult != nil)
+
+        phone.startNewSession()
+        #expect(phone.lastResult == nil)
     }
 
     @Test func finishingOnOneDeviceClearsBoth() async throws {

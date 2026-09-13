@@ -10,6 +10,10 @@ public final class MatchStore {
     /// Set when a peer's session replaced ours and the discarded one had real scores in
     /// it. It was archived to history first; this just lets the UI say so.
     public private(set) var replacedSessionTitle: String?
+    /// The session that just ended, so the app can show how it went instead of dropping
+    /// straight back to the start. Local to this device and deliberately not persisted — it
+    /// is a curtain call, not state worth resuming.
+    public private(set) var lastResult: SessionState?
     /// Saved configurations. Edited on the phone, readable on both.
     public private(set) var presets = PresetLibrary()
     /// How the phone draws its scoreboard. Shared so the watch can flip it from the wrist;
@@ -169,6 +173,7 @@ public final class MatchStore {
         log = MatchLog()
         outbox = Outbox()
         replacedSessionTitle = nil
+        lastResult = nil
         refresh()
     }
 
@@ -194,9 +199,12 @@ public final class MatchStore {
 
     private func concludeIfFinished() -> Bool {
         guard let finished = state, finished.isFinished else { return false }
-        if keepsHistory, finished.hasResults, wasAskedToArchive {
+        let keeping = finished.hasResults && wasAskedToArchive
+        if keepsHistory, keeping {
             try? store?.archive(HistoryRecord(title: finished.title, state: finished))
         }
+        // Nothing to celebrate about a session that was called off or never played.
+        lastResult = keeping ? finished : nil
 
         // The counterpart has to learn this before the log disappears from here, or it
         // will keep offering the session back as though it were still live.
@@ -214,6 +222,11 @@ public final class MatchStore {
 
     public func acknowledgeReplacedSession() {
         replacedSessionTitle = nil
+    }
+
+    /// Dismisses the result screen.
+    public func acknowledgeResult() {
+        lastResult = nil
     }
 
     // MARK: - Sync
