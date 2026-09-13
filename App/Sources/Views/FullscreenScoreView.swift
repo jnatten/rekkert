@@ -11,6 +11,9 @@ struct FullscreenScoreView: View {
 
     var round: Int?
     var court = 0
+    var mirrored = false
+
+    private var layout: ScoreboardLayout { ScoreboardLayout(isMirrored: mirrored) }
 
     @State private var display = DisplayOverride()
     @State private var showingControls = true
@@ -24,7 +27,7 @@ struct FullscreenScoreView: View {
 
                 if let snapshot {
                     HStack(spacing: 3) {
-                        ForEach(TeamSide.allCases, id: \.self) { side in
+                        ForEach(layout.order, id: \.self) { side in
                             half(side, snapshot: snapshot, in: geometry.size, insets: geometry.safeAreaInsets)
                         }
                     }
@@ -179,8 +182,13 @@ struct FullscreenScoreView: View {
 
     private func detail(_ snapshot: ScoreboardSnapshot) -> String {
         guard let games = snapshot.games else { return snapshot.detail }
-        let previous = snapshot.completedSets.map { "\($0.games.a)-\($0.games.b)" }
-        return (previous + ["\(games.a)-\(games.b)"]).joined(separator: "  ") + "   ·   " + snapshot.detail
+        let previous = snapshot.completedSets.map {
+            let shown = layout.asShown($0.games)
+            return "\(shown.left)-\(shown.right)"
+        }
+        let current = layout.asShown(games)
+        return (previous + ["\(current.left)-\(current.right)"]).joined(separator: "  ")
+            + "   ·   " + snapshot.detail
     }
 
     /// Dims the controls again after a while so the score is clean, but never all the way

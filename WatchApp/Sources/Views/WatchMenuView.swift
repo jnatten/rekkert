@@ -6,7 +6,10 @@ import WatchKit
 /// scoring screen so a stray tap cannot finish a round.
 struct WatchMenuView: View {
     @Environment(AppModel.self) private var model
+    var round = 0
+    var court = 0
     @State private var confirming: Confirmation?
+    @AppStorage(ScoreboardLayout.storageKey) private var isMirrored = false
 
     private enum Confirmation: String, Identifiable {
         case endRound, nextRound, finish
@@ -40,6 +43,18 @@ struct WatchMenuView: View {
                     action("Next round", systemImage: "arrow.right.circle.fill", tint: .blue) {
                         confirming = .nextRound
                     }
+                }
+
+                action("Swap serve", systemImage: "arrow.left.arrow.right", tint: .gray) {
+                    WKInterfaceDevice.current().play(.click)
+                    model.store.swapServingTeam(round: round, court: court)
+                }
+
+                // Local to this watch: where you stand relative to the phone is not where
+                // you stand relative to your wrist.
+                action("Swap sides", systemImage: "rectangle.2.swap", tint: .gray) {
+                    WKInterfaceDevice.current().play(.click)
+                    isMirrored.toggle()
                 }
 
                 action("Undo", systemImage: "arrow.uturn.backward", tint: .gray) {

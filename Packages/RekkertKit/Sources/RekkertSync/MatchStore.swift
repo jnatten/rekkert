@@ -65,6 +65,15 @@ public final class MatchStore {
 
     public func chooseServeSide(_ court: ServeCourt) { record(.chooseServeSide(court)) }
 
+    /// Hands service to the other team. The rotation alternates teams at every step, so
+    /// moving the starting point on by one is exactly a swap — and sending the resulting
+    /// index rather than "swap" means two devices correcting it together agree.
+    public func swapServingTeam(round: Int = 0, court: Int = 0) {
+        guard let current = state?.firstServerIndex(round: round, court: court) else { return }
+        let swapped = (current + 1) % ServeRotation.order.count
+        record(.setFirstServer(round: round, court: court, index: swapped))
+    }
+
     public func setRoundConfirmed(_ round: Int, _ isConfirmed: Bool = true) {
         record(.setRoundConfirmed(round: round, isConfirmed: isConfirmed))
     }

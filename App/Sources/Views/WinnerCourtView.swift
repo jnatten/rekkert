@@ -5,6 +5,7 @@ struct WinnerCourtView: View {
     @Environment(AppModel.self) private var model
     @State private var showingEnd = false
     @State private var fullscreen = false
+    @AppStorage(ScoreboardLayout.storageKey) private var isMirrored = false
 
     var body: some View {
         NavigationStack {
@@ -13,6 +14,7 @@ struct WinnerCourtView: View {
                     VStack(spacing: 0) {
                         ScoreboardView(
                             snapshot: snapshot,
+                            layout: ScoreboardLayout(isMirrored: isMirrored),
                             onTap: { model.store.tap(team: $0) },
                             onUndo: { model.store.undoLast() }
                         )
@@ -40,10 +42,13 @@ struct WinnerCourtView: View {
                         .disabled(!model.store.canUndo)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    MatchOptionsMenu(isMirrored: $isMirrored)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("Finish", systemImage: "stop.circle") { showingEnd = true }
                 }
             }
-            .fullScreenCover(isPresented: $fullscreen) { FullscreenScoreView() }
+            .fullScreenCover(isPresented: $fullscreen) { FullscreenScoreView(mirrored: isMirrored) }
             .task {
                 #if DEBUG
                 if DemoLaunch.fullscreen { fullscreen = true }

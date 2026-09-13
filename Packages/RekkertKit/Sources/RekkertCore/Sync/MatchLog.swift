@@ -18,6 +18,7 @@ public struct MatchLog: Codable, Sendable, Hashable {
         effectiveEvents.contains { event in
             switch event.kind {
             case .point, .setScore, .setRoundConfirmed, .nextRound, .finish, .endRound: true
+            case .setFirstServer: false
             case .configure, .undo, .chooseServeSide: false
             }
         }

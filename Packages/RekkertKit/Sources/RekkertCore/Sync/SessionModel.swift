@@ -109,6 +109,19 @@ public enum SessionState: Codable, Sendable, Hashable {
         }
     }
 
+    /// Where the service rotation currently starts for this court, which is what a
+    /// correction shifts.
+    public func firstServerIndex(round: Int? = nil, court: Int = 0) -> Int? {
+        switch self {
+        case .traditional(let session): session.score.firstServerIndex
+        case .winnerCourt(let session): session.score.firstServerIndex
+        case .tournament(let tournament):
+            (round.map { tournament.round(at: $0) } ?? tournament.currentRound)?
+                .matches.first { $0.courtIndex == court }?
+                .state.firstServerIndex
+        }
+    }
+
     /// Courts the user can score right now: always one for a traditional match, and one
     /// per filled court in the current tournament round.
     public var courtCount: Int {

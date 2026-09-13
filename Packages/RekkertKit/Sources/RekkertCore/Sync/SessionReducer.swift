@@ -42,6 +42,13 @@ public enum SessionReducer {
             session.score = session.engine.endingRound(session.score)
             state = .winnerCourt(session)
 
+        case .setFirstServer(let round, let court, let index):
+            mutateCourt(round: round, court: court, in: &state) { _, match in
+                match.state.firstServerIndex = index
+            } traditional: { session in
+                session.score.firstServerIndex = index
+            }
+
         case .setRoundConfirmed(let round, let isConfirmed):
             guard case .tournament(var tournament) = state,
                   tournament.rounds.indices.contains(round) else { return }

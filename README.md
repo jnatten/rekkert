@@ -54,6 +54,15 @@ last page reaches a menu holding everything that ends something: end the round, 
 next one, undo, finish and save. They are kept off the scoring page so a stray tap during a
 rally cannot end a round.
 
+## Mid-match corrections
+
+Both apps carry two fixes for when reality and the app disagree. **Swap serving team**
+moves service to the other side and carries through the rest of the rotation; it is match
+state, so it travels between the devices. **Swap sides** flips which half of the screen each
+team occupies, for when you have changed ends — that is a display preference, stored per
+device, so flipping the phone leaves the watch alone and the other way round. Flipping also
+turns the games line round, so it reads the same direction as the numbers above it.
+
 ## Full screen
 
 Any scoreboard has a full-screen button. It fills the display with the two numbers, turns

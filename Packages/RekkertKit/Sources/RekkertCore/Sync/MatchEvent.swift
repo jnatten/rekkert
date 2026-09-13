@@ -7,6 +7,9 @@ public enum EventKind: Codable, Sendable, Hashable {
     /// cannot land on the current one just because it arrived late.
     case point(round: Int, court: Int, team: TeamSide)
     case setScore(round: Int, court: Int, points: BySide<Int>)
+    /// Corrects who is serving. Absolute rather than "swap", so two devices fixing it at
+    /// once land on the same answer instead of swapping twice.
+    case setFirstServer(round: Int, court: Int, index: Int)
     /// On a golden/star sudden-death point the receiving team picks which side it is
     /// served to.
     case chooseServeSide(ServeCourt)
@@ -38,7 +41,9 @@ public struct MatchEvent: Codable, Sendable, Hashable, Identifiable {
     public var isUndoable: Bool {
         switch kind {
         case .point, .setScore, .setRoundConfirmed, .nextRound, .finish, .endRound: true
-        case .configure, .undo, .chooseServeSide: false
+        // A serve correction is its own undo — swapping again puts it back — and undo
+        // should keep meaning "take back the last thing that changed the score".
+        case .configure, .undo, .chooseServeSide, .setFirstServer: false
         }
     }
 }

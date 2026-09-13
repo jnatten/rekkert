@@ -4,6 +4,7 @@ import SwiftUI
 struct ScoreboardView: View {
     let snapshot: ScoreboardSnapshot
     var compact = false
+    var layout = ScoreboardLayout(isMirrored: false)
     let onTap: (TeamSide) -> Void
     let onUndo: () -> Void
 
@@ -11,7 +12,7 @@ struct ScoreboardView: View {
         VStack(spacing: 0) {
             header
             HStack(spacing: compact ? 2 : 4) {
-                ForEach(TeamSide.allCases, id: \.self) { side in
+                ForEach(layout.order, id: \.self) { side in
                     ScoreButton(
                         side: side,
                         value: snapshot.primary[side],
@@ -55,10 +56,12 @@ struct ScoreboardView: View {
         ScrollView(.horizontal) {
             HStack(spacing: 10) {
                 ForEach(Array(snapshot.completedSets.enumerated()), id: \.offset) { _, set in
-                    Text("\(set.games.a)-\(set.games.b)")
+                    let shown = layout.asShown(set.games)
+                    Text("\(shown.left)-\(shown.right)")
                         .foregroundStyle(.secondary)
                 }
-                Text("\(games.a)-\(games.b)")
+                let current = layout.asShown(games)
+                Text("\(current.left)-\(current.right)")
                     .fontWeight(.semibold)
             }
             .font(compact ? .system(size: 12).monospacedDigit() : .callout.monospacedDigit())
