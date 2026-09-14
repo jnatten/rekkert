@@ -355,7 +355,9 @@ public final class MatchStore {
     /// whenever the app comes to the foreground.
     public func synchronise() async {
         isReachable = transport.isReachable
-        guard let payload = try? Wire.hello(sessionID: log.sessionID, vector: log.vector).encoded() else { return }
+        // Coverage rather than the raw vector: this is the "what am I missing" question, and
+        // the highest number seen is the wrong answer to it when something below is absent.
+        guard let payload = try? Wire.hello(sessionID: log.sessionID, vector: log.coverage).encoded() else { return }
         if let reply = await transport.sendLive(payload) {
             handle(InboundPacket(payload: reply))
         }
@@ -426,7 +428,7 @@ public final class MatchStore {
     private func handle(_ packet: InboundPacket) {
         guard let wire = try? Wire.decode(packet.payload) else {
             // Always answer, so a peer awaiting a reply can never hang on bad input.
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.vector)))
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
             return
         }
 
@@ -446,7 +448,7 @@ public final class MatchStore {
             }
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
             if log.merge(events) { refresh() }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.vector)))
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
 
         case .retired(let sessionID):
             // Only ever our own live session, and only once: concluding puts it in the
@@ -456,17 +458,17 @@ public final class MatchStore {
             if sessionID == log.sessionID, !log.isEmpty, !retired.contains(sessionID) {
                 record(.finish(archive: true))
             }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.vector)))
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
 
         case .presets(let incoming):
             let merged = presets.adopting(incoming)
             if merged != presets { apply(merged, publish: false) }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.vector)))
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
 
         case .display(let incoming):
             let merged = display.adopting(incoming)
             if merged != display { apply(merged, publish: false) }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.vector)))
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
 
         case .snapshot(let incoming):
             if retired.contains(incoming.sessionID) {
@@ -488,7 +490,7 @@ public final class MatchStore {
                 // so two devices can never sit pushing sessions at each other.
                 offerOurSession()
             }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.vector)))
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
         }
     }
 

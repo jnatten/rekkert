@@ -209,3 +209,90 @@ struct MatchLogTests {
         #expect(tapped > 50, "the fixed seed should actually exercise the path")
     }
 }
+
+@Suite("Concurrent undo")
+struct ConcurrentUndoTests {
+    /// The last event worth taking back is a function of the log, not of who is looking, so
+    /// two devices reaching for undo at the same moment name the same point.
+    @Test func twoPeopleReachingForUndoAtOnceTakeBackOnePoint() {
+        var phone = configuredLog()
+        let point = phone.append(.point(round: 0, court: 0, team: .a), from: deviceA)
+        var watch = phone
+
+        #expect(phone.lastUndoableEvent()?.id == point.id)
+        #expect(watch.lastUndoableEvent()?.id == point.id, "both pick the same target")
+
+        let fromPhone = phone.append(.undo(point.id), from: deviceA)
+        let fromWatch = watch.append(.undo(point.id), from: deviceB)
+
+        phone.merge([fromWatch])
+        watch.merge([fromPhone])
+
+        #expect(score(phone) == BySide(a: 0, b: 0), "one point taken back, not handed straight back")
+        #expect(score(phone) == score(watch), "and both devices agree")
+    }
+
+    @Test func takingAnUndoBackStillWorksAfterTheOtherDeviceAlsoUndid() {
+        var log = configuredLog()
+        let point = log.append(.point(round: 0, court: 0, team: .a), from: deviceA)
+        let mine = log.append(.undo(point.id), from: deviceA)
+        log.append(.undo(point.id), from: deviceB)
+        #expect(score(log) == BySide(a: 0, b: 0))
+
+        // Taking back my own undo does not resurrect the point: the other device still
+        // wants it gone, and its tombstone stands on its own.
+        log.append(.undo(mine.id), from: deviceA)
+        #expect(score(log) == BySide(a: 0, b: 0))
+    }
+}
+
+@Suite("Coverage")
+struct CoverageTests {
+    /// The gap is invisible to `vector`, which is why it cannot be the thing a peer asks with.
+    private func logWithAHole() -> (MatchLog, MatchEvent) {
+        var full = configuredLog()
+        let first = full.append(.point(round: 0, court: 0, team: .a), from: deviceB)
+        let second = full.append(.point(round: 0, court: 0, team: .a), from: deviceB)
+
+        var holed = configuredLog()
+        holed.merge([second])
+        return (holed, first)
+    }
+
+    @Test func theFrontierStopsBelowAMissingEvent() {
+        let (holed, _) = logWithAHole()
+
+        #expect(holed.vector[deviceB] == 2, "the highest number seen")
+        #expect(holed.coverage[deviceB] == 0, "but nothing is held contiguously")
+    }
+
+    @Test func aHoleIsAskedForAndFilled() throws {
+        var full = configuredLog()
+        full.append(.point(round: 0, court: 0, team: .a), from: deviceB)
+        full.append(.point(round: 0, court: 0, team: .a), from: deviceB)
+
+        let (holed, missing) = logWithAHole()
+
+        let byVector = full.events(missingRelativeTo: holed.vector)
+        #expect(!byVector.contains { $0.id == missing.id }, "the old question never asks for it")
+
+        let byCoverage = full.events(missingRelativeTo: holed.coverage)
+        #expect(byCoverage.contains { $0.id == missing.id }, "the honest one does")
+
+        var healed = holed
+        healed.merge(byCoverage)
+        #expect(score(healed) == score(full))
+        #expect(healed.coverage[deviceB] == 2, "and the frontier moves up once the hole is gone")
+    }
+
+    @Test func aContiguousLogCoversEverythingItHasSeen() {
+        var log = configuredLog()
+        for _ in 0 ..< 3 { log.append(.point(round: 0, court: 0, team: .a), from: deviceB) }
+
+        #expect(log.coverage == log.vector, "with no holes the two questions have one answer")
+    }
+
+    @Test func anEmptyLogClaimsNothing() {
+        #expect(MatchLog().coverage[deviceA] == 0)
+    }
+}

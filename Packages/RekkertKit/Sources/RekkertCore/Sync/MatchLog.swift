@@ -33,12 +33,32 @@ public struct MatchLog: Codable, Sendable, Hashable {
 
     public var isEmpty: Bool { events.isEmpty }
 
-    /// Highest sequence number seen per device — what the other side needs in order to
-    /// work out which events we are missing.
+    /// Highest sequence number seen per device — what a new event has to be numbered after.
     public var vector: VersionVector {
         var result = VersionVector()
         for event in events.values {
             result[event.id.device] = event.id.seq
+        }
+        return result
+    }
+
+    /// Highest *contiguous* sequence number held per device — what a peer must be told when
+    /// it asks what it is missing.
+    ///
+    /// `vector` answers a different question and is a lie for this one: a device holding X.3
+    /// but not X.1 truthfully reports "X: 3", is sent nothing back, and then quietly replays a
+    /// different match for the rest of the session. The frontier can only be claimed where
+    /// there is nothing missing below it.
+    public var coverage: VersionVector {
+        var seen: [DeviceID: Set<UInt32>] = [:]
+        for id in events.keys { seen[id.device, default: []].insert(id.seq) }
+
+        var result = VersionVector()
+        for (device, sequences) in seen {
+            var frontier: UInt32 = 0
+            while sequences.contains(frontier + 1) { frontier += 1 }
+            guard frontier > 0 else { continue }
+            result[device] = frontier
         }
         return result
     }
@@ -75,19 +95,21 @@ public struct MatchLog: Codable, Sendable, Hashable {
     }
 
     /// Events that still count. An undo is a tombstone rather than a deletion, so an undo
-    /// on one device and a new point on the other both survive the merge. Resolved in
-    /// reverse order because an undo always carries a higher Lamport stamp than its target.
+    /// on one device and a new point on the other both survive the merge.
+    ///
+    /// Resolved in reverse order, which is safe because an undo always carries a higher Lamport
+    /// stamp than the event it targets. Cancelling is a set rather than a count: the last event
+    /// worth taking back is a function of the log rather than of who is looking at it, so two
+    /// people reaching for undo at the same moment name the same point — and counting would let
+    /// that pair of tombstones cancel each other out and hand the point back. Taking an undo
+    /// back is still said as an undo *of the undo*, and a chain resolves the same way it always
+    /// did.
     public var effectiveEvents: [MatchEvent] {
         let sorted = ordered
-        var cancelledBy: [EventID: Int] = [:]
         var cancelled: Set<EventID> = []
 
-        for event in sorted.reversed() {
-            let isEffective = (cancelledBy[event.id] ?? 0).isMultiple(of: 2)
-            if !isEffective { cancelled.insert(event.id) }
-            if isEffective, case .undo(let target) = event.kind {
-                cancelledBy[target, default: 0] += 1
-            }
+        for event in sorted.reversed() where !cancelled.contains(event.id) {
+            if case .undo(let target) = event.kind { cancelled.insert(target) }
         }
         return sorted.filter { !cancelled.contains($0.id) }
     }
