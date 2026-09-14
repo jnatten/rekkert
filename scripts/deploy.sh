@@ -105,9 +105,18 @@ test -d "$APP" || { echo "FAIL: no app at $APP" >&2; exit 1; }
 version=$(plutil -extract CFBundleVersion raw "$APP/Info.plist")
 echo "==> Built $(plutil -extract CFBundleShortVersionString raw "$APP/Info.plist") ($version)"
 
+# A device that has locked itself since the listing drops the install service with
+# a CoreDeviceError 3002. Waking it and going again is all it takes.
 install_to() {
-  echo "==> Install onto $(name_of "$1")"
-  xcrun devicectl device install app --device "$(id_of "$1")" "$2" >/dev/null
+  local id name
+  id=$(id_of "$1")
+  name=$(name_of "$1")
+  echo "==> Install onto $name"
+  if ! xcrun devicectl device install app --device "$id" "$2" >/dev/null 2>&1; then
+    echo "    first attempt failed - unlock $name if it is asleep, retrying"
+    sleep 3
+    xcrun devicectl device install app --device "$id" "$2" >/dev/null
+  fi
 }
 
 [ "$DO_PHONE" = 1 ] && install_to "$phone" "$APP"
