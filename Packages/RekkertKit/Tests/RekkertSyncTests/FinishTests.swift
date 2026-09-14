@@ -12,7 +12,7 @@ private func settle() async throws {
     try await Task.sleep(for: .milliseconds(250))
 }
 
-@Suite("Finishing a session")
+@Suite("Finishing a session", .serialized)
 @MainActor
 struct FinishTests {
     private func pair(_ directory: URL) -> (MatchStore, MatchStore, LoopbackTransport, LoopbackTransport) {

@@ -19,6 +19,11 @@ public enum Wire: Codable, Sendable, Hashable {
     case events(sessionID: UUID, events: [MatchEvent])
     /// Whole-log backstop, used on the coalescing application-context channel.
     case snapshot(MatchLog)
+    /// "The session you are offering ended here." Retiring a session is otherwise
+    /// knowledge one device holds alone: it refuses every packet for that session, and a
+    /// counterpart that never heard the ending goes on scoring into a match that can no
+    /// longer reach it.
+    case retired(sessionID: UUID)
     /// Saved configurations, so a session can be started from either device.
     case presets(PresetLibrary)
     /// How the phone should draw its scoreboard, so the watch can flip it.

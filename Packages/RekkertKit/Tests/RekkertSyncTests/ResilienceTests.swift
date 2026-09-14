@@ -38,7 +38,7 @@ private final class SilentTransport: PeerTransport, @unchecked Sendable {
     func queue(_ payload: Data) { lock.withLock { _queued.append(payload) } }
 }
 
-@Suite("Sync resilience")
+@Suite("Sync resilience", .serialized)
 @MainActor
 struct ResilienceTests {
     @Test func aReplyThatNeverArrivesDoesNotWedgeTheOutbox() async throws {
@@ -114,5 +114,150 @@ struct ResilienceTests {
             return
         }
         #expect(session.score.points == BySide(a: 3, b: 0), "the trailing publish carried the newest state")
+    }
+}
+
+/// A pair of links that can be silenced on every channel at once — out of range, or the
+/// Simulator, where the durable queue does nothing either. `LoopbackTransport` always
+/// delivers queued payloads, which hides what happens when even those are lost.
+nonisolated private final class QuietableLink: PeerTransport, @unchecked Sendable {
+    let inbound: AsyncStream<InboundPacket>
+    let reachability: AsyncStream<Bool>
+    private let packets: AsyncStream<InboundPacket>.Continuation
+    private let lock = NSLock()
+    private var peer: QuietableLink?
+    private var quiet = false
+    /// Switched off to prove convergence without the coalescing application-context
+    /// channel, which on a real watch is the slowest and least predictable of the three.
+    var carriesSnapshots = true
+
+    init() {
+        var continuation: AsyncStream<InboundPacket>.Continuation!
+        inbound = AsyncStream { continuation = $0 }
+        packets = continuation
+        reachability = AsyncStream { _ in }
+    }
+
+    static func pair() -> (QuietableLink, QuietableLink) {
+        let one = QuietableLink(), two = QuietableLink()
+        one.peer = two
+        two.peer = one
+        return (one, two)
+    }
+
+    func setQuiet(_ value: Bool) { lock.withLock { quiet = value } }
+    var isReachable: Bool { lock.withLock { peer != nil && !quiet } }
+    func activate() {}
+
+    private var target: QuietableLink? {
+        lock.withLock { quiet ? nil : peer }
+    }
+
+    func sendLive(_ payload: Data) async -> Data? {
+        guard let peer = target else { return nil }
+        return await withCheckedContinuation { continuation in
+            let once = SingleAnswer(continuation)
+            peer.packets.yield(InboundPacket(payload: payload) { once.resume($0) })
+        }
+    }
+
+    func queue(_ payload: Data) {
+        target?.packets.yield(InboundPacket(payload: payload))
+    }
+
+    func publishSnapshot(_ payload: Data) {
+        guard carriesSnapshots else { return }
+        target?.packets.yield(InboundPacket(payload: payload))
+    }
+}
+
+nonisolated private final class SingleAnswer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Data?, Never>?
+    init(_ continuation: CheckedContinuation<Data?, Never>) { self.continuation = continuation }
+    func resume(_ value: Data?) {
+        lock.lock()
+        let pending = continuation
+        continuation = nil
+        lock.unlock()
+        pending?.resume(returning: value)
+    }
+}
+
+@Suite("Sessions ending out of earshot", .serialized)
+@MainActor
+struct RetirementTests {
+    private func settle() async throws {
+        try await Task.sleep(for: .milliseconds(400))
+    }
+
+    private func points(_ store: MatchStore) -> BySide<Int>? {
+        guard case .traditional(let session) = store.state else { return nil }
+        return session.score.points
+    }
+
+    /// The match is ended from the watch while the phone is out of range, so only the
+    /// watch retires the session. The phone must not be left scoring into a match every
+    /// packet of which the watch now refuses — a blackout that used to be permanent, and
+    /// to survive relaunching both apps, since the retired list is persisted.
+    @Test func aMatchEndedOutOfRangeDoesNotBlackOutTheOtherDevice() async throws {
+        let (phoneLink, watchLink) = QuietableLink.pair()
+        let shared = ActiveSession(log: MatchLog(sessionID: UUID()))
+        let phone = MatchStore(device: DeviceID(), transport: phoneLink, session: shared, snapshotInterval: 0)
+        let watch = MatchStore(
+            device: DeviceID(), transport: watchLink,
+            session: shared, snapshotInterval: 0, keepsHistory: false
+        )
+        let tasks = [Task { await phone.run() }, Task { await watch.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+
+        phone.configure(setup)
+        phone.tap(team: .a)
+        try await settle()
+        #expect(points(watch) == BySide(a: 1, b: 0), "the watch was following along")
+
+        phoneLink.setQuiet(true)
+        watchLink.setQuiet(true)
+        watch.finish()
+        try await settle()
+        #expect(watch.state == nil, "the watch ended and retired the session")
+        #expect(phone.state != nil, "the phone never heard, and is still in the match")
+
+        phoneLink.setQuiet(false)
+        watchLink.setQuiet(false)
+        phone.tap(team: .b)
+        try await settle()
+
+        #expect(phone.state == nil, "the phone is told the match ended rather than scoring alone")
+        #expect(phone.lastResult != nil, "and is shown how it went instead of losing it")
+
+        // The real test of recovery: the two can start again and find each other.
+        phone.startNewSession()
+        phone.configure(setup)
+        phone.tap(team: .b)
+        try await settle()
+        #expect(points(watch) == BySide(a: 0, b: 1), "a fresh match on the phone reaches the watch")
+    }
+
+    /// Each install makes its own session id when it has nothing stored, so a phone and a
+    /// watch meeting for the first time disagree about which session is being played.
+    /// Reconciling that used to rest entirely on the application-context channel.
+    @Test func devicesWithDifferentSessionsAgreeWithoutTheSnapshotChannel() async throws {
+        let (phoneLink, watchLink) = QuietableLink.pair()
+        phoneLink.carriesSnapshots = false
+        watchLink.carriesSnapshots = false
+        let phone = MatchStore(device: DeviceID(), transport: phoneLink, snapshotInterval: 0)
+        let watch = MatchStore(device: DeviceID(), transport: watchLink, snapshotInterval: 0)
+        let tasks = [Task { await phone.run() }, Task { await watch.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        phone.configure(setup)
+        phone.tap(team: .a)
+        phone.tap(team: .a)
+        try await settle()
+
+        #expect(watch.log.sessionID == phone.log.sessionID, "the watch came over to the phone's session")
+        #expect(points(watch) == BySide(a: 2, b: 0))
     }
 }

@@ -37,7 +37,7 @@ private func points(_ store: MatchStore) -> BySide<Int>? {
     return session.score.points
 }
 
-@Suite("Watch and phone sync")
+@Suite("Watch and phone sync", .serialized)
 @MainActor
 struct SyncTests {
     @Test func aTapOnThePhoneReachesTheWatch() async throws {

@@ -232,6 +232,8 @@ public final class MatchStore {
         // will keep offering the session back as though it were still live.
         let farewell = encode(.snapshot(log))
         transport.queue(farewell)
+        transport.publishSnapshot(farewell)
+        lastSnapshotPublished = Date()
         Task { _ = await sendLive(farewell) }
 
         concludedSessionID = log.sessionID
@@ -385,6 +387,10 @@ public final class MatchStore {
         if case .hello(_, let vector)? = try? Wire.decode(reply) {
             outbox.acknowledge(upTo: vector)
             persist()
+        } else {
+            // Anything else is the counterpart saying it is not on the session we just
+            // sent — which is the one thing that has to be acted on rather than dropped.
+            handle(InboundPacket(payload: reply))
         }
     }
 
@@ -417,14 +423,28 @@ public final class MatchStore {
         case .hello(let sessionID, let vector):
             sharePresets()
             shareDisplay()
-            guard !retired.contains(sessionID) else { return replyWithOurs(packet) }
+            guard !retired.contains(sessionID) else {
+                return announceRetirement(of: sessionID, to: packet)
+            }
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
             packet.reply?(encode(.events(sessionID: log.sessionID, events: log.events(missingRelativeTo: vector))))
 
         case .events(let sessionID, let events):
-            guard !retired.contains(sessionID) else { return replyWithOurs(packet) }
+            guard !retired.contains(sessionID) else {
+                return announceRetirement(of: sessionID, to: packet)
+            }
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
             if log.merge(events) { refresh() }
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.vector)))
+
+        case .retired(let sessionID):
+            // Only ever our own live session, and only once: concluding puts it in the
+            // retired list here too, so a second notice is a no-op rather than a volley.
+            // Ending it locally is the same path the `.finish` event would have taken, so
+            // the match is archived and the result shown rather than quietly dropped.
+            if sessionID == log.sessionID, !log.isEmpty, !retired.contains(sessionID) {
+                record(.finish(archive: true))
+            }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.vector)))
 
         case .presets(let incoming):
@@ -439,11 +459,12 @@ public final class MatchStore {
 
         case .snapshot(let incoming):
             if retired.contains(incoming.sessionID) {
-                replyWithOurs(packet)
+                return announceRetirement(of: incoming.sessionID, to: packet)
             } else if incoming.isEmpty {
-                // A peer that has not started anything yet is not a competing session;
-                // our own snapshot will reach it and it will adopt ours.
-                break
+                // A peer that has not started anything yet is not a competing session, but
+                // it does need ours — and it cannot ask for it, since the reply it would
+                // ask down is the one it just used to tell us it has nothing.
+                offerOurSession()
             } else if log.isEmpty {
                 log = incoming
                 refresh()
@@ -451,8 +472,11 @@ public final class MatchStore {
                 if log.merge(incoming.ordered) { refresh() }
             } else if incoming.createdAt > log.createdAt {
                 adopt(incoming)
+            } else if incoming.createdAt < log.createdAt {
+                // Ours is the newer session and wins. Only the strictly newer one offers,
+                // so two devices can never sit pushing sessions at each other.
+                offerOurSession()
             }
-            // Otherwise ours is the newer session and wins; our own snapshot tells them so.
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.vector)))
         }
     }
@@ -485,14 +509,32 @@ public final class MatchStore {
         Task { _ = await sendLive(payload) }
     }
 
+    /// Hands our session to a counterpart that is not on it. The snapshot channel
+    /// coalesces and the live one needs the counterpart awake, so the one thing that must
+    /// not be missed — which session is being played — goes on the durable queue too.
+    private func offerOurSession() {
+        guard !log.isEmpty else { return }
+        transport.queue(encode(.snapshot(log)))
+    }
+
     private func requestSnapshot(_ packet: InboundPacket) {
         packet.reply?(encode(.snapshot(log)))
     }
 
-    /// Tells the counterpart what we have instead, which is how it learns the session it is
-    /// offering is over.
-    private func replyWithOurs(_ packet: InboundPacket) {
-        packet.reply?(encode(.snapshot(log)))
+    /// Tells the counterpart the session it is offering is over here.
+    ///
+    /// Pushed rather than only replied: the durable and snapshot channels both arrive with
+    /// no reply handler, so answering only down the reply would leave the counterpart
+    /// scoring into a session every packet of which we refuse — silently, and for good,
+    /// since the retired list outlives a relaunch.
+    private func announceRetirement(of sessionID: UUID, to packet: InboundPacket) {
+        let notice = encode(.retired(sessionID: sessionID))
+        if let reply = packet.reply {
+            reply(notice)
+        } else {
+            transport.queue(notice)
+            Task { _ = await sendLive(notice) }
+        }
     }
 
     /// Throttled, but never dropped: a change that arrives inside the window is published
@@ -500,6 +542,11 @@ public final class MatchStore {
     /// thing a counterpart sees at cold launch, so it must end up holding the newest state
     /// rather than whichever update happened to win the race.
     private func publishSnapshot(force: Bool) {
+        // An empty log tells a counterpart nothing — it ignores empty snapshots — but
+        // publishing one replaces a context that did say something. On the point that ends
+        // a match the log is already cleared by the time this runs, so without this the
+        // farewell would be overwritten by "nothing here" a moment after being sent.
+        guard !log.isEmpty else { return }
         let elapsed = Date().timeIntervalSince(lastSnapshotPublished)
         guard force || elapsed >= snapshotInterval else {
             scheduleSnapshot(after: snapshotInterval - elapsed)
@@ -515,7 +562,7 @@ public final class MatchStore {
         snapshotPending = true
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(max(0, delay)))
-            guard let self, self.snapshotPending else { return }
+            guard let self, self.snapshotPending, !self.log.isEmpty else { return }
             self.snapshotPending = false
             self.lastSnapshotPublished = Date()
             self.transport.publishSnapshot(self.encode(.snapshot(self.log)))
