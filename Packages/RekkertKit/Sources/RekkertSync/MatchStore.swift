@@ -159,6 +159,17 @@ public final class MatchStore {
         setScoreboardMirrored(!display.isMirrored)
     }
 
+    /// Swaps which side is drawn blue, on both devices — unlike mirroring, this is about
+    /// which team you are rather than where you are standing.
+    public func setTeamColorsSwapped(_ swapped: Bool) {
+        guard swapped != display.areColorsSwapped else { return }
+        apply(display.setting(colorsSwapped: swapped), publish: true)
+    }
+
+    public func toggleTeamColors() {
+        setTeamColorsSwapped(!display.areColorsSwapped)
+    }
+
     private func apply(_ preferences: DisplayPreferences, publish: Bool) {
         display = preferences
         try? store?.save(preferences)

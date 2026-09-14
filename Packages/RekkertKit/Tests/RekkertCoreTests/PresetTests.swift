@@ -103,3 +103,32 @@ struct PresetTests {
         #expect(store.loadPresets().presets.map(\.name) == ["Thursday"])
     }
 }
+
+@Suite("Display preferences")
+struct DisplayPreferenceTests {
+    @Test func settingOneLeavesTheOtherAlone() {
+        let flipped = DisplayPreferences().setting(mirrored: true)
+        let both = flipped.setting(colorsSwapped: true)
+
+        #expect(both.isMirrored, "the flip survives the colour swap")
+        #expect(both.areColorsSwapped)
+        #expect(both.revision == 2, "and each change is its own revision")
+    }
+
+    @Test func aStoredValueFromBeforeTheColourSwapStillReads() throws {
+        let legacy = #"{"isMirrored":true,"revision":4,"updatedAt":0}"#
+        let decoded = try JSONCoding.decoder.decode(DisplayPreferences.self, from: Data(legacy.utf8))
+
+        #expect(decoded.isMirrored)
+        #expect(decoded.revision == 4)
+        #expect(decoded.areColorsSwapped == false, "defaulting to the colours it was drawn in")
+    }
+
+    @Test func theNewerRevisionWinsWhicheverFieldChanged() {
+        let mine = DisplayPreferences().setting(mirrored: true)
+        let theirs = mine.setting(colorsSwapped: true)
+
+        #expect(mine.adopting(theirs) == theirs)
+        #expect(theirs.adopting(mine) == theirs)
+    }
+}

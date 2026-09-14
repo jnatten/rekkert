@@ -4,6 +4,7 @@ import SwiftUI
 struct CourtScoreboardView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.teamPalette) private var palette
     let round: Int
     let court: Int
 
@@ -103,7 +104,7 @@ struct CourtScoreboardView: View {
 
     private func entryRow(_ side: TeamSide, snapshot: ScoreboardSnapshot) -> some View {
         HStack(spacing: 12) {
-            Circle().fill(Color.team(side)).frame(width: 10, height: 10)
+            Circle().fill(palette.color(side)).frame(width: 10, height: 10)
             Text(snapshot.teamNames[side])
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -114,7 +115,7 @@ struct CourtScoreboardView: View {
                 .font(.title3.bold().monospacedDigit())
                 .frame(width: 64)
                 .padding(.vertical, 6)
-                .background(Color.team(side).opacity(0.12), in: .rect(cornerRadius: 8))
+                .background(palette.color(side).opacity(0.12), in: .rect(cornerRadius: 8))
                 .focused($typing, equals: side)
                 .onSubmit(commit)
 

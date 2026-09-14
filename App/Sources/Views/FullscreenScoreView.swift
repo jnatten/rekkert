@@ -8,6 +8,7 @@ struct FullscreenScoreView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.teamPalette) private var palette
 
     var round: Int?
     var court = 0
@@ -64,7 +65,7 @@ struct FullscreenScoreView: View {
         insets: EdgeInsets
     ) -> some View {
         ZStack {
-            Color.team(side)
+            palette.color(side)
             serveCourt(snapshot, side: side, in: size, insets: insets)
 
             VStack(spacing: 0) {

@@ -2,7 +2,7 @@ import RekkertCore
 import SwiftUI
 
 /// The corrections you reach for mid-match: who is serving, which way round the
-/// scoreboard reads, and whether the score is read out loud.
+/// scoreboard reads, which side is blue, and whether the score is read out loud.
 struct MatchOptionsMenu: View {
     @Environment(AppModel.self) private var model
     var round = 0
@@ -19,6 +19,9 @@ struct MatchOptionsMenu: View {
             }
             Button("Swap sides", systemImage: "rectangle.2.swap") {
                 model.store.toggleScoreboardMirrored()
+            }
+            Button("Swap colours", systemImage: "circle.lefthalf.filled") {
+                model.store.toggleTeamColors()
             }
         } label: {
             Image(systemName: "ellipsis.circle")

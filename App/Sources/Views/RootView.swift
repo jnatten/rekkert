@@ -23,6 +23,7 @@ struct RootView: View {
                 PointCountMatchView()
             }
         }
+        .environment(\.teamPalette, TeamPalette(isSwapped: model.store.display.areColorsSwapped))
         .alert(
             "Switched to the newer match",
             isPresented: Binding(

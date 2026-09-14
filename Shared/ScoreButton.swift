@@ -3,6 +3,7 @@ import SwiftUI
 
 /// One of the two big numbers. Tap scores a point, long press undoes.
 struct ScoreButton: View {
+    @Environment(\.teamPalette) private var palette
     let side: TeamSide
     let value: String
     let teamName: String
@@ -41,7 +42,7 @@ struct ScoreButton: View {
     var body: some View {
         Button(action: onTap) {
             ZStack {
-                Color.team(side)
+                palette.color(side)
                 VStack(spacing: compact ? 0 : 6) {
                     teamLabel
 

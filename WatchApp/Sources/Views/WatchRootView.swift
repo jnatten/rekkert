@@ -9,6 +9,12 @@ struct WatchRootView: View {
     @State private var lastCourt = 0
 
     var body: some View {
+        content
+            .environment(\.teamPalette, TeamPalette(isSwapped: model.store.display.areColorsSwapped))
+    }
+
+    @ViewBuilder
+    private var content: some View {
         switch model.store.state {
         case .none:
             if let result = model.store.lastResult {

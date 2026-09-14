@@ -5,10 +5,11 @@ import SwiftUI
 /// dropping straight back to the start screen with no word of how it went.
 struct MatchResultView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.teamPalette) private var palette
     let state: SessionState
 
     private var result: SessionResult { SessionResult.make(from: state) }
-    private var tint: Color { result.winningSide.map(Color.team) ?? .accentColor }
+    private var tint: Color { result.winningSide.map(palette.color) ?? .accentColor }
 
     private var symbol: String {
         switch result.outcome {

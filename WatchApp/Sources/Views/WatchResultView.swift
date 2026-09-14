@@ -5,10 +5,11 @@ import WatchKit
 /// The watch's curtain call: how it finished, and a way to clear it.
 struct WatchResultView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.teamPalette) private var palette
     let state: SessionState
 
     private var result: SessionResult { SessionResult.make(from: state) }
-    private var tint: Color { result.winningSide.map(Color.team) ?? .gray }
+    private var tint: Color { result.winningSide.map(palette.color) ?? .gray }
 
     private var symbol: String {
         switch result.outcome {

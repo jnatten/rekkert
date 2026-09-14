@@ -3,6 +3,7 @@ import SwiftUI
 
 struct WinnerCourtView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.teamPalette) private var palette
     @State private var showingEnd = false
     @State private var fullscreen = false
 
@@ -117,9 +118,9 @@ struct WinnerCourtView: View {
         VStack(spacing: 2) {
             Text(label).foregroundStyle(.secondary)
             HStack(spacing: 4) {
-                Text("\(value.a)").foregroundStyle(Color.teamA)
+                Text("\(value.a)").foregroundStyle(palette.color(.a))
                 Text("–").foregroundStyle(.secondary)
-                Text("\(value.b)").foregroundStyle(Color.teamB)
+                Text("\(value.b)").foregroundStyle(palette.color(.b))
             }
             .fontWeight(.semibold)
             .monospacedDigit()

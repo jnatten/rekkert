@@ -211,6 +211,7 @@ struct CourtRef: Identifiable, Hashable {
 }
 
 private struct CourtRow: View {
+    @Environment(\.teamPalette) private var palette
     let tournament: Tournament
     let match: CourtMatch
 
@@ -225,12 +226,12 @@ private struct CourtRow: View {
             }
             ForEach(TeamSide.allCases, id: \.self) { side in
                 HStack {
-                    Circle().fill(Color.team(side)).frame(width: 8, height: 8)
+                    Circle().fill(palette.color(side)).frame(width: 8, height: 8)
                     Text(names(side)).lineLimit(1)
                     Spacer()
                     Text("\(match.state.points[side])")
                         .font(.title3.bold().monospacedDigit())
-                        .foregroundStyle(Color.team(side))
+                        .foregroundStyle(palette.color(side))
                 }
             }
         }

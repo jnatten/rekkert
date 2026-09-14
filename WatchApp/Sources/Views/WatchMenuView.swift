@@ -66,6 +66,13 @@ struct WatchMenuView: View {
                     model.store.toggleScoreboardMirrored()
                 }
 
+                // Unlike the side swap this reaches both devices: it is about which team
+                // you are, not which way you happen to be facing.
+                action("Swap colours", systemImage: "circle.lefthalf.filled", tint: .gray) {
+                    WKInterfaceDevice.current().play(.click)
+                    model.store.toggleTeamColors()
+                }
+
                 action(
                     model.announcer.isEnabled ? "Calling score" : "Call score",
                     systemImage: model.announcer.isEnabled ? "speaker.wave.2.fill" : "speaker.slash",

@@ -347,6 +347,39 @@ struct SyncTests {
         #expect(pair.watch.display.isMirrored == false, "the watch follows so its next press is right")
     }
 
+    @Test func swappingTheColoursReachesBothDevices() async throws {
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        pair.watch.toggleTeamColors()
+        try await settle()
+
+        #expect(pair.phone.display.areColorsSwapped, "which side is blue is not about where you stand")
+        #expect(pair.watch.display.areColorsSwapped, "so unlike mirroring, the watch follows it too")
+
+        pair.phone.toggleTeamColors()
+        try await settle()
+        #expect(pair.phone.display.areColorsSwapped == false)
+        #expect(pair.watch.display.areColorsSwapped == false)
+    }
+
+    @Test func theTwoDisplayPreferencesDoNotDisturbEachOther() async throws {
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        pair.phone.toggleScoreboardMirrored()
+        try await settle()
+        pair.watch.toggleTeamColors()
+        try await settle()
+
+        #expect(pair.phone.display.isMirrored, "still flipped")
+        #expect(pair.phone.display.areColorsSwapped, "and swapped")
+    }
+
     @Test func aRepeatedFlipInstructionDoesNotUndoItself() async throws {
         let pair = Pair()
         let tasks = pair.run()

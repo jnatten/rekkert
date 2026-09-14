@@ -4,6 +4,7 @@ import SwiftUI
 struct NewSessionView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.teamPalette) private var palette
     let mode: GameMode
 
     /// Starts the form filled in from a tournament that has already been played, for
@@ -103,7 +104,7 @@ struct NewSessionView: View {
     private func teamRows(name: Binding<String>, players: Binding<[String]>, side: TeamSide) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Circle().fill(Color.team(side)).frame(width: 10, height: 10)
+                Circle().fill(palette.color(side)).frame(width: 10, height: 10)
                 TextField("Team name", text: name)
                     .font(.headline)
                     .focused($focused, equals: .teamName(side))

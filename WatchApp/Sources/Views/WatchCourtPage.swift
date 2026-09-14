@@ -4,6 +4,7 @@ import WatchKit
 
 struct WatchCourtPage: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.teamPalette) private var palette
     var round = 0
     let court: Int
     /// Every court page stays alive behind the one on screen, so only the one being looked
@@ -43,7 +44,7 @@ struct WatchCourtPage: View {
 
                     correction(snapshot)
                 }
-                .containerBackground(Color.team(.a).gradient.opacity(0.25), for: .tabView)
+                .containerBackground(palette.color(.a).gradient.opacity(0.25), for: .tabView)
             } else {
                 ProgressView()
             }
@@ -76,7 +77,7 @@ struct WatchCourtPage: View {
                 ForEach(TeamSide.allCases, id: \.self) { side in
                     Stepper(value: binding(side, snapshot: snapshot), in: 0 ... 99) {
                         HStack {
-                            Circle().fill(Color.team(side)).frame(width: 6, height: 6)
+                            Circle().fill(palette.color(side)).frame(width: 6, height: 6)
                             Text("\(points(snapshot)[side])").monospacedDigit()
                         }
                         .font(.footnote)

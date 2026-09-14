@@ -6,6 +6,7 @@ import SwiftUI
 struct HistoryDetailView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.teamPalette) private var palette
     let record: HistoryRecord
 
     @State private var confirmingResume = false
@@ -17,7 +18,7 @@ struct HistoryDetailView: View {
         guard case .tournament(let value) = record.state else { return nil }
         return value
     }
-    private var tint: Color { result.winningSide.map(Color.team) ?? .accentColor }
+    private var tint: Color { result.winningSide.map(palette.color) ?? .accentColor }
 
     var body: some View {
         List {
@@ -121,12 +122,12 @@ struct HistoryDetailView: View {
                             .foregroundStyle(.secondary)
                         ForEach(TeamSide.allCases, id: \.self) { side in
                             HStack {
-                                Circle().fill(Color.team(side)).frame(width: 8, height: 8)
+                                Circle().fill(palette.color(side)).frame(width: 8, height: 8)
                                 Text(names(match, side, in: tournament)).lineLimit(1)
                                 Spacer()
                                 Text("\(match.state.points[side])")
                                     .font(.body.bold().monospacedDigit())
-                                    .foregroundStyle(Color.team(side))
+                                    .foregroundStyle(palette.color(side))
                             }
                         }
                     }

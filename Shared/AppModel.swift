@@ -139,6 +139,9 @@ final class AppModel {
                 store.nextRound()
             }
         }
+        if arguments.contains("-rekkert-demo-swap-colours") {
+            store.toggleTeamColors()
+        }
         if arguments.contains("-rekkert-demo-finished") {
             store.finish()
         }
