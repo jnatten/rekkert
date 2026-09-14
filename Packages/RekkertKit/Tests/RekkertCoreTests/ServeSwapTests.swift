@@ -108,3 +108,60 @@ struct ServeSwapTests {
         #expect(ScoreboardSnapshot.make(from: state!, court: 1)?.serving == .b)
     }
 }
+
+@Suite("Swapping service on a tournament court")
+struct CourtServeSwapTests {
+    private func tournament(courts: Int = 2, players: Int = 8) -> MatchLog {
+        var log = MatchLog()
+        log.append(.configure(.tournament(Tournament(
+            id: TournamentID(UUID(uuidString: "00000000-0000-0000-0000-0000000000FF")!),
+            name: "Test", format: .americano,
+            players: (0 ..< players).map { Player(name: "P\($0)") },
+            config: TournamentConfig(pointRules: PointCountRules(target: 16), courtCount: courts)
+        ))), from: device)
+        log.drawRound(from: device)
+        return log
+    }
+
+    private func serving(_ log: MatchLog, court: Int) -> TeamSide? {
+        SessionReducer.state(of: log)
+            .flatMap { ScoreboardSnapshot.make(from: $0, court: court) }?
+            .serving
+    }
+
+    @Test func everyCourtCanBeCorrectedOnItsOwn() {
+        var log = tournament()
+        #expect(serving(log, court: 0) == .a)
+        #expect(serving(log, court: 1) == .a)
+
+        swapServe(&log, court: 1)
+
+        #expect(serving(log, court: 1) == .b, "the court that was corrected")
+        #expect(serving(log, court: 0) == .a, "and only that one")
+    }
+
+    @Test func aCorrectionOnALaterRoundLeavesTheEarlierOneAlone() {
+        var log = tournament()
+        for court in 0 ..< 2 {
+            log.append(.setScore(round: 0, court: court, points: BySide(a: 9, b: 7)), from: device)
+        }
+        log.append(.setRoundConfirmed(round: 0, isConfirmed: true), from: device)
+        log.drawRound(from: device)
+
+        swapServe(&log, round: 1, court: 0)
+
+        guard case .tournament(let value)? = SessionReducer.state(of: log) else {
+            Issue.record("expected a tournament")
+            return
+        }
+        #expect(value.rounds[1].matches[0].state.firstServerIndex == 1)
+        #expect(value.rounds[0].matches[0].state.firstServerIndex == 0, "round one is untouched")
+    }
+
+    @Test func swappingTwiceOnOneCourtPutsItBack() {
+        var log = tournament()
+        swapServe(&log, court: 1)
+        swapServe(&log, court: 1)
+        #expect(serving(log, court: 1) == .a)
+    }
+}

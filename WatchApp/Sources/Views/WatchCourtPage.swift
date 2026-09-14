@@ -18,6 +18,7 @@ struct WatchCourtPage: View {
                     ScoreboardView(
                         snapshot: snapshot,
                         compact: true,
+                        layout: layout,
                         onTap: { side in
                             WKInterfaceDevice.current().play(.click)
                             model.store.tap(round: round, court: court, team: side)
@@ -42,9 +43,10 @@ struct WatchCourtPage: View {
                         .disabled(!model.store.canUndo)
                         .font(.footnote)
 
+                    courtControls
                     correction(snapshot)
                 }
-                .containerBackground(palette.color(.a).gradient.opacity(0.25), for: .tabView)
+                .containerBackground(palette.color(layout.order[0]).gradient.opacity(0.25), for: .tabView)
             } else {
                 ProgressView()
             }
@@ -54,6 +56,35 @@ struct WatchCourtPage: View {
 
     private var snapshot: ScoreboardSnapshot? {
         model.store.state.flatMap { ScoreboardSnapshot.make(from: $0, round: round, court: court) }
+    }
+
+    /// Blue always reads first here. The watch is glanced at rather than studied, and on a
+    /// screen this size the colour you are is the thing you are looking for — so swapping
+    /// the colours swaps the sides with them.
+    private var layout: ScoreboardLayout {
+        ScoreboardLayout(isMirrored: model.store.display.areColorsSwapped)
+    }
+
+    private var hasSeveralCourts: Bool { (model.store.state?.courtCount ?? 0) > 1 }
+
+    /// Kept on the court itself once there is more than one. The menu is a page of its own
+    /// and cannot say which court it means, which is exactly the thing you are correcting.
+    @ViewBuilder
+    private var courtControls: some View {
+        if hasSeveralCourts {
+            VStack(spacing: 4) {
+                Button("Swap serve", systemImage: "arrow.left.arrow.right") {
+                    WKInterfaceDevice.current().play(.click)
+                    model.store.swapServingTeam(round: round, court: court)
+                }
+                Button("Swap colours", systemImage: "circle.lefthalf.filled") {
+                    WKInterfaceDevice.current().play(.click)
+                    model.store.toggleTeamColors()
+                }
+            }
+            .font(.footnote)
+            .padding(.top, 2)
+        }
     }
 
     private func serveSideButton(_ title: String, court: ServeCourt, snapshot: ScoreboardSnapshot) -> some View {
@@ -74,7 +105,7 @@ struct WatchCourtPage: View {
         if case .tournament? = model.store.state, !snapshot.isLocked {
             VStack(spacing: 4) {
                 Text("Fix score").font(.system(size: 11)).foregroundStyle(.secondary)
-                ForEach(TeamSide.allCases, id: \.self) { side in
+                ForEach(layout.order, id: \.self) { side in
                     Stepper(value: binding(side, snapshot: snapshot), in: 0 ... 99) {
                         HStack {
                             Circle().fill(palette.color(side)).frame(width: 6, height: 6)

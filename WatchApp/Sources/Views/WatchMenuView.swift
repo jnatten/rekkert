@@ -54,9 +54,13 @@ struct WatchMenuView: View {
                     }
                 }
 
-                action("Swap serve", systemImage: "arrow.left.arrow.right", tint: .gray) {
-                    WKInterfaceDevice.current().play(.click)
-                    model.store.swapServingTeam(round: round, court: court)
+                // With one court this is unambiguous. With several it lives on the court
+                // page instead, where there is no doubt which one it means.
+                if !hasSeveralCourts {
+                    action("Swap serve", systemImage: "arrow.left.arrow.right", tint: .gray) {
+                        WKInterfaceDevice.current().play(.click)
+                        model.store.swapServingTeam(round: round, court: court)
+                    }
                 }
 
                 // Flips the phone, not this watch: it is the phone that is propped up
@@ -168,6 +172,8 @@ struct WatchMenuView: View {
     }
 
     private var hasResults: Bool { model.store.state?.hasResults ?? false }
+
+    private var hasSeveralCourts: Bool { (model.store.state?.courtCount ?? 0) > 1 }
 
     private var isWinnerCourt: Bool {
         if case .winnerCourt? = model.store.state { return true }
