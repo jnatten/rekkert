@@ -14,6 +14,21 @@ public struct VersionVector: Sendable, Hashable, Codable {
 
     public var isEmpty: Bool { entries.isEmpty }
 
+    /// The highest sequence number *every* one of them has seen.
+    ///
+    /// The only safe thing to acknowledge when a message went to more than one peer: the
+    /// outbox may only forget what has reached all of them, and a peer absent from the list
+    /// has seen nothing, so the bound for that device is nothing.
+    public static func lowerBound(of vectors: [VersionVector]) -> VersionVector {
+        guard let first = vectors.first else { return VersionVector() }
+        var result: [DeviceID: UInt32] = [:]
+        for (device, seq) in first.entries {
+            let lowest = vectors.dropFirst().reduce(seq) { Swift.min($0, $1[device]) }
+            if lowest > 0 { result[device] = lowest }
+        }
+        return VersionVector(result)
+    }
+
     private struct Entry: Codable, Sendable {
         let device: DeviceID
         let seq: UInt32

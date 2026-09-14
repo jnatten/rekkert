@@ -25,7 +25,7 @@ let project = Project(
             "ENABLE_USER_SCRIPT_SANDBOXING": "YES",
             "CODE_SIGN_STYLE": "Automatic",
             "MARKETING_VERSION": "1.0",
-            "CURRENT_PROJECT_VERSION": "31",
+            "CURRENT_PROJECT_VERSION": "32",
         ].merging(signingSettings) { _, signing in signing }
     ),
     targets: [

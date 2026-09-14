@@ -447,7 +447,7 @@ public final class MatchStore {
                 return announceRetirement(of: sessionID, to: packet)
             }
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
-            if log.merge(events) { refresh() }
+            relay(events)
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
 
         case .retired(let sessionID):
@@ -482,7 +482,7 @@ public final class MatchStore {
                 log = incoming
                 refresh()
             } else if incoming.sessionID == log.sessionID {
-                if log.merge(incoming.ordered) { refresh() }
+                relay(incoming.ordered)
             } else if incoming.createdAt > log.createdAt {
                 adopt(incoming)
             } else if incoming.createdAt < log.createdAt {
@@ -492,6 +492,19 @@ public final class MatchStore {
             }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
         }
+    }
+
+    /// Merges what a peer sent and passes on whatever was new.
+    ///
+    /// Where there are several peers this device is the road between them, so an event that
+    /// arrives here has to go back out as though it had been scored here — otherwise a point
+    /// tapped on one phone reaches this one and stops dead. Only the genuinely new ones are
+    /// passed on, so two devices cannot volley the same event back and forth for ever.
+    private func relay(_ incoming: [MatchEvent]) {
+        let fresh = incoming.filter { log.events[$0.id] == nil }
+        guard log.merge(fresh) else { return }
+        outbox.enqueue(contentsOf: fresh)
+        refresh()
     }
 
     /// Replaces the local session with the peer's. Anything already scored locally is
