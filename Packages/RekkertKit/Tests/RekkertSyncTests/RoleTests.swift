@@ -45,6 +45,8 @@ struct RoleTests {
         let guest = MatchStore(device: DeviceID(), transport: two, snapshotInterval: 0)
         let tasks = [Task { await host.run() }, Task { await guest.run() }]
         defer { tasks.forEach { $0.cancel() } }
+        // Both run loops have to be consuming before anybody asks anything of the other.
+        try await settle()
 
         guest.beginJoining()
         try await settle()
@@ -144,6 +146,7 @@ struct RoleTests {
         )
         let tasks = [Task { await host.run() }, Task { await joiner.run() }]
         defer { tasks.forEach { $0.cancel() } }
+        try await settle()
 
         joiner.beginJoining()
         try await settle()
@@ -167,6 +170,8 @@ struct RoleTests {
         let guest = MatchStore(device: DeviceID(), transport: two, snapshotInterval: 0)
         let tasks = [Task { await host.run() }, Task { await guest.run() }]
         defer { tasks.forEach { $0.cancel() } }
+        // Both run loops have to be consuming before anybody asks anything of the other.
+        try await settle()
 
         guest.beginJoining()
         try await settle()

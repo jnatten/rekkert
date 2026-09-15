@@ -44,6 +44,9 @@ struct SyncTests {
         let pair = Pair()
         let tasks = pair.run()
         defer { tasks.forEach { $0.cancel() } }
+        // Both ends have to be consuming before either says anything. In the app the run
+        // loops start at launch; here they start a microsecond before the first tap.
+        try await settle()
 
         pair.phone.configure(setup)
         pair.phone.tap(team: .a)
