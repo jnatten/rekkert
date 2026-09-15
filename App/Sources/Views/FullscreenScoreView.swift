@@ -265,7 +265,7 @@ final class DisplayOverride {
         guard previousBrightness == nil, let screen else { return }
         previousBrightness = screen.brightness
         screen.brightness = 1
-        UIApplication.shared.isIdleTimerDisabled = true
+        ScreenSleep.hold("fullscreen")
     }
 
     func restore() {
@@ -273,7 +273,7 @@ final class DisplayOverride {
             screen.brightness = previousBrightness
         }
         previousBrightness = nil
-        UIApplication.shared.isIdleTimerDisabled = false
+        ScreenSleep.release("fullscreen")
     }
 
     private var screen: UIScreen? {

@@ -43,12 +43,33 @@ struct RootView: View {
             JoinMatchSheet()
             #endif
         }
+        .onChange(of: model.sharing.isSharing, initial: true) { _, sharing in
+            // Sharing stops the moment the system suspends the app, so a host whose screen
+            // times out quietly drops everybody. Telling people to keep the phone awake was
+            // advice standing in for this.
+            sharing ? ScreenSleep.hold("sharing") : ScreenSleep.release("sharing")
+        }
         .task {
             #if DEBUG
             // Here rather than on the start screen: a device that already has a match never
             // shows that screen, and joining from one is exactly the case worth exercising.
             if DemoLaunch.joinCode != nil { model.showingJoin = true }
             #endif
+        }
+        .alert(
+            "Lost the shared match",
+            isPresented: Binding(
+                get: { model.sharing.hasLostTheMatch },
+                set: { if !$0 { model.sharing.acknowledgeLostMatch() } }
+            )
+        ) {
+            Button("Keep looking") { model.sharing.acknowledgeLostMatch() }
+            Button("Leave", role: .destructive) {
+                model.sharing.acknowledgeLostMatch()
+                model.sharing.stop()
+            }
+        } message: {
+            Text("Whoever shared this match is out of reach. The score here is the last that got through, and Rekkert will pick it up again if they come back.")
         }
         .alert(
             "Switched to the newer match",

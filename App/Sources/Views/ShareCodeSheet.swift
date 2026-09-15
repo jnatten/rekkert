@@ -30,7 +30,7 @@ struct ShareCodeSheet: View {
 
                 VStack(spacing: 6) {
                     Text("Only you can finish this match.")
-                    Text("Keep this phone awake and nearby — sharing stops while the app is in your pocket.")
+                    Text("Keep this phone nearby and in Rekkert — sharing stops while the app is put away. The screen will not sleep while you are sharing.")
                 }
                 .font(.footnote)
                 .foregroundStyle(.secondary)

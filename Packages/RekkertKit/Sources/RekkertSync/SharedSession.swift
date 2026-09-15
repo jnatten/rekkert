@@ -22,6 +22,10 @@ public final class SharedSession {
     public private(set) var phase: Phase = .off
     /// How many other phones are on the match right now.
     public private(set) var peers = 0
+    /// Set when a match this device had joined has been out of reach long enough that it is
+    /// worth saying so. The scoreboard goes on showing the copy it holds, which is the point
+    /// — but a score that has quietly stopped being true is worse than an honest notice.
+    public private(set) var hasLostTheMatch = false
 
     private let store: MatchStore
     private let link: LocalNetworkTransport
@@ -30,10 +34,19 @@ public final class SharedSession {
     /// never written to disk — this lasts exactly as long as the app is running.
     private var hosted: (code: SessionCode, share: UUID)?
     private var wanted: SessionCode?
+    private var noticing: Task<Void, Never>?
+    /// Long enough to ride out a phone glanced at or a moment of bad Wi-Fi, short enough that
+    /// somebody looking at a stale score finds out before the game moves on.
+    private let graceBeforeNotice: Duration
 
-    public init(store: MatchStore, link: LocalNetworkTransport) {
+    public init(
+        store: MatchStore,
+        link: LocalNetworkTransport,
+        graceBeforeNotice: Duration = .seconds(8)
+    ) {
         self.store = store
         self.link = link
+        self.graceBeforeNotice = graceBeforeNotice
         watching = Task { [weak self] in
             for await status in link.status { self?.apply(status) }
         }
@@ -103,6 +116,9 @@ public final class SharedSession {
         phase = .off
         hosted = nil
         wanted = nil
+        hasLostTheMatch = false
+        noticing?.cancel()
+        noticing = nil
     }
 
     /// Stops watching the transport. The app holds this for its whole life, so this is here
@@ -112,12 +128,28 @@ public final class SharedSession {
         watching = nil
     }
 
+    public func acknowledgeLostMatch() {
+        hasLostTheMatch = false
+    }
+
     public func dismissFailure() {
         guard case .failed = phase else { return }
         stop()
     }
 
-    private func apply(_ status: LocalNetworkTransport.Status) {
+    private func beginNoticingTheLoss() {
+        guard noticing == nil else { return }
+        noticing = Task { [weak self, graceBeforeNotice] in
+            try? await Task.sleep(for: graceBeforeNotice)
+            guard let self, !Task.isCancelled else { return }
+            guard case .searching = self.phase else { return }
+            self.hasLostTheMatch = true
+            self.noticing = nil
+        }
+    }
+
+    /// Internal rather than private so the tests can drive the states a socket would.
+    func apply(_ status: LocalNetworkTransport.Status) {
         switch status {
         case .idle:
             peers = 0
@@ -127,10 +159,16 @@ public final class SharedSession {
         case .searching:
             peers = 0
             if case .hosting = phase { return }
+            // Coming back to searching having been joined means the host went away. Give the
+            // redial a moment before saying so — most drops heal on their own.
+            if case .joined = phase { beginNoticingTheLoss() }
             phase = .searching
         case .joined(let count):
             peers = count
             if case .hosting = phase { return }
+            noticing?.cancel()
+            noticing = nil
+            hasLostTheMatch = false
             phase = .joined
         case .failed(let failure):
             peers = 0

@@ -98,3 +98,62 @@ struct SharedSessionTests {
         #expect(sharing.phase == .off)
     }
 }
+
+@Suite("Losing the host")
+@MainActor
+struct LostHostTests {
+    private func joined(grace: Duration = .milliseconds(80)) -> SharedSession {
+        let store = MatchStore(device: DeviceID(), transport: LoopbackTransport(), snapshotInterval: 0)
+        let sharing = SharedSession(store: store, link: LocalNetworkTransport(), graceBeforeNotice: grace)
+        sharing.join(SessionCode("K9M4PT")!)
+        sharing.apply(.joined(peers: 1))
+        return sharing
+    }
+
+    @Test func aHostThatGoesAwayIsWorthSayingSo() async {
+        let sharing = joined()
+        #expect(sharing.hasLostTheMatch == false)
+
+        sharing.apply(.searching)
+        await eventually { sharing.hasLostTheMatch }
+        #expect(sharing.hasLostTheMatch, "the score on screen stopped being true")
+    }
+
+    /// Most drops heal on their own — a phone glanced at, a moment of bad Wi-Fi — and saying
+    /// so every time would be worse than saying nothing.
+    @Test func aBlipIsNotWorthMentioning() async throws {
+        let sharing = joined(grace: .milliseconds(400))
+
+        sharing.apply(.searching)
+        try await Task.sleep(for: .milliseconds(50))
+        sharing.apply(.joined(peers: 1))
+
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(sharing.hasLostTheMatch == false, "it came straight back")
+    }
+
+    @Test func comingBackClearsTheNotice() async {
+        let sharing = joined()
+        sharing.apply(.searching)
+        await eventually { sharing.hasLostTheMatch }
+
+        sharing.apply(.joined(peers: 1))
+        #expect(sharing.hasLostTheMatch == false)
+    }
+
+    @Test func aHostIsNeverToldItLostItself() async throws {
+        let store = MatchStore(device: DeviceID(), transport: LoopbackTransport(), snapshotInterval: 0)
+        store.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+        let sharing = SharedSession(
+            store: store, link: LocalNetworkTransport(), graceBeforeNotice: .milliseconds(80)
+        )
+        sharing.host()
+
+        // Everybody left, which for a host is ordinary rather than a loss.
+        sharing.apply(.searching)
+        try await Task.sleep(for: .milliseconds(200))
+
+        #expect(sharing.hasLostTheMatch == false)
+        #expect(sharing.isSharing, "still hosting, still waiting")
+    }
+}
