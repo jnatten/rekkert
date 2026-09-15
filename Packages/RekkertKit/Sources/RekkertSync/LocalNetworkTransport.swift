@@ -63,6 +63,9 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     private var waiting: [UInt32: ResumeOnce] = [:]
     private var nextCorrelation: UInt32 = 1
     private var isHosting = false
+    /// Kept while joining so a link that drops can be dialled again. The browser only speaks
+    /// up when the advertisements *change*, and a host that never went away is not a change.
+    private var joiningCode: SessionCode?
     private var lastSnapshot: Data?
     private var searchDeadline: DispatchWorkItem?
 
@@ -135,6 +138,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     /// refused handshake costs nothing.
     public func startJoining(code: SessionCode) {
         stop()
+        lock.withLock { joiningCode = code }
 
         let parameters = NWParameters()
         parameters.includePeerToPeer = true
@@ -180,6 +184,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             waiting = [:]
             searchDeadline = nil
             isHosting = false
+            joiningCode = nil
             lastSnapshot = nil
             return values
         }
@@ -333,12 +338,32 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
 
         let everGotThere = link.isReady
         reachabilityUpdates.yield(isReachable)
-        if !everGotThere, rejected, lock.withLock({ !isHosting && links.isEmpty }) {
+
+        if everGotThere {
+            // It was working and went away — the host walked off, or a phone went in a
+            // pocket. Go back to looking rather than sitting there with nothing.
+            announce()
+            return redial()
+        }
+        if rejected, lock.withLock({ !isHosting && links.isEmpty }) {
             // It was there and it would not have us, which is what a wrong code looks like.
             publish(.failed(.rejected))
         } else {
             announce()
         }
+    }
+
+    /// Dials whatever the browser can currently see again.
+    ///
+    /// Needed because `browseResultsChangedHandler` only fires on a change: a host that never
+    /// stopped advertising produces no new event, so a guest whose link dropped would wait
+    /// for one that never comes.
+    private func redial() {
+        let (code, browser, hosting, count) = lock.withLock {
+            (joiningCode, self.browser, isHosting, links.count)
+        }
+        guard !hosting, count == 0, let code, let browser else { return }
+        consider(browser.browseResults, code: code)
     }
 
     private func receive(on link: Link) {
