@@ -25,7 +25,7 @@ let project = Project(
             "ENABLE_USER_SCRIPT_SANDBOXING": "YES",
             "CODE_SIGN_STYLE": "Automatic",
             "MARKETING_VERSION": "1.0",
-            "CURRENT_PROJECT_VERSION": "34",
+            "CURRENT_PROJECT_VERSION": "35",
         ].merging(signingSettings) { _, signing in signing }
     ),
     targets: [
@@ -42,6 +42,12 @@ let project = Project(
                 // however the build settings are set.
                 "CFBundleShortVersionString": "$(MARKETING_VERSION)",
                 "CFBundleVersion": "$(CURRENT_PROJECT_VERSION)",
+                // Sharing a match with the other phones at the court. Bonjour over
+                // Network.framework needs no entitlement — the multicast one is for raw
+                // sockets and is request-only from Apple.
+                "NSLocalNetworkUsageDescription":
+                    "Rekkert finds the other phones at your court, so everyone can follow and score the same match.",
+                "NSBonjourServices": ["_rekkert-score._tcp"],
             ]),
             sources: ["App/Sources/**", "Shared/**"],
             resources: ["App/Resources/**"],

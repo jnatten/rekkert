@@ -35,4 +35,15 @@ check '"WKApplication" => true'
 check '"WKCompanionAppBundleIdentifier" => "dev.natten.rekkert"'
 check '"CFBundleIdentifier" => "dev.natten.rekkert.watchkitapp"'
 
+echo "==> Assert the iPhone app may look at the local network"
+# Without these two, sharing a match fails at runtime with nothing in the UI to explain it.
+iosplist="$APP/Info.plist"
+check_ios() {
+  plutil -p "$iosplist" | grep -q "$1" || { echo "FAIL: expected $1 in iOS Info.plist"; exit 1; }
+  echo "  ok: $1"
+}
+check_ios 'NSLocalNetworkUsageDescription'
+check_ios 'NSBonjourServices'
+check_ios '"_rekkert-score._tcp"'
+
 echo "==> All checks passed"

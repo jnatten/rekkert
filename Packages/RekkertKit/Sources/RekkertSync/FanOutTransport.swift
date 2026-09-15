@@ -140,32 +140,12 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
             return collected
         }
 
-        var acknowledgement: Data?
-        var sessionID: UUID?
-        var vectors: [VersionVector] = []
-        for (acknowledges, reply) in answers {
-            guard let reply else { continue }
-            guard case .hello(let session, let vector)? = try? Wire.decode(reply) else {
-                // Not an acknowledgement — a snapshot or a retirement notice — so it has to
-                // reach the store even though nobody asked it a question.
-                if let reply = reply as Data? { packets.yield(InboundPacket(payload: reply)) }
-                continue
-            }
-            if acknowledges { acknowledgement = acknowledgement ?? reply }
-            sessionID = sessionID ?? session
-            vectors.append(vector)
-        }
-        if let acknowledgement { return acknowledgement }
-
-        // No paired device to answer for everyone, so speak for the whole room: acknowledge
-        // only as far as the peer furthest behind, and not at all unless every one of them
-        // answered. Acknowledging on the first reply would drop events the others never got,
-        // and nothing would go looking for them again.
-        guard let sessionID, vectors.count == recipients.count else { return nil }
-        return try? Wire.hello(
-            sessionID: sessionID,
-            vector: VersionVector.lowerBound(of: vectors)
-        ).encoded()
+        // A paired device speaks for itself: its own reply is the acknowledgement, because it
+        // is the one channel with a durable queue behind it. Otherwise fold the room together.
+        let fromPaired = answers.first { $0.0 }?.1
+        let folded = ReplyFold.fold(answers.map(\.1), expected: recipients.count)
+        for payload in folded.unsolicited { packets.yield(InboundPacket(payload: payload)) }
+        return fromPaired ?? folded.acknowledgement
     }
 
     public func publishSnapshot(_ payload: Data) {
