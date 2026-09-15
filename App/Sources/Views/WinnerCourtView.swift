@@ -29,8 +29,9 @@ struct WinnerCourtView: View {
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    ConnectionBadge(isReachable: model.store.isReachable)
+                ToolbarItemGroup(placement: .topBarLeading) {
+                    ConnectionBadge()
+                    SharingBadge()
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Full screen", systemImage: "arrow.up.left.and.arrow.down.right") {

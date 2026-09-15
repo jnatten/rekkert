@@ -47,8 +47,9 @@ struct CourtListView: View {
             }
             .navigationTitle(title)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    ConnectionBadge(isReachable: model.store.isReachable)
+                ToolbarItemGroup(placement: .topBarLeading) {
+                    ConnectionBadge()
+                    SharingBadge()
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Undo", systemImage: "arrow.uturn.backward") { model.store.undoLast() }

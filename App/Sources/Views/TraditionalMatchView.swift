@@ -27,8 +27,9 @@ struct TraditionalMatchView: View {
             .navigationTitle("Match")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    ConnectionBadge(isReachable: model.store.isReachable)
+                ToolbarItemGroup(placement: .topBarLeading) {
+                    ConnectionBadge()
+                    SharingBadge()
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Full screen", systemImage: "arrow.up.left.and.arrow.down.right") {
@@ -94,15 +95,5 @@ struct TraditionalMatchView: View {
         .padding(.top, 12)
         .padding(.bottom, 30)
         .background(.orange.opacity(0.2))
-    }
-}
-
-struct ConnectionBadge: View {
-    let isReachable: Bool
-
-    var body: some View {
-        Image(systemName: isReachable ? "applewatch.radiowaves.left.and.right" : "applewatch.slash")
-            .foregroundStyle(isReachable ? .green : .secondary)
-            .accessibilityLabel(isReachable ? "Watch connected" : "Watch not reachable")
     }
 }
