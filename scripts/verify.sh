@@ -45,5 +45,17 @@ check_ios() {
 check_ios 'NSLocalNetworkUsageDescription'
 check_ios 'NSBonjourServices'
 check_ios '"_rekkert-score._tcp"'
+check_ios '"ITSAppUsesNonExemptEncryption" => false'
+
+echo "==> Assert both apps ship a privacy manifest"
+# App Store Connect rejects an upload that uses UserDefaults without declaring a reason,
+# and the failure arrives by email long after the build. Both bundles carry the sources
+# that touch it, so both need the file — and it has to reach the bundle root.
+for manifest in "$APP/PrivacyInfo.xcprivacy" "$WATCH_APP/PrivacyInfo.xcprivacy"; do
+  test -f "$manifest" || { echo "FAIL: no privacy manifest at $manifest"; exit 1; }
+  plutil -p "$manifest" | grep -q 'NSPrivacyAccessedAPICategoryUserDefaults' \
+    || { echo "FAIL: $manifest does not declare UserDefaults"; exit 1; }
+  echo "  ok: ${manifest#"$APP/"}"
+done
 
 echo "==> All checks passed"

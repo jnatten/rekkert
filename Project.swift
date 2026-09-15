@@ -25,7 +25,7 @@ let project = Project(
             "ENABLE_USER_SCRIPT_SANDBOXING": "YES",
             "CODE_SIGN_STYLE": "Automatic",
             "MARKETING_VERSION": "1.0",
-            "CURRENT_PROJECT_VERSION": "43",
+            "CURRENT_PROJECT_VERSION": "44",
         ].merging(signingSettings) { _, signing in signing }
     ),
     targets: [
@@ -48,6 +48,10 @@ let project = Project(
                 "NSLocalNetworkUsageDescription":
                     "Rekkert finds the other phones at your court, so everyone can follow and score the same match.",
                 "NSBonjourServices": ["_rekkert-score._tcp"],
+                // Declared up front so App Store Connect stops asking on every upload. The
+                // only cryptography here is Apple's own — TLS from Security.framework and
+                // HKDF from CryptoKit — which is exempt.
+                "ITSAppUsesNonExemptEncryption": false,
             ]),
             sources: ["App/Sources/**", "Shared/**"],
             resources: ["App/Resources/**"],
