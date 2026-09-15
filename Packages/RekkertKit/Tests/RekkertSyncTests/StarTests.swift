@@ -58,6 +58,13 @@ private final class Star {
     }
 
     var everyone: [MatchStore] { [host] + guests }
+
+    /// Everyone is holding the host's session. The tests that go on to score need this to
+    /// have happened first, and a fixed sleep only guesses that it has — under a loaded
+    /// machine the guess is wrong and the failure looks like a lost point.
+    func ready() async {
+        await eventually { everyone.allSatisfy { points($0) != nil } }
+    }
 }
 
 private func points(_ store: MatchStore) -> BySide<Int>? {
@@ -94,7 +101,7 @@ struct StarTests {
         defer { tasks.forEach { $0.cancel() } }
 
         star.host.configure(setup)
-        try await settle()
+        await star.ready()
 
         star.guests[0].tap(team: .b)
         await eventually { points(star.guests[1]) == BySide(a: 0, b: 1) }
@@ -110,7 +117,7 @@ struct StarTests {
         defer { tasks.forEach { $0.cancel() } }
 
         star.host.configure(counting)
-        try await settle()
+        await star.ready()
 
         star.host.tap(team: .a)
         for guest in star.guests { guest.tap(team: .a) }
@@ -127,11 +134,13 @@ struct StarTests {
         defer { tasks.forEach { $0.cancel() } }
 
         star.host.configure(counting)
-        try await settle()
+        await star.ready()
 
         star.links[1].setReachable(false)
         for _ in 0 ..< 3 { star.guests[0].tap(team: .a) }
-        try await settle()
+        // Anchored on the points reaching the host rather than on a stretch of time: it says
+        // the three taps have been everywhere they can go while guest 1 is cut off.
+        await eventually { points(star.host) == BySide(a: 3, b: 0) }
         #expect(points(star.guests[1]) == BySide(a: 0, b: 0), "still in the dark")
 
         star.links[1].setReachable(true)
@@ -146,7 +155,7 @@ struct StarTests {
 
         star.host.configure(counting)
         for _ in 0 ..< 5 { star.host.tap(team: .b) }
-        try await settle()
+        await eventually { points(star.guests[0]) == BySide(a: 0, b: 5) }
 
         // A second phone arrives after the match has been going a while.
         let latecomer = star.addGuest()
@@ -183,9 +192,11 @@ struct StarTests {
         defer { tasks.forEach { $0.cancel() } }
 
         star.host.configure(setup)
-        try await settle()
+        await star.ready()
 
         star.host.toggleTeamColors()
+        // Nothing to wait for on the guest — the point is that the swap stays put — so the
+        // only honest way to say "it did not travel" is to give it time to.
         try await settle()
 
         #expect(star.host.display.areColorsSwapped)

@@ -187,10 +187,6 @@ nonisolated private final class SingleAnswer: @unchecked Sendable {
 @Suite("Sessions ending out of earshot", .serialized)
 @MainActor
 struct RetirementTests {
-    private func settle() async throws {
-        try await Task.sleep(for: .milliseconds(400))
-    }
-
     private func points(_ store: MatchStore) -> BySide<Int>? {
         guard case .traditional(let session) = store.state else { return nil }
         return session.score.points
@@ -213,20 +209,20 @@ struct RetirementTests {
 
         phone.configure(setup)
         phone.tap(team: .a)
-        try await settle()
+        await eventually { points(watch) == BySide(a: 1, b: 0) }
         #expect(points(watch) == BySide(a: 1, b: 0), "the watch was following along")
 
         phoneLink.setQuiet(true)
         watchLink.setQuiet(true)
         watch.finish()
-        try await settle()
+        await eventually { watch.state == nil }
         #expect(watch.state == nil, "the watch ended and retired the session")
         #expect(phone.state != nil, "the phone never heard, and is still in the match")
 
         phoneLink.setQuiet(false)
         watchLink.setQuiet(false)
         phone.tap(team: .b)
-        try await settle()
+        await eventually { phone.state == nil }
 
         #expect(phone.state == nil, "the phone is told the match ended rather than scoring alone")
         #expect(phone.lastResult != nil, "and is shown how it went instead of losing it")
@@ -235,7 +231,7 @@ struct RetirementTests {
         phone.startNewSession()
         phone.configure(setup)
         phone.tap(team: .b)
-        try await settle()
+        await eventually { points(watch) == BySide(a: 0, b: 1) }
         #expect(points(watch) == BySide(a: 0, b: 1), "a fresh match on the phone reaches the watch")
     }
 
@@ -250,12 +246,13 @@ struct RetirementTests {
         let watch = MatchStore(device: DeviceID(), transport: watchLink, snapshotInterval: 0)
         let tasks = [Task { await phone.run() }, Task { await watch.run() }]
         defer { tasks.forEach { $0.cancel() } }
-        try await settle()
 
         phone.configure(setup)
         phone.tap(team: .a)
         phone.tap(team: .a)
-        try await settle()
+        await eventually {
+            watch.log.sessionID == phone.log.sessionID && points(watch) == BySide(a: 2, b: 0)
+        }
 
         #expect(watch.log.sessionID == phone.log.sessionID, "the watch came over to the phone's session")
         #expect(points(watch) == BySide(a: 2, b: 0))
