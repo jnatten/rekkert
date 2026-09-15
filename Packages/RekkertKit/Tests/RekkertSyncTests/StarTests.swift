@@ -78,7 +78,7 @@ struct StarTests {
 
         star.host.configure(setup)
         star.host.tap(team: .a)
-        try await settle()
+        await eventually { star.guests.allSatisfy { points($0) == BySide(a: 1, b: 0) } }
 
         for guest in star.guests {
             #expect(guest.log.sessionID == star.host.log.sessionID)
@@ -97,7 +97,7 @@ struct StarTests {
         try await settle()
 
         star.guests[0].tap(team: .b)
-        try await settle()
+        await eventually { points(star.guests[1]) == BySide(a: 0, b: 1) }
 
         #expect(points(star.host) == BySide(a: 0, b: 1), "the host saw it")
         #expect(points(star.guests[1]) == BySide(a: 0, b: 1), "and so did the other guest")
@@ -114,8 +114,7 @@ struct StarTests {
 
         star.host.tap(team: .a)
         for guest in star.guests { guest.tap(team: .a) }
-        try await settle()
-        try await settle()
+        await eventually { star.everyone.allSatisfy { points($0) == BySide(a: 4, b: 0) } }
 
         for store in star.everyone {
             #expect(points(store) == BySide(a: 4, b: 0), "four taps, four points, everywhere")
@@ -136,8 +135,7 @@ struct StarTests {
         #expect(points(star.guests[1]) == BySide(a: 0, b: 0), "still in the dark")
 
         star.links[1].setReachable(true)
-        try await settle()
-        try await settle()
+        await eventually { points(star.guests[1]) == BySide(a: 3, b: 0) }
         #expect(points(star.guests[1]) == BySide(a: 3, b: 0), "and caught up on its own")
     }
 
@@ -153,8 +151,7 @@ struct StarTests {
         // A second phone arrives after the match has been going a while.
         let latecomer = star.addGuest()
         star.host.tap(team: .b)
-        try await settle()
-        try await settle()
+        await eventually { points(latecomer) == BySide(a: 0, b: 6) }
 
         #expect(points(latecomer) == BySide(a: 0, b: 6), "the whole match, not just what came after")
     }
@@ -172,7 +169,8 @@ struct StarTests {
         star.guests[0].savePreset(Preset(name: "Mine", configuration: .winnerCourt(
             rules: WinnerCourtRules(), teams: BySide(a: .home, b: .away)
         )))
-        try await settle()
+        // Nothing to wait *for* here — the point is that nothing arrives — so this one
+        // genuinely has to sit out a stretch of time.
         try await settle()
 
         #expect(star.host.presets.presets.map(\.name) == ["Thursday"], "kept its own")

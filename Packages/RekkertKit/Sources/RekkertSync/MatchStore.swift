@@ -522,6 +522,7 @@ public final class MatchStore {
                 return announceRetirement(of: sessionID, to: packet)
             }
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
+            arrive(on: sessionID)
             packet.reply?(encode(.events(sessionID: log.sessionID, events: log.events(missingRelativeTo: vector))))
 
         case .events(let sessionID, let events):
@@ -529,6 +530,7 @@ public final class MatchStore {
                 return announceRetirement(of: sessionID, to: packet)
             }
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
+            arrive(on: sessionID)
             relay(events)
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
 
@@ -576,6 +578,7 @@ public final class MatchStore {
                 log = incoming
                 refresh()
             } else if incoming.sessionID == log.sessionID {
+                arrive(on: incoming.sessionID)
                 relay(incoming.ordered)
             } else if role == .host {
                 // A host is never taken over. The people in front of it are playing this
@@ -598,6 +601,20 @@ public final class MatchStore {
     /// arrives here has to go back out as though it had been scored here — otherwise a point
     /// tapped on one phone reaches this one and stops dead. Only the genuinely new ones are
     /// passed on, so two devices cannot volley the same event back and forth for ever.
+    /// Joining is an explicit act, so it has to conclude even when this device already
+    /// happens to be on the session it asked for.
+    ///
+    /// A phone with nothing on it is handed a peer's match automatically — that is how the
+    /// pair has always worked — so a guest can arrive already holding the right session and
+    /// never be told anything about it. Without this it would go on holding the whistle for
+    /// a match that belongs to whoever started it.
+    private func arrive(on sessionID: UUID) {
+        guard isJoining, sessionID == log.sessionID, !log.isEmpty else { return }
+        isJoining = false
+        role = .guest
+        shareRole()
+    }
+
     private func relay(_ incoming: [MatchEvent]) {
         let fresh = incoming.filter { log.events[$0.id] == nil }
         guard log.merge(fresh) else { return }

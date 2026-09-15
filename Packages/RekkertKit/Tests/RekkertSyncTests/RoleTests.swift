@@ -49,12 +49,12 @@ struct RoleTests {
         try await settle()
 
         guest.beginJoining()
-        try await settle()
+        await eventually { guest.role == .guest }
         #expect(guest.role == .guest, "it was handed the session it asked for")
         #expect(points(guest) == BySide(a: 1, b: 0))
 
         guest.tap(team: .b)
-        try await settle()
+        await eventually { points(host) == BySide(a: 1, b: 1) }
         #expect(points(host) == BySide(a: 1, b: 1), "scoring is everybody's")
 
         guest.finish()
@@ -90,8 +90,7 @@ struct RoleTests {
         #expect(watch.canEndSession, "a watch holds the whistle until it is told otherwise")
 
         phone.beginJoining()
-        try await settle()
-        try await settle()
+        await eventually { phone.role == .guest && !watch.canEndSession }
 
         #expect(phone.role == .guest)
         #expect(phone.canEndSession == false)
@@ -149,8 +148,7 @@ struct RoleTests {
         try await settle()
 
         joiner.beginJoining()
-        try await settle()
-        try await settle()
+        await eventually { joiner.role == .guest }
 
         #expect(joiner.role == .guest)
         #expect(joiner.log.sessionID == host.log.sessionID)
@@ -174,20 +172,18 @@ struct RoleTests {
         try await settle()
 
         guest.beginJoining()
-        try await settle()
+        await eventually { guest.role == .guest }
         #expect(guest.role == .guest)
 
         guest.leaveSharedSession()
-        try await settle()
-        try await settle()
+        await eventually { guest.state == nil }
 
         #expect(guest.state == nil, "stepped off")
         #expect(guest.role == .solo)
         #expect(host.state != nil, "and the host is still playing")
 
         guest.beginJoining()
-        try await settle()
-        try await settle()
+        await eventually { guest.log.sessionID == host.log.sessionID }
         #expect(guest.log.sessionID == host.log.sessionID, "and can walk back in")
     }
 
