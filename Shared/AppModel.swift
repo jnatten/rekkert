@@ -6,20 +6,38 @@ import RekkertSync
 @Observable
 final class AppModel {
     let store: MatchStore
+    /// Hosting and joining. Inert on the watch, which reaches a shared match through its own
+    /// phone and never talks to a stranger's.
+    let sharing: SharedSession
     let announcer = ScoreAnnouncer()
+    /// Driven from the match menu and presented at the root, so every scoreboard has it.
+    var showingShareCode = false
+    /// Joining is reachable from the start screen and from a match already in progress —
+    /// somebody inviting you does not wait for you to have nothing on.
+    var showingJoin = false
     private let sessionStore: SessionStore?
     private var runTask: Task<Void, Never>?
 
     init() {
         let persistence = try? SessionStore.applicationSupport()
         sessionStore = persistence
-        store = MatchStore(
+
+        // One peer as far as the store is concerned; a watch and some other people's phones
+        // as far as anybody else is.
+        let links = FanOutTransport()
+        links.attach(AppModel.makePairedTransport(), as: .pairedDevice)
+        let localNetwork = LocalNetworkTransport()
+        links.attach(localNetwork, as: .sharedSession)
+
+        let store = MatchStore(
             device: DeviceIdentity.current(),
-            transport: AppModel.makeTransport(),
+            transport: links,
             store: persistence,
             session: try? persistence?.loadActive(),
             keepsHistory: AppModel.keepsHistory
         )
+        self.store = store
+        sharing = SharedSession(store: store, link: localNetwork)
         roster = persistence?.loadRoster() ?? PlayerRoster()
     }
 
@@ -37,7 +55,7 @@ final class AppModel {
         #endif
     }
 
-    private static func makeTransport() -> any PeerTransport {
+    private static func makePairedTransport() -> any PeerTransport {
         #if canImport(WatchConnectivity)
         WatchConnectivityTransport()
         #else
@@ -77,6 +95,17 @@ final class AppModel {
             remember(players: ["Jonas", "Ada", "Kim", "Sam", "Bjørn", "Ola", "Siri", "Tor", "Håkon"])
             remember(players: ["Jonas", "Ada", "Kim"])
         }
+        // `-rekkert-demo-late-tap 8` scores a point after eight seconds, which is how a live
+        // update gets verified between two simulators that nothing can tap.
+        if let index = arguments.firstIndex(of: "-rekkert-demo-late-tap"),
+           index + 1 < arguments.count,
+           let delay = Int(arguments[index + 1]) {
+            Task { [store] in
+                try? await Task.sleep(for: .seconds(delay))
+                store.tap(team: .b)
+            }
+        }
+
         guard let flag = arguments.firstIndex(of: "-rekkert-demo"), flag + 1 < arguments.count else { return }
         store.startNewSession()
 
@@ -142,6 +171,15 @@ final class AppModel {
         if arguments.contains("-rekkert-demo-swap-colours") {
             store.toggleTeamColors()
         }
+        #if os(iOS)
+        // `-rekkert-share-host H7K3MR` starts sharing on a pinned code, so two simulators can
+        // be pointed at each other from a script.
+        if let index = arguments.firstIndex(of: "-rekkert-share-host"),
+           index + 1 < arguments.count,
+           let code = SessionCode(arguments[index + 1]) {
+            sharing.host(code: code)
+        }
+        #endif
         if arguments.contains("-rekkert-demo-finished") {
             store.finish()
         }

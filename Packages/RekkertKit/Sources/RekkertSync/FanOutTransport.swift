@@ -122,7 +122,11 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
     public func sendLive(_ payload: Data) async -> Data? {
         guard let wire = try? Wire.decode(payload) else { return nil }
         let recipients = snapshotOfChildren().filter { $0.scope.carries(wire) }
-        guard !recipients.isEmpty else { return nil }
+        // Only a child that was there counts towards "everybody answered". One that is not
+        // connected was never really sent to, and holding the acknowledgement for it would
+        // stop a phone with no watch paired from ever draining its outbox.
+        let present = recipients.filter(\.transport.isReachable).count
+        guard present > 0 else { return nil }
 
         let answers = await withTaskGroup(of: (Bool, Data?).self) { group in
             for child in recipients {
@@ -143,7 +147,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         // A paired device speaks for itself: its own reply is the acknowledgement, because it
         // is the one channel with a durable queue behind it. Otherwise fold the room together.
         let fromPaired = answers.first { $0.0 }?.1
-        let folded = ReplyFold.fold(answers.map(\.1), expected: recipients.count)
+        let folded = ReplyFold.fold(answers.map(\.1), expected: present)
         for payload in folded.unsolicited { packets.yield(InboundPacket(payload: payload)) }
         return fromPaired ?? folded.acknowledgement
     }

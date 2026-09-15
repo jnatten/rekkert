@@ -29,6 +29,12 @@ enum DemoLaunch {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-rematch")
     }
 
+    /// `-rekkert-share-host H7K3MR` starts sharing on a pinned code, and
+    /// `-rekkert-share-join H7K3MR` opens the join sheet with it already filled in. Between
+    /// them two simulators can be driven through the whole flow without a tap.
+    static var hostCode: String? { value(for: "-rekkert-share-host") }
+    static var joinCode: String? { value(for: "-rekkert-share-join") }
+
     static var browseRound: Int? {
         value(for: "-rekkert-demo-browse-round").flatMap(Int.init)
     }

@@ -24,6 +24,32 @@ struct RootView: View {
             }
         }
         .environment(\.teamPalette, TeamPalette(isSwapped: model.store.display.areColorsSwapped))
+        .sheet(isPresented: Binding(
+            get: { model.showingShareCode },
+            set: { model.showingShareCode = $0 }
+        )) {
+            ShareCodeSheet()
+        }
+        .sheet(isPresented: Binding(
+            get: { model.showingJoin },
+            set: { model.showingJoin = $0 }
+        )) {
+            #if DEBUG
+            JoinMatchSheet(
+                prefilled: DemoLaunch.joinCode ?? "",
+                submitsImmediately: DemoLaunch.joinCode != nil
+            )
+            #else
+            JoinMatchSheet()
+            #endif
+        }
+        .task {
+            #if DEBUG
+            // Here rather than on the start screen: a device that already has a match never
+            // shows that screen, and joining from one is exactly the case worth exercising.
+            if DemoLaunch.joinCode != nil { model.showingJoin = true }
+            #endif
+        }
         .alert(
             "Switched to the newer match",
             isPresented: Binding(

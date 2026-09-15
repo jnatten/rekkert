@@ -186,3 +186,28 @@ Debug builds accept `-rekkert-demo traditional|winnercourt|americano|mexicano` (
 `-rekkert-demo-watch-page menu`, `-rekkert-demo-fullscreen` or
 `-rekkert-demo-new <mode>`) as
 launch arguments to put the app into a given state, since `simctl` cannot tap the screen.
+
+### Sharing a match between two phones
+
+Two booted iPhone simulators share the Mac's network stack, so Bonjour between them works:
+
+    HOST=<udid>; GUEST=<udid>
+    APP=.build/dd/Build/Products/Debug-iphonesimulator/Rekkert.app
+    xcrun simctl install $HOST $APP; xcrun simctl install $GUEST $APP
+
+    xcrun simctl launch $HOST  dev.natten.rekkert \
+      -rekkert-demo traditional -rekkert-demo-points 5 -rekkert-share-host K9M4PT
+    xcrun simctl launch $GUEST dev.natten.rekkert \
+      -rekkert-share-join K9M4PT -rekkert-demo-late-tap 14
+
+`-rekkert-share-host CODE` pins the code instead of drawing one, `-rekkert-share-join CODE`
+opens the join sheet with it filled in and submits, and `-rekkert-demo-late-tap N` scores a
+point after N seconds — which is how a *live* update gets verified between two simulators
+that nothing can tap.
+
+Two things the Simulator cannot show you: the peer-to-peer radio path (there is no AWDL
+interface, so `includePeerToPeer` is quietly a no-op), and the iOS local-network permission
+prompt. Both need two real iPhones.
+
+`swift scripts/psk-spike.swift` checks, in a couple of seconds and with no devices at all,
+that a session code still works as a TLS pre-shared key.

@@ -58,6 +58,26 @@ struct HomeView: View {
                 }
 
                 Section {
+                    Button {
+                        model.showingJoin = true
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Join a match").foregroundStyle(.primary)
+                                Text("Type the code the host reads out")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "person.2.wave.2")
+                        }
+                    }
+                } header: {
+                    Text("Play together")
+                } footer: {
+                    Text("Everyone at the court sees the same scoreboard and can score it. Whoever shared it is the one who finishes it.")
+                }
+
+                Section {
                     Toggle(isOn: $announcer.isEnabled) {
                         Label("Call the score", systemImage: "speaker.wave.2")
                     }
