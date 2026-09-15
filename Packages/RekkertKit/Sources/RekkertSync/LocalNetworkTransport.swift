@@ -112,8 +112,18 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         )
         listener.newConnectionHandler = { [weak self] in self?.accept($0) }
         listener.stateUpdateHandler = { [weak self] state in
-            guard case .failed = state else { return }
-            self?.publish(.failed(.blocked))
+            guard let self else { return }
+            switch state {
+            case .failed:
+                self.lock.withLock { self.listener = nil }
+                self.publish(.failed(.blocked))
+            case .cancelled:
+                // iOS takes the listener away when the app goes into the background. Letting
+                // go of it here is what lets `resume()` know there is something to rebuild.
+                self.lock.withLock { self.listener = nil }
+            default:
+                break
+            }
         }
         lock.withLock { self.listener = listener }
         listener.start(queue: queue)
@@ -136,8 +146,16 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             self?.consider(results, code: code)
         }
         browser.stateUpdateHandler = { [weak self] state in
-            guard case .failed = state else { return }
-            self?.publish(.failed(.blocked))
+            guard let self else { return }
+            switch state {
+            case .failed:
+                self.lock.withLock { self.browser = nil }
+                self.publish(.failed(.blocked))
+            case .cancelled:
+                self.lock.withLock { self.browser = nil }
+            default:
+                break
+            }
         }
         lock.withLock { self.browser = browser }
         browser.start(queue: queue)
@@ -177,6 +195,16 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     // MARK: - PeerTransport
 
     public func activate() {}
+
+    /// Whether the machinery is still standing. False once the system has taken the listener
+    /// or browser away, which is what happens when the app is put down.
+    public var isAlive: Bool {
+        lock.withLock { listener != nil || browser != nil }
+    }
+
+    public func forgetSnapshot() {
+        lock.withLock { lastSnapshot = nil }
+    }
 
     public var isReachable: Bool {
         lock.withLock { links.values.contains { $0.isReady } }
@@ -429,7 +457,9 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
 
     public var isReachable: Bool { false }
     public var reachableCount: Int { 0 }
+    public var isAlive: Bool { false }
     public func activate() {}
+    public func forgetSnapshot() {}
     public func sendLive(_ payload: Data) async -> Data? { nil }
     public func publishSnapshot(_ payload: Data) {}
     public func queue(_ payload: Data) {}

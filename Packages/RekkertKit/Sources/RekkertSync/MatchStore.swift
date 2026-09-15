@@ -322,6 +322,9 @@ public final class MatchStore {
         let farewell = encode(.snapshot(log))
         transport.queue(farewell)
         transport.publishSnapshot(farewell)
+        // Sent, then forgotten: whoever is here now needs to be told, and whoever arrives
+        // afterwards must not be handed a finished match as though it were live.
+        transport.forgetSnapshot()
         lastSnapshotPublished = Date()
         Task { _ = await sendLive(farewell) }
 

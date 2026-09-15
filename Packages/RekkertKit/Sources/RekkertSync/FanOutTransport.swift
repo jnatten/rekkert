@@ -105,8 +105,6 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         reachabilityChanged()
     }
 
-    /// How many counterparts are reachable. `isReachable` stays "is anyone there", because
-    /// that is what decides whether a live send is worth attempting; this is what a UI counts.
     public var reachableCount: Int {
         lock.withLock { children.values.count { $0.transport.isReachable } }
     }

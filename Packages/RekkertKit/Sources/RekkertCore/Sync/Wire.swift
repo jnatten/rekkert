@@ -67,4 +67,22 @@ public protocol PeerTransport: Sendable {
     /// Hands the payload to a queue that survives the counterpart not running. Delivery is
     /// eventual and unacknowledged, so it supplements the outbox rather than replacing it.
     func queue(_ payload: Data)
+
+    /// Throws away any snapshot being kept for peers that arrive later. Called when a session
+    /// ends: what is cached at that moment is the farewell, and handing it to somebody who
+    /// turns up afterwards would file a result for a match they never played.
+    ///
+    /// Declared here rather than only in the extension below. A member that exists solely in
+    /// a protocol extension dispatches statically, so through an `any PeerTransport` the
+    /// default would be the only one that ever ran.
+    func forgetSnapshot()
+
+    /// How many counterparts are reachable. `isReachable` stays "is anyone there", because
+    /// that is what decides whether a live send is worth attempting; this is what a UI counts.
+    var reachableCount: Int { get }
+}
+
+extension PeerTransport {
+    public func forgetSnapshot() {}
+    public var reachableCount: Int { isReachable ? 1 : 0 }
 }

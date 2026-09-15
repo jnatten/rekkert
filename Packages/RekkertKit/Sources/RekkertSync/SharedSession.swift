@@ -26,6 +26,10 @@ public final class SharedSession {
     private let store: MatchStore
     private let link: LocalNetworkTransport
     private var watching: Task<Void, Never>?
+    /// Kept so sharing can be stood back up after the app has been put down. The code is
+    /// never written to disk — this lasts exactly as long as the app is running.
+    private var hosted: (code: SessionCode, share: UUID)?
+    private var wanted: SessionCode?
 
     public init(store: MatchStore, link: LocalNetworkTransport) {
         self.store = store
@@ -54,13 +58,34 @@ public final class SharedSession {
     /// through an evening.
     public func host(code: SessionCode = .random()) {
         guard store.state != nil else { return }
-        let share = UUID()
+        hosted = (code, UUID())
         store.startSharing()
-        link.startHosting(code: code, share: share)
+        link.startHosting(code: code, share: hosted!.share)
         phase = .hosting(code)
     }
 
+    /// Puts sharing back up after the app has been in a pocket.
+    ///
+    /// iOS takes the listener and the browser away when an app is suspended, so a host who
+    /// puts their phone down stops being reachable and does not come back on their own. Only
+    /// rebuilt when the machinery has actually gone, so a working connection is never torn
+    /// down just because the app was glanced away from.
+    public func resume() {
+        guard !link.isAlive else { return }
+        switch phase {
+        case .hosting(let code):
+            guard let hosted else { return }
+            link.startHosting(code: code, share: hosted.share)
+        case .searching, .joined:
+            guard let wanted else { return }
+            link.startJoining(code: wanted)
+        case .off, .failed:
+            break
+        }
+    }
+
     public func join(_ code: SessionCode) {
+        wanted = code
         store.beginJoining()
         link.startJoining(code: code)
         phase = .searching
@@ -76,6 +101,8 @@ public final class SharedSession {
         }
         peers = 0
         phase = .off
+        hosted = nil
+        wanted = nil
     }
 
     /// Stops watching the transport. The app holds this for its whole life, so this is here

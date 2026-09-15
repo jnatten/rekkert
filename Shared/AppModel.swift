@@ -197,6 +197,9 @@ final class AppModel {
     #endif
 
     func becameActive() {
+        // Sharing does not survive being put down: the system takes the listener away with
+        // the app, so coming back to the front is when it has to be stood up again.
+        sharing.resume()
         Task { [store] in await store.synchronise() }
     }
 
