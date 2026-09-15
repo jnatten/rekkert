@@ -19,6 +19,8 @@ public final class MatchStore {
     /// the result is on screen the log has been filed away, so the way back has to be
     /// worked out while it is still in hand.
     public private(set) var resultRewind: RewindableResult?
+    /// Which end of a shared session this device is on.
+    public private(set) var role: SessionRole
     /// Saved configurations. Edited on the phone, readable on both.
     public private(set) var presets = PresetLibrary()
     /// How the phone draws its scoreboard. Shared so the watch can flip it from the wrist;
@@ -35,6 +37,10 @@ public final class MatchStore {
     private var snapshotPending = false
     private var lastQueued: [EventID] = []
     private var retired: [UUID]
+    /// What the counterpart on the paired channel says it is. A guest's watch must not offer
+    /// to end a match that belongs to whoever started it.
+    private var pairedRole: SessionRole = .solo
+    private var isJoining = false
     /// Which session the result on screen came from, so taking it back can drop the record
     /// filed for it.
     private var concludedSessionID: UUID?
@@ -57,6 +63,7 @@ public final class MatchStore {
         self.retryInterval = retryInterval
         self.keepsHistory = keepsHistory
         self.retired = session?.retired ?? []
+        self.role = session?.role ?? .solo
         self.device = device
         self.transport = transport
         self.store = store
@@ -107,11 +114,80 @@ public final class MatchStore {
         record(.endRound(round: session.completedRounds.count))
     }
     /// Ends the session and keeps it in history if anything was played.
-    public func finish() { record(.finish(archive: true)) }
+    public func finish() {
+        guard canEndSession else { return }
+        record(.finish(archive: true))
+    }
 
     /// Ends the session and throws it away — for calling a match off rather than recording
     /// how far it got.
-    public func discardSession() { record(.finish(archive: false)) }
+    public func discardSession() {
+        guard canEndSession else { return }
+        record(.finish(archive: false))
+    }
+
+    /// Whether this device may end the match for everybody. A guest scores, corrects and
+    /// undoes like anyone else, but the match belongs to the people who started it — and the
+    /// watch has to be told, because it cannot see whose phone it is paired to.
+    ///
+    /// A convention rather than a boundary: with nobody holding the ring there is nothing to
+    /// stop a modified client appending the event itself. These are four people on a court.
+    public var canEndSession: Bool { role != .guest && pairedRole != .guest }
+
+    /// Opens this session to other phones. Changes nothing about the session itself — only
+    /// what this device is willing to be told about it.
+    public func startSharing() {
+        guard role != .guest else { return }
+        role = .host
+        persist()
+        shareRole()
+    }
+
+    public func stopSharing() {
+        guard role == .host else { return }
+        role = .solo
+        persist()
+        shareRole()
+    }
+
+    /// Waits to be handed somebody else's session. Until one arrives this device goes on
+    /// showing whatever it had.
+    public func beginJoining() {
+        isJoining = true
+        // Say hello straight away rather than waiting to be spoken to. The counterpart
+        // answers a session id it does not recognise with its own, which is exactly the
+        // offer being waited for.
+        Task { await synchronise() }
+    }
+
+    public func cancelJoining() {
+        isJoining = false
+    }
+
+    /// Steps off a shared session without ending it for anybody else.
+    ///
+    /// Deliberately not `startNewSession()`, which retires the session id: retiring is how a
+    /// device says a match is over, so a guest that left and came back would refuse the
+    /// host's session and announce its retirement — ending the match it was trying to rejoin.
+    public func leaveSharedSession() {
+        if log.hasProgress, let state = SessionReducer.state(of: log) {
+            try? store?.archive(HistoryRecord(id: log.sessionID, title: state.title, state: state))
+        }
+        log = MatchLog()
+        outbox = Outbox()
+        role = .solo
+        isJoining = false
+        lastResult = nil
+        resultRewind = nil
+        refresh()
+        shareRole()
+    }
+
+    private func shareRole() {
+        let payload = encode(.role(role))
+        transport.queue(payload)
+        Task { _ = await sendLive(payload) }
+    }
 
     // MARK: - Presets
 
@@ -202,6 +278,8 @@ public final class MatchStore {
         replacedSessionTitle = nil
         lastResult = nil
         resultRewind = nil
+        isJoining = false
+        if role == .guest { role = .solo }
         refresh()
     }
 
@@ -436,6 +514,7 @@ public final class MatchStore {
         case .hello(let sessionID, let vector):
             sharePresets()
             shareDisplay()
+            shareRoleOnReconnect()
             guard !retired.contains(sessionID) else {
                 return announceRetirement(of: sessionID, to: packet)
             }
@@ -465,6 +544,10 @@ public final class MatchStore {
             if merged != presets { apply(merged, publish: false) }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
 
+        case .role(let incoming):
+            pairedRole = incoming
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
+
         case .display(let incoming):
             let merged = display.adopting(incoming)
             if merged != display { apply(merged, publish: false) }
@@ -478,11 +561,23 @@ public final class MatchStore {
                 // it does need ours — and it cannot ask for it, since the reply it would
                 // ask down is the one it just used to tell us it has nothing.
                 offerOurSession()
+            } else if isJoining {
+                // A code was typed, so this is the session that was asked for, whatever the
+                // clocks say about which of the two was started more recently — and even if
+                // there is nothing here to weigh it against.
+                adopt(incoming)
+                role = .guest
+                isJoining = false
+                shareRole()
             } else if log.isEmpty {
                 log = incoming
                 refresh()
             } else if incoming.sessionID == log.sessionID {
                 relay(incoming.ordered)
+            } else if role == .host {
+                // A host is never taken over. The people in front of it are playing this
+                // match, and a phone that happened to start one a moment ago is not.
+                offerOurSession()
             } else if incoming.createdAt > log.createdAt {
                 adopt(incoming)
             } else if incoming.createdAt < log.createdAt {
@@ -529,6 +624,13 @@ public final class MatchStore {
 
     /// Offered alongside the presets on reconnect, so the watch's flip button knows which
     /// way the phone is currently reading before it sends the opposite.
+    /// Offered alongside the presets on reconnect, so a watch that has just woken knows
+    /// whether the phone it is paired to is holding the whistle.
+    private func shareRoleOnReconnect() {
+        guard role != .solo else { return }
+        Task { _ = await sendLive(encode(.role(role))) }
+    }
+
     private func shareDisplay() {
         guard display.hasBeenSet else { return }
         let payload = encode(.display(display))
@@ -557,7 +659,9 @@ public final class MatchStore {
         let notice = encode(.retired(sessionID: sessionID))
         if let reply = packet.reply {
             reply(notice)
-        } else {
+        } else if role != .guest {
+            // Refusing a packet is not the same as ending a match, and a push has no
+            // addressee: a guest doing this would tell everybody the host's match was over.
             transport.queue(notice)
             Task { _ = await sendLive(notice) }
         }
@@ -612,7 +716,7 @@ public final class MatchStore {
     }
 
     private func persist() {
-        try? store?.save(ActiveSession(log: log, outbox: outbox, retired: retired))
+        try? store?.save(ActiveSession(log: log, outbox: outbox, retired: retired, role: role))
     }
 }
 

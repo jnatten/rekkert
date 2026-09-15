@@ -43,7 +43,7 @@ struct TraditionalMatchView: View {
                     MatchOptionsMenu()
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("End", systemImage: "flag.checkered") { showingEnd = true }
+                    EndSessionButton { showingEnd = true }
                 }
             }
             .fullScreenCover(isPresented: $fullscreen) { FullscreenScoreView(mirrored: model.store.display.isMirrored) }

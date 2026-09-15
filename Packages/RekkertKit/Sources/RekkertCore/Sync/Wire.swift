@@ -28,6 +28,9 @@ public enum Wire: Codable, Sendable, Hashable {
     case presets(PresetLibrary)
     /// How the phone should draw its scoreboard, so the watch can flip it.
     case display(DisplayPreferences)
+    /// Who is carrying the whistle. The log says nothing about it — a guest's log is the
+    /// host's log — and a watch has no way to tell whose phone it is paired to.
+    case role(SessionRole)
 
     public func encoded() throws -> Data {
         try JSONCoding.encoder.encode(self)

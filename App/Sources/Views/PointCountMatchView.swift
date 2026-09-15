@@ -43,7 +43,7 @@ struct PointCountMatchView: View {
                     MatchOptionsMenu()
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("End", systemImage: "flag.checkered") { showingEnd = true }
+                    EndSessionButton { showingEnd = true }
                 }
             }
             .fullScreenCover(isPresented: $fullscreen) {

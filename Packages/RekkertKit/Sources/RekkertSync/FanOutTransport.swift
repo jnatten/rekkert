@@ -39,7 +39,9 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         public static let sharedSession = Scope(isDurable: false, acknowledges: false) { wire in
             switch wire {
             case .hello, .events, .snapshot, .retired: true
-            case .presets, .display: false
+            // Saved setups and which side is blue belong to whoever's phone this is. The
+            // whistle is between a phone and its own watch, and says nothing to anyone else.
+            case .presets, .display, .role: false
             }
         }
     }

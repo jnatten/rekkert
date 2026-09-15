@@ -92,14 +92,22 @@ struct WatchMenuView: View {
                 }
                 .disabled(!model.store.canUndo)
 
-                if hasResults {
-                    action("Finish & save", systemImage: "stop.circle", tint: .red) {
-                        confirming = .finish
+                if model.store.canEndSession {
+                    if hasResults {
+                        action("Finish & save", systemImage: "stop.circle", tint: .red) {
+                            confirming = .finish
+                        }
                     }
-                }
 
-                action(hasResults ? "Discard" : "Call it off", systemImage: "trash", tint: .red) {
-                    confirming = .discard
+                    action(hasResults ? "Discard" : "Call it off", systemImage: "trash", tint: .red) {
+                        confirming = .discard
+                    }
+                } else {
+                    // Somebody else's match: step off it rather than end it for them.
+                    action("Leave", systemImage: "rectangle.portrait.and.arrow.right", tint: .gray) {
+                        WKInterfaceDevice.current().play(.click)
+                        model.store.leaveSharedSession()
+                    }
                 }
             }
             .padding(.horizontal, 2)

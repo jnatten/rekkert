@@ -45,7 +45,7 @@ struct WinnerCourtView: View {
                     MatchOptionsMenu()
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Finish", systemImage: "stop.circle") { showingEnd = true }
+                    EndSessionButton(title: "Finish", symbol: "stop.circle") { showingEnd = true }
                 }
             }
             .fullScreenCover(isPresented: $fullscreen) { FullscreenScoreView(mirrored: model.store.display.isMirrored) }
