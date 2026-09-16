@@ -54,12 +54,12 @@ struct WatchMenuView: View {
 
                 // Flips the phone, not this watch: it is the phone that is propped up
                 // somewhere with a side of the court in front of it.
-                action("Swap phone sides", systemImage: "rectangle.2.swap", tint: .gray) {
+                action("Swap phone sides", systemImage: "rectangle.2.swap") {
                     WKInterfaceDevice.current().play(.click)
                     model.store.toggleScoreboardMirrored()
                 }
 
-                action("Undo", systemImage: "arrow.uturn.backward", tint: .gray) {
+                action("Undo", systemImage: "arrow.uturn.backward") {
                     WKInterfaceDevice.current().play(.retry)
                     model.store.undoLast()
                 }
@@ -77,7 +77,7 @@ struct WatchMenuView: View {
                     }
                 } else {
                     // Somebody else's match: step off it rather than end it for them.
-                    action("Leave", systemImage: "rectangle.portrait.and.arrow.right", tint: .gray) {
+                    action("Leave", systemImage: "rectangle.portrait.and.arrow.right") {
                         WKInterfaceDevice.current().play(.click)
                         model.store.leaveSharedSession()
                     }
@@ -114,10 +114,13 @@ struct WatchMenuView: View {
         .padding(.bottom, 2)
     }
 
+    /// A tint paints the label as well as the pill, which on grey reads as a disabled
+    /// button — so the plain ones go untinted, the watchOS default the scoreboard uses.
+    /// The colours keep theirs: on those the tinted label is the point.
     private func action(
         _ title: String,
         systemImage: String,
-        tint: Color,
+        tint: Color? = nil,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {

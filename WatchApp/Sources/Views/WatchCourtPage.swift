@@ -133,7 +133,9 @@ struct WatchCourtPage: View {
             .minimumScaleFactor(0.7)
             .buttonStyle(.bordered)
             .controlSize(.mini)
-            .tint(snapshot.suddenDeathCourt == court ? .orange : .gray)
+            // Untinted where the orange has nothing to say: a grey tint paints the word grey
+            // too, and this row is asking to be tapped.
+            .tint(snapshot.suddenDeathCourt == court ? .orange : nil)
     }
 
     private func undo() {
