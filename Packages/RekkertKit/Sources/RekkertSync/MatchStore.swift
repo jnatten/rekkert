@@ -26,6 +26,15 @@ public final class MatchStore {
     /// How the phone draws its scoreboard. Shared so the watch can flip it from the wrist;
     /// only the phone acts on it.
     public private(set) var display = DisplayPreferences()
+    /// What a phone and its own watch say to each other about a workout. `MatchStore` only
+    /// carries these — the workout is none of its business — but this is the channel that
+    /// already exists between exactly those two devices, and no other.
+    @ObservationIgnored public var onWorkout: ((WorkoutSignal) -> Void)?
+    /// The last thing this device said about its own workout, so a reconnect can say it
+    /// again. Live state, deliberately not persisted: a "running" restored from disk would
+    /// be a lie the moment either app is relaunched.
+    @ObservationIgnored private var announcedWorkout: Date?
+    @ObservationIgnored private var hasAnnouncedWorkout = false
 
     private var outbox: Outbox
     private let device: DeviceID
@@ -174,7 +183,9 @@ public final class MatchStore {
     /// host's session and announce its retirement — ending the match it was trying to rejoin.
     public func leaveSharedSession() {
         if log.hasProgress, let state = SessionReducer.state(of: log) {
-            try? store?.archive(HistoryRecord(id: log.sessionID, title: state.title, state: state))
+            try? store?.archive(HistoryRecord(
+                id: log.sessionID, title: state.title, state: state, startedAt: log.createdAt
+            ))
         }
         log = MatchLog()
         outbox = Outbox()
@@ -323,7 +334,9 @@ public final class MatchStore {
         if keepsHistory, keeping {
             // Filed under the session's own id, so archiving twice replaces rather than
             // duplicates — and so taking the result back knows which record to remove.
-            try? store?.archive(HistoryRecord(id: log.sessionID, title: finished.title, state: finished))
+            try? store?.archive(HistoryRecord(
+                id: log.sessionID, title: finished.title, state: finished, startedAt: log.createdAt
+            ))
         }
         // Nothing to celebrate about a session that was called off or never played.
         lastResult = keeping ? finished : nil
@@ -532,6 +545,7 @@ public final class MatchStore {
             sharePresets()
             shareDisplay()
             shareRoleOnReconnect()
+            shareWorkoutOnReconnect()
             guard !retired.contains(sessionID) else {
                 return announceRetirement(of: sessionID, to: packet)
             }
@@ -570,6 +584,16 @@ public final class MatchStore {
         case .display(let incoming):
             let merged = display.adopting(incoming)
             if merged != display { apply(merged, publish: false) }
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
+
+        case .workout(let signal):
+            // A finished workout is filed here because the watch that recorded it keeps no
+            // history. Under its own id, so at-least-once delivery lands as exactly-once on
+            // disk. Everything else is somebody's live state, and belongs to whoever asked.
+            if case .finished(let record) = signal, keepsHistory {
+                try? store?.archive(record)
+            }
+            onWorkout?(signal)
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
 
         case .snapshot(let incoming):
@@ -640,7 +664,9 @@ public final class MatchStore {
     /// archived first, so a session is never silently destroyed.
     private func adopt(_ incoming: MatchLog) {
         if log.hasProgress, let state = SessionReducer.state(of: log) {
-            try? store?.archive(HistoryRecord(id: log.sessionID, title: state.title, state: state))
+            try? store?.archive(HistoryRecord(
+                id: log.sessionID, title: state.title, state: state, startedAt: log.createdAt
+            ))
             replacedSessionTitle = state.title
         }
         log = incoming
@@ -650,6 +676,41 @@ public final class MatchStore {
 
     /// Offered on every reconnect, so a watch that has never seen them catches up without
     /// anyone having to think about it.
+    /// Tells this device's own watch, or its own phone, what the workout is doing.
+    ///
+    /// A finished one is queued as well as sent, deliberately: `sendLive` returns without
+    /// doing anything at all when nothing is reachable, so leaning on its own durable
+    /// fallback would drop exactly the case this exists for — a workout ended with the
+    /// phone in a bag on the other side of the club. Losing it is not fatal even then, since
+    /// Health has the real copy, but the list should not need the Health app to explain it.
+    public func send(_ signal: WorkoutSignal) {
+        switch signal {
+        case .running(let since):
+            announcedWorkout = since
+            hasAnnouncedWorkout = true
+        case .idle:
+            announcedWorkout = nil
+            hasAnnouncedWorkout = true
+        case .stop, .finished:
+            break
+        }
+        let payload = encode(.workout(signal))
+        // A statement about right now goes live only. Queued, `.stop` would land twenty
+        // minutes late and end a workout started since; `.running` would switch a glyph back
+        // on with nothing behind it. Only a finished workout is a fact worth keeping.
+        if case .finished = signal { transport.queue(payload) }
+        Task { _ = await sendLive(payload) }
+    }
+
+    /// Offered alongside the presets on reconnect. A workout signal is never queued, so a
+    /// phone that has just come back has to be told again — and one that heard "running" and
+    /// missed the ending has to be corrected, or its glyph stays on over nothing.
+    private func shareWorkoutOnReconnect() {
+        guard hasAnnouncedWorkout else { return }
+        let signal: WorkoutSignal = announcedWorkout.map { .running(since: $0) } ?? .idle
+        Task { _ = await sendLive(encode(.workout(signal))) }
+    }
+
     private func sharePresets() {
         guard !presets.isEmpty else { return }
         let payload = encode(.presets(presets))

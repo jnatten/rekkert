@@ -14,6 +14,9 @@ final class AppModel {
     /// the court, so it has no announcer at all.
     let announcer = ScoreAnnouncer()
     #endif
+    /// The workout, which only the watch can actually hold — the phone's counterpart is a
+    /// remote control with the same shape, so the scoreboards can be written once.
+    let workout = WorkoutController()
     /// Driven from the match menu and presented at the root, so every scoreboard has it.
     var showingShareCode = false
     /// Joining is reachable from the start screen and from a match already in progress —
@@ -70,6 +73,16 @@ final class AppModel {
     func start() {
         guard runTask == nil else { return }
         runTask = Task { [store] in await store.run() }
+        // A workout is between this device and the one in the same pocket. `MatchStore`
+        // carries the messages and holds no opinion about them; the controller has the
+        // opinions and cannot reach a transport.
+        workout.publish = { [store] signal in store.send(signal) }
+        store.onWorkout = { [workout] signal in workout.heard(signal) }
+        #if os(watchOS)
+        // A session outlives the process that started it, so coming back to a stopped-looking
+        // button while Health is still recording would be a lie.
+        workout.recover()
+        #endif
         #if DEBUG
         seedDemoIfRequested()
         #endif
@@ -94,6 +107,20 @@ final class AppModel {
                 rules: TraditionalRules(deuceRule: .starPoint),
                 teams: BySide(a: TeamInfo(name: "Us"), b: TeamInfo(name: "Them"))
             )))
+        }
+        if arguments.contains("-rekkert-demo-workouts") {
+            let start = Date().addingTimeInterval(-7_200)
+            try? sessionStore?.archive(WorkoutRecord(
+                id: UUID(), startedAt: start, endedAt: start.addingTimeInterval(5_400),
+                duration: 5_400, activeEnergyKilocalories: 612,
+                heartRateAverage: 131, heartRateMaximum: 174
+            ))
+            let earlier = start.addingTimeInterval(-259_200)
+            try? sessionStore?.archive(WorkoutRecord(
+                id: UUID(), startedAt: earlier, endedAt: earlier.addingTimeInterval(3_900),
+                duration: 3_900, activeEnergyKilocalories: 428,
+                heartRateAverage: 126, heartRateMaximum: 166
+            ))
         }
         if arguments.contains("-rekkert-demo-roster") {
             remember(players: ["Jonas", "Ada", "Kim", "Sam", "Bjørn", "Ola", "Siri", "Tor", "Håkon"])
@@ -205,6 +232,9 @@ final class AppModel {
         // the app, so coming back to the front is when it has to be stood up again.
         sharing.resume()
         Task { [store] in await store.synchronise() }
+        #if os(watchOS)
+        workout.recover()
+        #endif
         #if !os(watchOS)
         // Coming back to the front is when somebody has just been off downloading a voice.
         announcer.refreshVoices()
@@ -230,6 +260,26 @@ final class AppModel {
 
     var history: [HistoryRecord] {
         (try? sessionStore?.history()) ?? []
+    }
+
+    var workouts: [WorkoutRecord] {
+        (try? sessionStore?.workouts()) ?? []
+    }
+
+    /// Asked on every redraw of the start screen purely to decide whether a row is there, so
+    /// it lists the directory rather than decoding everything in it.
+    var hasWorkouts: Bool {
+        sessionStore?.hasWorkouts() ?? false
+    }
+
+    func deleteWorkout(_ id: UUID) {
+        try? sessionStore?.deleteWorkout(id)
+    }
+
+    /// The matches scored while a workout was running, worked out from the clock. A match
+    /// that spanned two workouts appears under both, which is the answer rather than a bug.
+    func matches(during workout: WorkoutRecord) -> [HistoryRecord] {
+        history.filter(workout.covers)
     }
 
     /// Ends the session everywhere. The store archives it if it is worth keeping and

@@ -32,6 +32,7 @@ struct WinnerCourtView: View {
                 ToolbarItemGroup(placement: .topBarLeading) {
                     ConnectionBadge()
                     SharingBadge()
+                    WorkoutBadge()
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Full screen", systemImage: "arrow.up.left.and.arrow.down.right") {

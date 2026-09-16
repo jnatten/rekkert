@@ -1,7 +1,8 @@
 # Rekkert
 
 Padel and tennis score tracking for iPhone and Apple Watch. The score syncs both ways
-between the two, so it does not matter which one you tap. No Health integration.
+between the two, so it does not matter which one you tap. The watch will record the session
+as an Apple Health workout, if you ask it to.
 
 ## Modes
 
@@ -91,6 +92,41 @@ Presets are edited on the phone and read on both, so the whole library travels t
 and the newer copy wins. That is what keeps a deletion from being resurrected by a stale
 copy on the other device.
 
+## Workouts
+
+The watch can record a workout while you play. It is a button — on the watch's menu page,
+on its idle screen, and in the iPhone's main menu — and it has nothing to do with matches:
+it never starts itself, it survives a match ending, and you can play none, one or six of
+them while it runs.
+
+It is saved to Health as tennis, indoors. Health has no padel, and tennis is the nearest
+thing in the list with an energy model calibrated for it. Indoors is chosen rather than
+offered: an outdoor workout turns on GPS, and not asking for location at all is worth more
+than a route map of a padel court.
+
+Starting it holds the watch app frontmost, which is the other half of why it exists — a
+lowered wrist comes back to the score rather than to the clock.
+
+The watch keeps no history of its own, so when the workout ends the summary travels to the
+phone on the same durable queue the outbox uses, and the phone files it under `workouts/`.
+If the phone is away it arrives whenever the phone next turns up. If it never arrives at
+all, the workout is still in Health, which is where the real copy lives.
+
+The phone lists them under History. Opening one shows how long you played, the energy and
+the heart rate, and the matches you scored while it was running. Matches are lined up by the
+clock rather than by a stored link — a workout has no id until Health saves it, which is
+after the match it covers has already been filed — so starting the workout halfway through
+the first game still gathers that game up, and a match spanning two workouts shows under
+both.
+
+Heart rate never goes on the wire. The live reading stays on the wrist that read it, and the
+summary reaches that one phone and no other: `FanOutTransport.Scope.sharedSession` drops it,
+in the same exhaustive switch that drops your saved setups, so adding a `Wire` case carrying
+anything personal is a compile error rather than a leak.
+
+None of it is required. Never press the button and the app is what it was: no prompt, no
+Workouts row, no Health access of any kind.
+
 ## Getting started
 
 Requires Xcode 26 and [mise](https://mise.jdx.dev) (which pins Tuist via `mise.toml`).
@@ -132,6 +168,7 @@ the destination.
 Project.swift              Tuist project: iOS app + embedded watchOS app
 Packages/RekkertKit/       the brain, as a local Swift package
   RekkertCore              scoring, tournaments, event log, persistence (pure Foundation)
+                           — HealthKit must never reach here, or the tests need a simulator
   RekkertSync              WatchConnectivity transport and the observable MatchStore
 App/                       iPhone SwiftUI
 WatchApp/                  Apple Watch SwiftUI
@@ -184,6 +221,7 @@ Debug builds accept `-rekkert-demo traditional|winnercourt|americano|mexicano` (
 `-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N`,
 `-rekkert-demo-open-court R,C`, `-rekkert-demo-roster`, `-rekkert-demo-presets`,
 `-rekkert-demo-watch-page menu|standings|controls`, `-rekkert-demo-fullscreen`,
+`-rekkert-demo-workouts`,
 `-rekkert-demo-voices` or
 `-rekkert-demo-new <mode>`) as
 launch arguments to put the app into a given state, since `simctl` cannot tap the screen.
@@ -228,17 +266,19 @@ the simulator's own resolution.
 
 ## The App Store listing
 
-The description, promotional text, keywords and copyright live in `fastlane/metadata/`,
-one plain file per field, and are the source of truth rather than the web form:
+The description, promotional text, keywords, copyright and privacy URL live in
+`fastlane/metadata/`, one plain file per field, and are the source of truth rather than the
+web form:
 
     fastlane/metadata/copyright.txt          # not localised, so it sits at the top
     fastlane/metadata/en-US/description.txt
     fastlane/metadata/en-US/keywords.txt
     fastlane/metadata/en-US/promotional_text.txt
+    fastlane/metadata/en-US/privacy_url.txt
 
 `deliver` reads a fixed set of names, and the ones not here yet are `release_notes.txt`
-(What's New, per version), `name.txt`, `subtitle.txt`, `support_url.txt`,
-`marketing_url.txt` and `privacy_url.txt`. Add a file and it starts being uploaded.
+(What's New, per version), `name.txt`, `subtitle.txt`, `support_url.txt` and
+`marketing_url.txt`. Add a file and it starts being uploaded.
 
 ```sh
 ./scripts/release.sh --metadata                  # text only

@@ -52,9 +52,18 @@ let project = Project(
                 // only cryptography here is Apple's own — TLS from Security.framework and
                 // HKDF from CryptoKit — which is exempt.
                 "ITSAppUsesNonExemptEncryption": false,
+                // Recording a workout is the watch's job; the phone only asks it to start
+                // one and is told when it does. It never reads a workout back out of Health
+                // — it keeps its own copy of the summary — but the sheet the button puts up
+                // belongs on the device the button is on.
+                "NSHealthShareUsageDescription":
+                    "Rekkert shows the heart rate your Apple Watch reads while you play.",
+                "NSHealthUpdateUsageDescription":
+                    "Rekkert saves the session your Apple Watch records as a workout in Health.",
             ]),
             sources: ["App/Sources/**", "Shared/**"],
             resources: ["App/Resources/**"],
+            entitlements: .dictionary(["com.apple.developer.healthkit": true]),
             dependencies: [
                 .package(product: "RekkertCore"),
                 .package(product: "RekkertSync"),
@@ -71,18 +80,39 @@ let project = Project(
             product: .app,
             bundleId: "\(iosBundleID).watchkitapp",
             deploymentTargets: .watchOS("26.0"),
-            infoPlist: nil,
+            // Spelled out rather than generated. `WKBackgroundModes` is an array and has no
+            // `INFOPLIST_KEY_` of its own, so the generator cannot express it — and mixing a
+            // generated plist with a real one relies on merge behaviour that has moved
+            // between Xcode versions. Every key the generator was supplying is stated here,
+            // and `scripts/verify.sh` asserts the load-bearing ones survived.
+            infoPlist: .extendingDefault(with: [
+                "CFBundleDisplayName": "Rekkert",
+                // As on the iPhone target: Tuist's default hard-codes these, which would pin
+                // the watch app at 1.0 (1) while the phone moves on — a pair App Store
+                // Connect rejects.
+                "CFBundleShortVersionString": "$(MARKETING_VERSION)",
+                "CFBundleVersion": "$(CURRENT_PROJECT_VERSION)",
+                // Not in Tuist's watch default: it came from the generator. Without it the
+                // watch app does not install at all.
+                "WKApplication": true,
+                "WKCompanionAppBundleIdentifier": .string(iosBundleID),
+                "WKRunsIndependentlyOfCompanionApp": false,
+                // The reason this target has a plist at all. Without it watchOS suspends the
+                // app the moment the wrist drops, and the workout stops collecting.
+                "WKBackgroundModes": ["workout-processing"],
+                "NSHealthShareUsageDescription":
+                    "Rekkert reads your heart rate and energy while a workout you started is running.",
+                "NSHealthUpdateUsageDescription":
+                    "Rekkert saves what you played as a tennis workout in Health.",
+            ]),
             sources: ["WatchApp/Sources/**", "Shared/**"],
             resources: ["WatchApp/Resources/**"],
+            entitlements: .dictionary(["com.apple.developer.healthkit": true]),
             dependencies: [
                 .package(product: "RekkertCore"),
                 .package(product: "RekkertSync"),
             ],
             settings: .settings(base: [
-                "GENERATE_INFOPLIST_FILE": true,
-                "INFOPLIST_KEY_CFBundleDisplayName": "Rekkert",
-                "INFOPLIST_KEY_WKCompanionAppBundleIdentifier": .string(iosBundleID),
-                "INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp": false,
                 "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
                 "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "AccentColor",
             ])

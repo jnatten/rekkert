@@ -13,6 +13,24 @@ public enum JSONCoding {
     public static var decoder: JSONDecoder { JSONDecoder() }
 }
 
+/// What a phone and its own watch tell each other about a workout.
+///
+/// Only the watch can hold one, so the traffic is lopsided: the phone asks for it to stop,
+/// and the watch says what it is doing. Starting is not in here — the phone starts one by
+/// launching the watch app with a workout configuration, which is Health's own way of
+/// asking, and needs no message of ours.
+public enum WorkoutSignal: Codable, Sendable, Hashable {
+    /// Phone to watch: end the workout and save it.
+    case stop
+    /// Watch to phone: one is running, and has been since this moment.
+    case running(since: Date)
+    /// Watch to phone: none is running.
+    case idle
+    /// Watch to phone: this one ended and Health kept it. The phone files it, because the
+    /// watch keeps no history of its own.
+    case finished(WorkoutRecord)
+}
+
 public enum Wire: Codable, Sendable, Hashable {
     /// "Here is what I have" — the reply carries whatever the sender is missing.
     case hello(sessionID: UUID, vector: VersionVector)
@@ -31,6 +49,9 @@ public enum Wire: Codable, Sendable, Hashable {
     /// Who is carrying the whistle. The log says nothing about it — a guest's log is the
     /// host's log — and a watch has no way to tell whose phone it is paired to.
     case role(SessionRole)
+    /// Whether this phone's own watch is on a workout, and the summary once it ends. The
+    /// heart rate itself is never in here: it stays on the wrist it was read from.
+    case workout(WorkoutSignal)
 
     public func encoded() throws -> Data {
         try JSONCoding.encoder.encode(self)

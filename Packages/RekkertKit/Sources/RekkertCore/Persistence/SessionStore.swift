@@ -38,12 +38,42 @@ public struct HistoryRecord: Codable, Sendable, Hashable, Identifiable {
     public var finishedAt: Date
     public var title: String
     public var state: SessionState
+    /// When the session was first configured, kept so a match can be lined up against a
+    /// workout that was running at the time. Absent on anything filed before workouts
+    /// existed, which `playedFrom` stands in for.
+    public var startedAt: Date?
 
-    public init(id: UUID = UUID(), finishedAt: Date = Date(), title: String, state: SessionState) {
+    public init(
+        id: UUID = UUID(),
+        finishedAt: Date = Date(),
+        title: String,
+        state: SessionState,
+        startedAt: Date? = nil
+    ) {
         self.id = id
         self.finishedAt = finishedAt
         self.title = title
         self.state = state
+        self.startedAt = startedAt
+    }
+
+    /// The stretch of time this was played over. A record from before start times were kept
+    /// collapses to the instant it finished, which still lands inside a workout that was
+    /// running then.
+    public var playedFrom: Date { startedAt ?? finishedAt }
+
+    private enum CodingKeys: String, CodingKey { case id, finishedAt, title, state, startedAt }
+
+    /// Hand-rolled so that a record written before `startedAt` existed still decodes.
+    /// `history()` drops what it cannot read without a word, so a synthesised decoder
+    /// gaining a field would quietly empty the history.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        finishedAt = try container.decode(Date.self, forKey: .finishedAt)
+        title = try container.decode(String.self, forKey: .title)
+        state = try container.decode(SessionState.self, forKey: .state)
+        startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
     }
 }
 
@@ -54,6 +84,7 @@ public struct SessionStore: Sendable {
 
     private var activeURL: URL { directory.appending(path: "active.json") }
     private var historyDirectory: URL { directory.appending(path: "history", directoryHint: .isDirectory) }
+    private var workoutsDirectory: URL { directory.appending(path: "workouts", directoryHint: .isDirectory) }
 
     public init(directory: URL) {
         self.directory = directory
@@ -115,6 +146,39 @@ public struct SessionStore: Sendable {
 
     public func deleteHistory(_ id: UUID) throws {
         try? FileManager.default.removeItem(at: historyDirectory.appending(path: "\(id.uuidString).json"))
+    }
+
+    // MARK: - Workouts
+
+    public func archive(_ workout: WorkoutRecord) throws {
+        try write(
+            try encoder.encode(workout),
+            to: workoutsDirectory.appending(path: "\(workout.id.uuidString).json")
+        )
+    }
+
+    /// Whether there is anything at all, without decoding it. The start screen asks on every
+    /// redraw purely to decide whether a row exists, and reading the whole shelf for that is
+    /// a cost `history()` already pays and this need not.
+    public func hasWorkouts() -> Bool {
+        let urls = (try? FileManager.default.contentsOfDirectory(
+            at: workoutsDirectory, includingPropertiesForKeys: nil
+        )) ?? []
+        return urls.contains { $0.pathExtension == "json" }
+    }
+
+    public func workouts() throws -> [WorkoutRecord] {
+        let urls = (try? FileManager.default.contentsOfDirectory(
+            at: workoutsDirectory, includingPropertiesForKeys: nil
+        )) ?? []
+        return urls
+            .filter { $0.pathExtension == "json" }
+            .compactMap { try? decoder.decode(WorkoutRecord.self, from: Data(contentsOf: $0)) }
+            .sorted { $0.startedAt > $1.startedAt }
+    }
+
+    public func deleteWorkout(_ id: UUID) throws {
+        try? FileManager.default.removeItem(at: workoutsDirectory.appending(path: "\(id.uuidString).json"))
     }
 
     // MARK: - Player roster

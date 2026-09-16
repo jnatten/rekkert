@@ -59,6 +59,13 @@ struct WatchResultView: View {
                     .buttonStyle(.bordered)
                     .font(.footnote)
                 }
+
+                // Only when one is actually running. Without it, finishing a match strands
+                // a live workout on a screen with no way to end it, and the watch goes in a
+                // bag still recording.
+                if model.workout.isTracking {
+                    WatchWorkoutButton(isMenuRow: false)
+                }
             }
             .padding(.horizontal, 4)
         }

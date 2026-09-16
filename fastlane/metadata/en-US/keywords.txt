@@ -1,1 +1,1 @@
-padel,tennis,score,tracking,racket,sport
+padel,tennis,score,tracking,racket,sport,workout,fitness

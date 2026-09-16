@@ -30,6 +30,18 @@ enum DemoLaunch {
         value(for: "-rekkert-demo-history").flatMap(Int.init)
     }
 
+    /// Seeds a couple of workouts and opens the list. Nothing can start a real one on a
+    /// simulator — there is no wrist — so the only way to photograph the screen is to put
+    /// the records there directly.
+    static var openWorkouts: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-workouts")
+    }
+
+    /// With a value, the detail for that row: -rekkert-demo-workouts 0
+    static var openWorkoutRecord: Int? {
+        value(for: "-rekkert-demo-workouts").flatMap(Int.init)
+    }
+
     /// Opens the voice picker, which otherwise takes a toggle and a tap to reach.
     static var openVoices: Bool {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-voices")

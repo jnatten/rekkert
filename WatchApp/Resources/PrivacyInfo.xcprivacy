@@ -7,7 +7,12 @@
 	<key>NSPrivacyTrackingDomains</key>
 	<array/>
 	<!-- Nothing leaves the device except to the phones you share a match with, so there is
-	     nothing collected in Apple's sense: no server, no analytics, no third party. -->
+	     nothing collected in Apple's sense: no server, no analytics, no third party.
+	     A recorded workout is no exception. It is written to Health on the wrist and its
+	     summary sent to that one paired phone, and Apple's definition of collecting is
+	     transmitting off the device somewhere the developer can reach — which is nowhere
+	     here. Declaring it would put "Health & Fitness" on the product page in exchange for
+	     a claim that is not true. -->
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array/>
 	<key>NSPrivacyAccessedAPITypes</key>

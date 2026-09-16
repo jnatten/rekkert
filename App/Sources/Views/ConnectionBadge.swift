@@ -15,6 +15,25 @@ struct ConnectionBadge: View {
     }
 }
 
+/// Whether this phone's own watch is on a workout. Nothing at all when it is not: playing
+/// without one is the ordinary case, and there is no "no workout" worth reporting.
+///
+/// A glyph rather than a control. The trailing side of this toolbar is already full, and a
+/// heart within thumb's reach of the score is a mis-tap waiting to happen — stopping lives in
+/// the options menu.
+struct WorkoutBadge: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if model.workout.isTracking {
+            Image(systemName: "heart.fill")
+                .foregroundStyle(.pink)
+                .symbolEffect(.pulse)
+                .accessibilityLabel("Workout running")
+        }
+    }
+}
+
 /// How many other phones are on this match, and a way back to the code — somebody always
 /// turns up late. Its own toolbar item rather than sitting beside the watch glyph, because a
 /// toolbar item renders one control and quietly drops the rest of a stack.

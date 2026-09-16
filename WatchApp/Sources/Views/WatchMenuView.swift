@@ -41,6 +41,8 @@ struct WatchMenuView: View {
 
                 status
 
+                WatchWorkoutButton()
+
                 if isWinnerCourt {
                     action("End round", systemImage: "flag.pattern.checkered", tint: .orange) {
                         confirming = .endRound

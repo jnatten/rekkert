@@ -50,6 +50,7 @@ struct CourtListView: View {
                 ToolbarItemGroup(placement: .topBarLeading) {
                     ConnectionBadge()
                     SharingBadge()
+                    WorkoutBadge()
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Undo", systemImage: "arrow.uturn.backward") { model.store.undoLast() }

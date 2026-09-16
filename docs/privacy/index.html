@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Privacy Policy — Rekkert</title>
-<meta name="description" content="Rekkert's privacy policy. Rekkert collects nothing about you: no account, no analytics, no servers.">
+<meta name="description" content="Rekkert's privacy policy. No account, no analytics, no server: everything stays on your own iPhone, Apple Watch and Health app.">
 <style>
   :root {
     --bg: #ffffff;
@@ -95,7 +95,8 @@
 </header>
 
 <div class="lede">
-  <p><strong>Rekkert collects nothing about you.</strong> There is no account to create, no analytics, no advertising, no tracking, and no third-party code in the app. Rekkert has no server, so there is nowhere for your information to be sent even if it were wanted.</p>
+  <p><strong>Nothing about you is sent anywhere.</strong> There is no account to create, no analytics, no advertising, no tracking, and no third-party code in the app. Rekkert has no server, so there is nowhere for your information to be sent even if it were wanted.</p>
+  <p>Rekkert can record a workout to Apple Health while you play, if you start one. That is the only part of the app that touches health data, it only reads anything while a workout you started is running, and what it reads stays on your own devices.</p>
   <p>Everything below is detail on that.</p>
 </div>
 
@@ -109,15 +110,18 @@
   <li>Saved setups, so a regular format is one tap away</li>
   <li>Past matches and tournaments, so you can look back at them</li>
   <li>Preferences, such as which side is drawn blue</li>
+  <li>Workouts you recorded, if you used them: when you started and stopped, how long it ran, the energy, and your average and highest heart rate</li>
 </ul>
 
-<p>This lives in Rekkert's own storage on your iPhone and Apple Watch. It is not uploaded anywhere. Deleting the app deletes all of it.</p>
+<p>This lives in Rekkert's own storage on your iPhone and Apple Watch. It is not uploaded anywhere. Deleting the app deletes all of it — except the workouts themselves, which belong to Health rather than to Rekkert and stay in the Health app until you delete them there.</p>
 
 <h2>What leaves your device, and when</h2>
 
-<p>Two things travel, and only between devices you are using:</p>
+<p>Three things travel, and only between devices you are using:</p>
 
 <p><strong>Your Apple Watch.</strong> The match is kept in step between your iPhone and your paired watch, directly, through Apple's own device-to-device link.</p>
+
+<p><strong>Your workouts, to Apple Health and to your own iPhone.</strong> A workout you start is recorded by the watch and saved into Health on that watch, and Apple's own sync puts it on your iPhone with the rest of your health data. Rekkert sends the summary — the times, how long it ran, the energy, your average and highest heart rate — to that same paired iPhone, so it can list it. It goes over the private link the score already uses, and over nothing else: it is never offered to the other phones at your court, even while you are sharing a match with them. The live heart rate stays on the watch and is never sent at all.</p>
 
 <p><strong>Other phones at your court, but only if you share a match.</strong> When you choose to share, Rekkert announces itself on the local network you are on and accepts phones that have the short code you read out. Whoever joins receives the match itself — the score, the names, the format — so that everyone can follow and score the same game.</p>
 
@@ -131,7 +135,9 @@
   <li>No analytics, crash reporting or usage measurement</li>
   <li>No advertising, and no tracking for advertising or any other purpose</li>
   <li>No third-party SDKs — the app is built entirely from Apple's frameworks and our own code</li>
-  <li>No location, contacts, photos, microphone or camera access</li>
+  <li>No location, contacts, photos, microphone or camera access — a workout is recorded as indoor precisely so that no location is ever asked for</li>
+  <li>No reading of your Health data beyond the workout in progress, and none at all unless you start one</li>
+  <li>No workout unless you ask for it — nothing is detected automatically, and never pressing the button means Rekkert never asks Health for anything</li>
   <li>No accounts, sign-in, email address or anything else identifying you</li>
 </ul>
 

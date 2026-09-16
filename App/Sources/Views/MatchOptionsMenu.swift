@@ -27,6 +27,17 @@ struct MatchOptionsMenu: View {
                     model.showingJoin = true
                 }
             }
+            if model.workout.isAvailable {
+                // A button whose title flips rather than a toggle: the state belongs to the
+                // watch and arrives a moment later, and a switch that springs back is worse
+                // than a button that takes its time.
+                Button(
+                    model.workout.isTracking ? "Stop workout" : "Start workout",
+                    systemImage: model.workout.isTracking ? "stop.circle" : "figure.tennis"
+                ) {
+                    model.workout.isTracking ? model.workout.stop() : model.workout.start()
+                }
+            }
             Toggle(isOn: $announcer.isEnabled) {
                 Label("Call the score", systemImage: "speaker.wave.2")
             }

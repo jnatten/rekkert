@@ -101,6 +101,9 @@ struct WatchIdleView: View {
                 .font(.footnote)
                 .padding(.top, 2)
 
+                // A workout is not tied to a match, so it has to be reachable with none on.
+                WatchWorkoutButton(isMenuRow: false)
+
                 connection
             }
             .padding(.horizontal, 2)

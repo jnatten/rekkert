@@ -45,6 +45,7 @@ struct WatchCourtPage: View {
             // Nothing scrolls on this page any more, so the numbers take the whole of it.
             .frame(maxHeight: .infinity)
             .overlay(alignment: .bottomLeading) { undoButton }
+            .overlay(alignment: .bottomTrailing) { heartRate }
 
             // The line above the score already says it is sudden death, so this row only has
             // to say whose call it is and take the answer.
@@ -61,6 +62,35 @@ struct WatchCourtPage: View {
             }
         }
         .frame(maxHeight: .infinity)
+    }
+
+    /// Present only while a workout is running, and gone entirely otherwise — playing
+    /// without one is the ordinary case, not a thing to report. It follows the session
+    /// rather than the first sample: waiting for a reading would have it blink into
+    /// existence some seconds after the button, which reads as a fault.
+    @ViewBuilder
+    private var heartRate: some View {
+        if model.workout.isTracking {
+            HStack(spacing: 2) {
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 9))
+                    .symbolEffect(.pulse)
+                if let beats = model.workout.heartRate {
+                    Text(beats.formatted(.number.precision(.fractionLength(0))))
+                        .font(.system(size: 11, weight: .semibold))
+                        .monospacedDigit()
+                }
+            }
+            .foregroundStyle(.pink)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(.black.opacity(0.4), in: .capsule)
+            .padding(.trailing, 3)
+            .padding(.bottom, 3)
+            .accessibilityLabel(
+                model.workout.heartRate.map { "\(Int($0)) beats per minute" } ?? "Workout running"
+            )
+        }
     }
 
     /// Undoing is a correction, not the thing you came here to do, so it sits in a corner

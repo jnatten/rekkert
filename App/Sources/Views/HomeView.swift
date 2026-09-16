@@ -77,6 +77,31 @@ struct HomeView: View {
                     Text("Everyone at the court sees the same scoreboard and can score it. Whoever shared it is the one who finishes it.")
                 }
 
+                if model.workout.isAvailable {
+                    Section {
+                        Button {
+                            model.workout.isTracking ? model.workout.stop() : model.workout.start()
+                        } label: {
+                            Label {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(model.workout.isTracking ? "Stop the workout" : "Start a workout")
+                                        .foregroundStyle(.primary)
+                                    Text(model.workout.isTracking
+                                         ? "Running on your Apple Watch"
+                                         : "On your Apple Watch")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                            } icon: {
+                                Image(systemName: model.workout.isTracking ? "stop.circle" : "figure.tennis")
+                            }
+                        }
+                    } header: {
+                        Text("Workout")
+                    } footer: {
+                        Text(model.workout.failure ?? "Records your heart rate and energy on your Apple Watch and saves it to Health as tennis, the nearest thing Health has to padel. It runs on its own: start it when you walk on, stop it when you walk off, and play as many matches in between as you like.")
+                    }
+                }
+
                 Section {
                     Toggle(isOn: $announcer.isEnabled) {
                         Label("Call the score", systemImage: "speaker.wave.2")
@@ -96,10 +121,17 @@ struct HomeView: View {
                     Text("Reads every point out loud, server first: \"thirty, fifteen\", \"deuce\", \"game\". The phone does the talking; the watch stays quiet.")
                 }
 
-                if !model.history.isEmpty {
+                if !model.history.isEmpty || model.hasWorkouts {
                     Section("History") {
-                        NavigationLink(value: HomeRoute.list) {
-                            Label("Past matches", systemImage: "clock.arrow.circlepath")
+                        if !model.history.isEmpty {
+                            NavigationLink(value: HomeRoute.list) {
+                                Label("Past matches", systemImage: "clock.arrow.circlepath")
+                            }
+                        }
+                        if model.hasWorkouts {
+                            NavigationLink(value: HomeRoute.workouts) {
+                                Label("Workouts", systemImage: "figure.tennis")
+                            }
                         }
                     }
                 }
@@ -109,6 +141,8 @@ struct HomeView: View {
                 case .list: HistoryView()
                 case .record(let record): HistoryDetailView(record: record)
                 case .voice: VoicePickerView()
+                case .workouts: WorkoutsView()
+                case .workout(let workout): WorkoutDetailView(workout: workout)
                 }
             }
             .navigationTitle("Rekkert")
@@ -123,6 +157,12 @@ struct HomeView: View {
                 if DemoLaunch.openVoices {
                     model.announcer.isEnabled = true
                     path = [.voice]
+                }
+                if DemoLaunch.openWorkouts {
+                    path = [.workouts]
+                    if let index = DemoLaunch.openWorkoutRecord, model.workouts.indices.contains(index) {
+                        path.append(.workout(model.workouts[index]))
+                    }
                 }
                 if DemoLaunch.openHistory {
                     path = [.list]
