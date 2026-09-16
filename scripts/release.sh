@@ -6,6 +6,7 @@
 #   scripts/release.sh --archive   # stop after the .ipa, upload nothing
 #   scripts/release.sh --validate  # archive and validate, upload nothing
 #   scripts/release.sh --skip-tests
+#   scripts/release.sh --screenshots   # upload only the screenshots, build nothing
 #
 # Needs, once:
 #   TUIST_DEVELOPMENT_TEAM      the paid team id, in mise.local.toml
@@ -21,6 +22,12 @@
 #
 # The watch app rides along inside the iPhone app, so this uploads both.
 # Every upload needs a build number no earlier upload used: --bump, or edit Project.swift.
+#
+# --screenshots uploads whatever `scripts/shots.sh` last put in fastlane/screenshots/.
+# Screenshots belong to a version rather than to the app, so this needs a version in an
+# editable state — the one you are preparing. It replaces the whole set for each device
+# size rather than adding to it, because App Store Connect caps a set at ten and then
+# starts refusing.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -39,17 +46,19 @@ for arg in "$@"; do
     --archive) STOP_AFTER=archive ;;
     --validate) STOP_AFTER=validate ;;
     --skip-tests) DO_TESTS=0 ;;
+    --screenshots) STOP_AFTER=screenshots ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
 done
 
+IOS_ID=dev.natten.rekkert
 OUT=.build/release
 ARCHIVE="$OUT/Rekkert.xcarchive"
 EXPORTED="$OUT/export"
 IPA="$EXPORTED/Rekkert.ipa"
 
 team="${TUIST_DEVELOPMENT_TEAM:-}"
-if [ -z "$team" ]; then
+if [ -z "$team" ] && [ "$STOP_AFTER" != screenshots ]; then
   echo "TUIST_DEVELOPMENT_TEAM is not set. Put your paid team id in mise.local.toml." >&2
   exit 1
 fi
@@ -73,6 +82,42 @@ if [ -n "$key_id" ] && [ -n "$issuer" ] && [ -f "$key_path" ]; then
   auth=(-authenticationKeyPath "$key_path"
         -authenticationKeyID "$key_id"
         -authenticationKeyIssuerID "$issuer")
+fi
+
+if [ "$STOP_AFTER" = screenshots ]; then
+  shots=fastlane/screenshots
+  test -n "$(find "$shots" -name '*.png' 2>/dev/null)" || {
+    echo "No screenshots in $shots/ - run ./scripts/shots.sh first" >&2; exit 1; }
+
+  # deliver wants the key as one JSON file rather than as the three separate things every
+  # other Apple tool takes. It carries the private key, so it is written where only this
+  # user can read it and removed on the way out however the script ends.
+  api_key=$(mktemp -t rekkert-asc-key)
+  trap 'rm -f "$api_key"' EXIT
+  chmod 600 "$api_key"
+  KEY_ID="$key_id" ISSUER="$issuer" KEY_PATH="$key_path" python3 -c '
+import json, os, pathlib
+print(json.dumps({
+    "key_id": os.environ["KEY_ID"],
+    "issuer_id": os.environ["ISSUER"],
+    "key": pathlib.Path(os.environ["KEY_PATH"]).read_text(),
+    "in_house": False,
+}))' > "$api_key"
+
+  echo "==> Upload screenshots"
+  find "$shots" -name '*.png' | sort | sed 's/^/  /'
+  # --force skips the HTML summary deliver would otherwise stop and ask you to confirm.
+  mise exec -- fastlane deliver \
+    --api_key_path "$api_key" \
+    --app_identifier "$IOS_ID" \
+    --screenshots_path "$shots" \
+    --skip_binary_upload true \
+    --skip_metadata true \
+    --skip_screenshots false \
+    --overwrite_screenshots true \
+    --force true
+  echo "==> Screenshots uploaded, onto the version you are preparing."
+  exit 0
 fi
 
 if [ "$BUMP" = 1 ]; then

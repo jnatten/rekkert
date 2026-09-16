@@ -6,9 +6,9 @@
 #   scripts/shots.sh --store      # only the App Store set
 #   scripts/shots.sh --no-build   # reuse whatever is already in .build/shots
 #
-# Docs images land in docs/images/ at the sizes index.html declares. App Store
-# images land in .build/appstore/ at the simulator's own resolution, which is the
-# size App Store Connect asks for.
+# Docs images land in docs/images/ at the sizes index.html declares. App Store images
+# land in fastlane/screenshots/en-US/ at the simulator's own resolution, which is where
+# `scripts/release.sh --screenshots` uploads them from.
 #
 # Override the devices if the listing needs a different size:
 #
@@ -35,7 +35,7 @@ WATCH_NAME=${REKKERT_SHOTS_WATCH:-"Apple Watch Ultra 3 (49mm)"}
 
 DD=.build/shots
 RAW=.build/shots/raw
-STORE=.build/appstore
+STORE=fastlane/screenshots/en-US
 IOS_ID=dev.natten.rekkert
 WATCH_ID=dev.natten.rekkert.watchkitapp
 IOS_APP="$DD/Build/Products/Debug-iphonesimulator/Rekkert.app"
@@ -153,19 +153,22 @@ fi
 
 if [ "$DO_STORE" = 1 ]; then
   echo "==> $STORE"
+  # One flat folder per locale is deliver's own layout: it reads the device from each
+  # image's pixel size, so the names only decide the order they appear in the listing.
   rm -rf "$STORE"
-  mkdir -p "$STORE/iphone" "$STORE/watch"
-  cp "$RAW/home.png" "$STORE/iphone/1-home.png"
-  cp "$RAW/americano.png" "$STORE/iphone/2-americano.png"
-  cp "$RAW/match.png" "$STORE/iphone/3-match.png"
-  cp "$RAW/watch.png" "$STORE/watch/1-scoreboard.png"
-  cp "$RAW/watch-controls.png" "$STORE/watch/2-controls.png"
-  # App Store Connect rejects an upload whose pixel size is not one it lists for
-  # the device, and it is the only place that knows the current list — so print
-  # what came out rather than assert anything about it.
+  mkdir -p "$STORE"
+  cp "$RAW/home.png" "$STORE/iphone-1-home.png"
+  cp "$RAW/americano.png" "$STORE/iphone-2-americano.png"
+  cp "$RAW/match.png" "$STORE/iphone-3-match.png"
+  cp "$RAW/watch.png" "$STORE/watch-1-scoreboard.png"
+  cp "$RAW/watch-controls.png" "$STORE/watch-2-controls.png"
+  # App Store Connect rejects an upload whose pixel size is not one it lists for the
+  # device, and it is the only place that knows the current list — so print what came
+  # out rather than assert anything about it.
   find "$STORE" -name '*.png' | sort | while read -r shot; do
     echo "  $shot  $(sips -g pixelWidth -g pixelHeight "$shot" | awk '/pixel/ {printf "%s", $2 " "}')"
   done
+  echo "  upload them with: ./scripts/release.sh --screenshots"
 fi
 
 echo "==> Done"

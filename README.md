@@ -223,8 +223,16 @@ that a session code still works as a TLS pre-shared key.
 
 Docs images are written straight into `docs/images/` at the sizes `docs/index.html`
 declares, and the script fails if the two ever disagree — a wrong size is a crooked page
-that nothing else would catch. App Store images land in `.build/appstore/`, at the
-simulator's own resolution, ready to upload.
+that nothing else would catch. App Store images land in `fastlane/screenshots/en-US/`, at
+the simulator's own resolution, and go up with:
+
+```sh
+./scripts/release.sh --screenshots    # uploads those, builds nothing
+```
+
+Screenshots belong to a version rather than to the app, so that needs a version in an
+editable state — the one you are preparing. It replaces the set for each device size
+instead of adding to it, because App Store Connect caps a set at ten and then refuses.
 
 The shots come from an iPhone 17 Pro Max and an Apple Watch Ultra 3; set
 `REKKERT_SHOTS_PHONE` or `REKKERT_SHOTS_WATCH` to shoot a listing slot of another size.

@@ -1,2 +1,4 @@
 [tools]
+"gem:fastlane" = "2.240.1"
+ruby = "3.4"
 tuist = "4.208.0"
