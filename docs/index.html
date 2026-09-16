@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rekkert</title>
+<meta name="description" content="Padel scoring for iPhone and Apple Watch. Keep the score from your wrist, and share the match with everyone at the court.">
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f4f4f6;
+    --text: #17171a;
+    --muted: #5f5f6b;
+    --rule: #e2e2e8;
+    --accent: #2160e6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #101013;
+      --surface: #1a1a1f;
+      --text: #ececf1;
+      --muted: #a0a0ad;
+      --rule: #2b2b33;
+      --accent: #4a96ff;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #101013;
+    --surface: #1a1a1f;
+    --text: #ececf1;
+    --muted: #a0a0ad;
+    --rule: #2b2b33;
+    --accent: #4a96ff;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 0 16px 96px;
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  main { max-width: 52rem; margin: 0 auto; }
+
+  header { padding: 80px 0 40px; text-align: center; }
+  h1 {
+    font-size: 3.2rem;
+    line-height: 1.05;
+    letter-spacing: -0.035em;
+    margin: 0 0 12px;
+  }
+  .tagline { font-size: 1.25rem; color: var(--muted); margin: 0 auto; max-width: 30rem; }
+
+  .hero { margin: 8px 0 56px; }
+  .hero img {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 14px;
+    border: 1px solid var(--rule);
+  }
+
+  h2 {
+    font-size: 1.25rem;
+    letter-spacing: -0.01em;
+    margin: 0 0 16px;
+  }
+
+  section { margin-bottom: 56px; }
+
+  ul { margin: 0; padding-left: 1.3em; }
+  li { margin-bottom: 10px; }
+  li strong { font-weight: 600; }
+
+  .shots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    justify-content: center;
+    align-items: flex-end;
+  }
+  figure { margin: 0; text-align: center; }
+  figure img {
+    display: block;
+    height: auto;
+    border-radius: 12px;
+    border: 1px solid var(--rule);
+  }
+  .phone img { width: 230px; }
+  .watch img { width: 190px; }
+  figcaption { color: var(--muted); font-size: 0.85rem; margin-top: 10px; }
+
+  .contact {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+  }
+  .contact p { margin: 0 0 8px; }
+  .contact p:last-child { margin-bottom: 0; }
+  .email { font-size: 1.15rem; }
+
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+  footer {
+    margin-top: 56px;
+    padding-top: 20px;
+    border-top: 1px solid var(--rule);
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-align: center;
+  }
+
+  @media (max-width: 560px) {
+    header { padding: 52px 0 32px; }
+    h1 { font-size: 2.4rem; }
+    .tagline { font-size: 1.1rem; }
+    .phone img { width: 150px; }
+    .watch img { width: 130px; }
+    .shots { gap: 16px; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>Rekkert</h1>
+  <p class="tagline">Padel scoring for iPhone and Apple&nbsp;Watch.</p>
+</header>
+
+<div class="hero">
+  <img src="images/match.png" alt="The Rekkert scoreboard on an iPhone, one team blue and the other orange, level at 15–15 in the first set." width="1200" height="552">
+</div>
+
+<section>
+  <h2>What it does</h2>
+  <ul>
+    <li><strong>Every format you play.</strong> Games, sets and match; points counted to a target; winner court, round after round; americano and mexicano tournaments across several courts.</li>
+    <li><strong>Score from your wrist.</strong> The Apple Watch app is the whole scoreboard, not a remote — tap the point on whichever device is nearer.</li>
+    <li><strong>Share the match.</strong> Read out a short code and everyone at the court follows the same score on their own phone. It goes straight between the phones on the local network, with no account and no server.</li>
+    <li><strong>It calls the score.</strong> Hands full with a racket — let the phone say it out loud.</li>
+    <li><strong>It remembers.</strong> Past matches and tournaments are kept, with the players, so next Thursday is one tap away.</li>
+  </ul>
+</section>
+
+<section>
+  <div class="shots">
+    <figure class="phone">
+      <img src="images/home.png" alt="Rekkert's home screen listing saved setups and the five ways to start a match." width="560" height="1216">
+      <figcaption>Start in one tap</figcaption>
+    </figure>
+    <figure class="phone">
+      <img src="images/americano.png" alt="An americano tournament in Rekkert showing round three across two courts." width="560" height="1216">
+      <figcaption>Tournaments, court by court</figcaption>
+    </figure>
+    <figure class="watch">
+      <img src="images/watch.png" alt="The Rekkert scoreboard on an Apple Watch, level at 15–15." width="422" height="514">
+      <figcaption>On the wrist</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="contact">
+  <p>Questions, bugs, or something you wish it did?</p>
+  <p class="email"><a href="mailto:jonas@natten.dev">jonas@natten.dev</a></p>
+</section>
+
+<footer>
+  <a href="/privacy/">Privacy policy</a>
+</footer>
+
+</main>
+</body>
+</html>
