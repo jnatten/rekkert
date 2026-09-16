@@ -212,3 +212,21 @@ prompt. Both need two real iPhones.
 
 `swift scripts/psk-spike.swift` checks, in a couple of seconds and with no devices at all,
 that a session code still works as a TLS pre-shared key.
+
+## Screenshots
+
+```sh
+./scripts/shots.sh             # every shot the landing page and the App Store use
+./scripts/shots.sh --docs      # only docs/images/
+./scripts/shots.sh --no-build  # reuse the last build
+```
+
+Docs images are written straight into `docs/images/` at the sizes `docs/index.html`
+declares, and the script fails if the two ever disagree — a wrong size is a crooked page
+that nothing else would catch. App Store images land in `.build/appstore/`, at the
+simulator's own resolution, ready to upload.
+
+The shots come from an iPhone 17 Pro Max and an Apple Watch Ultra 3; set
+`REKKERT_SHOTS_PHONE` or `REKKERT_SHOTS_WATCH` to shoot a listing slot of another size.
+App Store Connect is the only thing that knows which pixel sizes it accepts this month, so
+the script prints what it made rather than claiming the sizes are right.
