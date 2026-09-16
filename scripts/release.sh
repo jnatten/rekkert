@@ -10,8 +10,14 @@
 # Needs, once:
 #   TUIST_DEVELOPMENT_TEAM      the paid team id, in mise.local.toml
 #   APP_STORE_CONNECT_KEY_ID    App Store Connect -> Users and Access ->
-#   APP_STORE_CONNECT_ISSUER_ID   Integrations -> App Store Connect API, key role Developer
+#   APP_STORE_CONNECT_ISSUER_ID   Integrations -> App Store Connect API, team key
 #   ~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8   the downloaded key, kept private
+#
+# The key's role must be Admin. Export asks App Store Connect for a cloud-managed
+# distribution certificate, and that is restricted to Account Holders and Admins: a
+# Developer key is refused with a 403 and the export ends up with nothing to sign with,
+# reported as the unrelated-looking "No signing certificate iOS Distribution found".
+# A key's role cannot be changed afterwards, so a wrong one has to be replaced.
 #
 # The watch app rides along inside the iPhone app, so this uploads both.
 # Every upload needs a build number no earlier upload used: --bump, or edit Project.swift.
