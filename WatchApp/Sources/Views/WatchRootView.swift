@@ -4,9 +4,6 @@ import SwiftUI
 struct WatchRootView: View {
     @Environment(AppModel.self) private var model
     @State private var selection = 0
-    /// The court page last looked at, so the menu acts on that one rather than always the
-    /// first.
-    @State private var lastCourt = 0
 
     var body: some View {
         content
@@ -39,13 +36,10 @@ struct WatchRootView: View {
                             .tag(match.courtIndex)
                     }
                     WatchStandingsView(tournament: tournament).tag(standingsTag)
-                    WatchMenuView(round: round.index, court: lastCourt).tag(menuTag)
+                    WatchMenuView().tag(menuTag)
                 }
                 .tabViewStyle(.page)
                 .task { openDemoPage() }
-                .onChange(of: selection) { _, new in
-                    if new != standingsTag, new != menuTag { lastCourt = new }
-                }
             } else {
                 WatchNoRoundView(tournament: tournament)
             }

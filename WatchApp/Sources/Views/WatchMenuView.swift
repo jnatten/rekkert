@@ -6,8 +6,6 @@ import WatchKit
 /// scoring screen so a stray tap cannot finish a round.
 struct WatchMenuView: View {
     @Environment(AppModel.self) private var model
-    var round = 0
-    var court = 0
     @State private var confirming: Confirmation?
 
     private enum Confirmation: String, Identifiable {
@@ -54,27 +52,11 @@ struct WatchMenuView: View {
                     }
                 }
 
-                // With one court this is unambiguous. With several it lives on the court
-                // page instead, where there is no doubt which one it means.
-                if !hasSeveralCourts {
-                    action("Swap serve", systemImage: "arrow.left.arrow.right", tint: .gray) {
-                        WKInterfaceDevice.current().play(.click)
-                        model.store.swapServingTeam(round: round, court: court)
-                    }
-                }
-
                 // Flips the phone, not this watch: it is the phone that is propped up
                 // somewhere with a side of the court in front of it.
                 action("Swap phone sides", systemImage: "rectangle.2.swap", tint: .gray) {
                     WKInterfaceDevice.current().play(.click)
                     model.store.toggleScoreboardMirrored()
-                }
-
-                // Unlike the side swap this reaches both devices: it is about which team
-                // you are, not which way you happen to be facing.
-                action("Swap colours", systemImage: "circle.lefthalf.filled", tint: .gray) {
-                    WKInterfaceDevice.current().play(.click)
-                    model.store.toggleTeamColors()
                 }
 
                 action("Undo", systemImage: "arrow.uturn.backward", tint: .gray) {
@@ -171,8 +153,6 @@ struct WatchMenuView: View {
     }
 
     private var hasResults: Bool { model.store.state?.hasResults ?? false }
-
-    private var hasSeveralCourts: Bool { (model.store.state?.courtCount ?? 0) > 1 }
 
     private var isWinnerCourt: Bool {
         if case .winnerCourt? = model.store.state { return true }

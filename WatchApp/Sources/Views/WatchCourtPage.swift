@@ -7,46 +7,97 @@ struct WatchCourtPage: View {
     @Environment(\.teamPalette) private var palette
     var round = 0
     let court: Int
+    @State private var page = WatchCourtPage.startPage
 
     var body: some View {
-        ScrollView {
-            if let snapshot {
-                VStack(spacing: 6) {
-                    ScoreboardView(
-                        snapshot: snapshot,
-                        compact: true,
-                        layout: layout,
-                        onTap: { side in
-                            WKInterfaceDevice.current().play(.click)
-                            model.store.tap(round: round, court: court, team: side)
-                        },
-                        onUndo: undo
-                    )
-                    .frame(height: snapshot.games == nil ? 132 : 150)
+        content
+            .containerBackground(palette.color(layout.order[0]).gradient.opacity(0.25), for: .tabView)
+    }
 
-                    if snapshot.isSuddenDeath {
-                        VStack(spacing: 3) {
-                            Text("Sudden death · receivers pick")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(.orange)
-                            HStack(spacing: 4) {
-                                serveSideButton("Right", court: .deuce, snapshot: snapshot)
-                                serveSideButton("Left", court: .ad, snapshot: snapshot)
-                            }
-                        }
-                    }
-
-                    Button("Undo", systemImage: "arrow.uturn.backward", action: undo)
-                        .disabled(!model.store.canUndo)
-                        .font(.footnote)
-
-                    courtControls
-                    correction(snapshot)
-                }
-                .containerBackground(palette.color(layout.order[0]).gradient.opacity(0.25), for: .tabView)
-            } else {
-                ProgressView()
+    @ViewBuilder
+    private var content: some View {
+        if let snapshot {
+            TabView(selection: $page) {
+                scoreboard(snapshot).tag(0)
+                controls(snapshot).tag(1)
             }
+            .tabViewStyle(.verticalPage)
+            // A court page is reused as the rounds go by, and each one should open on the
+            // score rather than wherever the last one was left.
+            .onChange(of: round) { page = 0 }
+        } else {
+            ProgressView()
+        }
+    }
+
+    private func scoreboard(_ snapshot: ScoreboardSnapshot) -> some View {
+        VStack(spacing: 4) {
+            ScoreboardView(
+                snapshot: snapshot,
+                compact: true,
+                layout: layout,
+                onTap: { side in
+                    WKInterfaceDevice.current().play(.click)
+                    model.store.tap(round: round, court: court, team: side)
+                },
+                onUndo: undo
+            )
+            // Nothing scrolls on this page any more, so the numbers take the whole of it.
+            .frame(maxHeight: .infinity)
+            .overlay(alignment: .bottomLeading) { undoButton }
+
+            // The line above the score already says it is sudden death, so this row only has
+            // to say whose call it is and take the answer.
+            if snapshot.isSuddenDeath {
+                HStack(spacing: 4) {
+                    Text("Receivers pick")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    serveSideButton("Right", court: .deuce, snapshot: snapshot)
+                    serveSideButton("Left", court: .ad, snapshot: snapshot)
+                }
+            }
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    /// Undoing is a correction, not the thing you came here to do, so it sits in a corner
+    /// as the icon alone rather than taking a row from the numbers. The score undoes on a
+    /// long press too, and the menu carries it in full.
+    private var undoButton: some View {
+        Button(action: undo) {
+            Image(systemName: "arrow.uturn.backward")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 30, height: 30)
+                // Dark enough to read as a control over a team's colour as well as over the
+                // black around it.
+                .background(.black.opacity(0.4), in: .circle)
+        }
+        .buttonStyle(.plain)
+        .opacity(model.store.canUndo ? 1 : 0.35)
+        .disabled(!model.store.canUndo)
+        .padding(.leading, 3)
+        .padding(.bottom, 3)
+        .accessibilityLabel("Undo")
+    }
+
+    /// The page below the score: everything you reach for between points rather than during
+    /// them, kept off the scoreboard so it can hold still.
+    private func controls(_ snapshot: ScoreboardSnapshot) -> some View {
+        ScrollView {
+            VStack(spacing: 8) {
+                if let label = snapshot.courtLabel {
+                    Text(label)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                courtControls
+                correction(snapshot)
+            }
+            .padding(.top, 6)
         }
     }
 
@@ -61,38 +112,43 @@ struct WatchCourtPage: View {
         ScoreboardLayout(isMirrored: model.store.display.areColorsSwapped)
     }
 
-    private var hasSeveralCourts: Bool { (model.store.state?.courtCount ?? 0) > 1 }
-
-    /// Kept on the court itself once there is more than one. The menu is a page of its own
-    /// and cannot say which court it means, which is exactly the thing you are correcting.
-    @ViewBuilder
     private var courtControls: some View {
-        if hasSeveralCourts {
-            VStack(spacing: 4) {
-                Button("Swap serve", systemImage: "arrow.left.arrow.right") {
-                    WKInterfaceDevice.current().play(.click)
-                    model.store.swapServingTeam(round: round, court: court)
-                }
-                Button("Swap colours", systemImage: "circle.lefthalf.filled") {
-                    WKInterfaceDevice.current().play(.click)
-                    model.store.toggleTeamColors()
-                }
+        VStack(spacing: 4) {
+            Button("Swap serve", systemImage: "arrow.left.arrow.right") {
+                WKInterfaceDevice.current().play(.click)
+                model.store.swapServingTeam(round: round, court: court)
             }
-            .font(.footnote)
-            .padding(.top, 2)
+            Button("Swap colours", systemImage: "circle.lefthalf.filled") {
+                WKInterfaceDevice.current().play(.click)
+                model.store.toggleTeamColors()
+            }
         }
+        .font(.footnote)
     }
 
     private func serveSideButton(_ title: String, court: ServeCourt, snapshot: ScoreboardSnapshot) -> some View {
         Button(title) { model.store.chooseServeSide(court) }
             .font(.system(size: 12))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
             .buttonStyle(.bordered)
+            .controlSize(.mini)
             .tint(snapshot.suddenDeathCourt == court ? .orange : .gray)
     }
 
     private func undo() {
         WKInterfaceDevice.current().play(.retry)
         model.store.undoLast()
+    }
+
+    /// Set before the tab view exists rather than in a task: handed a selection after its
+    /// pages have registered, it falls back to the first one.
+    private static var startPage: Int {
+        #if DEBUG
+        WatchDemoLaunch.page == "controls" ? 1 : 0
+        #else
+        0
+        #endif
     }
 
     /// Crown-driven correction. watchOS Steppers bind to the Digital Crown when focused.

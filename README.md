@@ -183,7 +183,8 @@ Debug builds accept `-rekkert-demo traditional|winnercourt|americano|mexicano` (
 `-rekkert-demo-points N`, `-rekkert-demo-deuce`, `-rekkert-demo-rounds`,
 `-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N`,
 `-rekkert-demo-open-court R,C`, `-rekkert-demo-roster`, `-rekkert-demo-presets`,
-`-rekkert-demo-watch-page menu`, `-rekkert-demo-fullscreen`, `-rekkert-demo-voices` or
+`-rekkert-demo-watch-page menu|standings|controls`, `-rekkert-demo-fullscreen`,
+`-rekkert-demo-voices` or
 `-rekkert-demo-new <mode>`) as
 launch arguments to put the app into a given state, since `simctl` cannot tap the screen.
 
