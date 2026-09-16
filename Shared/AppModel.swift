@@ -9,7 +9,11 @@ final class AppModel {
     /// Hosting and joining. Inert on the watch, which reaches a shared match through its own
     /// phone and never talks to a stranger's.
     let sharing: SharedSession
+    #if !os(watchOS)
+    /// The phone does the talking. The watch is on a wrist, not propped at the side of
+    /// the court, so it has no announcer at all.
     let announcer = ScoreAnnouncer()
+    #endif
     /// Driven from the match menu and presented at the root, so every scoreboard has it.
     var showingShareCode = false
     /// Joining is reachable from the start screen and from a match already in progress —
@@ -201,6 +205,10 @@ final class AppModel {
         // the app, so coming back to the front is when it has to be stood up again.
         sharing.resume()
         Task { [store] in await store.synchronise() }
+        #if !os(watchOS)
+        // Coming back to the front is when somebody has just been off downloading a voice.
+        announcer.refreshVoices()
+        #endif
     }
 
     /// Everyone who has played before, for name suggestions.

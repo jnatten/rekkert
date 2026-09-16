@@ -7,9 +7,6 @@ struct WatchCourtPage: View {
     @Environment(\.teamPalette) private var palette
     var round = 0
     let court: Int
-    /// Every court page stays alive behind the one on screen, so only the one being looked
-    /// at should be talking.
-    var isActive = true
 
     var body: some View {
         ScrollView {
@@ -51,7 +48,6 @@ struct WatchCourtPage: View {
                 ProgressView()
             }
         }
-        .announcesScore(snapshot, isActive: isActive)
     }
 
     private var snapshot: ScoreboardSnapshot? {

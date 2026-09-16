@@ -1,9 +1,10 @@
 import RekkertCore
 import SwiftUI
 
-enum HistoryRoute: Hashable {
+enum HomeRoute: Hashable {
     case list
     case record(HistoryRecord)
+    case voice
 }
 
 struct HistoryView: View {
@@ -12,7 +13,7 @@ struct HistoryView: View {
     var body: some View {
         List {
             ForEach(model.history) { record in
-                NavigationLink(value: HistoryRoute.record(record)) {
+                NavigationLink(value: HomeRoute.record(record)) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(record.title).font(.headline)
                         HStack(spacing: 4) {

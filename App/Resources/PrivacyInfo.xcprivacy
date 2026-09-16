@@ -15,9 +15,9 @@
 		<dict>
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
-			<!-- CA92.1: defaults readable and writable only by this app. Both uses qualify —
-			     the announcer's toggle and the per-install device id — and neither goes
-			     through an app group. -->
+			<!-- CA92.1: defaults readable and writable only by this app. Every use qualifies —
+			     the announcer's toggle, voice and speed, and the per-install device id — and
+			     none of them goes through an app group. -->
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
 				<string>CA92.1</string>

@@ -4,7 +4,7 @@ import SwiftUI
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     @State private var newMatch: GameMode?
-    @State private var path: [HistoryRoute] = []
+    @State private var path: [HomeRoute] = []
 
     var body: some View {
         @Bindable var announcer = model.announcer
@@ -81,22 +81,34 @@ struct HomeView: View {
                     Toggle(isOn: $announcer.isEnabled) {
                         Label("Call the score", systemImage: "speaker.wave.2")
                     }
+                    if announcer.isEnabled {
+                        NavigationLink(value: HomeRoute.voice) {
+                            LabeledContent("Voice", value: announcer.currentVoiceName)
+                        }
+                        Picker("Speed", selection: $announcer.speed) {
+                            ForEach(ScoreAnnouncer.Speed.allCases) { speed in
+                                Text(speed.title).tag(speed)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
                 } footer: {
-                    Text("Reads every point out loud, server first: \"thirty, fifteen\", \"deuce\", \"game\". This device only — set it separately on your Apple Watch.")
+                    Text("Reads every point out loud, server first: \"thirty, fifteen\", \"deuce\", \"game\". The phone does the talking; the watch stays quiet.")
                 }
 
                 if !model.history.isEmpty {
                     Section("History") {
-                        NavigationLink(value: HistoryRoute.list) {
+                        NavigationLink(value: HomeRoute.list) {
                             Label("Past matches", systemImage: "clock.arrow.circlepath")
                         }
                     }
                 }
             }
-            .navigationDestination(for: HistoryRoute.self) { route in
+            .navigationDestination(for: HomeRoute.self) { route in
                 switch route {
                 case .list: HistoryView()
                 case .record(let record): HistoryDetailView(record: record)
+                case .voice: VoicePickerView()
                 }
             }
             .navigationTitle("Rekkert")
@@ -107,6 +119,10 @@ struct HomeView: View {
                 #if DEBUG
                 if let raw = DemoLaunch.newSession {
                     newMatch = GameMode(rawValue: raw)
+                }
+                if DemoLaunch.openVoices {
+                    model.announcer.isEnabled = true
+                    path = [.voice]
                 }
                 if DemoLaunch.openHistory {
                     path = [.list]
