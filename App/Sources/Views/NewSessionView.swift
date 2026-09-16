@@ -291,13 +291,22 @@ struct NewSessionView: View {
                 ScrollView(.horizontal) {
                     HStack(spacing: 8) {
                         ForEach(quickAdd) { known in
-                            Button(known.name) { add(known.name) }
-                                .buttonStyle(.bordered)
-                                .contextMenu {
-                                    Button("Forget \(known.name)", systemImage: "trash", role: .destructive) {
-                                        model.forgetPlayer(known.name)
-                                    }
+                            // A menu with a primary action rather than a button with a
+                            // context menu: tap still adds, press and hold still offers to
+                            // forget, but the menu belongs to this chip rather than to the
+                            // row. The whole scroller is one row, and a row resolves a
+                            // long press to the first context menu anywhere inside it — so
+                            // every chip offered to forget whoever came first.
+                            Menu {
+                                Button("Forget \(known.name)", systemImage: "trash", role: .destructive) {
+                                    model.forgetPlayer(known.name)
                                 }
+                            } label: {
+                                Text(known.name)
+                            } primaryAction: {
+                                add(known.name)
+                            }
+                            .buttonStyle(.bordered)
                         }
                     }
                     .padding(.vertical, 2)
