@@ -24,6 +24,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Export shells out to /usr/bin/rsync, which is Apple's openrsync, and openrsync starts a
+# second rsync off PATH to copy to. Homebrew's rsync is not Apple's and rejects the -E it
+# is handed, which surfaces three steps later as a bare "Copy failed" with nothing in it
+# about rsync. /usr/bin first keeps the pair matched; mise and tuist are still found.
+export PATH="/usr/bin:$PATH"
+
 DO_TESTS=1
 STOP_AFTER=upload
 BUMP=0
