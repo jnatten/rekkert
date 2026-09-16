@@ -224,15 +224,36 @@ that a session code still works as a TLS pre-shared key.
 Docs images are written straight into `docs/images/` at the sizes `docs/index.html`
 declares, and the script fails if the two ever disagree — a wrong size is a crooked page
 that nothing else would catch. App Store images land in `fastlane/screenshots/en-US/`, at
-the simulator's own resolution, and go up with:
+the simulator's own resolution.
+
+## The App Store listing
+
+The description, promotional text, keywords and copyright live in `fastlane/metadata/`,
+one plain file per field, and are the source of truth rather than the web form:
+
+    fastlane/metadata/copyright.txt          # not localised, so it sits at the top
+    fastlane/metadata/en-US/description.txt
+    fastlane/metadata/en-US/keywords.txt
+    fastlane/metadata/en-US/promotional_text.txt
+
+`deliver` reads a fixed set of names, and the ones not here yet are `release_notes.txt`
+(What's New, per version), `name.txt`, `subtitle.txt`, `support_url.txt`,
+`marketing_url.txt` and `privacy_url.txt`. Add a file and it starts being uploaded.
 
 ```sh
-./scripts/release.sh --screenshots    # uploads those, builds nothing
+./scripts/release.sh --metadata                  # text only
+./scripts/release.sh --screenshots               # images only
+./scripts/release.sh --screenshots --metadata    # the whole listing
 ```
 
-Screenshots belong to a version rather than to the app, so that needs a version in an
-editable state — the one you are preparing. It replaces the set for each device size
-instead of adding to it, because App Store Connect caps a set at ten and then refuses.
+None of these build anything. Both belong to a version rather than to the app, so they
+need a version in an editable state — the one you are preparing.
+
+Screenshots replace the set for each device size instead of adding to it, because App
+Store Connect caps a set at ten and then refuses. Metadata only touches fields that exist
+as files: a missing one is skipped, and so is an empty one, so a field is cleared in the
+web UI and never by emptying a file here. Anything over Apple's character limit is caught
+before the upload rather than after the round trip.
 
 The shots come from an iPhone 17 Pro Max and an Apple Watch Ultra 3; set
 `REKKERT_SHOTS_PHONE` or `REKKERT_SHOTS_WATCH` to shoot a listing slot of another size.

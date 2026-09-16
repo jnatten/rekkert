@@ -7,6 +7,8 @@
 #   scripts/release.sh --validate  # archive and validate, upload nothing
 #   scripts/release.sh --skip-tests
 #   scripts/release.sh --screenshots   # upload only the screenshots, build nothing
+#   scripts/release.sh --metadata      # upload only the description and the rest
+#   scripts/release.sh --screenshots --metadata   # the whole listing
 #
 # Needs, once:
 #   TUIST_DEVELOPMENT_TEAM      the paid team id, in mise.local.toml
@@ -23,11 +25,14 @@
 # The watch app rides along inside the iPhone app, so this uploads both.
 # Every upload needs a build number no earlier upload used: --bump, or edit Project.swift.
 #
-# --screenshots uploads whatever `scripts/shots.sh` last put in fastlane/screenshots/.
-# Screenshots belong to a version rather than to the app, so this needs a version in an
-# editable state — the one you are preparing. It replaces the whole set for each device
-# size rather than adding to it, because App Store Connect caps a set at ten and then
-# starts refusing.
+# --screenshots uploads whatever `scripts/shots.sh` last put in fastlane/screenshots/, and
+# --metadata uploads the text in fastlane/metadata/. Both belong to a version rather than
+# to the app, so they need a version in an editable state — the one you are preparing.
+#
+# Screenshots replace the whole set for each device size rather than adding to it, because
+# App Store Connect caps a set at ten and then starts refusing. Metadata only touches the
+# fields that exist as files: deliver skips a missing one and skips an empty one too, so a
+# field is cleared in the web UI, never by emptying the file here.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -35,18 +40,24 @@ cd "$(dirname "$0")/.."
 # second rsync off PATH to copy to. Homebrew's rsync is not Apple's and rejects the -E it
 # is handed, which surfaces three steps later as a bare "Copy failed" with nothing in it
 # about rsync. /usr/bin first keeps the pair matched; mise and tuist are still found.
+# Kept for the steps below that need it: fastlane resolves ruby through PATH, and
+# /usr/bin/ruby is macOS's own 2.6, which fastlane refuses to run on.
+mise_path="$PATH"
 export PATH="/usr/bin:$PATH"
 
 DO_TESTS=1
 STOP_AFTER=upload
 BUMP=0
+UP_SHOTS=0
+UP_META=0
 for arg in "$@"; do
   case "$arg" in
     --bump) BUMP=1 ;;
     --archive) STOP_AFTER=archive ;;
     --validate) STOP_AFTER=validate ;;
     --skip-tests) DO_TESTS=0 ;;
-    --screenshots) STOP_AFTER=screenshots ;;
+    --screenshots) STOP_AFTER=listing; UP_SHOTS=1 ;;
+    --metadata) STOP_AFTER=listing; UP_META=1 ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
 done
@@ -58,7 +69,7 @@ EXPORTED="$OUT/export"
 IPA="$EXPORTED/Rekkert.ipa"
 
 team="${TUIST_DEVELOPMENT_TEAM:-}"
-if [ -z "$team" ] && [ "$STOP_AFTER" != screenshots ]; then
+if [ -z "$team" ] && [ "$STOP_AFTER" != listing ]; then
   echo "TUIST_DEVELOPMENT_TEAM is not set. Put your paid team id in mise.local.toml." >&2
   exit 1
 fi
@@ -84,10 +95,42 @@ if [ -n "$key_id" ] && [ -n "$issuer" ] && [ -f "$key_path" ]; then
         -authenticationKeyIssuerID "$issuer")
 fi
 
-if [ "$STOP_AFTER" = screenshots ]; then
+if [ "$STOP_AFTER" = listing ]; then
   shots=fastlane/screenshots
-  test -n "$(find "$shots" -name '*.png' 2>/dev/null)" || {
-    echo "No screenshots in $shots/ - run ./scripts/shots.sh first" >&2; exit 1; }
+  meta=fastlane/metadata
+
+  if [ "$UP_SHOTS" = 1 ]; then
+    test -n "$(find "$shots" -name '*.png' 2>/dev/null)" || {
+      echo "No screenshots in $shots/ - run ./scripts/shots.sh first" >&2; exit 1; }
+  fi
+
+  # App Store Connect rejects the whole upload over one long field, and says so after the
+  # round trip. The caps are Apple's, and a field with no cap is simply not listed.
+  if [ "$UP_META" = 1 ]; then
+    test -d "$meta" || { echo "No metadata in $meta/" >&2; exit 1; }
+    META_DIR="$meta" python3 -c '
+import os, pathlib, sys
+caps = {
+    "description.txt": 4000,
+    "keywords.txt": 100,
+    "promotional_text.txt": 170,
+    "release_notes.txt": 4000,
+    "name.txt": 30,
+    "subtitle.txt": 30,
+    "copyright.txt": 200,
+}
+over = []
+for path in sorted(pathlib.Path(os.environ["META_DIR"]).rglob("*.txt")):
+    cap = caps.get(path.name)
+    if cap is None:
+        continue
+    size = len(path.read_text().strip())
+    if size > cap:
+        over.append("  %s: %d characters, App Store allows %d" % (path, size, cap))
+if over:
+    sys.exit("FAIL: metadata too long\n" + "\n".join(over))
+' || exit 1
+  fi
 
   # deliver wants the key as one JSON file rather than as the three separate things every
   # other Apple tool takes. It carries the private key, so it is written where only this
@@ -104,19 +147,31 @@ print(json.dumps({
     "in_house": False,
 }))' > "$api_key"
 
-  echo "==> Upload screenshots"
-  find "$shots" -name '*.png' | sort | sed 's/^/  /'
+  skip_shots=true
+  skip_meta=true
+  echo "==> Upload"
+  if [ "$UP_SHOTS" = 1 ]; then
+    skip_shots=false
+    find "$shots" -name '*.png' | sort | sed 's/^/  /'
+  fi
+  if [ "$UP_META" = 1 ]; then
+    skip_meta=false
+    find "$meta" -name '*.txt' | sort | sed 's/^/  /'
+  fi
+
   # --force skips the HTML summary deliver would otherwise stop and ask you to confirm.
-  mise exec -- fastlane deliver \
+  # This app tells the App Store it does no tracking, so its release tooling does none.
+  PATH="$mise_path" FASTLANE_OPT_OUT_USAGE=1 mise exec -- fastlane deliver \
     --api_key_path "$api_key" \
     --app_identifier "$IOS_ID" \
     --screenshots_path "$shots" \
+    --metadata_path "$meta" \
     --skip_binary_upload true \
-    --skip_metadata true \
-    --skip_screenshots false \
+    --skip_metadata "$skip_meta" \
+    --skip_screenshots "$skip_shots" \
     --overwrite_screenshots true \
     --force true
-  echo "==> Screenshots uploaded, onto the version you are preparing."
+  echo "==> Uploaded, onto the version you are preparing."
   exit 0
 fi
 
