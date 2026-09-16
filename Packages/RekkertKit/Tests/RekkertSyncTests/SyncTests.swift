@@ -368,6 +368,28 @@ struct SyncTests {
         #expect(pair.watch.display.areColorsSwapped == false)
     }
 
+    @Test func aNewMatchStartsUsBlueOnTheLeftAgain() async throws {
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        pair.phone.configure(setup)
+        pair.phone.toggleScoreboardMirrored()
+        try await settle()
+        pair.watch.toggleTeamColors()
+        try await settle()
+        #expect(pair.phone.display.isMirrored)
+        #expect(pair.phone.display.areColorsSwapped)
+
+        pair.phone.startNewSession()
+        pair.phone.configure(setup)
+        try await settle()
+
+        #expect(pair.phone.display.isDefault, "the flips belonged to the match that is over")
+        #expect(pair.watch.display.isDefault, "and the watch reads the new one the same way")
+    }
+
     @Test func theTwoDisplayPreferencesDoNotDisturbEachOther() async throws {
         let pair = Pair()
         let tasks = pair.run()

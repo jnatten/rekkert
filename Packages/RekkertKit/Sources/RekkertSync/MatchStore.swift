@@ -77,7 +77,10 @@ public final class MatchStore {
 
     // MARK: - Local mutations
 
-    public func configure(_ setup: SessionSetup) { record(.configure(setup)) }
+    public func configure(_ setup: SessionSetup) {
+        resetDisplayForNewMatch()
+        record(.configure(setup))
+    }
     public func tap(round: Int = 0, court: Int = 0, team: TeamSide) {
         record(.point(round: round, court: court, team: team))
     }
@@ -220,6 +223,7 @@ public final class MatchStore {
     public func resume(_ archived: SessionState) {
         guard let resumable = archived.resumed() else { return }
         startNewSession()
+        resetDisplayForNewMatch()
         record(.restore(resumable))
     }
 
@@ -244,6 +248,16 @@ public final class MatchStore {
 
     public func toggleTeamColors() {
         setTeamColorsSwapped(!display.areColorsSwapped)
+    }
+
+    /// A match starts the way everyone reads it — us blue on the left, them orange on the
+    /// right — whatever the last one was flipped to. A flip answers where you are standing
+    /// and which side of the draw you are on today, and neither survives the match it was
+    /// made for. Set here rather than on `startNewSession()`, which taking back a result
+    /// also goes through: that reopens the match you were already reading.
+    private func resetDisplayForNewMatch() {
+        guard !display.isDefault else { return }
+        apply(display.reset(), publish: true)
     }
 
     private func apply(_ preferences: DisplayPreferences, publish: Bool) {

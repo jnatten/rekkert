@@ -33,6 +33,16 @@ public struct DisplayPreferences: Codable, Sendable, Hashable {
 
     public var hasBeenSet: Bool { revision > 0 }
 
+    /// The way a scoreboard reads before anyone has flipped it: the first team on the left
+    /// and drawn blue.
+    public var isDefault: Bool { !isMirrored && !areColorsSwapped }
+
+    /// Back to that, carried as the next revision rather than as a fresh value, so it
+    /// outranks whatever flips the other device is still holding.
+    public func reset(at date: Date = Date()) -> DisplayPreferences {
+        DisplayPreferences(revision: revision + 1, updatedAt: date)
+    }
+
     public func setting(mirrored: Bool, at date: Date = Date()) -> DisplayPreferences {
         DisplayPreferences(
             isMirrored: mirrored,

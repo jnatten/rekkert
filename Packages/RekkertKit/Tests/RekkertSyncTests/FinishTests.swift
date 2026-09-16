@@ -256,6 +256,25 @@ struct FinishTests {
         #expect(watch.state == phone.state, "the watch is back in the match too")
     }
 
+    @Test func takingBackAResultKeepsTheMatchTheColourItWasBeingReadIn() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let (phone, watch, _, _) = pair(directory)
+        let tasks = [Task { await phone.run() }, Task { await watch.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+
+        phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+        phone.toggleTeamColors()
+        for _ in 0 ..< 48 { phone.tap(team: .a) }
+        try await settle()
+
+        phone.undoResult()
+        try await settle()
+
+        #expect(phone.display.areColorsSwapped, "the same match is back on, not a new one")
+        #expect(watch.display.areColorsSwapped)
+    }
+
     @Test func takingBackADeliberateEndingReopensTheSession() async throws {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
