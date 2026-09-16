@@ -1,5 +1,6 @@
 import RekkertCore
 import SwiftUI
+import UIKit
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
@@ -54,6 +55,10 @@ struct RootView: View {
             // Here rather than on the start screen: a device that already has a match never
             // shows that screen, and joining from one is exactly the case worth exercising.
             if DemoLaunch.joinCode != nil { model.showingJoin = true }
+            if DemoLaunch.isLandscape,
+               let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
+            }
             #endif
         }
         .alert(

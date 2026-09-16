@@ -10,6 +10,12 @@ enum DemoLaunch {
     /// Opens the new-session sheet: -rekkert-demo-new americano
     static var newSession: String? { value(for: "-rekkert-demo-new") }
 
+    /// Turns the phone on its side. simctl cannot rotate and Xcode ships no Simulator app
+    /// to do it from, so landscape has to be asked for at launch like everything else here.
+    static var isLandscape: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-landscape")
+    }
+
     /// Opens straight into the full-screen scoreboard.
     static var fullscreen: Bool {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-fullscreen")
