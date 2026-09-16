@@ -45,7 +45,7 @@ struct WatchCourtPage: View {
             // Nothing scrolls on this page any more, so the numbers take the whole of it.
             .frame(maxHeight: .infinity)
             .overlay(alignment: .bottomLeading) { undoButton }
-            .overlay(alignment: .bottomTrailing) { heartRate }
+            .overlay(alignment: .topLeading) { heartRate }
 
             // The line above the score already says it is sudden death, so this row only has
             // to say whose call it is and take the answer.
@@ -68,28 +68,29 @@ struct WatchCourtPage: View {
     /// without one is the ordinary case, not a thing to report. It follows the session
     /// rather than the first sample: waiting for a reading would have it blink into
     /// existence some seconds after the button, which reads as a fault.
+    ///
+    /// Beside the set line at the top rather than in a bottom corner: the bottom right is
+    /// where the games read, anchored trailing so the running game sits hard against that
+    /// edge, and the bottom left is the undo button.
+    ///
+    /// The symbol alone, with no reading beside it. The line it shares is centred and can be
+    /// as long as "Round 1 · 16 to play", which on a 40mm watch runs clean under a number
+    /// wide enough to hold three digits.
     @ViewBuilder
     private var heartRate: some View {
         if model.workout.isTracking {
-            HStack(spacing: 2) {
-                Image(systemName: "heart.fill")
-                    .font(.system(size: 9))
-                    .symbolEffect(.pulse)
-                if let beats = model.workout.heartRate {
-                    Text(beats.formatted(.number.precision(.fractionLength(0))))
-                        .font(.system(size: 11, weight: .semibold))
-                        .monospacedDigit()
-                }
-            }
-            .foregroundStyle(.pink)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
-            .background(.black.opacity(0.4), in: .capsule)
-            .padding(.trailing, 3)
-            .padding(.bottom, 3)
-            .accessibilityLabel(
-                model.workout.heartRate.map { "\(Int($0)) beats per minute" } ?? "Workout running"
-            )
+            Image(systemName: "heart.fill")
+                .font(.system(size: 10))
+                .symbolEffect(.pulse)
+                .foregroundStyle(.pink)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(.black.opacity(0.4), in: .capsule)
+                .padding(.leading, 3)
+                .accessibilityLabel(
+                    model.workout.heartRate.map { "Workout running, \(Int($0)) beats per minute" }
+                        ?? "Workout running"
+                )
         }
     }
 
