@@ -183,4 +183,25 @@ struct ScoreCallTests {
         let call = ScoreCall(phrases: ["Game, Blue", "1 game to 0, Blue"])
         #expect(call.spoken == "Game, Blue. 1 game to 0, Blue.")
     }
+
+    @Test func winningAFriendlyRoundIsCalledAsAMatch() throws {
+        var session = FriendlySession(
+            id: FriendlyID(UUID(uuidString: "00000000-0000-0000-0000-0000000000A1")!),
+            rules: TraditionalRules(setsToWin: 1),
+            players: ["Jonas", "Ola", "Kari", "Trond"].map { Player(name: $0) }
+        )
+        session = try FriendlyScheduler.appendingRound(to: session)
+        let engine = session.engine
+        session.rounds[0].score = engine.winGames(5, for: .a, from: session.rounds[0].score)
+        session.rounds[0].score = engine.play([.a, .a, .a], from: session.rounds[0].score)
+        let before = try #require(ScoreboardSnapshot.make(from: .friendly(session)))
+
+        session.rounds[0].score = engine.play([.a], from: session.rounds[0].score)
+        let after = try #require(ScoreboardSnapshot.make(from: .friendly(session)))
+
+        let winners = session.names(.a, in: session.rounds[0])
+        #expect(ScoreCaller.call(from: before, to: after)?.phrases == [
+            "Game, set and match, \(winners)",
+        ])
+    }
 }

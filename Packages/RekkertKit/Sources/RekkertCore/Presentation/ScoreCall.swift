@@ -81,7 +81,7 @@ public enum ScoreCaller {
         case .pointCount:
             guard let winner = snapshot.winner else { return ["Finished, all square"] }
             return ["Game to \(snapshot.teamNames[winner])"]
-        case .traditional, .winnerCourt:
+        case .traditional, .winnerCourt, .friendly:
             return []
         }
     }

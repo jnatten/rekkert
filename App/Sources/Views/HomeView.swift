@@ -204,6 +204,7 @@ enum GameMode: String, CaseIterable, Identifiable {
     case traditional
     case pointCount
     case winnerCourt
+    case friendly
     case americano
     case mexicano
 
@@ -214,6 +215,7 @@ enum GameMode: String, CaseIterable, Identifiable {
         case .traditional: "Match"
         case .pointCount: "Points"
         case .winnerCourt: "Winner court"
+        case .friendly: "Friendly"
         case .americano: "Americano"
         case .mexicano: "Mexicano"
         }
@@ -224,6 +226,7 @@ enum GameMode: String, CaseIterable, Identifiable {
         case .traditional: "Games, sets and match"
         case .pointCount: "One round, counted 1, 2, 3 to a target"
         case .winnerCourt: "Games until the whistle, round after round"
+        case .friendly: "Rotating teams, match after match"
         case .americano: "Everyone partners everyone"
         case .mexicano: "Re-paired by standings each round"
         }
@@ -234,6 +237,7 @@ enum GameMode: String, CaseIterable, Identifiable {
         case .traditional: "figure.tennis"
         case .pointCount: "number"
         case .winnerCourt: "arrow.up.arrow.down"
+        case .friendly: "shuffle"
         case .americano: "arrow.triangle.2.circlepath"
         case .mexicano: "list.number"
         }
@@ -241,7 +245,7 @@ enum GameMode: String, CaseIterable, Identifiable {
 
     var tournamentFormat: TournamentFormat? {
         switch self {
-        case .traditional, .pointCount, .winnerCourt: nil
+        case .traditional, .pointCount, .winnerCourt, .friendly: nil
         case .americano: .americano
         case .mexicano: .mexicano
         }

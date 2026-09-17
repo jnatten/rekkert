@@ -11,6 +11,14 @@ private func tournamentPreset(_ name: String = "Thursday") -> Preset {
     ))
 }
 
+private func friendlyPreset(_ name: String = "Thursday mix") -> Preset {
+    Preset(name: name, configuration: .friendly(
+        name: "Thursday night",
+        players: ["Jonas", "Ada", "Kim", "Sam", "Ola"].map { Player(name: $0) },
+        rules: TraditionalRules(setsToWin: 1, gamesPerSet: 4)
+    ))
+}
+
 @Suite("Presets")
 struct PresetTests {
     @Test func startingFromATournamentPresetMintsAFreshTournament() {
@@ -28,10 +36,32 @@ struct PresetTests {
                 "and the players are fresh too, so standings never bleed across")
     }
 
-    @Test func onlyTournamentsNeedARoundDrawn() {
+    @Test func startingFromAFriendlyPresetMintsAFreshSession() {
+        let preset = friendlyPreset()
+        guard case .friendly(let one) = preset.configuration.makeSetup(),
+              case .friendly(let two) = preset.configuration.makeSetup()
+        else {
+            Issue.record("not a friendly")
+            return
+        }
+        #expect(one.id != two.id, "a fresh id, so the draw does not repeat last week's")
+        #expect(one.rules.gamesPerSet == 4, "but the settings carry over")
+        #expect(one.players.map(\.name) == ["Jonas", "Ada", "Kim", "Sam", "Ola"])
+        #expect(Set(one.players.map(\.id)).isDisjoint(with: Set(two.players.map(\.id))))
+    }
+
+    @Test func onlyTheRotatingModesNeedARoundDrawn() {
         #expect(tournamentPreset().configuration.drawsRounds)
+        #expect(friendlyPreset().configuration.drawsRounds)
         #expect(!PresetConfiguration.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)).drawsRounds)
         #expect(!PresetConfiguration.winnerCourt(rules: WinnerCourtRules(), teams: BySide(a: .home, b: .away)).drawsRounds)
+    }
+
+    @Test func aFriendlyPresetSaysWhatItIs() {
+        #expect(friendlyPreset().configuration.summary == "Friendly · 5 players · first to 4")
+        #expect(PresetConfiguration.friendly(
+            name: "", players: [], rules: TraditionalRules(setsToWin: 2)
+        ).summary == "Friendly · 0 players · best of 3")
     }
 
     @Test func savingReplacesAPresetWithTheSameIdentity() {

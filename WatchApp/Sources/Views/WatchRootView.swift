@@ -45,6 +45,17 @@ struct WatchRootView: View {
             .tabViewStyle(.page)
             .task { openDemoPage() }
 
+        // Its own case rather than joining the deck above: the round index has to reach
+        // the page, or a tap after round 1 lands on round 1.
+        case .friendly(let session):
+            TabView(selection: $selection) {
+                WatchCourtPage(round: session.currentIndex, court: 0, onShowWorkout: showWorkout).tag(0)
+                workoutPage
+                WatchMenuView().tag(menuTag)
+            }
+            .tabViewStyle(.page)
+            .task { openDemoPage() }
+
         case .tournament(let tournament):
             if let round = tournament.currentRound {
                 TabView(selection: $selection) {

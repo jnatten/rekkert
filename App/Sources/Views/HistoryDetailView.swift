@@ -35,8 +35,15 @@ struct HistoryDetailView: View {
                             Text(placing.name)
                                 .fontWeight(placing.rank == 1 ? .semibold : .regular)
                             Spacer()
-                            Text(placing.value)
-                                .font(.callout.bold().monospacedDigit())
+                            VStack(alignment: .trailing, spacing: 1) {
+                                Text(placing.value)
+                                    .font(.callout.bold().monospacedDigit())
+                                if let detail = placing.detail {
+                                    Text(detail)
+                                        .font(.caption2.monospacedDigit())
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                         }
                     }
                 }
@@ -50,6 +57,9 @@ struct HistoryDetailView: View {
             }
             if case .winnerCourt(let session) = record.state, !session.completedRounds.isEmpty {
                 winnerCourtRounds(session)
+            }
+            if case .friendly(let session) = record.state {
+                friendlyRounds(session)
             }
 
             resumeSection
@@ -180,6 +190,32 @@ struct HistoryDetailView: View {
     }
 
     @ViewBuilder
+    private func friendlyRounds(_ session: FriendlySession) -> some View {
+        ForEach(session.rounds.filter(\.wasPlayed)) { round in
+            Section("Round \(round.index + 1)") {
+                ForEach(TeamSide.allCases, id: \.self) { side in
+                    HStack {
+                        Circle().fill(palette.color(side)).frame(width: 8, height: 8)
+                        Text(session.names(side, in: round)).lineLimit(1)
+                        Spacer()
+                        Text("\(round.games[side])")
+                            .font(.body.bold().monospacedDigit())
+                            .foregroundStyle(palette.color(side))
+                    }
+                }
+                if round.isStopped {
+                    Text("Stopped part-way").font(.caption).foregroundStyle(.secondary)
+                }
+                if !round.sitOuts.isEmpty {
+                    Text("Sitting out: \(session.sitOutNames(in: round).joined(separator: ", "))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
     private var resumeSection: some View {
         Section {
             if tournament != nil {
@@ -202,6 +238,9 @@ struct HistoryDetailView: View {
         // the wrong thing to say about one you deliberately finished.
         if case .tournament = record.state {
             return "Resuming adds more rounds to this tournament. Starting a new one keeps the players and leaves this where it is."
+        }
+        if case .friendly = record.state {
+            return "Resuming adds more rounds to this friendly, with the same group and the draw carrying on from where it left off."
         }
         return record.state.canResume
             ? "This one never ran its course, so there is more of it to play."

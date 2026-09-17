@@ -34,6 +34,22 @@ private func playRounds(_ tournament: Tournament, count: Int, score: (Int) -> By
     return current
 }
 
+/// Every round's teams as names, which is what a draw actually is once the identifiers are
+/// stripped off it.
+private func drawn(_ tournament: Tournament) -> [[[[String]]]] {
+    tournament.rounds.map { round in
+        round.matches.map { match in
+            TeamSide.allCases.map { side in
+                match.teams[side].compactMap { tournament.player($0)?.name }
+            }
+        }
+    }
+}
+
+private func benched(_ tournament: Tournament) -> [[String]] {
+    tournament.rounds.map { $0.sitOuts.compactMap { tournament.player($0)?.name } }
+}
+
 @Suite("Tournament scheduling")
 struct TournamentTests {
     @Test func fourPlayersOneCourtNobodySitsOut() throws {
@@ -176,5 +192,34 @@ struct LeaderboardTests {
 
         #expect(Leaderboard.standings(for: t, onlyConfirmed: false).first?.total == 10)
         #expect(Leaderboard.standings(for: t, onlyConfirmed: true).allSatisfy { $0.total == 0 })
+    }
+
+    // MARK: - Golden draws
+
+    /// A fingerprint of the rounds the schedulers draw today. The pairing machinery is shared
+    /// with other modes, so a refactor of it has to reproduce these exactly rather than merely
+    /// stay plausible — a draw that is still fair but different would silently re-partner
+    /// everybody's Thursday.
+    @Test func americanoDrawsTheRoundsItAlwaysHas() throws {
+        let played = try playRounds(makeTournament(.americano, players: 8, courts: 2), count: 3)
+        #expect(drawn(played) == [
+            [[["P5", "P1"], ["P3", "P2"]], [["P4", "P0"], ["P6", "P7"]]],
+            [[["P1", "P0"], ["P5", "P4"]], [["P7", "P2"], ["P3", "P6"]]],
+            [[["P6", "P4"], ["P3", "P5"]], [["P1", "P2"], ["P0", "P7"]]],
+        ])
+    }
+
+    @Test func mexicanoDrawsTheRoundsItAlwaysHas() throws {
+        let played = try playRounds(
+            makeTournament(.mexicano, players: 9, courts: 2),
+            count: 3,
+            score: { BySide(a: 10 - $0, b: 6 + $0) }
+        )
+        #expect(drawn(played) == [
+            [[["P1", "P4"], ["P3", "P2"]], [["P5", "P8"], ["P7", "P0"]]],
+            [[["P4", "P6"], ["P5", "P8"]], [["P0", "P7"], ["P2", "P3"]]],
+            [[["P4", "P6"], ["P1", "P5"]], [["P8", "P2"], ["P0", "P7"]]],
+        ])
+        #expect(benched(played) == [["P6"], ["P1"], ["P3"]])
     }
 }

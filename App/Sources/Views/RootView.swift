@@ -22,6 +22,8 @@ struct RootView: View {
                 WinnerCourtView()
             case .pointCount:
                 PointCountMatchView()
+            case .friendly:
+                FriendlyMatchView()
             }
         }
         .environment(\.teamPalette, TeamPalette(isSwapped: model.store.display.areColorsSwapped))

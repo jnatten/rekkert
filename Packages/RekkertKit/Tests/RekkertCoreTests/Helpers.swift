@@ -33,6 +33,16 @@ extension MatchLog {
         return append(.nextRound(after: tournament.rounds.count - 1), from: device)
     }
 
+    /// Mirrors `MatchStore.nextRound()` for a friendly, which addresses the round on screen
+    /// now so two devices tapping at once still produce one.
+    @discardableResult
+    mutating func drawFriendlyRound(from device: DeviceID) -> MatchEvent {
+        guard case .friendly(let session)? = SessionReducer.state(of: self) else {
+            return append(.nextRound(after: -1), from: device)
+        }
+        return append(.nextRound(after: session.rounds.count - 1), from: device)
+    }
+
     /// Mirrors `MatchStore.endRound()`.
     @discardableResult
     mutating func blowWhistle(from device: DeviceID) -> MatchEvent {

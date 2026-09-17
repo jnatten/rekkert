@@ -1,17 +1,17 @@
 import Foundation
 
 enum RoundScheduler {
-    /// Everyone who can't be given a court this round. Benches whoever has sat out least
+    /// Everyone who can't be given a seat this round. Benches whoever has sat out least
     /// so far, so sit-outs spread evenly; ties break on a seeded order rather than on
     /// dictionary iteration, which would differ between devices.
     static func split(
         players: [Player],
-        courts: Int,
-        history: TournamentHistory,
+        seats: Int,
+        history: PairingHistory,
         generator: inout SeededGenerator
     ) -> (playing: [PlayerID], sitting: [PlayerID]) {
         let shuffled = players.map(\.id).shuffled(using: &generator)
-        let seatCount = courts * 4
+        let seatCount = seats
         guard shuffled.count > seatCount else { return (shuffled, []) }
 
         let order = Dictionary(uniqueKeysWithValues: shuffled.enumerated().map { ($1, $0) })
@@ -36,32 +36,26 @@ enum RoundScheduler {
     }
 }
 
-public enum AmericanoScheduler {
+/// Picks the partnerships for a set of players already known to be on court, preferring the
+/// pairs and the match-ups that have come up least.
+///
+/// Doubles only: the search swaps players between four fixed slots per court, so every team
+/// handed to it must have exactly two players. A singles draw has nothing left to decide
+/// once the bench is chosen, and goes nowhere near this.
+enum PairingSearch {
     private static let repeatPartnerCost = 100
     private static let repeatOpponentCost = 1
 
-    public static func nextRound(for tournament: Tournament) throws -> Round {
-        let courts = tournament.playableCourts
-        guard courts >= 1 else {
-            throw TournamentError.notEnoughPlayers(needed: 4, have: tournament.players.count)
-        }
-
-        let index = tournament.rounds.count
-        let history = TournamentHistory(tournament)
-        var generator = SeededGenerator(tournament.id.raw, salt: UInt64(index))
-        let (playing, sitting) = RoundScheduler.split(
-            players: tournament.players, courts: courts, history: history, generator: &generator
-        )
-
+    static func teams(
+        from playing: [PlayerID], courts: Int, history: PairingHistory
+    ) -> [BySide<[PlayerID]>] {
         var teams = greedyTeams(from: playing, courts: courts, history: history)
         improve(&teams, history: history)
-
-        let matches = teams.enumerated().map { CourtMatch(courtIndex: $0.offset, teams: $0.element) }
-        return Round(index: index, matches: matches, sitOuts: sitting)
+        return teams
     }
 
     private static func greedyTeams(
-        from playing: [PlayerID], courts: Int, history: TournamentHistory
+        from playing: [PlayerID], courts: Int, history: PairingHistory
     ) -> [BySide<[PlayerID]>] {
         var pool = playing
         var teams: [BySide<[PlayerID]>] = []
@@ -97,7 +91,7 @@ public enum AmericanoScheduler {
         return best
     }
 
-    private static func crossCost(_ one: [PlayerID], _ two: [PlayerID], history: TournamentHistory) -> Int {
+    private static func crossCost(_ one: [PlayerID], _ two: [PlayerID], history: PairingHistory) -> Int {
         var total = 0
         for left in one {
             for right in two {
@@ -107,7 +101,7 @@ public enum AmericanoScheduler {
         return total
     }
 
-    static func cost(_ teams: [BySide<[PlayerID]>], history: TournamentHistory) -> Int {
+    static func cost(_ teams: [BySide<[PlayerID]>], history: PairingHistory) -> Int {
         teams.reduce(0) { running, match in
             var total = running
             for side in TeamSide.allCases where match[side].count == 2 {
@@ -120,7 +114,7 @@ public enum AmericanoScheduler {
 
     /// Bounded, deterministic local search: swap two players between slots whenever it
     /// lowers the repeat cost. Greedy alone can leave obvious repeats on the table.
-    private static func improve(_ teams: inout [BySide<[PlayerID]>], history: TournamentHistory) {
+    private static func improve(_ teams: inout [BySide<[PlayerID]>], history: PairingHistory) {
         let slots = teams.indices.flatMap { court in
             TeamSide.allCases.flatMap { side in (0 ..< 2).map { (court, side, $0) } }
         }
@@ -148,6 +142,27 @@ public enum AmericanoScheduler {
     }
 }
 
+public enum AmericanoScheduler {
+    public static func nextRound(for tournament: Tournament) throws -> Round {
+        let courts = tournament.playableCourts
+        guard courts >= 1 else {
+            throw TournamentError.notEnoughPlayers(needed: 4, have: tournament.players.count)
+        }
+
+        let index = tournament.rounds.count
+        let history = PairingHistory(tournament)
+        var generator = SeededGenerator(tournament.id.raw, salt: UInt64(index))
+        let (playing, sitting) = RoundScheduler.split(
+            players: tournament.players, seats: courts * 4, history: history, generator: &generator
+        )
+
+        let teams = PairingSearch.teams(from: playing, courts: courts, history: history)
+
+        let matches = teams.enumerated().map { CourtMatch(courtIndex: $0.offset, teams: $0.element) }
+        return Round(index: index, matches: matches, sitOuts: sitting)
+    }
+}
+
 public enum MexicanoScheduler {
     public static func nextRound(for tournament: Tournament) throws -> Round {
         let courts = tournament.playableCourts
@@ -156,10 +171,10 @@ public enum MexicanoScheduler {
         }
 
         let index = tournament.rounds.count
-        let history = TournamentHistory(tournament)
+        let history = PairingHistory(tournament)
         var generator = SeededGenerator(tournament.id.raw, salt: UInt64(index))
         let (playing, sitting) = RoundScheduler.split(
-            players: tournament.players, courts: courts, history: history, generator: &generator
+            players: tournament.players, seats: courts * 4, history: history, generator: &generator
         )
 
         let ranked: [PlayerID]

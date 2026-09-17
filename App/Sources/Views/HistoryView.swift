@@ -59,6 +59,9 @@ struct HistoryView: View {
             Text("\(session.completedRounds.count) rounds · games \(session.totalGames.a)–\(session.totalGames.b)")
         case .pointCount(let session):
             Text("\(session.score.points.a)–\(session.score.points.b) · to \(session.rules.target)")
+        case .friendly:
+            // The result already counts the rounds and the people; no need to do it twice.
+            Text(SessionResult.make(from: state).detail ?? "")
         }
     }
 }

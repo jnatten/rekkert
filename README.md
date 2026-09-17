@@ -31,6 +31,25 @@ side won — so there are no courts, partners or standings to keep up to date. T
 usually interrupts a game, so the one in progress goes to whoever is ahead in it; level and
 it is discarded.
 
+**Friendly** — you put in the names and play real matches, redrawing the partnerships after
+every one of them. A round is a match on the ordinary rules — sets to win, games per set,
+tiebreak and the 40–40 rule are the ones Match uses — and when somebody wins it the board
+locks on the final score and offers the next round, naming the pair about to play it. Tapping
+starts it; until then the point that ended the last one is still there to be taken back. A
+round can also be stopped where it stands, and the games played still count.
+
+Four or more play doubles; two or three play singles. Anyone over the four seats sits the
+round out, and the bench goes to whoever has sat out least, so it comes round evenly. The
+draw puts nobody with the same partner twice while a fresh pairing is available and, after
+that, avoids repeating match-ups — Americano's own cost function, on one court. It is seeded
+on the session id and the round number and reads only who has played with and against whom,
+never the scores, so the phone and the watch draw the same round without negotiating it, and
+correcting a point can never re-partner a round already drawn.
+
+Rounds go on until somebody finishes the session. The rounds list, in the match menu, holds
+every round played and the table so far — ranked on rounds won, ties broken on games won —
+and both turn up again on the result screen and in History.
+
 **Americano / Mexicano** — club tournaments over one or more courts. Points count
 1, 2, 3, … to a configurable target (16 by default; 21, 24 and 32 are a tap away). A round
 either ends when both scores together reach the target — so every court finishes at the
@@ -246,8 +265,10 @@ xcrun simctl pair <watch udid> <phone udid>
 xcrun simctl boot <pair udid>
 ```
 
-Debug builds accept `-rekkert-demo traditional|winnercourt|americano|mexicano` (plus
+Debug builds accept `-rekkert-demo traditional|winnercourt|friendly|americano|mexicano` (plus
 `-rekkert-demo-points N`, `-rekkert-demo-deuce`, `-rekkert-demo-rounds`,
+`-rekkert-demo-friendly-rounds N`, `-rekkert-demo-friendly-players N`,
+`-rekkert-demo-rounds-sheet`,
 `-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N`,
 `-rekkert-demo-open-court R,C`, `-rekkert-demo-roster`, `-rekkert-demo-presets`,
 `-rekkert-demo-watch-page menu|standings|controls`, `-rekkert-demo-fullscreen`,

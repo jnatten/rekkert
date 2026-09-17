@@ -116,15 +116,27 @@ public final class MatchStore {
     /// Draws the next round. Addressed to the round on screen now, so two devices tapping
     /// at once still produce one round.
     public func nextRound() {
-        guard case .tournament(let tournament)? = state else { return }
+        switch state {
         // -1 when nothing has been drawn yet, so the first round is "the one after none".
-        record(.nextRound(after: tournament.rounds.count - 1))
+        case .tournament(let tournament):
+            record(.nextRound(after: tournament.rounds.count - 1))
+        case .friendly(let session):
+            record(.nextRound(after: session.rounds.count - 1))
+        case .traditional, .winnerCourt, .pointCount, .none:
+            break
+        }
     }
 
-    /// The whistle in winner court.
+    /// The whistle in winner court, and calling a friendly round off where it stands.
     public func endRound() {
-        guard case .winnerCourt(let session)? = state else { return }
-        record(.endRound(round: session.completedRounds.count))
+        switch state {
+        case .winnerCourt(let session):
+            record(.endRound(round: session.completedRounds.count))
+        case .friendly(let session):
+            record(.endRound(round: session.currentIndex))
+        case .traditional, .tournament, .pointCount, .none:
+            break
+        }
     }
     /// Ends the session and keeps it in history if anything was played.
     public func finish() {

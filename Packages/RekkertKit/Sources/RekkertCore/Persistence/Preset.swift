@@ -8,6 +8,7 @@ public enum PresetConfiguration: Codable, Sendable, Hashable {
     case winnerCourt(rules: WinnerCourtRules, teams: BySide<TeamInfo>)
     case tournament(format: TournamentFormat, name: String, players: [Player], config: TournamentConfig)
     case pointCount(rules: PointCountRules, teams: BySide<TeamInfo>)
+    case friendly(name: String, players: [Player], rules: TraditionalRules)
 
     public func makeSetup() -> SessionSetup {
         switch self {
@@ -25,13 +26,22 @@ public enum PresetConfiguration: Codable, Sendable, Hashable {
                 players: players.map { Player(name: $0.name) },
                 config: config
             ))
+        case .friendly(let name, let players, let rules):
+            .friendly(FriendlySession(
+                id: FriendlyID(),
+                name: name,
+                rules: rules,
+                players: players.map { Player(name: $0.name) }
+            ))
         }
     }
 
     /// True when starting this needs a round drawn before there is anything to score.
     public var drawsRounds: Bool {
-        if case .tournament = self { return true }
-        return false
+        switch self {
+        case .tournament, .friendly: true
+        case .traditional, .winnerCourt, .pointCount: false
+        }
     }
 
     public var symbol: String {
@@ -39,6 +49,7 @@ public enum PresetConfiguration: Codable, Sendable, Hashable {
         case .traditional: "figure.tennis"
         case .winnerCourt: "arrow.up.arrow.down"
         case .pointCount: "number"
+        case .friendly: "shuffle"
         case .tournament(let format, _, _, _):
             format == .americano ? "arrow.triangle.2.circlepath" : "list.number"
         }
@@ -54,6 +65,10 @@ public enum PresetConfiguration: Codable, Sendable, Hashable {
             "Points · to \(rules.target)"
         case .tournament(let format, _, let players, let config):
             "\(format.displayName) · \(players.count) players · \(config.courtCount) court\(config.courtCount == 1 ? "" : "s") · to \(config.pointRules.target)"
+        case .friendly(_, let players, let rules):
+            "Friendly · \(players.count) players · " + (rules.setsToWin == 1
+                ? "first to \(rules.gamesPerSet)"
+                : "best of \(rules.setsToWin * 2 - 1)")
         }
     }
 }

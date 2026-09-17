@@ -9,10 +9,17 @@ struct MatchOptionsMenu: View {
     @State private var settling = false
     var round = 0
     var court = 0
+    /// For the modes that play several rounds and have something to look back at. Here
+    /// rather than in the toolbar, which is full: one more button squeezes the title down to an
+    /// ellipsis on every screen that has one.
+    var onShowRounds: (() -> Void)?
 
     var body: some View {
         @Bindable var announcer = model.announcer
         Menu {
+            if let onShowRounds {
+                Button("Rounds and standings", systemImage: "list.bullet.rectangle", action: onShowRounds)
+            }
             if model.store.role == .host {
                 Button("Show the code", systemImage: "person.2.wave.2") {
                     model.showingShareCode = true

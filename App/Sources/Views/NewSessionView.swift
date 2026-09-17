@@ -12,9 +12,14 @@ struct NewSessionView: View {
     /// tournament rather than a second handle on the old one.
     init(mode: GameMode, from played: Tournament? = nil) {
         self.mode = mode
+        // A friendly plays a whole match every round and then redraws, so one set is the
+        // sane default where a Match wants best of three.
+        if mode == .friendly {
+            _rules = State(initialValue: TraditionalRules(setsToWin: 1))
+        }
         guard let played else { return }
         _players = State(initialValue: played.players.map { Player(name: $0.name) })
-        _tournamentName = State(initialValue: played.name)
+        _sessionName = State(initialValue: played.name)
         _config = State(initialValue: played.config)
     }
 
@@ -24,7 +29,7 @@ struct NewSessionView: View {
     @State private var playersA = ["", ""]
     @State private var playersB = ["", ""]
 
-    @State private var tournamentName = ""
+    @State private var sessionName = ""
     @State private var winnerCourtRules = WinnerCourtRules()
     @State private var pointRules = PointCountRules()
     @State private var presetName = ""
@@ -34,7 +39,7 @@ struct NewSessionView: View {
 
     private enum Field: Hashable {
         case presetName
-        case tournamentName
+        case sessionName
         case player(PlayerID)
         case teamName(TeamSide)
         case teamPlayer(TeamSide, Int)
@@ -47,6 +52,7 @@ struct NewSessionView: View {
                 case .traditional: traditionalSections
                 case .pointCount: pointCountSections
                 case .winnerCourt: winnerCourtSections
+                case .friendly: friendlySections
                 case .americano, .mexicano: tournamentSections
                 }
                 presetSection
@@ -71,18 +77,31 @@ struct NewSessionView: View {
 
     @ViewBuilder
     private var traditionalSections: some View {
-        Section("Sport") {
-            Picker("Sport", selection: $rules.sport) {
-                ForEach(Sport.allCases, id: \.self) { Text($0.displayName).tag($0) }
-            }
-            .pickerStyle(.segmented)
-        }
+        sportSection
 
         Section("Teams") {
             teamRows(name: $teamA, players: $playersA, side: .a)
             teamRows(name: $teamB, players: $playersB, side: .b)
         }
 
+        scoringSection
+        formatSection
+    }
+
+    // MARK: - Match rules, shared with Friendly
+
+    @ViewBuilder
+    private var sportSection: some View {
+        Section("Sport") {
+            Picker("Sport", selection: $rules.sport) {
+                ForEach(Sport.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+            .pickerStyle(.segmented)
+        }
+    }
+
+    @ViewBuilder
+    private var scoringSection: some View {
         Section("Scoring") {
             Picker("At 40–40", selection: $rules.deuceRule) {
                 ForEach(DeuceRule.allCases, id: \.self) { Text($0.displayName).tag($0) }
@@ -91,7 +110,10 @@ struct NewSessionView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
 
+    @ViewBuilder
+    private var formatSection: some View {
         Section("Format") {
             Stepper("Sets to win: \(rules.setsToWin)", value: $rules.setsToWin, in: 1 ... 5)
             Stepper("Games per set: \(rules.gamesPerSet)", value: $rules.gamesPerSet, in: 1 ... 9)
@@ -219,10 +241,12 @@ struct NewSessionView: View {
             .pointCount(rules: pointRules, teams: teams)
         case .winnerCourt:
             .winnerCourt(rules: winnerCourtRules, teams: teams)
+        case .friendly:
+            .friendly(name: sessionName, players: namedPlayers, rules: rules)
         case .americano, .mexicano:
             .tournament(
                 format: mode == .mexicano ? .mexicano : .americano,
-                name: tournamentName,
+                name: sessionName,
                 players: namedPlayers,
                 config: config
             )
@@ -265,10 +289,40 @@ struct NewSessionView: View {
         }
     }
 
-    // MARK: - Tournament
+    // MARK: - Friendly
 
     @ViewBuilder
-    private var tournamentSections: some View {
+    private var friendlySections: some View {
+        Section("Friendly") {
+            TextField("Name", text: $sessionName)
+                .focused($focused, equals: .sessionName)
+                .submitLabel(.next)
+                .onSubmit { focused = players.first.map { .player($0.id) } }
+        }
+
+        playersSection(footer: friendlyFooter)
+
+        sportSection
+        scoringSection
+        formatSection
+    }
+
+    private var friendlyFooter: String {
+        let count = namedPlayers.count
+        guard count >= 2 else {
+            return "At least 2 players are needed. Two or three play singles; four or more play doubles."
+        }
+        let kind = count >= 4 ? "Doubles" : "Singles"
+        let sitting = count - (count >= 4 ? 4 : 2)
+        return sitting == 0
+            ? "\(kind), and everyone plays every round."
+            : "\(kind), so \(sitting) sit\(sitting == 1 ? "s" : "") out each round — whoever has sat out least plays next."
+    }
+
+    // MARK: - Player entry, shared with Tournament
+
+    @ViewBuilder
+    private func playersSection(footer: String) -> some View {
         Section {
             ForEach($players) { $player in
                 TextField("Player name", text: $player.name)
@@ -283,7 +337,7 @@ struct NewSessionView: View {
         } header: {
             Text("Players (\(namedPlayers.count))")
         } footer: {
-            Text(playerFooter)
+            Text(footer)
         }
 
         if !quickAdd.isEmpty {
@@ -318,10 +372,17 @@ struct NewSessionView: View {
                 Text("Tap to add. Press and hold to forget someone.")
             }
         }
+    }
+
+    // MARK: - Tournament
+
+    @ViewBuilder
+    private var tournamentSections: some View {
+        playersSection(footer: playerFooter)
 
         Section("Tournament") {
-            TextField("Name", text: $tournamentName)
-                .focused($focused, equals: .tournamentName)
+            TextField("Name", text: $sessionName)
+                .focused($focused, equals: .sessionName)
                 .submitLabel(.next)
                 .onSubmit { focused = players.first.map { .player($0.id) } }
             Stepper("Courts: \(config.courtCount)", value: $config.courtCount, in: 1 ... 8)
@@ -419,7 +480,7 @@ struct NewSessionView: View {
     private var suggestions: [KnownPlayer] {
         guard let focused else { return [] }
         switch focused {
-        case .tournamentName, .teamName, .presetName:
+        case .sessionName, .teamName, .presetName:
             return []
         case .player(let id):
             guard let player = players.first(where: { $0.id == id }) else { return [] }
@@ -435,7 +496,7 @@ struct NewSessionView: View {
     private func fill(_ name: String) {
         guard let focused else { return }
         switch focused {
-        case .tournamentName, .teamName, .presetName:
+        case .sessionName, .teamName, .presetName:
             break
         case .player(let id):
             guard let index = players.firstIndex(where: { $0.id == id }) else { return }
@@ -501,6 +562,7 @@ struct NewSessionView: View {
     private var canStart: Bool {
         switch mode {
         case .traditional, .pointCount, .winnerCourt: true
+        case .friendly: namedPlayers.count >= 2
         case .americano, .mexicano: namedPlayers.count >= 4
         }
     }
@@ -508,31 +570,43 @@ struct NewSessionView: View {
     private func start() {
         savePresetIfNamed()
 
-        if mode == .winnerCourt || mode == .pointCount {
-            model.remember(players: (playersA + playersB).filter { !$0.isEmpty })
-            model.store.configure(
-                mode == .winnerCourt
-                    ? .winnerCourt(rules: winnerCourtRules, teams: teams)
-                    : .pointCount(rules: pointRules, teams: teams)
-            )
-            dismiss()
-            return
-        }
-
-        switch mode.tournamentFormat {
-        case .none:
-            model.remember(players: (playersA + playersB).filter { !$0.isEmpty })
+        switch mode {
+        case .traditional:
+            model.remember(players: namedTeamPlayers)
             model.store.configure(.traditional(rules: rules, teams: teams))
-        case .some(let format):
+
+        case .pointCount:
+            model.remember(players: namedTeamPlayers)
+            model.store.configure(.pointCount(rules: pointRules, teams: teams))
+
+        case .winnerCourt:
+            model.remember(players: namedTeamPlayers)
+            model.store.configure(.winnerCourt(rules: winnerCourtRules, teams: teams))
+
+        case .friendly:
+            model.remember(players: namedPlayers.map(\.name))
+            model.store.configure(.friendly(FriendlySession(
+                name: sessionName,
+                rules: rules,
+                players: namedPlayers
+            )))
+            // Nothing to score until there is a round, exactly as a tournament works.
+            model.store.nextRound()
+
+        case .americano, .mexicano:
             model.remember(players: namedPlayers.map(\.name))
             model.store.configure(.tournament(Tournament(
-                name: tournamentName,
-                format: format,
+                name: sessionName,
+                format: mode == .mexicano ? .mexicano : .americano,
                 players: namedPlayers,
                 config: config
             )))
             model.store.nextRound()
         }
         dismiss()
+    }
+
+    private var namedTeamPlayers: [String] {
+        (playersA + playersB).filter { !$0.isEmpty }
     }
 }

@@ -35,15 +35,38 @@ public enum SessionReducer {
             case .winnerCourt(var session):
                 session.score.suddenDeathCourt = court
                 state = .winnerCourt(session)
+            case .friendly(var session):
+                // The event names no round, so a late one lands on whichever is current.
+                // Benign: the choice is wiped by the next point and only read at a
+                // sudden-death point in the first place.
+                guard let index = session.rounds.indices.last else { break }
+                session.rounds[index].score.suddenDeathCourt = court
+                state = .friendly(session)
             case .tournament, .pointCount, .none:
                 break
             }
 
         case .endRound(let round):
-            guard case .winnerCourt(var session) = state, !session.isFinished else { return }
-            guard session.score.completedSets.count == round else { return }
-            session.score = session.engine.endingRound(session.score)
-            state = .winnerCourt(session)
+            switch state {
+            case .winnerCourt(var session):
+                guard !session.isFinished, session.score.completedSets.count == round else { return }
+                session.score = session.engine.endingRound(session.score)
+                state = .winnerCourt(session)
+
+            case .friendly(var session):
+                // Stops the round where it stands rather than inventing a set. The games
+                // played still count; nobody won it. A round nothing has happened in is left
+                // alone — the same line winner court draws — so the only way past it is to
+                // play it or to finish the session.
+                guard !session.isFinished, session.rounds.indices.contains(round),
+                      !session.rounds[round].isFinished,
+                      session.rounds[round].wasPlayed else { return }
+                session.rounds[round].isStopped = true
+                state = .friendly(session)
+
+            case .traditional, .tournament, .pointCount, .none:
+                break
+            }
 
         case .setFirstServer(let round, let court, let index):
             mutateCourt(round: round, court: court, in: &state) { _, match in
@@ -61,10 +84,20 @@ public enum SessionReducer {
             state = .tournament(tournament)
 
         case .nextRound(let after):
-            guard case .tournament(let tournament) = state,
-                  tournament.rounds.count == after + 1,
-                  let next = try? TournamentEngine.appendingRound(to: tournament) else { return }
-            state = .tournament(next)
+            switch state {
+            case .tournament(let tournament):
+                guard tournament.rounds.count == after + 1,
+                      let next = try? TournamentEngine.appendingRound(to: tournament) else { return }
+                state = .tournament(next)
+
+            case .friendly(let session):
+                guard !session.isFinished, session.rounds.count == after + 1,
+                      let next = try? FriendlyScheduler.appendingRound(to: session) else { return }
+                state = .friendly(next)
+
+            case .traditional, .winnerCourt, .pointCount, .none:
+                break
+            }
 
         case .finish:
             switch state {
@@ -80,6 +113,9 @@ public enum SessionReducer {
             case .pointCount(var session):
                 session.isStopped = true
                 state = .pointCount(session)
+            case .friendly(var session):
+                session.isFinished = true
+                state = .friendly(session)
             case .none:
                 break
             }
@@ -125,6 +161,18 @@ public enum SessionReducer {
 
         case (.pointCount(let rules, let teams), _):
             state = .pointCount(PointCountSession(rules: rules, teams: teams))
+
+        case (.friendly(let incoming), .friendly(var session)):
+            // The rounds already played stay where they are; the rest is the setup being
+            // corrected. The id is not adopted — it seeds the draw, and re-seeding it would
+            // re-partner every round still to come.
+            session.name = incoming.name
+            session.rules = incoming.rules
+            session.players = incoming.players
+            state = .friendly(session)
+
+        case (.friendly(let incoming), _):
+            state = .friendly(incoming)
         }
     }
 
@@ -155,6 +203,14 @@ public enum SessionReducer {
             change(session.engine, &asCourt)
             session.score = asCourt.state
             state = .pointCount(session)
+
+        case .friendly(var session):
+            guard !session.isFinished, session.rounds.indices.contains(round),
+                  !session.rounds[round].isFinished,
+                  var asTraditional = session.match(at: round) else { return }
+            traditional(&asTraditional)
+            session.rounds[round].score = asTraditional.score
+            state = .friendly(session)
 
         case .tournament(var current):
             guard current.rounds.indices.contains(round),

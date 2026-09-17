@@ -18,6 +18,8 @@ public enum SessionSetup: Codable, Sendable, Hashable {
     case tournament(Tournament)
     case winnerCourt(rules: WinnerCourtRules, teams: BySide<TeamInfo>)
     case pointCount(rules: PointCountRules, teams: BySide<TeamInfo>)
+    /// The whole session travels, so the id that seeds the draw is the same on both devices.
+    case friendly(FriendlySession)
 }
 
 public struct TraditionalSession: Codable, Sendable, Hashable {
@@ -126,6 +128,7 @@ public enum SessionState: Codable, Sendable, Hashable {
     case tournament(Tournament)
     case winnerCourt(WinnerCourtSession)
     case pointCount(PointCountSession)
+    case friendly(FriendlySession)
 
     public var isTournament: Bool {
         if case .tournament = self { return true }
@@ -138,6 +141,8 @@ public enum SessionState: Codable, Sendable, Hashable {
         case .tournament(let tournament): tournament.isFinished
         case .winnerCourt(let session): session.isFinished
         case .pointCount(let session): session.isFinished
+        // Rounds never run out, so a friendly ends only when somebody says it has.
+        case .friendly(let session): session.isFinished
         }
     }
 
@@ -151,6 +156,8 @@ public enum SessionState: Codable, Sendable, Hashable {
             "\(session.teams.a.name) vs \(session.teams.b.name)"
         case .pointCount(let session):
             "\(session.teams.a.name) vs \(session.teams.b.name)"
+        case .friendly(let session):
+            session.name.isEmpty ? "Friendly" : session.name
         }
     }
 
@@ -168,6 +175,8 @@ public enum SessionState: Codable, Sendable, Hashable {
             }
         case .pointCount(let session):
             session.score.points.total > 0
+        case .friendly(let session):
+            session.wasPlayed
         }
     }
 
@@ -178,6 +187,8 @@ public enum SessionState: Codable, Sendable, Hashable {
         case .traditional(let session): session.score.firstServerIndex
         case .winnerCourt(let session): session.score.firstServerIndex
         case .pointCount(let session): session.score.firstServerIndex
+        case .friendly(let session):
+            session.round(at: round ?? session.currentIndex)?.score.firstServerIndex
         case .tournament(let tournament):
             (round.map { tournament.round(at: $0) } ?? tournament.currentRound)?
                 .matches.first { $0.courtIndex == court }?
@@ -192,6 +203,7 @@ public enum SessionState: Codable, Sendable, Hashable {
         case .traditional: "Match"
         case .pointCount: "Points"
         case .winnerCourt: "Winner court"
+        case .friendly: "Friendly"
         case .tournament(let tournament): tournament.format.displayName
         }
     }
@@ -201,6 +213,7 @@ public enum SessionState: Codable, Sendable, Hashable {
         case .traditional: "figure.tennis"
         case .pointCount: "number"
         case .winnerCourt: "arrow.up.arrow.down"
+        case .friendly: "shuffle"
         case .tournament(let tournament):
             tournament.format == .americano ? "arrow.triangle.2.circlepath" : "list.number"
         }
@@ -229,6 +242,11 @@ public enum SessionState: Codable, Sendable, Hashable {
             session.isFinished = false
             return .winnerCourt(session)
 
+        case .friendly(var session):
+            // Same as winner court: there is always another round in it.
+            session.isFinished = false
+            return .friendly(session)
+
         case .tournament(var tournament):
             tournament.isFinished = false
             return .tournament(tournament)
@@ -239,7 +257,7 @@ public enum SessionState: Codable, Sendable, Hashable {
     /// per filled court in the current tournament round.
     public var courtCount: Int {
         switch self {
-        case .traditional, .winnerCourt, .pointCount: 1
+        case .traditional, .winnerCourt, .pointCount, .friendly: 1
         case .tournament(let tournament): tournament.currentRound?.matches.count ?? 0
         }
     }

@@ -53,6 +53,20 @@ struct WatchMenuView: View {
                         confirming = .nextRound
                     }
                 }
+                if let round = friendlyRound {
+                    // One button, whichever the round is asking for: draw the next one when
+                    // this is over, stop this one where it stands while it is not.
+                    if round.isFinished {
+                        action("Next round", systemImage: "arrow.right.circle.fill", tint: .blue) {
+                            confirming = .nextRound
+                        }
+                    } else {
+                        action("End round", systemImage: "flag.pattern.checkered", tint: .orange) {
+                            confirming = .endRound
+                        }
+                        .disabled(!round.wasPlayed)
+                    }
+                }
 
                 // Flips the phone, not this watch: it is the phone that is propped up
                 // somewhere with a side of the court in front of it.
@@ -91,7 +105,7 @@ struct WatchMenuView: View {
         // captures it. Reading `confirming` inside the action instead would race the
         // dialog's own dismissal, which clears it — and the button would do nothing.
         .confirmationDialog(
-            confirming?.question ?? "",
+            confirming.map(question) ?? "",
             isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }),
             titleVisibility: .visible,
             presenting: confirming
@@ -103,6 +117,17 @@ struct WatchMenuView: View {
                 perform(pending)
             }
             Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    /// A friendly ends a round rather than a set, and draws rather than finishes — so the
+    /// questions the dialog asks are its own.
+    private func question(_ pending: Confirmation) -> String {
+        guard friendlyRound != nil else { return pending.question }
+        switch pending {
+        case .endRound: return "Stop this round where it stands?"
+        case .nextRound: return "Draw the next round?"
+        case .finish, .discard: return pending.question
         }
     }
 
@@ -167,5 +192,10 @@ struct WatchMenuView: View {
     private var isTournament: Bool {
         if case .tournament? = model.store.state { return true }
         return false
+    }
+
+    private var friendlyRound: FriendlyRound? {
+        guard case .friendly(let session)? = model.store.state else { return nil }
+        return session.currentRound
     }
 }

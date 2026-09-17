@@ -108,6 +108,11 @@ final class AppModel {
                 rules: WinnerCourtRules(deuceRule: .goldenPoint),
                 teams: BySide(a: TeamInfo(name: "Us"), b: TeamInfo(name: "Them"))
             )))
+            store.savePreset(Preset(name: "Fredagsmiks", configuration: .friendly(
+                name: "Fredagsmiks",
+                players: ["Jonas", "Ola", "Kari", "Trond", "Siri"].map { Player(name: $0) },
+                rules: TraditionalRules(setsToWin: 1, deuceRule: .goldenPoint)
+            )))
             store.savePreset(Preset(name: "Best of 3", configuration: .traditional(
                 rules: TraditionalRules(deuceRule: .starPoint),
                 teams: BySide(a: TeamInfo(name: "Us"), b: TeamInfo(name: "Them"))
@@ -191,6 +196,37 @@ final class AppModel {
                     b: TeamInfo(name: "Oranges", players: ["Kim", "Sam"])
                 )
             ))
+        case "friendly":
+            store.configure(.friendly(FriendlySession(
+                // Pinned, so a screenshot draws the same partnerships every time.
+                id: FriendlyID(UUID(uuidString: "00000000-0000-0000-0000-0000000000C0")!),
+                name: "Thursday",
+                rules: TraditionalRules(setsToWin: 1, deuceRule: .goldenPoint),
+                // `-rekkert-demo-friendly-players 3` cuts the group down, which is how the
+                // singles and the bench get onto a screenshot.
+                players: Array(
+                    ["Jonas", "Ola", "Kari", "Trond", "Siri"].map { Player(name: $0) }
+                        .prefix(friendlyPlayerCount(arguments))
+                )
+            )))
+            store.nextRound()
+            // `-rekkert-demo-friendly-rounds 3` plays three of them out, which is the only
+            // way to photograph the summary and the history screens.
+            if let index = arguments.firstIndex(of: "-rekkert-demo-friendly-rounds"),
+               index + 1 < arguments.count, let rounds = Int(arguments[index + 1]) {
+                for round in 0 ..< rounds {
+                    // Drawn between rounds rather than after the last, so it finishes on the
+                    // screen offering the next partnership rather than on a blank board.
+                    if round > 0 { store.nextRound() }
+                    // Alternating every third game, so a round has a shape to it rather
+                    // than being a whitewash.
+                    for game in 0 ..< 9 {
+                        let winner: TeamSide = game.isMultiple(of: 3) ? .b : .a
+                        for _ in 0 ..< 4 { store.tap(round: round, court: 0, team: winner) }
+                    }
+                }
+            }
+
         case let format:
             store.configure(.tournament(Tournament(
                 name: "Thursday",
@@ -240,6 +276,15 @@ final class AppModel {
                 store.tap(court: 0, team: .b)
             }
         }
+    }
+    #endif
+
+    #if DEBUG
+    private func friendlyPlayerCount(_ arguments: [String]) -> Int {
+        guard let index = arguments.firstIndex(of: "-rekkert-demo-friendly-players"),
+              index + 1 < arguments.count,
+              let count = Int(arguments[index + 1]) else { return 5 }
+        return min(max(count, 2), 5)
     }
     #endif
 

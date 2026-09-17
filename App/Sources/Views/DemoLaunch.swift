@@ -47,6 +47,11 @@ enum DemoLaunch {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-voices")
     }
 
+    /// Opens a friendly's rounds-and-standings sheet.
+    static var openRounds: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-rounds-sheet")
+    }
+
     /// Opens the sheet for running a past tournament's players again.
     static var rematch: Bool {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-rematch")

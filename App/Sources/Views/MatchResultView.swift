@@ -32,6 +32,7 @@ struct MatchResultView: View {
                 VStack(spacing: 18) {
                     banner
                     if !result.placings.isEmpty { placings }
+                    if !result.rounds.isEmpty { rounds }
                 }
                 .padding(.horizontal)
                 .padding(.top, 40)
@@ -82,13 +83,64 @@ struct MatchResultView: View {
                     Text(placing.name)
                         .fontWeight(placing.rank == 1 ? .semibold : .regular)
                     Spacer()
-                    Text(placing.value)
-                        .font(.callout.bold().monospacedDigit())
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text(placing.value)
+                            .font(.callout.bold().monospacedDigit())
+                        if let detail = placing.detail {
+                            Text(detail)
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 .padding(.vertical, 9)
                 .padding(.horizontal, 14)
                 if placing.id != result.placings.last?.id {
                     Divider().padding(.leading, 50)
+                }
+            }
+        }
+        .background(.thinMaterial, in: .rect(cornerRadius: 14))
+    }
+
+    /// Round by round, for the modes that play several with the teams redrawn between them.
+    private var rounds: some View {
+        VStack(spacing: 0) {
+            ForEach(result.rounds) { round in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(round.title)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(round.score)
+                            .font(.callout.bold().monospacedDigit())
+                    }
+                    ForEach(TeamSide.allCases, id: \.self) { side in
+                        HStack(spacing: 8) {
+                            Circle().fill(palette.color(side)).frame(width: 7, height: 7)
+                            Text(round.teams[side])
+                                .font(.subheadline)
+                                .fontWeight(round.winner == side ? .semibold : .regular)
+                                .lineLimit(1)
+                            Spacer()
+                        }
+                    }
+                    if round.isStopped {
+                        Text("Stopped part-way")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let sitOuts = round.sitOuts {
+                        Text("Sitting out: \(sitOuts)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 9)
+                .padding(.horizontal, 14)
+                if round.id != result.rounds.last?.id {
+                    Divider().padding(.leading, 14)
                 }
             }
         }

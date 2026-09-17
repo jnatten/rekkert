@@ -114,4 +114,26 @@ struct ResumeTests {
         log.append(.restore(.traditional(TraditionalSession(rules: TraditionalRules(), teams: teams))), from: DeviceID())
         #expect(log.lastUndoableEvent() == nil, "undo means taking back a score, not the session itself")
     }
+
+    @Test func aFriendlyCanAlwaysGoOn() throws {
+        var session = FriendlySession(
+            rules: TraditionalRules(setsToWin: 1),
+            players: (0 ..< 5).map { Player(name: "P\($0)") },
+            isFinished: true
+        )
+        session = try FriendlyScheduler.appendingRound(to: session)
+        session.rounds[0].score = session.engine.winGames(6, for: .a, from: session.rounds[0].score)
+
+        let state = SessionState.friendly(session)
+        #expect(state.isFinished)
+        #expect(state.canResume, "there is always another round in it")
+
+        guard case .friendly(let resumed)? = state.resumed() else {
+            Issue.record("expected a friendly session")
+            return
+        }
+        #expect(!resumed.isFinished)
+        #expect(resumed.id == session.id, "the same id, so the schedule carries on")
+        #expect(resumed.rounds == session.rounds, "with everything already played")
+    }
 }

@@ -6,6 +6,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
         case winnerCourt
         case tournament
         case pointCount
+        case friendly
     }
 
     public var kind: Kind
@@ -39,6 +40,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
         case .tournament(let tournament): tournamentCourt(tournament, round: round, court: court)
         case .winnerCourt(let session): winnerCourt(session)
         case .pointCount(let session): pointCount(session)
+        case .friendly(let session): friendly(session, round: round)
         }
     }
 
@@ -66,6 +68,57 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             isFinished: score.isFinished,
             winner: score.winner
         )
+    }
+
+    /// A friendly round is an ordinary match between partnerships drawn for it, so this is
+    /// the traditional scoreboard with the round written on it and the serve resolved against
+    /// teams that may hold only one player.
+    private static func friendly(_ session: FriendlySession, round index: Int?) -> ScoreboardSnapshot? {
+        let roundIndex = index ?? session.currentIndex
+        guard let round = session.round(at: roundIndex),
+              let match = session.match(at: roundIndex) else { return nil }
+
+        var snapshot = traditional(match)
+        snapshot.kind = .friendly
+        snapshot.detail = detail(for: session, round: round)
+        snapshot.isLocked = round.isFinished
+        snapshot.isFinished = round.isFinished
+
+        if round.isFinished {
+            snapshot.serving = nil
+            snapshot.servingCourt = nil
+            snapshot.servingPlayer = nil
+        } else {
+            // The padel rotation asks for the second player on a side, which a singles team
+            // has not got — so the one who is there serves every time.
+            let serve = match.engine.serve(round.score)
+            let players = match.teams[serve.slot.team].players
+            snapshot.servingPlayer = players[safe: serve.slot.playerIndex] ?? players.first
+        }
+        return snapshot
+    }
+
+    private static func detail(for session: FriendlySession, round: FriendlyRound) -> String {
+        let engine = session.engine
+        let number = "Round \(round.index + 1)"
+        if let winner = round.score.winner {
+            return "\(number) · \(session.names(winner, in: round)) won"
+        }
+        if round.isStopped {
+            return "\(number) · stopped"
+        }
+        if case .tiebreak(let target) = engine.phase(round.score) {
+            return engine.isDecidingSet(round.score) && target != session.rules.tiebreakPoints
+                ? "\(number) · super tiebreak to \(target)"
+                : "\(number) · tiebreak to \(target)"
+        }
+        if engine.isSuddenDeathPoint(round.score) {
+            return "\(number) · sudden death"
+        }
+        if session.rules.setsToWin > 1 {
+            return "\(number) · set \(round.score.completedSets.count + 1)"
+        }
+        return number
     }
 
     private static func winnerCourt(_ session: WinnerCourtSession) -> ScoreboardSnapshot {
