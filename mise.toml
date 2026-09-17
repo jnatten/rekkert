@@ -2,3 +2,9 @@
 "gem:fastlane" = "2.240.1"
 ruby = "3.4"
 tuist = "4.208.0"
+
+[env]
+# Points RubyGems at the .gemrc beside this file, so the setting applies to mise installing
+# fastlane as well as to anyone running gem by hand. Repo-level rather than in ~/.gemrc: a
+# fresh clone on another machine hits exactly the same wall.
+GEMRC = "{{config_root}}/.gemrc"

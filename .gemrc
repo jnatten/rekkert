@@ -1,0 +1,10 @@
+# RubyGems builds documentation for everything it installs unless told not to, and mise's
+# gem backend runs `gem install` without --no-document. That matters here because fastlane's
+# dependency tree carries rdoc 8, RubyGems' doc hook loads the newest rdoc it can see, and
+# rdoc 8 asks for rdoc/markup/inline_parser — which does not exist in the rdoc 6 bundled with
+# Ruby 3.4. The LoadError comes after all 103 gems are installed, so `gem` reports success
+# for every one of them and then exits 1; mise reads the exit code, deletes the install and
+# leaves the tool marked (missing), which sends the next `mise exec` round the same loop.
+#
+# Nothing here wants the documentation. Turning it off removes the only step that fails.
+gem: --no-document
