@@ -66,6 +66,10 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     /// Kept while joining so a link that drops can be dialled again. The browser only speaks
     /// up when the advertisements *change*, and a host that never went away is not a change.
     private var joiningCode: SessionCode?
+    /// Whether any link has reached ready since the code was typed in. Until one has, a
+    /// connection that fails is the only evidence there is that the code was wrong;
+    /// afterwards it is only evidence that a phone went into a pocket.
+    private var hasEverJoined = false
     private var lastSnapshot: Data?
     private var searchDeadline: DispatchWorkItem?
 
@@ -185,6 +189,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             searchDeadline = nil
             isHosting = false
             joiningCode = nil
+            hasEverJoined = false
             lastSnapshot = nil
             return values
         }
@@ -315,15 +320,22 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             guard let self else { return }
             switch state {
             case .ready:
-                self.lock.withLock { link.isReady = true }
+                self.lock.withLock {
+                    link.isReady = true
+                    self.hasEverJoined = true
+                }
                 self.receive(on: link)
                 if let snapshot = self.lock.withLock({ self.lastSnapshot }) {
                     self.send(Frame(kind: .oneway, payload: snapshot), on: link)
                 }
                 self.reachabilityUpdates.yield(true)
                 self.announce()
-            case .failed, .cancelled:
-                self.close(token, rejected: true)
+            case .failed:
+                self.close(token, refusable: true)
+            case .cancelled:
+                // Never a rejection: a wrong pre-shared key surfaces as a failure, and a
+                // cancel is somebody hanging up — usually this end.
+                self.close(token, refusable: false)
             default:
                 break
             }
@@ -331,24 +343,34 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         connection.start(queue: queue)
     }
 
-    private func close(_ token: ObjectIdentifier, rejected: Bool) {
+    private func close(_ token: ObjectIdentifier, refusable: Bool) {
         let link = lock.withLock { links.removeValue(forKey: token) }
         guard let link else { return }
         link.connection.cancel()
 
-        let everGotThere = link.isReady
+        // Gathered under the lock, `isReady` included: it is written by a callback on this
+        // class's own queue and nothing orders that against whoever is closing the link.
+        let circumstances = lock.withLock {
+            ReconnectPolicy.Circumstances(
+                everGotThere: link.isReady,
+                hasEverJoined: hasEverJoined,
+                isHosting: isHosting,
+                linksRemain: !links.isEmpty,
+                refusable: refusable
+            )
+        }
         reachabilityUpdates.yield(isReachable)
 
-        if everGotThere {
+        switch ReconnectPolicy.loss(circumstances) {
+        case .refused:
+            // It was there and it would not have us, which is what a wrong code looks like.
+            publish(.failed(.rejected))
+        case .keepLooking:
             // It was working and went away — the host walked off, or a phone went in a
             // pocket. Go back to looking rather than sitting there with nothing.
             announce()
-            return redial()
-        }
-        if rejected, lock.withLock({ !isHosting && links.isEmpty }) {
-            // It was there and it would not have us, which is what a wrong code looks like.
-            publish(.failed(.rejected))
-        } else {
+            redial()
+        case .carryOn:
             announce()
         }
     }
@@ -378,11 +400,11 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
                     link.buffer.append(data)
                     do { frames = try FrameCodec.decode(from: &link.buffer) } catch { broken = true }
                 }
-                if broken { return self.close(ObjectIdentifier(link.connection), rejected: false) }
+                if broken { return self.close(ObjectIdentifier(link.connection), refusable: false) }
                 for frame in frames { self.deliver(frame, on: link) }
             }
             if isComplete || error != nil {
-                return self.close(ObjectIdentifier(link.connection), rejected: false)
+                return self.close(ObjectIdentifier(link.connection), refusable: false)
             }
             self.receive(on: link)
         }

@@ -34,6 +34,10 @@ public final class SharedSession {
     /// never written to disk — this lasts exactly as long as the app is running.
     private var hosted: (code: SessionCode, share: UUID)?
     private var wanted: SessionCode?
+    /// Whether this device has ever actually been on the match it is looking for. A search
+    /// that follows a typed code may give up and say so; one that follows a link going away
+    /// may not — there is a score on the screen, and it came from somewhere.
+    private var hasJoinedBefore = false
     private var noticing: Task<Void, Never>?
     /// Long enough to ride out a phone glanced at or a moment of bad Wi-Fi, short enough that
     /// somebody looking at a stale score finds out before the game moves on.
@@ -99,6 +103,7 @@ public final class SharedSession {
 
     public func join(_ code: SessionCode) {
         wanted = code
+        hasJoinedBefore = false
         store.beginJoining()
         link.startJoining(code: code)
         phase = .searching
@@ -117,6 +122,7 @@ public final class SharedSession {
         hosted = nil
         wanted = nil
         hasLostTheMatch = false
+        hasJoinedBefore = false
         noticing?.cancel()
         noticing = nil
     }
@@ -169,8 +175,14 @@ public final class SharedSession {
             noticing?.cancel()
             noticing = nil
             hasLostTheMatch = false
+            hasJoinedBefore = true
             phase = .joined
         case .failed(let failure):
+            // A failure after the match has once been found is a drop, not a refusal. The
+            // transport is meant never to send one now; if it ever does, the answer here is to
+            // go on looking rather than to throw away a match somebody is in the middle of
+            // playing and send them back to the keyboard.
+            guard !hasJoinedBefore else { return apply(.searching) }
             peers = 0
             store.cancelJoining()
             phase = .failed(failure)
