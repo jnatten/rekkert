@@ -62,16 +62,28 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     private var links: [ObjectIdentifier: Link] = [:]
     private var waiting: [UInt32: ResumeOnce] = [:]
     private var nextCorrelation: UInt32 = 1
-    private var isHosting = false
-    /// Kept while joining so a link that drops can be dialled again. The browser only speaks
-    /// up when the advertisements *change*, and a host that never went away is not a change.
-    private var joiningCode: SessionCode?
+    /// What this has been asked to be, as against what it currently is. The system takes the
+    /// listener and the browser away with the app, so something has to remember what to put
+    /// back — and the code has to be kept anyway, because the browser only speaks up when the
+    /// advertisements *change*, and a host that never went away is not a change.
+    private enum Intent: Sendable {
+        case none
+        case hosting(code: SessionCode, share: UUID)
+        case joining(SessionCode)
+    }
+    private var intent: Intent = .none
     /// Whether any link has reached ready since the code was typed in. Until one has, a
     /// connection that fails is the only evidence there is that the code was wrong;
     /// afterwards it is only evidence that a phone went into a pocket.
     private var hasEverJoined = false
     private var lastSnapshot: Data?
     private var searchDeadline: DispatchWorkItem?
+
+    /// Only ever read with `lock` already held.
+    private var isHosting: Bool {
+        if case .hosting = intent { return true }
+        return false
+    }
 
     private let replyTimeout: DispatchTimeInterval
     private let searchTimeout: DispatchTimeInterval
@@ -100,8 +112,35 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     /// whose phone is on court three.
     public func startHosting(code: SessionCode, share: UUID) {
         stop()
-        lock.withLock { isHosting = true }
+        lock.withLock { intent = .hosting(code: code, share: share) }
+        standUpListener(code: code, share: share)
+    }
 
+    /// Puts hosting back after the app has been in a pocket, without disturbing anyone already
+    /// on it.
+    ///
+    /// Deliberately not `startHosting`, which begins by stopping: that cancels every link, so a
+    /// host who glanced at a notification and came back would drop every guest on the way past.
+    /// The listener is only replaced when it is actually gone — a working one is left alone
+    /// rather than torn down and re-advertised.
+    public func resumeHosting(code: SessionCode, share: UUID) {
+        sweepDeadLinks()
+        let needed = lock.withLock { () -> Bool in
+            intent = .hosting(code: code, share: share)
+            return listener == nil || listener?.state != .ready
+        }
+        guard needed else { return announce() }
+
+        let old = lock.withLock { () -> NWListener? in
+            let previous = listener
+            listener = nil
+            return previous
+        }
+        old?.cancel()
+        standUpListener(code: code, share: share)
+    }
+
+    private func standUpListener(code: SessionCode, share: UUID) {
         var txt = NWTXTRecord()
         txt["v"] = "1"
         txt["id"] = share.uuidString.lowercased()
@@ -134,7 +173,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         }
         lock.withLock { self.listener = listener }
         listener.start(queue: queue)
-        publish(.hosting(peers: 0))
+        publish(.hosting(peers: reachableCount))
     }
 
     /// Looks for the match that code belongs to. Every advertisement whose fingerprint matches
@@ -142,8 +181,47 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     /// refused handshake costs nothing.
     public func startJoining(code: SessionCode) {
         stop()
-        lock.withLock { joiningCode = code }
+        lock.withLock { intent = .joining(code) }
+        standUpBrowser(code: code)
 
+        // Nothing reports a declined local-network permission, and nothing reports an absent
+        // host either, so the honest answer to both is the same one after a decent wait. Armed
+        // here and nowhere else: this is the search that follows somebody typing a code, and it
+        // is the only one entitled to give up. A search that follows a link going away has a
+        // score on the screen and has to go on looking.
+        let deadline = DispatchWorkItem { [weak self] in
+            guard let self, !self.isReachable else { return }
+            self.publish(.failed(.notFound))
+        }
+        lock.withLock { searchDeadline = deadline }
+        queue.asyncAfter(deadline: .now() + searchTimeout, execute: deadline)
+    }
+
+    /// Goes back to looking after the app has been in a pocket.
+    ///
+    /// No `stop()`, so a link that survived is kept; no deadline, so a guest whose host is still
+    /// away is not told its code was wrong ten seconds later; and `hasEverJoined` is left
+    /// standing, so a dial that misses is still read as a host in a pocket.
+    public func resumeJoining(code: SessionCode) {
+        sweepDeadLinks()
+        let needed = lock.withLock { () -> Bool in
+            intent = .joining(code)
+            return browser == nil || browser?.state != .ready
+        }
+        if needed {
+            let old = lock.withLock { () -> NWBrowser? in
+                let previous = browser
+                browser = nil
+                return previous
+            }
+            old?.cancel()
+            standUpBrowser(code: code)
+        }
+        redial()
+        announce()
+    }
+
+    private func standUpBrowser(code: SessionCode) {
         let parameters = NWParameters()
         parameters.includePeerToPeer = true
         let browser = NWBrowser(
@@ -168,15 +246,6 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         lock.withLock { self.browser = browser }
         browser.start(queue: queue)
         publish(.searching)
-
-        // Nothing reports a declined local-network permission, and nothing reports an absent
-        // host either, so the honest answer to both is the same one after a decent wait.
-        let deadline = DispatchWorkItem { [weak self] in
-            guard let self, !self.isReachable else { return }
-            self.publish(.failed(.notFound))
-        }
-        lock.withLock { searchDeadline = deadline }
-        queue.asyncAfter(deadline: .now() + searchTimeout, execute: deadline)
     }
 
     public func stop() {
@@ -187,8 +256,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             links = [:]
             waiting = [:]
             searchDeadline = nil
-            isHosting = false
-            joiningCode = nil
+            intent = .none
             hasEverJoined = false
             lastSnapshot = nil
             return values
@@ -205,12 +273,6 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     // MARK: - PeerTransport
 
     public func activate() {}
-
-    /// Whether the machinery is still standing. False once the system has taken the listener
-    /// or browser away, which is what happens when the app is put down.
-    public var isAlive: Bool {
-        lock.withLock { listener != nil || browser != nil }
-    }
 
     public func forgetSnapshot() {
         lock.withLock { lastSnapshot = nil }
@@ -343,6 +405,31 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         connection.start(queue: queue)
     }
 
+    /// Lets go of links the system has already taken away.
+    ///
+    /// `Link.isReady` is a cache written by a callback on this class's own queue, and coming
+    /// back to the front is exactly the moment that callback may not have arrived yet. So ask
+    /// each connection what it is rather than what we last heard it was — a sweep is this end
+    /// hanging up on something already gone, not a loss with anything to read into it.
+    private func sweepDeadLinks() {
+        let dead = lock.withLock { () -> [Link] in
+            var removed: [Link] = []
+            for (token, link) in links {
+                switch link.connection.state {
+                case .ready, .preparing, .setup:
+                    continue
+                default:
+                    links.removeValue(forKey: token)
+                    removed.append(link)
+                }
+            }
+            return removed
+        }
+        guard !dead.isEmpty else { return }
+        for link in dead { link.connection.cancel() }
+        reachabilityUpdates.yield(isReachable)
+    }
+
     private func close(_ token: ObjectIdentifier, refusable: Bool) {
         let link = lock.withLock { links.removeValue(forKey: token) }
         guard let link else { return }
@@ -381,10 +468,8 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     /// stopped advertising produces no new event, so a guest whose link dropped would wait
     /// for one that never comes.
     private func redial() {
-        let (code, browser, hosting, count) = lock.withLock {
-            (joiningCode, self.browser, isHosting, links.count)
-        }
-        guard !hosting, count == 0, let code, let browser else { return }
+        let (intent, browser, count) = lock.withLock { (self.intent, self.browser, links.count) }
+        guard case .joining(let code) = intent, count == 0, let browser else { return }
         consider(browser.browseResults, code: code)
     }
 
@@ -504,14 +589,15 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
 
     public var isReachable: Bool { false }
     public var reachableCount: Int { 0 }
-    public var isAlive: Bool { false }
     public func activate() {}
     public func forgetSnapshot() {}
     public func sendLive(_ payload: Data) async -> Data? { nil }
     public func publishSnapshot(_ payload: Data) {}
     public func queue(_ payload: Data) {}
     public func startHosting(code: SessionCode, share: UUID) {}
+    public func resumeHosting(code: SessionCode, share: UUID) {}
     public func startJoining(code: SessionCode) {}
+    public func resumeJoining(code: SessionCode) {}
     public func stop() {}
 }
 

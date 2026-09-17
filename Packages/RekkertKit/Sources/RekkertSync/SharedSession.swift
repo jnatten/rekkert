@@ -81,23 +81,41 @@ public final class SharedSession {
         phase = .hosting(code)
     }
 
+    /// What the transport should be asked to put back when the app comes to the front.
+    ///
+    /// A value rather than a branch inside `resume()` so the decision can be asserted from the
+    /// tests: there are no sockets on macOS, and the bug this replaced was entirely in the
+    /// decision — a guard on whether the machinery *looked* alive, answered by a callback that
+    /// had not arrived yet.
+    enum Revival: Equatable {
+        case nothing
+        case hosting(SessionCode, UUID)
+        case joining(SessionCode)
+    }
+
+    var revival: Revival {
+        switch phase {
+        case .hosting(let code): hosted.map { .hosting(code, $0.share) } ?? .nothing
+        case .searching, .joined: wanted.map { Revival.joining($0) } ?? .nothing
+        case .off, .failed: .nothing
+        }
+    }
+
     /// Puts sharing back up after the app has been in a pocket.
     ///
-    /// iOS takes the listener and the browser away when an app is suspended, so a host who
-    /// puts their phone down stops being reachable and does not come back on their own. Only
-    /// rebuilt when the machinery has actually gone, so a working connection is never torn
-    /// down just because the app was glanced away from.
+    /// iOS takes the listener and the browser away when an app is suspended, so a host who puts
+    /// their phone down stops being reachable and does not come back on their own. There is no
+    /// guard on whether it looked alive: the rebuilds leave a working link alone, so the honest
+    /// answer to "did the system take it away?" is to stop asking a question nothing can answer
+    /// in time and simply put it back every time.
     public func resume() {
-        guard !link.isAlive else { return }
-        switch phase {
-        case .hosting(let code):
-            guard let hosted else { return }
-            link.startHosting(code: code, share: hosted.share)
-        case .searching, .joined:
-            guard let wanted else { return }
-            link.startJoining(code: wanted)
-        case .off, .failed:
+        switch revival {
+        case .nothing:
             break
+        case .hosting(let code, let share):
+            link.resumeHosting(code: code, share: share)
+        case .joining(let code):
+            link.resumeJoining(code: code)
         }
     }
 

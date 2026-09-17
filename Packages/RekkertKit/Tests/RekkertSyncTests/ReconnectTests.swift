@@ -80,4 +80,51 @@ struct ReconnectTests {
 
         #expect(sharing.phase == .failed(.rejected))
     }
+
+    @Test func aGuestComingBackToTheFrontLooksForTheSameMatchAgain() throws {
+        let code = try #require(SessionCode("H7K3MR"))
+        let store = MatchStore(device: DeviceID(), transport: LoopbackTransport(), snapshotInterval: 0)
+        let sharing = SharedSession(store: store, link: LocalNetworkTransport())
+        sharing.join(code)
+        sharing.apply(.joined(peers: 1))
+
+        #expect(sharing.revival == .joining(code))
+
+        // And still, once the host has gone quiet — which is the whole point of it.
+        sharing.apply(.searching)
+        #expect(sharing.revival == .joining(code))
+    }
+
+    @Test func aHostComingBackToTheFrontAdvertisesTheSameShareAgain() throws {
+        let store = MatchStore(device: DeviceID(), transport: LoopbackTransport(), snapshotInterval: 0)
+        let sharing = SharedSession(store: store, link: LocalNetworkTransport())
+        store.configure(setup)
+        let code = try #require(SessionCode("K9M4PT"))
+        sharing.host(code: code)
+
+        guard case .hosting(let revived, let share) = sharing.revival else {
+            Issue.record("a host has something to put back")
+            return
+        }
+        #expect(revived == code)
+
+        // The share id is minted once and kept: a guest dialling back has to find the same
+        // advertisement it was told about, not a new one under the same code.
+        #expect(sharing.revival == .hosting(code, share))
+    }
+
+    @Test func aSessionThatWasNeverSharedHasNothingToPutBack() {
+        let store = MatchStore(device: DeviceID(), transport: LoopbackTransport(), snapshotInterval: 0)
+        let sharing = SharedSession(store: store, link: LocalNetworkTransport())
+        #expect(sharing.revival == .nothing)
+    }
+
+    @Test func aFailureThatWasNotDismissedIsNotPutBack() {
+        let store = MatchStore(device: DeviceID(), transport: LoopbackTransport(), snapshotInterval: 0)
+        let sharing = SharedSession(store: store, link: LocalNetworkTransport())
+        sharing.join(SessionCode("H7K3MR")!)
+        sharing.apply(.failed(.notFound))
+
+        #expect(sharing.revival == .nothing, "it was told the code found nothing")
+    }
 }
