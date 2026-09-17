@@ -46,7 +46,13 @@ struct WorkoutSyncTests {
         duration: 3_600,
         activeEnergyKilocalories: 420,
         heartRateAverage: 128,
-        heartRateMaximum: 171
+        heartRateMaximum: 171,
+        // In the fixture so every assertion about this record covers the breakdown too — it
+        // is the most personal thing on this channel and the one with furthest to travel.
+        heartRateZoneTimes: [
+            HeartRateZoneTime(zone: 1, lowerBound: nil, upperBound: 133, duration: 1_284),
+            HeartRateZoneTime(zone: 2, lowerBound: 134, upperBound: nil, duration: 2_316),
+        ]
     )
 
     /// The guard that matters. `LocalNetworkTransport` reaches the other people at the

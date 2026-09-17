@@ -113,7 +113,14 @@ final class AppModel {
             try? sessionStore?.archive(WorkoutRecord(
                 id: UUID(), startedAt: start, endedAt: start.addingTimeInterval(5_400),
                 duration: 5_400, activeEnergyKilocalories: 612,
-                heartRateAverage: 131, heartRateMaximum: 174
+                heartRateAverage: 131, heartRateMaximum: 174,
+                heartRateZoneTimes: [
+                    HeartRateZoneTime(zone: 1, lowerBound: nil, upperBound: 133, duration: 1_284),
+                    HeartRateZoneTime(zone: 2, lowerBound: 134, upperBound: 145, duration: 1_902),
+                    HeartRateZoneTime(zone: 3, lowerBound: 146, upperBound: 157, duration: 1_734),
+                    HeartRateZoneTime(zone: 4, lowerBound: 158, upperBound: 169, duration: 438),
+                    HeartRateZoneTime(zone: 5, lowerBound: 170, upperBound: nil, duration: 42),
+                ]
             ))
             let earlier = start.addingTimeInterval(-259_200)
             try? sessionStore?.archive(WorkoutRecord(

@@ -13,11 +13,6 @@ import SwiftUI
 struct WatchWorkoutPage: View {
     @Environment(AppModel.self) private var model
 
-    /// Blue through red, the way every heart rate chart has drawn effort since long before
-    /// any of them were on a wrist. Spread across however many zones there turn out to be,
-    /// because a set configured by hand in Health Settings need not be five.
-    private static let zoneColors: [Color] = [.blue, .teal, .green, .orange, .red]
-
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             elapsed
@@ -73,37 +68,70 @@ struct WatchWorkoutPage: View {
         )
     }
 
-    /// A bar per zone and a word. Which zone you are in is the whole of what a zone is for,
-    /// and the bar is there so it can be read at a glance rather than counted.
+    /// A bar per zone, each as wide as the time gone into it, with the one you are in now
+    /// lit and the rest held back. Two questions in one row: where you are, and where the
+    /// hour went. Below watchOS 27 there is no tally to size them by and they share the
+    /// width equally, which still answers the first question.
     private func zoneBar(_ zones: HeartRateZones) -> some View {
         let current = model.workout.heartRate.map { zones.number(for: $0) }
+        let times = model.workout.zoneTimes
         return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 2) {
-                ForEach(1 ... zones.count, id: \.self) { number in
-                    Capsule()
-                        .fill(Self.zoneColor(number, of: zones.count))
-                        .opacity(number <= (current ?? 0) ? 1 : 0.2)
-                        .frame(height: 5)
+            GeometryReader { proxy in
+                let widths = Self.widths(across: proxy.size.width, count: zones.count, times: times)
+                HStack(spacing: Self.zoneGap) {
+                    ForEach(1 ... zones.count, id: \.self) { number in
+                        Capsule()
+                            .fill(HeartRateZoneStyle.color(number, of: zones.count))
+                            .opacity(number == current ? 1 : 0.3)
+                            .frame(width: widths[number - 1])
+                    }
                 }
             }
-            Text(current.map { zoneLabel(zones, current: $0) } ?? " ")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            .frame(height: 5)
+
+            HStack(spacing: 4) {
+                Text(current.map { zoneLabel(zones, current: $0) } ?? " ")
+                Spacer(minLength: 2)
+                if let spent = times.first(where: { $0.zone == current })?.duration, spent > 0 {
+                    Text(WorkoutFormat.duration(spent))
+                        .monospacedDigit()
+                }
+            }
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
         }
         .accessibilityElement(children: .combine)
     }
 
-    /// Both ends open, the way the Workout app writes them: "Zone 1 · under 134" and
-    /// "Zone 5 · 170+", with the ones between reading as a range.
-    private func zoneLabel(_ zones: HeartRateZones, current: Int) -> String {
-        switch (zones.lowerBound(of: current), zones.upperBound(of: current)) {
-        case (nil, let upper?): "Zone \(current) · under \(Int(upper) + 1)"
-        case (let lower?, nil): "Zone \(current) · \(Int(lower))+"
-        case (let lower?, let upper?): "Zone \(current) · \(Int(lower))–\(Int(upper))"
-        case (nil, nil): "Zone \(current)"
+    private static let zoneGap: CGFloat = 2
+
+    /// Every zone keeps a sliver whatever its share, so a bar you have not been in yet reads
+    /// as empty rather than as absent — the row has to hold the same shape all the way
+    /// through, or the zones appear to move about while you play.
+    private static func widths(
+        across total: CGFloat,
+        count: Int,
+        times: [HeartRateZoneTime]
+    ) -> [CGFloat] {
+        let available = max(total - zoneGap * CGFloat(count - 1), 0)
+        let equal = [CGFloat](repeating: available / CGFloat(count), count: count)
+        let seconds = times.reduce(0) { $0 + $1.duration }
+        let sliver = min(3, available / CGFloat(count))
+        let spare = available - sliver * CGFloat(count)
+        guard seconds > 0, spare > 0 else { return equal }
+        return (1 ... count).map { number in
+            let share = times.first { $0.zone == number }?.duration ?? 0
+            return sliver + spare * CGFloat(share / seconds)
         }
+    }
+
+    private func zoneLabel(_ zones: HeartRateZones, current: Int) -> String {
+        let range = WorkoutFormat.zoneRange(
+            lower: zones.lowerBound(of: current), upper: zones.upperBound(of: current)
+        )
+        return "Zone \(current) · \(range)"
     }
 
     /// What the workout has come to. Each line only once there is something in it: a zero
@@ -121,12 +149,6 @@ struct WatchWorkoutPage: View {
                 figure("Highest", WorkoutFormat.beats(maximum), systemImage: "arrow.up.heart.fill", tint: .pink)
             }
         }
-    }
-
-    private static func zoneColor(_ number: Int, of count: Int) -> Color {
-        guard count > 1 else { return zoneColors[0] }
-        let position = Double(number - 1) / Double(count - 1) * Double(zoneColors.count - 1)
-        return zoneColors[Int(position.rounded())]
     }
 
     private func figure(

@@ -77,6 +77,53 @@ struct WorkoutRecordTests {
         #expect(record.activeEnergyKilocalories == nil)
     }
 
+    /// The same trap `startedAt` set: every workout already on somebody's phone was written
+    /// without this key, and `workouts()` drops what it cannot read without a word — so
+    /// getting it wrong empties the list rather than crashing.
+    @Test func aWorkoutWrittenBeforeZoneTimesExistedStillDecodes() throws {
+        let start = Date(timeIntervalSince1970: 768_000_000)
+        let current = WorkoutRecord(
+            id: UUID(), startedAt: start, endedAt: start.addingTimeInterval(3_600),
+            duration: 3_600, heartRateZoneTimes: [zoneTime]
+        )
+        var fields = try #require(
+            JSONSerialization.jsonObject(with: JSONCoding.encoder.encode(current)) as? [String: Any]
+        )
+        #expect(fields.removeValue(forKey: "heartRateZoneTimes") != nil)
+        let legacy = try JSONSerialization.data(withJSONObject: fields)
+
+        let record = try JSONCoding.decoder.decode(WorkoutRecord.self, from: legacy)
+
+        #expect(record.heartRateZoneTimes.isEmpty)
+        #expect(record.duration == 3_600)
+    }
+
+    @Test func zoneTimesSurviveTheRoundTripAndTheFilingCabinet() throws {
+        let store = store()
+        let start = Date(timeIntervalSince1970: 768_000_000)
+        let original = WorkoutRecord(
+            id: UUID(), startedAt: start, endedAt: start.addingTimeInterval(3_600),
+            duration: 3_600,
+            heartRateZoneTimes: [
+                zoneTime,
+                HeartRateZoneTime(zone: 2, lowerBound: 134, upperBound: 145, duration: 900),
+                HeartRateZoneTime(zone: 3, lowerBound: 146, upperBound: nil, duration: 300),
+            ]
+        )
+        try store.archive(original)
+
+        let filed = try #require(try store.workouts().first)
+        #expect(filed == original)
+        // The open ends have to survive as open ends: a nil that came back as a number would
+        // claim the top zone had a ceiling.
+        #expect(filed.heartRateZoneTimes[0].lowerBound == nil)
+        #expect(filed.heartRateZoneTimes[2].upperBound == nil)
+    }
+
+    private var zoneTime: HeartRateZoneTime {
+        HeartRateZoneTime(zone: 1, lowerBound: nil, upperBound: 133, duration: 1_200)
+    }
+
     // MARK: - Which matches a workout covers
 
     @Test func aMatchPlayedInsideTheWorkoutIsCovered() {

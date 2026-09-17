@@ -1,5 +1,29 @@
 import Foundation
 
+/// How long a workout spent in one heart rate zone.
+///
+/// Carries its own edges rather than pointing at a configuration. The zones can be moved in
+/// Health Settings at any time, and a record that only knew "zone 3" would quietly start
+/// meaning something else the day they were; these numbers are what zone 3 was on the day
+/// it was played.
+public struct HeartRateZoneTime: Codable, Sendable, Hashable, Identifiable {
+    public var id: Int { zone }
+    /// 1 upwards, lowest first.
+    public var zone: Int
+    /// The beat this zone begins at. Nil for zone 1, which has no floor.
+    public var lowerBound: Double?
+    /// The last beat that still counts as it. Nil for the top zone, which has no ceiling.
+    public var upperBound: Double?
+    public var duration: TimeInterval
+
+    public init(zone: Int, lowerBound: Double?, upperBound: Double?, duration: TimeInterval) {
+        self.zone = zone
+        self.lowerBound = lowerBound
+        self.upperBound = upperBound
+        self.duration = duration
+    }
+}
+
 /// A workout as it stood when Health saved it, kept by whichever device keeps things —
 /// which is the phone, and never the watch that recorded it.
 ///
@@ -20,6 +44,9 @@ public struct WorkoutRecord: Codable, Sendable, Hashable, Identifiable {
     public var activeEnergyKilocalories: Double?
     public var heartRateAverage: Double?
     public var heartRateMaximum: Double?
+    /// Time in each heart rate zone, lowest first, as Health worked it out. Empty on a watch
+    /// too old to be asked and on every record written before this existed.
+    public var heartRateZoneTimes: [HeartRateZoneTime]
 
     public init(
         id: UUID,
@@ -28,7 +55,8 @@ public struct WorkoutRecord: Codable, Sendable, Hashable, Identifiable {
         duration: TimeInterval,
         activeEnergyKilocalories: Double? = nil,
         heartRateAverage: Double? = nil,
-        heartRateMaximum: Double? = nil
+        heartRateMaximum: Double? = nil,
+        heartRateZoneTimes: [HeartRateZoneTime] = []
     ) {
         self.id = id
         self.startedAt = startedAt
@@ -37,11 +65,13 @@ public struct WorkoutRecord: Codable, Sendable, Hashable, Identifiable {
         self.activeEnergyKilocalories = activeEnergyKilocalories
         self.heartRateAverage = heartRateAverage
         self.heartRateMaximum = heartRateMaximum
+        self.heartRateZoneTimes = heartRateZoneTimes
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, startedAt, endedAt, duration
         case activeEnergyKilocalories, heartRateAverage, heartRateMaximum
+        case heartRateZoneTimes
     }
 
     /// Hand-rolled from the first day rather than the second. `HistoryRecord` was written
@@ -57,6 +87,9 @@ public struct WorkoutRecord: Codable, Sendable, Hashable, Identifiable {
         activeEnergyKilocalories = try container.decodeIfPresent(Double.self, forKey: .activeEnergyKilocalories)
         heartRateAverage = try container.decodeIfPresent(Double.self, forKey: .heartRateAverage)
         heartRateMaximum = try container.decodeIfPresent(Double.self, forKey: .heartRateMaximum)
+        heartRateZoneTimes = try container.decodeIfPresent(
+            [HeartRateZoneTime].self, forKey: .heartRateZoneTimes
+        ) ?? []
     }
 
     /// Whether a finished session was played while this workout was running.

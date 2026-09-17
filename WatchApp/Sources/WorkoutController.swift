@@ -32,6 +32,10 @@ final class WorkoutController {
     /// and nil for good where the birthday was never entered — a zone off a guessed age
     /// would be a made-up number wearing a real one's clothes.
     private(set) var zones: HeartRateZones?
+    /// How long has gone into each zone so far, lowest first. Health keeps the tally itself
+    /// once heart rate is being collected — there is no stopwatch here — and it is empty on
+    /// a watch too old to be asked for it.
+    private(set) var zoneTimes: [HeartRateZoneTime] = []
     /// Set when a start went nowhere, so the button that was pressed can say so and then
     /// forget about it. Never a dialog, and never anything at all when no workout is running.
     private(set) var failure: String?
@@ -185,6 +189,11 @@ final class WorkoutController {
         heartRateAverage = reading.heartRateAverage ?? heartRateAverage
         heartRateMaximum = reading.heartRateMaximum ?? heartRateMaximum
         activeEnergyKilocalories = reading.activeEnergyKilocalories ?? activeEnergyKilocalories
+        // The bands come with the tally once it starts arriving, and they are the ones this
+        // workout is actually being scored against — so they replace whatever was asked for
+        // before it began, and the bar cannot disagree with the times drawn under it.
+        if let zones = reading.zones { self.zones = zones }
+        if !reading.zoneTimes.isEmpty { zoneTimes = reading.zoneTimes }
     }
 
     /// An error that stops a session is always reported before the state change that follows
@@ -287,6 +296,7 @@ final class WorkoutController {
         heartRateMaximum = nil
         activeEnergyKilocalories = nil
         zones = nil
+        zoneTimes = []
     }
 
     func acknowledgeFailure() { failure = nil }
@@ -303,8 +313,22 @@ final class WorkoutController {
         heartRateMaximum = 171
         activeEnergyKilocalories = 386
         zones = .estimated(maximum: 182, resting: 62)
+        zoneTimes = [
+            HeartRateZoneTime(zone: 1, lowerBound: nil, upperBound: 133, duration: 384),
+            HeartRateZoneTime(zone: 2, lowerBound: 134, upperBound: 145, duration: 612),
+            HeartRateZoneTime(zone: 3, lowerBound: 146, upperBound: 157, duration: 731),
+            HeartRateZoneTime(zone: 4, lowerBound: 158, upperBound: 169, duration: 108),
+            HeartRateZoneTime(zone: 5, lowerBound: 170, upperBound: nil, duration: 12),
+        ]
     }
     #endif
+
+    /// The breakdown as Health finally scored it, which is not necessarily the last live
+    /// tally: the workout goes on being added to until it is saved.
+    private static func zoneTimes(of workout: HKWorkout) -> [HeartRateZoneTime] {
+        guard #available(watchOS 27.0, *) else { return [] }
+        return workout.zoneGroup(for: HKQuantityType(.heartRate)).map(HeartRateZoneTime.list) ?? []
+    }
 
     private static func record(from workout: HKWorkout) -> WorkoutRecord {
         let beatsPerMinute = HKUnit.count().unitDivided(by: .minute())
@@ -318,7 +342,8 @@ final class WorkoutController {
                 .sumQuantity()?
                 .doubleValue(for: .kilocalorie()),
             heartRateAverage: heart?.averageQuantity()?.doubleValue(for: beatsPerMinute),
-            heartRateMaximum: heart?.maximumQuantity()?.doubleValue(for: beatsPerMinute)
+            heartRateMaximum: heart?.maximumQuantity()?.doubleValue(for: beatsPerMinute),
+            heartRateZoneTimes: zoneTimes(of: workout)
         )
     }
 }
@@ -330,6 +355,43 @@ struct Reading: Sendable {
     var heartRateAverage: Double?
     var heartRateMaximum: Double?
     var activeEnergyKilocalories: Double?
+    /// The bands this workout is being scored against, and the tally so far. Both come off
+    /// the same group, and both are empty below watchOS 27.
+    var zones: HeartRateZones?
+    var zoneTimes: [HeartRateZoneTime] = []
+}
+
+/// Health's own tally, turned into plain numbers. Done wherever a zone group is in hand —
+/// the live builder or a finished workout — so the rest of the app never has to know that
+/// `HKWorkoutZoneGroup` is watchOS 27 and up.
+@available(watchOS 27.0, *)
+nonisolated extension HeartRateZoneTime {
+    static func list(of group: HKWorkoutZoneGroup) -> [HeartRateZoneTime] {
+        let beatsPerMinute = HKUnit.count().unitDivided(by: .minute())
+        return group.zoneDurations
+            .sorted { $0.zone.index < $1.zone.index }
+            .enumerated()
+            .map { position, entry in
+                HeartRateZoneTime(
+                    // Numbered from 1 by where it sits rather than by the index Health
+                    // gives it, which is nothing this app should be repeating back.
+                    zone: position + 1,
+                    lowerBound: entry.zone.minimum?.doubleValue(for: beatsPerMinute),
+                    upperBound: entry.zone.maximum?.doubleValue(for: beatsPerMinute),
+                    duration: entry.duration
+                )
+            }
+    }
+
+    /// The edges of the same group, in the shape the bar draws from.
+    static func zones(of group: HKWorkoutZoneGroup) -> HeartRateZones? {
+        let beatsPerMinute = HKUnit.count().unitDivided(by: .minute())
+        return HeartRateZones(
+            boundaries: group.configuration.zones.compactMap {
+                $0.minimum?.doubleValue(for: beatsPerMinute)
+            }
+        )
+    }
 }
 
 /// The second nonisolated type in the app, for the same reason as `WCShim`: HealthKit's
@@ -378,6 +440,16 @@ nonisolated private final class Relay: NSObject,
     ) {
         let beatsPerMinute = HKUnit.count().unitDivided(by: .minute())
         let heart = workoutBuilder.statistics(for: HKQuantityType(.heartRate))
+        // Health keeps the tally; this only picks it up, and only where there is one to pick
+        // up. The group is left behind here — it is a watchOS 27 type, and what crosses is
+        // plain numbers as everything else on this path does.
+        var zones: HeartRateZones?
+        var zoneTimes: [HeartRateZoneTime] = []
+        if #available(watchOS 27.0, *),
+           let group = workoutBuilder.zoneGroup(for: HKQuantityType(.heartRate)) {
+            zones = HeartRateZoneTime.zones(of: group)
+            zoneTimes = HeartRateZoneTime.list(of: group)
+        }
         onReading(Reading(
             heartRate: heart?.mostRecentQuantity()?.doubleValue(for: beatsPerMinute),
             heartRateAverage: heart?.averageQuantity()?.doubleValue(for: beatsPerMinute),
@@ -385,7 +457,9 @@ nonisolated private final class Relay: NSObject,
             activeEnergyKilocalories: workoutBuilder
                 .statistics(for: HKQuantityType(.activeEnergyBurned))?
                 .sumQuantity()?
-                .doubleValue(for: .kilocalorie())
+                .doubleValue(for: .kilocalorie()),
+            zones: zones,
+            zoneTimes: zoneTimes
         ))
     }
 

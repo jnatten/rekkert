@@ -26,6 +26,8 @@ struct WorkoutDetailView: View {
                 LabeledContent("Saved as", value: "Tennis, indoor")
             }
 
+            zones
+
             Section {
                 if matches.isEmpty {
                     Text("No matches were scored during this one.")
@@ -55,6 +57,60 @@ struct WorkoutDetailView: View {
         }
         .navigationTitle(workout.startedAt.formatted(.dateTime.weekday(.abbreviated).day().month()))
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// Where the hour went, as Health scored it against the zones that were in force while
+    /// it was being played. Absent where there is nothing to show: a workout recorded on a
+    /// watch too old to be asked, or one from before this was kept.
+    @ViewBuilder
+    private var zones: some View {
+        if !workout.heartRateZoneTimes.isEmpty {
+            Section {
+                ForEach(workout.heartRateZoneTimes) { zone in
+                    zoneRow(zone)
+                }
+            } header: {
+                Text("Time in zones")
+            } footer: {
+                Text("Worked out by Health from the zones you were on. Changing them later leaves this as it was on the day.")
+            }
+        }
+    }
+
+    private func zoneRow(_ zone: HeartRateZoneTime) -> some View {
+        let total = workout.heartRateZoneTimes.reduce(0) { $0 + $1.duration }
+        let share = total > 0 ? zone.duration / total : 0
+        let color = HeartRateZoneStyle.color(zone.zone, of: workout.heartRateZoneTimes.count)
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Zone \(zone.zone)")
+                    .font(.subheadline.weight(.semibold))
+                Text(WorkoutFormat.zoneRange(lower: zone.lowerBound, upper: zone.upperBound))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                Text(WorkoutFormat.duration(zone.duration))
+                    .font(.subheadline.monospacedDigit())
+                Text(share.formatted(.percent.precision(.fractionLength(0))))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 34, alignment: .trailing)
+            }
+
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(color.opacity(0.15))
+                    // A zone with nothing in it draws nothing rather than a stub, because
+                    // the row above it already says "0:00" and a stub would read as some.
+                    Capsule()
+                        .fill(color)
+                        .frame(width: max(proxy.size.width * share, share > 0 ? 4 : 0))
+                }
+            }
+            .frame(height: 6)
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
     }
 
     private var headline: some View {
