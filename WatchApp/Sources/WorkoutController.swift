@@ -20,9 +20,18 @@ import RekkertCore
 final class WorkoutController {
     private(set) var isTracking = false
     private(set) var startedAt: Date?
-    /// The live reading, for the glyph on the scoreboard. It stays on this wrist: nothing
-    /// puts it on the wire.
+    /// The live reading, for the glyph on the scoreboard and the workout page. It stays on
+    /// this wrist: nothing puts it on the wire.
     private(set) var heartRate: Double?
+    /// What the workout has come to so far, refreshed as Health collects it. The same
+    /// figures the finished record carries, available while it is still being earned.
+    private(set) var heartRateAverage: Double?
+    private(set) var heartRateMaximum: Double?
+    private(set) var activeEnergyKilocalories: Double?
+    /// Where to place the reading, once Health has said whose heart it is. Nil until then,
+    /// and nil for good where the birthday was never entered — a zone off a guessed age
+    /// would be a made-up number wearing a real one's clothes.
+    private(set) var zones: HeartRateZones?
     /// Set when a start went nowhere, so the button that was pressed can say so and then
     /// forget about it. Never a dialog, and never anything at all when no workout is running.
     private(set) var failure: String?
@@ -50,8 +59,16 @@ final class WorkoutController {
         [HKQuantityType.workoutType(), HKQuantityType(.activeEnergyBurned)]
     }
 
+    /// The last two are for the zones rather than the workout: an age to estimate the
+    /// maximum from, and a resting rate to measure the reserve up from. Health never says
+    /// whether a read was granted, so both are asked for and neither is relied on.
     private static var read: Set<HKObjectType> {
-        [HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned)]
+        [
+            HKQuantityType(.heartRate),
+            HKQuantityType(.activeEnergyBurned),
+            HKQuantityType(.restingHeartRate),
+            HKCharacteristicType(.dateOfBirth),
+        ]
     }
 
     // MARK: - Starting and stopping
@@ -137,7 +154,7 @@ final class WorkoutController {
         let relay = Relay(
             onEnded: { [weak self] in Task { @MainActor in self?.sessionEnded() } },
             onFailure: { [weak self] error in Task { @MainActor in self?.failed(error) } },
-            onHeartRate: { [weak self] beats in Task { @MainActor in self?.collected(beats) } }
+            onReading: { [weak self] reading in Task { @MainActor in self?.collected(reading) } }
         )
         self.relay = relay
         session.delegate = relay
@@ -160,9 +177,14 @@ final class WorkoutController {
         }
     }
 
-    fileprivate func collected(_ beatsPerMinute: Double?) {
-        guard let beatsPerMinute else { return }
-        heartRate = beatsPerMinute
+    /// Each figure kept only while it has something to say. Health hands over whatever it
+    /// has collected so far, and a statistic that is not there yet must not blank one that
+    /// arrived a moment ago.
+    fileprivate func collected(_ reading: Reading) {
+        heartRate = reading.heartRate ?? heartRate
+        heartRateAverage = reading.heartRateAverage ?? heartRateAverage
+        heartRateMaximum = reading.heartRateMaximum ?? heartRateMaximum
+        activeEnergyKilocalories = reading.activeEnergyKilocalories ?? activeEnergyKilocalories
     }
 
     /// An error that stops a session is always reported before the state change that follows
@@ -178,6 +200,30 @@ final class WorkoutController {
         isTracking = true
         startedAt = date
         publish?(.running(since: date))
+        Task { await loadZones() }
+    }
+
+    /// Asked for once a workout is actually under way rather than at launch, and allowed to
+    /// come back with nothing. Everything it reads is optional to the app: without an age
+    /// there are no zones, and without a resting rate the zones are percentages of the
+    /// maximum instead of of the reserve.
+    private func loadZones() async {
+        guard let components = try? health.dateOfBirthComponents(),
+              let born = Calendar.current.date(from: components),
+              let age = Calendar.current.dateComponents([.year], from: born, to: .now).year,
+              let maximum = HeartRateZones.estimatedMaximum(forAge: age)
+        else { return }
+        zones = HeartRateZones(maximum: maximum, resting: await restingHeartRate())
+    }
+
+    private func restingHeartRate() async -> Double? {
+        let descriptor = HKStatisticsQueryDescriptor(
+            predicate: .quantitySample(type: HKQuantityType(.restingHeartRate)),
+            options: .mostRecent
+        )
+        guard let statistics = try? await descriptor.result(for: health) else { return nil }
+        return statistics.mostRecentQuantity()?
+            .doubleValue(for: .count().unitDivided(by: .minute()))
     }
 
     private func finished(_ workout: HKWorkout?) {
@@ -208,9 +254,28 @@ final class WorkoutController {
         isTracking = false
         startedAt = nil
         heartRate = nil
+        heartRateAverage = nil
+        heartRateMaximum = nil
+        activeEnergyKilocalories = nil
+        zones = nil
     }
 
     func acknowledgeFailure() { failure = nil }
+
+    #if DEBUG
+    /// `-rekkert-demo-workout` dresses the screen as though one were running. The simulator
+    /// has no wrist to read and Health will not start a session on it, so this is the only
+    /// way the badge and the workout page get in front of `simctl`.
+    func pretendRunning() {
+        isTracking = true
+        startedAt = Date().addingTimeInterval(-1_847)
+        heartRate = 148
+        heartRateAverage = 134
+        heartRateMaximum = 171
+        activeEnergyKilocalories = 386
+        zones = HeartRateZones(maximum: 182, resting: 58)
+    }
+    #endif
 
     private static func record(from workout: HKWorkout) -> WorkoutRecord {
         let beatsPerMinute = HKUnit.count().unitDivided(by: .minute())
@@ -229,10 +294,19 @@ final class WorkoutController {
     }
 }
 
+/// Everything the workout page and the scoreboard glyph draw, taken off the builder in one
+/// go. A plain value, so it can cross from HealthKit's queue to the main actor whole.
+struct Reading: Sendable {
+    var heartRate: Double?
+    var heartRateAverage: Double?
+    var heartRateMaximum: Double?
+    var activeEnergyKilocalories: Double?
+}
+
 /// The second nonisolated type in the app, for the same reason as `WCShim`: HealthKit's
 /// delegates are ObjC protocols wanting an `NSObject`, and it calls them on its own queue
 /// handing over a builder that is not `Sendable`. The reading is taken here, where the
-/// builder is legitimately in hand, and only a `Double` crosses.
+/// builder is legitimately in hand, and only the `Double`s cross.
 nonisolated private final class Relay: NSObject,
     HKWorkoutSessionDelegate,
     HKLiveWorkoutBuilderDelegate,
@@ -240,16 +314,16 @@ nonisolated private final class Relay: NSObject,
 {
     private let onEnded: @Sendable () -> Void
     private let onFailure: @Sendable (any Error) -> Void
-    private let onHeartRate: @Sendable (Double?) -> Void
+    private let onReading: @Sendable (Reading) -> Void
 
     init(
         onEnded: @escaping @Sendable () -> Void,
         onFailure: @escaping @Sendable (any Error) -> Void,
-        onHeartRate: @escaping @Sendable (Double?) -> Void
+        onReading: @escaping @Sendable (Reading) -> Void
     ) {
         self.onEnded = onEnded
         self.onFailure = onFailure
-        self.onHeartRate = onHeartRate
+        self.onReading = onReading
     }
 
     func workoutSession(
@@ -266,17 +340,24 @@ nonisolated private final class Relay: NSObject,
         onFailure(error)
     }
 
+    /// Everything is read on every collection rather than only what was named: the
+    /// statistics are cheap, they are only in reach here, and the alternative is four
+    /// branches that all have to be right.
     func workoutBuilder(
         _ workoutBuilder: HKLiveWorkoutBuilder,
         didCollectDataOf collectedTypes: Set<HKSampleType>
     ) {
-        guard collectedTypes.contains(HKQuantityType(.heartRate)) else { return }
         let beatsPerMinute = HKUnit.count().unitDivided(by: .minute())
-        onHeartRate(
-            workoutBuilder.statistics(for: HKQuantityType(.heartRate))?
-                .mostRecentQuantity()?
-                .doubleValue(for: beatsPerMinute)
-        )
+        let heart = workoutBuilder.statistics(for: HKQuantityType(.heartRate))
+        onReading(Reading(
+            heartRate: heart?.mostRecentQuantity()?.doubleValue(for: beatsPerMinute),
+            heartRateAverage: heart?.averageQuantity()?.doubleValue(for: beatsPerMinute),
+            heartRateMaximum: heart?.maximumQuantity()?.doubleValue(for: beatsPerMinute),
+            activeEnergyKilocalories: workoutBuilder
+                .statistics(for: HKQuantityType(.activeEnergyBurned))?
+                .sumQuantity()?
+                .doubleValue(for: .kilocalorie())
+        ))
     }
 
     func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {}

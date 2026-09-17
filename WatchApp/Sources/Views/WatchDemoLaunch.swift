@@ -1,7 +1,7 @@
 #if DEBUG
 import Foundation
 
-/// `-rekkert-demo-watch-page menu|standings|controls` opens straight onto a page that
+/// `-rekkert-demo-watch-page menu|standings|controls|workout` opens straight onto a page that
 /// otherwise needs a swipe, so screens can be captured from `simctl`.
 enum WatchDemoLaunch {
     static var page: String? {

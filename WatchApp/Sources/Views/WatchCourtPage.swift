@@ -7,6 +7,9 @@ struct WatchCourtPage: View {
     @Environment(\.teamPalette) private var palette
     var round = 0
     let court: Int
+    /// Set by the root, which owns the page the workout lives on. Nil where there is
+    /// nowhere to go, and the badge is then a badge rather than a button.
+    var onShowWorkout: (() -> Void)?
     @State private var page = WatchCourtPage.startPage
 
     var body: some View {
@@ -40,12 +43,12 @@ struct WatchCourtPage: View {
                     WKInterfaceDevice.current().play(.click)
                     model.store.tap(round: round, court: court, team: side)
                 },
-                onUndo: undo
+                onUndo: undo,
+                badge: { heartRate }
             )
             // Nothing scrolls on this page any more, so the numbers take the whole of it.
             .frame(maxHeight: .infinity)
             .overlay(alignment: .bottomLeading) { undoButton }
-            .overlay(alignment: .topLeading) { heartRate }
 
             // The line above the score already says it is sudden death, so this row only has
             // to say whose call it is and take the answer.
@@ -67,30 +70,43 @@ struct WatchCourtPage: View {
     /// Present only while a workout is running, and gone entirely otherwise — playing
     /// without one is the ordinary case, not a thing to report. It follows the session
     /// rather than the first sample: waiting for a reading would have it blink into
-    /// existence some seconds after the button, which reads as a fault.
+    /// existence some seconds after the button, which reads as a fault, so the glyph comes
+    /// up on its own and the number joins it.
     ///
-    /// Beside the set line at the top rather than in a bottom corner: the bottom right is
-    /// where the games read, anchored trailing so the running game sits hard against that
-    /// edge, and the bottom left is the undo button.
+    /// On the set line at the top rather than in a bottom corner: the bottom right is where
+    /// the games read, anchored trailing so the running game sits hard against that edge,
+    /// and the bottom left is the undo button. It is a part of that line rather than
+    /// something laid over it, which is what keeps it off the colour below.
     ///
-    /// The symbol alone, with no reading beside it. The line it shares is centred and can be
-    /// as long as "Round 1 · 16 to play", which on a 40mm watch runs clean under a number
-    /// wide enough to hold three digits.
+    /// Tapping it opens the workout page. Nothing is scored from here — this corner is the
+    /// header, not a button — so the tap is free, and it is the obvious place to reach for
+    /// when the number is what you wanted a better look at.
     @ViewBuilder
     private var heartRate: some View {
         if model.workout.isTracking {
-            Image(systemName: "heart.fill")
-                .font(.system(size: 10))
-                .symbolEffect(.pulse)
+            Button { onShowWorkout?() } label: {
+                HStack(spacing: 2) {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 9))
+                        .symbolEffect(.pulse)
+                    if let beats = model.workout.heartRate {
+                        Text("\(Int(beats.rounded()))")
+                            .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                    }
+                }
                 .foregroundStyle(.pink)
                 .padding(.horizontal, 4)
-                .padding(.vertical, 2)
+                .padding(.vertical, 1)
                 .background(.black.opacity(0.4), in: .capsule)
-                .padding(.leading, 3)
-                .accessibilityLabel(
-                    model.workout.heartRate.map { "Workout running, \(Int($0)) beats per minute" }
-                        ?? "Workout running"
-                )
+            }
+            .buttonStyle(.plain)
+            .disabled(onShowWorkout == nil)
+            .padding(.leading, 3)
+            .accessibilityLabel(
+                model.workout.heartRate.map { "Workout running, \(Int($0.rounded())) beats per minute" }
+                    ?? "Workout running"
+            )
+            .accessibilityHint("Opens the workout")
         }
     }
 

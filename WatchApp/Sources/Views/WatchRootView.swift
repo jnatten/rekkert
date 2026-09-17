@@ -8,6 +8,11 @@ struct WatchRootView: View {
     var body: some View {
         content
             .environment(\.teamPalette, TeamPalette(isSwapped: model.store.display.areColorsSwapped))
+            // The workout page is only in the deck while one is running, so stopping it from
+            // that page would otherwise leave the selection pointing at a page that has gone.
+            .onChange(of: model.workout.isTracking) { _, isTracking in
+                if !isTracking, selection == workoutTag { selection = 0 }
+            }
     }
 
     @ViewBuilder
@@ -16,13 +21,25 @@ struct WatchRootView: View {
         case .none:
             if let result = model.store.lastResult {
                 WatchResultView(state: result)
+            } else if model.workout.isTracking {
+                // A workout does not need a match around it, and somebody who started one
+                // with nothing on still wants somewhere to watch it.
+                TabView(selection: $selection) {
+                    WatchIdleView().tag(0)
+                    workoutPage
+                }
+                .tabViewStyle(.page)
+                // This deck is two pages where the one before it was four, so a selection
+                // left on the menu would land on a page that is not here.
+                .task { if selection != workoutTag { selection = 0 } }
             } else {
                 WatchIdleView()
             }
 
         case .traditional, .winnerCourt, .pointCount:
             TabView(selection: $selection) {
-                WatchCourtPage(court: 0).tag(0)
+                WatchCourtPage(court: 0, onShowWorkout: showWorkout).tag(0)
+                workoutPage
                 WatchMenuView().tag(menuTag)
             }
             .tabViewStyle(.page)
@@ -32,10 +49,15 @@ struct WatchRootView: View {
             if let round = tournament.currentRound {
                 TabView(selection: $selection) {
                     ForEach(round.matches) { match in
-                        WatchCourtPage(round: round.index, court: match.courtIndex)
-                            .tag(match.courtIndex)
+                        WatchCourtPage(
+                            round: round.index,
+                            court: match.courtIndex,
+                            onShowWorkout: showWorkout
+                        )
+                        .tag(match.courtIndex)
                     }
                     WatchStandingsView(tournament: tournament).tag(standingsTag)
+                    workoutPage
                     WatchMenuView().tag(menuTag)
                 }
                 .tabViewStyle(.page)
@@ -46,14 +68,28 @@ struct WatchRootView: View {
         }
     }
 
-    /// Fixed tags so the menu and standings keep their place whatever the court count.
+    /// Last but one, just before the menu: a swipe from the score on the days there is one
+    /// and never in the way on the days there is not.
+    @ViewBuilder
+    private var workoutPage: some View {
+        if model.workout.isTracking {
+            WatchWorkoutPage().tag(workoutTag)
+        }
+    }
+
+    private func showWorkout() { selection = workoutTag }
+
+    /// Fixed tags so the menu, the standings and the workout keep their place whatever the
+    /// court count.
     private var standingsTag: Int { 1_000 }
     private var menuTag: Int { 1_001 }
+    private var workoutTag: Int { 1_002 }
 
     private func openDemoPage() {
         #if DEBUG
         if WatchDemoLaunch.page == "menu" { selection = menuTag }
         if WatchDemoLaunch.page == "standings" { selection = standingsTag }
+        if WatchDemoLaunch.page == "workout" { selection = workoutTag }
         #endif
     }
 }

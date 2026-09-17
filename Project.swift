@@ -101,7 +101,7 @@ let project = Project(
                 // app the moment the wrist drops, and the workout stops collecting.
                 "WKBackgroundModes": ["workout-processing"],
                 "NSHealthShareUsageDescription":
-                    "Rekkert reads your heart rate and energy while a workout you started is running.",
+                    "Rekkert reads your heart rate and energy while a workout you started is running, and your age and resting rate to place that heart rate in a zone.",
                 "NSHealthUpdateUsageDescription":
                     "Rekkert saves what you played as a tennis workout in Health.",
             ]),
