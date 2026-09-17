@@ -59,6 +59,11 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         var backlog: [Data] = []
         var isReady = false
         var key: SymmetricKey?
+        /// Guest side only. A write is answered before the next one goes out: CoreBluetooth
+        /// will take more than it can carry and then drop the overflow, and a dropped chunk is
+        /// a frame that never opens at the far end and a reply somebody waits the timeout out
+        /// for. The host's side of the same problem is `updateValue` refusing, which it says so.
+        var isWriting = false
         /// Only a host has one of these, and only to answer the right central.
         let central: CBCentral?
 
@@ -272,6 +277,9 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             guard let next else { return }
             guard deliver(next, to: peer) else { return }
             lock.withLock { if !peer.backlog.isEmpty { peer.backlog.removeFirst() } }
+            // A guest may only have one write outstanding, so the acknowledgement is what
+            // fetches the next chunk rather than this loop.
+            if lock.withLock({ peer.isWriting }) { return }
         }
     }
 
@@ -283,10 +291,19 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         }
         let (server, inbox) = lock.withLock { (self.server, serverInbox) }
         guard let server, let inbox else { return false }
-        // With a response rather than without: the point of this link is that it works while
-        // nobody is watching, and an unacknowledged write is the one that goes missing then.
+        guard lock.withLock({ !peer.isWriting }) else { return false }
+        lock.withLock { peer.isWriting = true }
+        // With a response rather than without: the point of this link is that it goes on
+        // working while nobody is watching, and an unacknowledged write is the one that goes
+        // missing then.
         server.writeValue(chunk, for: inbox, type: .withResponse)
         return true
+    }
+
+    fileprivate func wroteChunk(to peripheral: CBPeripheral) {
+        guard let peer = lock.withLock({ peers[ObjectIdentifier(peripheral)] }) else { return }
+        lock.withLock { peer.isWriting = false }
+        drain(peer)
     }
 
     private func drainEverybody() {
@@ -594,6 +611,14 @@ nonisolated private final class Shim: NSObject, CBPeripheralManagerDelegate,
         error: (any Error)?
     ) {
         transport?.updated(characteristic, on: peripheral)
+    }
+
+    func peripheral(
+        _ peripheral: CBPeripheral,
+        didWriteValueFor characteristic: CBCharacteristic,
+        error: (any Error)?
+    ) {
+        transport?.wroteChunk(to: peripheral)
     }
 }
 

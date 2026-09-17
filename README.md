@@ -198,6 +198,26 @@ as the cold-start backstop.
 If a phone and a watch each end up with a session of their own, the more recently started
 one wins and the other is archived to History rather than dropped.
 
+Between phones the same conversation runs over two links at once. The local network —
+Bonjour over Network.framework, with the six-character code as a TLS pre-shared key — is the
+quick one, and iOS takes it away the moment the app stops being in front of somebody. So
+Bluetooth runs alongside it: it is the only link the system will let an app hold open with the
+screen off, which is what keeps two watches agreeing while both phones are in bags. A peer on
+both hears everything twice, which costs bytes and nothing else, because merging is a union.
+
+Bluetooth cannot carry the code in its advertisement — a backgrounded peripheral drops its
+name and service data and moves its service UUID into an overflow area — so the UUID is fixed
+and app-wide, and the code is checked after connecting instead: the host publishes a share id
+and a two-byte fingerprint, and every frame is then sealed with a key derived from the code.
+Deriving the service UUID from the code would be worse than saying nothing, since thirty bits
+of code under a hash broadcast in the clear comes straight back out.
+
+A drop is not a refusal. `ReconnectPolicy` decides what losing a connection means, and the
+only thing that tells a wrong code from a host who walked off is whether anything ever worked.
+Guests keep dialling on a timer rather than waiting for a Bonjour change that never comes, and
+a reconnect merges rather than replaces — both sides keep whatever they scored while apart. If
+the merged score is one nobody recognises, the host can settle it from the match menu.
+
 ## Verifying
 
 ```sh
