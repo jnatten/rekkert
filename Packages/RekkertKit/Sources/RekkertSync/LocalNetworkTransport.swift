@@ -78,6 +78,10 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     private var hasEverJoined = false
     private var lastSnapshot: Data?
     private var searchDeadline: DispatchWorkItem?
+    private var redialTimer: DispatchSourceTimer?
+    /// Per link, so a dial that never arrives can be given up on. Keyed the same way `links` is.
+    private var dialDeadlines: [ObjectIdentifier: DispatchWorkItem] = [:]
+    private var listenerAttempts = 0
 
     /// Only ever read with `lock` already held.
     private var isHosting: Bool {
@@ -87,10 +91,23 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
 
     private let replyTimeout: DispatchTimeInterval
     private let searchTimeout: DispatchTimeInterval
+    private let dialTimeout: DispatchTimeInterval
+    private let redialInterval: DispatchTimeInterval
 
-    public init(replyTimeout: Int = 4, searchTimeout: Int = 10) {
+    /// How many times a listener the system took away is put back before the honest answer is
+    /// that something else is wrong.
+    private static let rebuildAttempts = 5
+
+    public init(
+        replyTimeout: Int = 4,
+        searchTimeout: Int = 10,
+        dialTimeout: Int = 6,
+        redialInterval: Int = 2
+    ) {
         self.replyTimeout = .seconds(replyTimeout)
         self.searchTimeout = .seconds(searchTimeout)
+        self.dialTimeout = .seconds(dialTimeout)
+        self.redialInterval = .seconds(redialInterval)
 
         var packetContinuation: AsyncStream<InboundPacket>.Continuation!
         inbound = AsyncStream { packetContinuation = $0 }
@@ -140,6 +157,25 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         standUpListener(code: code, share: share)
     }
 
+    /// A listener that fails after the app has been away is the system having taken it, not a
+    /// permission somebody refused — so put it back rather than telling a host mid-match that
+    /// they cannot see their own network. Only so many times: a failure that keeps coming back
+    /// is a real one, and saying nothing at all about it would be worse than saying the wrong
+    /// thing once.
+    private func standUpListenerAgain() {
+        let (intent, attempts) = lock.withLock { () -> (Intent, Int) in
+            listenerAttempts += 1
+            return (self.intent, listenerAttempts)
+        }
+        guard case .hosting(let code, let share) = intent else { return }
+        guard attempts <= Self.rebuildAttempts else { return publish(.failed(.blocked)) }
+
+        queue.asyncAfter(deadline: .now() + .seconds(1)) { [weak self] in
+            guard let self, case .hosting = self.lock.withLock({ self.intent }) else { return }
+            self.standUpListener(code: code, share: share)
+        }
+    }
+
     private func standUpListener(code: SessionCode, share: UUID) {
         var txt = NWTXTRecord()
         txt["v"] = "1"
@@ -160,9 +196,11 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         listener.stateUpdateHandler = { [weak self] state in
             guard let self else { return }
             switch state {
+            case .ready:
+                self.lock.withLock { self.listenerAttempts = 0 }
             case .failed:
                 self.lock.withLock { self.listener = nil }
-                self.publish(.failed(.blocked))
+                self.standUpListenerAgain()
             case .cancelled:
                 // iOS takes the listener away when the app goes into the background. Letting
                 // go of it here is what lets `resume()` know there is something to rebuild.
@@ -183,6 +221,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         stop()
         lock.withLock { intent = .joining(code) }
         standUpBrowser(code: code)
+        startRedialling()
 
         // Nothing reports a declined local-network permission, and nothing reports an absent
         // host either, so the honest answer to both is the same one after a decent wait. Armed
@@ -217,6 +256,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             old?.cancel()
             standUpBrowser(code: code)
         }
+        startRedialling()
         redial()
         announce()
     }
@@ -235,8 +275,14 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             guard let self else { return }
             switch state {
             case .failed:
-                self.lock.withLock { self.browser = nil }
-                self.publish(.failed(.blocked))
+                let joinedBefore = self.lock.withLock { () -> Bool in
+                    self.browser = nil
+                    return self.hasEverJoined
+                }
+                // Before anything has ever worked, a browser that fails really is the refused
+                // permission. Afterwards it is the system having taken it away with the app,
+                // and the redial timer puts it back without troubling anybody about it.
+                if !joinedBefore { self.publish(.failed(.blocked)) }
             case .cancelled:
                 self.lock.withLock { self.browser = nil }
             default:
@@ -249,18 +295,25 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     }
 
     public func stop() {
-        let (oldListener, oldBrowser, oldLinks, pending, deadline) = lock.withLock {
-            let values = (listener, browser, Array(links.values), Array(waiting.values), searchDeadline)
+        stopRedialling()
+        let (oldListener, oldBrowser, oldLinks, pending, deadline, dials) = lock.withLock {
+            let values = (
+                listener, browser, Array(links.values), Array(waiting.values),
+                searchDeadline, Array(dialDeadlines.values)
+            )
             listener = nil
             browser = nil
             links = [:]
             waiting = [:]
             searchDeadline = nil
+            dialDeadlines = [:]
+            listenerAttempts = 0
             intent = .none
             hasEverJoined = false
             lastSnapshot = nil
             return values
         }
+        for dial in dials { dial.cancel() }
         deadline?.cancel()
         oldListener?.cancel()
         oldBrowser?.cancel()
@@ -365,23 +418,25 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
                 to: result.endpoint,
                 using: parameters(key: SessionKey.presharedKey(for: code, share: share))
             )
-            adopt(connection)
+            adopt(connection, dialled: true)
         }
     }
 
     private func accept(_ connection: NWConnection) {
-        adopt(connection)
+        adopt(connection, dialled: false)
     }
 
-    private func adopt(_ connection: NWConnection) {
+    private func adopt(_ connection: NWConnection, dialled: Bool) {
         let link = Link(connection)
         let token = ObjectIdentifier(connection)
         lock.withLock { links[token] = link }
+        if dialled { giveUpOnDial(token, link) }
 
         connection.stateUpdateHandler = { [weak self] state in
             guard let self else { return }
             switch state {
             case .ready:
+                self.forgetDialDeadline(token)
                 self.lock.withLock {
                     link.isReady = true
                     self.hasEverJoined = true
@@ -426,11 +481,31 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             return removed
         }
         guard !dead.isEmpty else { return }
-        for link in dead { link.connection.cancel() }
+        for link in dead {
+            forgetDialDeadline(ObjectIdentifier(link.connection))
+            link.connection.cancel()
+        }
         reachabilityUpdates.yield(isReachable)
     }
 
+    /// An `NWConnection` to an endpoint that is no longer there sits in `.waiting` rather than
+    /// failing, and `redial` will not dial while any link is on the books — so one of these
+    /// would quietly block every future attempt for the rest of the match.
+    private func giveUpOnDial(_ token: ObjectIdentifier, _ link: Link) {
+        let deadline = DispatchWorkItem { [weak self] in
+            guard let self, self.lock.withLock({ !link.isReady }) else { return }
+            self.close(token, refusable: false)
+        }
+        lock.withLock { dialDeadlines[token] = deadline }
+        queue.asyncAfter(deadline: .now() + dialTimeout, execute: deadline)
+    }
+
+    private func forgetDialDeadline(_ token: ObjectIdentifier) {
+        lock.withLock { dialDeadlines.removeValue(forKey: token) }?.cancel()
+    }
+
     private func close(_ token: ObjectIdentifier, refusable: Bool) {
+        forgetDialDeadline(token)
         let link = lock.withLock { links.removeValue(forKey: token) }
         guard let link else { return }
         link.connection.cancel()
@@ -460,6 +535,44 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         case .carryOn:
             announce()
         }
+    }
+
+    /// Looks again on a timer, for as long as this is meant to be joined to something.
+    ///
+    /// `browseResultsChangedHandler` fires on a *change*, and a host that never stopped
+    /// advertising is not a change — so a guest with nothing to dial at the moment it happened
+    /// to look has nothing that would ever make it look a second time. This is what makes it
+    /// look. It is also what puts the browser back when the system has taken it away.
+    private func startRedialling() {
+        stopRedialling()
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + redialInterval, repeating: redialInterval)
+        timer.setEventHandler { [weak self] in self?.lookAgain() }
+        lock.withLock { redialTimer = timer }
+        timer.resume()
+    }
+
+    private func stopRedialling() {
+        let timer = lock.withLock { () -> DispatchSourceTimer? in
+            let old = redialTimer
+            redialTimer = nil
+            return old
+        }
+        timer?.cancel()
+    }
+
+    private func lookAgain() {
+        let (intent, browser) = lock.withLock { (self.intent, self.browser) }
+        guard case .joining(let code) = intent else { return }
+        guard browser == nil || browser?.state != .ready else { return redial() }
+
+        let old = lock.withLock { () -> NWBrowser? in
+            let previous = self.browser
+            self.browser = nil
+            return previous
+        }
+        old?.cancel()
+        standUpBrowser(code: code)
     }
 
     /// Dials whatever the browser can currently see again.
@@ -548,7 +661,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     }
 
     private func publish(_ value: Status) {
-        if case .failed = value { searchDeadline?.cancel() }
+        if case .failed = value { lock.withLock { searchDeadline }?.cancel() }
         statusUpdates.yield(value)
     }
 }
