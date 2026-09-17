@@ -14,7 +14,8 @@ struct WatchWorkoutPage: View {
     @Environment(AppModel.self) private var model
 
     /// Blue through red, the way every heart rate chart has drawn effort since long before
-    /// any of them were on a wrist.
+    /// any of them were on a wrist. Spread across however many zones there turn out to be,
+    /// because a set configured by hand in Health Settings need not be five.
     private static let zoneColors: [Color] = [.blue, .teal, .green, .orange, .red]
 
     var body: some View {
@@ -72,20 +73,20 @@ struct WatchWorkoutPage: View {
         )
     }
 
-    /// Five bars and a word. Which zone you are in is the whole of what a zone is for, and
-    /// the bar is there so it can be read at a glance rather than counted.
+    /// A bar per zone and a word. Which zone you are in is the whole of what a zone is for,
+    /// and the bar is there so it can be read at a glance rather than counted.
     private func zoneBar(_ zones: HeartRateZones) -> some View {
-        let current = model.workout.heartRate.flatMap { zones.number(for: $0) }
+        let current = model.workout.heartRate.map { zones.number(for: $0) }
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 2) {
-                ForEach(1 ... HeartRateZones.count, id: \.self) { number in
+                ForEach(1 ... zones.count, id: \.self) { number in
                     Capsule()
-                        .fill(Self.zoneColors[number - 1])
+                        .fill(Self.zoneColor(number, of: zones.count))
                         .opacity(number <= (current ?? 0) ? 1 : 0.2)
                         .frame(height: 5)
                 }
             }
-            Text(zoneLabel(zones, current: current))
+            Text(current.map { zoneLabel(zones, current: $0) } ?? " ")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -94,11 +95,15 @@ struct WatchWorkoutPage: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func zoneLabel(_ zones: HeartRateZones, current: Int?) -> String {
-        guard let current else { return "Below zone 1 · under \(Int(zones.lowerBound(of: 1)))" }
-        let lower = Int(zones.lowerBound(of: current))
-        guard let upper = zones.upperBound(of: current) else { return "Zone \(current) · \(lower)+" }
-        return "Zone \(current) · \(lower)–\(Int(upper))"
+    /// Both ends open, the way the Workout app writes them: "Zone 1 · under 134" and
+    /// "Zone 5 · 170+", with the ones between reading as a range.
+    private func zoneLabel(_ zones: HeartRateZones, current: Int) -> String {
+        switch (zones.lowerBound(of: current), zones.upperBound(of: current)) {
+        case (nil, let upper?): "Zone \(current) · under \(Int(upper) + 1)"
+        case (let lower?, nil): "Zone \(current) · \(Int(lower))+"
+        case (let lower?, let upper?): "Zone \(current) · \(Int(lower))–\(Int(upper))"
+        case (nil, nil): "Zone \(current)"
+        }
     }
 
     /// What the workout has come to. Each line only once there is something in it: a zero
@@ -116,6 +121,12 @@ struct WatchWorkoutPage: View {
                 figure("Highest", WorkoutFormat.beats(maximum), systemImage: "arrow.up.heart.fill", tint: .pink)
             }
         }
+    }
+
+    private static func zoneColor(_ number: Int, of count: Int) -> Color {
+        guard count > 1 else { return zoneColors[0] }
+        let position = Double(number - 1) / Double(count - 1) * Double(zoneColors.count - 1)
+        return zoneColors[Int(position.rounded())]
     }
 
     private func figure(

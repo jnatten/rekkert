@@ -204,16 +204,45 @@ final class WorkoutController {
     }
 
     /// Asked for once a workout is actually under way rather than at launch, and allowed to
-    /// come back with nothing. Everything it reads is optional to the app: without an age
-    /// there are no zones, and without a resting rate the zones are percentages of the
-    /// maximum instead of of the reserve.
+    /// come back with nothing at all.
+    ///
+    /// The person's own bands where the system will give them up, which is watchOS 27 and
+    /// later. Those are the ones the Workout app draws: generated from their health metrics,
+    /// or set by hand in Health Settings, and there is no arithmetic here that could disagree
+    /// with what they see everywhere else.
     private func loadZones() async {
+        if #available(watchOS 27.0, *), let preferred = await preferredZones() {
+            zones = preferred
+            return
+        }
+        zones = await estimatedZones()
+    }
+
+    @available(watchOS 27.0, *)
+    private func preferredZones() async -> HeartRateZones? {
+        guard let configuration = try? await health.preferredWorkoutZoneConfiguration(
+            for: HKQuantityType(.heartRate)
+        ) else { return nil }
+        // Ordered lowest to highest, and the lowest has no minimum — a heart cannot be under
+        // zone 1 — so what is left is exactly the boundaries between them.
+        let beatsPerMinute = HKUnit.count().unitDivided(by: .minute())
+        return HeartRateZones(
+            boundaries: configuration.zones.compactMap {
+                $0.minimum?.doubleValue(for: beatsPerMinute)
+            }
+        )
+    }
+
+    /// watchOS 26, where the bands cannot be asked for. Everything it reads is optional to
+    /// the app: without an age there are no zones at all, and without a resting rate they
+    /// are percentages of the maximum rather than of the reserve.
+    private func estimatedZones() async -> HeartRateZones? {
         guard let components = try? health.dateOfBirthComponents(),
               let born = Calendar.current.date(from: components),
               let age = Calendar.current.dateComponents([.year], from: born, to: .now).year,
               let maximum = HeartRateZones.estimatedMaximum(forAge: age)
-        else { return }
-        zones = HeartRateZones(maximum: maximum, resting: await restingHeartRate())
+        else { return nil }
+        return .estimated(maximum: maximum, resting: await restingHeartRate())
     }
 
     private func restingHeartRate() async -> Double? {
@@ -273,7 +302,7 @@ final class WorkoutController {
         heartRateAverage = 134
         heartRateMaximum = 171
         activeEnergyKilocalories = 386
-        zones = HeartRateZones(maximum: 182, resting: 58)
+        zones = .estimated(maximum: 182, resting: 62)
     }
     #endif
 
