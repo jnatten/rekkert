@@ -505,6 +505,10 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         let peer = Peer()
         peer.key = SessionKey.sealingKey(for: code, share: greeting.share)
         lock.withLock { peers[ObjectIdentifier(peripheral)] = peer }
+        // Nothing left to look for. The connection carries its own reconnect from here — the
+        // request handed to `connect` outlives the link — and a scan left running is a radio
+        // kept awake for the length of a match.
+        lock.withLock { centralManager }?.stopScan()
 
         for service in peripheral.services ?? [] where service.uuid == Self.serviceUUID {
             for characteristic in service.characteristics ?? []
