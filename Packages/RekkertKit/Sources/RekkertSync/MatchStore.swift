@@ -146,6 +146,35 @@ public final class MatchStore {
     /// stop a modified client appending the event itself. These are four people on a court.
     public var canEndSession: Bool { role != .guest && pairedRole != .guest }
 
+    /// Says that this phone's score is the score, for everybody.
+    ///
+    /// The merge loses nothing, which is the right default: a guest that went on scoring while
+    /// the host's phone was in a pocket kept real points, and an overwrite would throw them
+    /// away. But a union can still come to a number nobody in front of it recognises — usually
+    /// because the same rally was scored on two phones — and then somebody has to be able to
+    /// say what it actually is.
+    ///
+    /// A `.restore` of the state as it stands here, appended to the same session. It carries
+    /// the highest Lamport stamp, so it folds last everywhere and the reducer replays straight
+    /// to this number. Deliberately not a new session: retiring this one and starting another
+    /// would file the match everybody is playing away to History and hand it back as somebody
+    /// else's, which is the loud version of the problem it is meant to fix.
+    ///
+    /// A line in the sand rather than a lock. Anything scored before it is overridden; a tap
+    /// made after it on a phone still out of earshot lands on top — which is why it is only
+    /// worth offering while the others are there to hear it.
+    public func settleScore() {
+        guard canSettleScore, let state else { return }
+        record(.restore(state))
+    }
+
+    /// Whose score it is to settle. The same convention as the whistle: a guest scores and
+    /// corrects like anyone else, but the match belongs to whoever started it.
+    public var canSettleScore: Bool {
+        guard let state, !state.isFinished else { return false }
+        return role == .host
+    }
+
     /// Opens this session to other phones. Changes nothing about the session itself — only
     /// what this device is willing to be told about it.
     public func startSharing() {

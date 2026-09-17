@@ -6,6 +6,7 @@ import SwiftUI
 /// scoreboard reads, which side is blue, and whether the score is read out loud.
 struct MatchOptionsMenu: View {
     @Environment(AppModel.self) private var model
+    @State private var settling = false
     var round = 0
     var court = 0
 
@@ -15,6 +16,13 @@ struct MatchOptionsMenu: View {
             if model.store.role == .host {
                 Button("Show the code", systemImage: "person.2.wave.2") {
                     model.showingShareCode = true
+                }
+                // Only while somebody is there to hear it, which is also the only moment the
+                // two logs have caught up enough for it to be the last word.
+                if model.store.canSettleScore, model.sharing.reachablePeers > 0 {
+                    Button("Use my score everywhere", systemImage: "checkmark.circle") {
+                        settling = true
+                    }
                 }
             } else if model.store.canEndSession {
                 Button("Share this match", systemImage: "person.2.wave.2") {
@@ -54,5 +62,17 @@ struct MatchOptionsMenu: View {
             Image(systemName: "ellipsis.circle")
         }
         .accessibilityLabel("Match options")
+        .confirmationDialog(
+            "Use this phone's score?",
+            isPresented: $settling,
+            titleVisibility: .visible
+        ) {
+            Button("Use my score", role: .destructive) { model.store.settleScore() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            // The score itself is on the screen behind this, which is a better place for it
+            // than a line of text that would have to guess at which court is meant.
+            Text("Every phone on this match will be set to the score shown here. Anything scored elsewhere that has not reached this phone yet will be replaced.")
+        }
     }
 }
