@@ -26,7 +26,7 @@ struct ShareCodeSheet: View {
 
                 Label(joinedDescription, systemImage: "person.2.fill")
                     .font(.headline)
-                    .foregroundStyle(model.sharing.peers > 0 ? Color.accentColor : .secondary)
+                    .foregroundStyle(model.sharing.reachablePeers > 0 ? Color.accentColor : .secondary)
 
                 VStack(spacing: 6) {
                     Text("Only you can finish this match.")
@@ -58,7 +58,7 @@ struct ShareCodeSheet: View {
 
     private var joinedDescription: String {
         if model.sharing.isReconnecting { return "Looking for them again" }
-        switch model.sharing.peers {
+        switch model.sharing.reachablePeers {
         case 0: return "Nobody has joined yet"
         case 1: return "1 phone joined"
         case let count: return "\(count) phones joined"

@@ -48,7 +48,7 @@ struct SharingBadge: View {
                 // Icon only: the scoreboard toolbar is already full, and a count here pushes
                 // the rest into an overflow menu. Colour says whether anybody is on, and the
                 // sheet behind it says how many.
-                Label("\(model.sharing.peers)", systemImage: symbol)
+                Label("\(model.sharing.reachablePeers)", systemImage: symbol)
                     .labelStyle(.iconOnly)
                     .symbolEffect(.pulse, isActive: model.sharing.isReconnecting)
             }
@@ -65,12 +65,12 @@ struct SharingBadge: View {
 
     private var tint: Color {
         if model.sharing.isReconnecting { return .secondary }
-        return model.sharing.peers > 0 ? Color.accentColor : .secondary
+        return model.sharing.reachablePeers > 0 ? Color.accentColor : .secondary
     }
 
     private var description: String {
         if model.sharing.isReconnecting { return "Reconnecting to the shared match" }
-        switch model.sharing.peers {
+        switch model.sharing.reachablePeers {
         case 0: return "Sharing, nobody has joined yet"
         case 1: return "Sharing with 1 phone"
         case let count: return "Sharing with \(count) phones"

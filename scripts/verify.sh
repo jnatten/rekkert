@@ -55,6 +55,13 @@ check_ios 'NSLocalNetworkUsageDescription'
 check_ios 'NSBonjourServices'
 check_ios '"_rekkert-score._tcp"'
 check_ios '"ITSAppUsesNonExemptEncryption" => false'
+
+echo "==> Assert the iPhone app may keep talking with the screen off"
+# Without these the app is suspended on lock and the two watches quietly stop agreeing on the
+# score — which is the whole reason the Bluetooth transport exists.
+check_ios 'bluetooth-central'
+check_ios 'bluetooth-peripheral'
+check_ios 'NSBluetoothAlwaysUsageDescription'
 check_ios 'NSHealthShareUsageDescription'
 check_ios 'NSHealthUpdateUsageDescription'
 

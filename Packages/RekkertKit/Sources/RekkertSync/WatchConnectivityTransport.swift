@@ -10,24 +10,6 @@ private nonisolated enum Key {
     static let revision = "revision"
 }
 
-/// Guards against WatchConnectivity invoking both the reply and the error handler.
-nonisolated private final class ResumeOnce: @unchecked Sendable {
-    private let lock = NSLock()
-    private var continuation: CheckedContinuation<Data?, Never>?
-
-    init(_ continuation: CheckedContinuation<Data?, Never>) {
-        self.continuation = continuation
-    }
-
-    func resume(_ value: Data?) {
-        lock.lock()
-        let pending = continuation
-        continuation = nil
-        lock.unlock()
-        pending?.resume(returning: value)
-    }
-}
-
 /// The only nonisolated type in the app. Delegate callbacks arrive on WCSession's private
 /// non-main serial queue, so `[String: Any]` is narrowed to `Data` right here, before
 /// anything crosses an isolation boundary.

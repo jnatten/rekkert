@@ -48,9 +48,17 @@ let project = Project(
                 "NSLocalNetworkUsageDescription":
                     "Rekkert finds the other phones at your court, so everyone can follow and score the same match.",
                 "NSBonjourServices": ["_rekkert-score._tcp"],
+                // The local network is the better link by every measure except the one that
+                // decides a match: the system takes it away when the app stops being in front
+                // of somebody, so a phone in a pocket stops carrying the score. Bluetooth is
+                // the only link iOS will let an app hold open with the screen off, and both
+                // halves are needed — a host advertises and a guest scans.
+                "UIBackgroundModes": ["bluetooth-central", "bluetooth-peripheral"],
+                "NSBluetoothAlwaysUsageDescription":
+                    "Rekkert keeps the score in step with the other phones at your court, even while your phone is locked in a bag.",
                 // Declared up front so App Store Connect stops asking on every upload. The
-                // only cryptography here is Apple's own — TLS from Security.framework and
-                // HKDF from CryptoKit — which is exempt.
+                // only cryptography here is Apple's own — TLS from Security.framework, and
+                // HKDF and ChaChaPoly from CryptoKit — which is exempt.
                 "ITSAppUsesNonExemptEncryption": false,
                 // Recording a workout is the watch's job; the phone only asks it to start
                 // one and is told when it does. It never reads a workout back out of Health

@@ -35,6 +35,11 @@ final class AppModel {
         links.attach(AppModel.makePairedTransport(), as: .pairedDevice)
         let localNetwork = LocalNetworkTransport()
         links.attach(localNetwork, as: .sharedSession)
+        // The same phones again, over the radio that goes on working with the screen off. A
+        // peer on both hears everything twice, which the log does not mind: merging is a union
+        // by event id, so a duplicate costs bytes and nothing else.
+        let bluetooth = BluetoothTransport()
+        links.attach(bluetooth, as: .sharedSession)
 
         let store = MatchStore(
             device: DeviceIdentity.current(),
@@ -44,7 +49,7 @@ final class AppModel {
             keepsHistory: AppModel.keepsHistory
         )
         self.store = store
-        sharing = SharedSession(store: store, link: localNetwork)
+        sharing = SharedSession(store: store, link: localNetwork, bluetooth: bluetooth)
         roster = persistence?.loadRoster() ?? PlayerRoster()
     }
 

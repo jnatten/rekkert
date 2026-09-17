@@ -29,7 +29,18 @@ public final class SharedSession {
 
     private let store: MatchStore
     private let link: LocalNetworkTransport
+    /// The link that survives the screen going off. It has no status of its own worth showing —
+    /// there is no browsing or advertising to report on, only whether anybody is there — so it
+    /// contributes reachability and nothing else.
+    private let bluetooth: (any SharedLink)?
     private var watching: Task<Void, Never>?
+    private var watchingBluetooth: Task<Void, Never>?
+    /// How many phones are on the match over Bluetooth. Kept apart from `peers` because the
+    /// same phone is usually on both links and there is nothing on the wire to tell that it is:
+    /// `Wire.hello` carries no sender, so the two transports cannot recognise each other's
+    /// peers. Folding them with `max` undercounts a room where somebody is on one link only,
+    /// which is better than telling four people there are eight of them.
+    private var bluetoothPeers = 0
     /// Kept so sharing can be stood back up after the app has been put down. The code is
     /// never written to disk — this lasts exactly as long as the app is running.
     private var hosted: (code: SessionCode, share: UUID)?
@@ -51,13 +62,22 @@ public final class SharedSession {
     public init(
         store: MatchStore,
         link: LocalNetworkTransport,
+        bluetooth: (any SharedLink)? = nil,
         graceBeforeNotice: Duration = .seconds(20)
     ) {
         self.store = store
         self.link = link
+        self.bluetooth = bluetooth
         self.graceBeforeNotice = graceBeforeNotice
         watching = Task { [weak self] in
             for await status in link.status { self?.apply(status) }
+        }
+        if let bluetooth {
+            watchingBluetooth = Task { [weak self] in
+                for await _ in bluetooth.reachability {
+                    self?.bluetoothPeers = bluetooth.reachableCount
+                }
+            }
         }
     }
 
@@ -72,8 +92,14 @@ public final class SharedSession {
     /// reads as "nobody has joined yet".
     public var isReconnecting: Bool {
         guard case .searching = phase else { return false }
+        // Still carried, just not over the network. Saying "reconnecting" here would be a
+        // worry about nothing while the score is going through perfectly well.
+        guard bluetoothPeers == 0 else { return false }
         return hasJoinedBefore
     }
+
+    /// How many phones are on this match, over whichever link reaches them.
+    public var reachablePeers: Int { max(peers, bluetoothPeers) }
 
     /// The code being read out, if this device is the one reading it.
     public var code: SessionCode? {
@@ -91,6 +117,7 @@ public final class SharedSession {
         hosted = (code, UUID())
         store.startSharing()
         link.startHosting(code: code, share: hosted!.share)
+        bluetooth?.startHosting(code: code, share: hosted!.share)
         phase = .hosting(code)
     }
 
@@ -127,8 +154,10 @@ public final class SharedSession {
             break
         case .hosting(let code, let share):
             link.resumeHosting(code: code, share: share)
+            bluetooth?.resumeHosting(code: code, share: share)
         case .joining(let code):
             link.resumeJoining(code: code)
+            bluetooth?.resumeJoining(code: code)
         }
     }
 
@@ -137,12 +166,15 @@ public final class SharedSession {
         hasJoinedBefore = false
         store.beginJoining()
         link.startJoining(code: code)
+        bluetooth?.startJoining(code: code)
         phase = .searching
     }
 
     /// Stops sharing, or steps off somebody else's match, depending which end this is.
     public func stop() {
         link.stop()
+        bluetooth?.stop()
+        bluetoothPeers = 0
         switch store.role {
         case .host: store.stopSharing()
         case .guest: store.leaveSharedSession()
@@ -163,6 +195,8 @@ public final class SharedSession {
     public func close() {
         watching?.cancel()
         watching = nil
+        watchingBluetooth?.cancel()
+        watchingBluetooth = nil
     }
 
     public func acknowledgeLostMatch() {
@@ -180,6 +214,8 @@ public final class SharedSession {
             try? await Task.sleep(for: graceBeforeNotice)
             guard let self, !Task.isCancelled else { return }
             guard case .searching = self.phase else { return }
+            // Nothing has been lost if Bluetooth is still carrying it.
+            guard self.bluetoothPeers == 0 else { return }
             self.hasLostTheMatch = true
             self.noticing = nil
         }

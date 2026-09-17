@@ -666,23 +666,6 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     }
 }
 
-nonisolated private final class ResumeOnce: @unchecked Sendable {
-    private let lock = NSLock()
-    private var continuation: CheckedContinuation<Data?, Never>?
-
-    init(_ continuation: CheckedContinuation<Data?, Never>) {
-        self.continuation = continuation
-    }
-
-    func resume(_ value: Data?) {
-        lock.lock()
-        let pending = continuation
-        continuation = nil
-        lock.unlock()
-        pending?.resume(returning: value)
-    }
-}
-
 #else
 
 /// Not built on watchOS — a watch reaches a shared match through its own iPhone, which is
