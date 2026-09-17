@@ -99,5 +99,20 @@ nonisolated public enum SessionKey {
         return digest.withUnsafeBytes { $0.map { String(format: "%02x", $0) }.joined() }
     }
 
+    /// The key that seals what goes over Bluetooth, where there is no TLS to do it.
+    ///
+    /// Derived apart from the pre-shared key rather than reusing it: the two guard different
+    /// links in different ways, and a key with one job is easier to reason about than a key
+    /// with two. Salted by the share id for the same reason the pre-shared key is — a code
+    /// overheard once is worth nothing against a later match.
+    public static func sealingKey(for code: SessionCode, share: UUID) -> SymmetricKey {
+        HKDF<SHA256>.deriveKey(
+            inputKeyMaterial: SymmetricKey(data: Data(code.letters.utf8)),
+            salt: salt,
+            info: Data("seal|".utf8) + bytes(of: share),
+            outputByteCount: 32
+        )
+    }
+
     public static let pskIdentity = Data("rekkert".utf8)
 }
