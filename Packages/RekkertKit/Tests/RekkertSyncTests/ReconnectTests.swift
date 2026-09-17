@@ -128,3 +128,45 @@ struct ReconnectTests {
         #expect(sharing.revival == .nothing, "it was told the code found nothing")
     }
 }
+
+/// What the badge is entitled to say.
+@Suite("Saying it is reconnecting")
+@MainActor
+struct ReconnectingBadgeTests {
+    private func make() -> SharedSession {
+        let store = MatchStore(device: DeviceID(), transport: LoopbackTransport(), snapshotInterval: 0)
+        return SharedSession(store: store, link: LocalNetworkTransport())
+    }
+
+    @Test func lookingForTheFirstTimeIsNotReconnecting() {
+        let sharing = make()
+        sharing.join(SessionCode("H7K3MR")!)
+        #expect(sharing.isReconnecting == false, "it has never been on this match")
+    }
+
+    @Test func lookingAgainAfterBeingOnItIs() {
+        let sharing = make()
+        sharing.join(SessionCode("H7K3MR")!)
+        sharing.apply(.joined(peers: 1))
+        sharing.apply(.searching)
+        #expect(sharing.isReconnecting)
+    }
+
+    @Test func beingBackOnItIsNot() {
+        let sharing = make()
+        sharing.join(SessionCode("H7K3MR")!)
+        sharing.apply(.joined(peers: 1))
+        sharing.apply(.searching)
+        sharing.apply(.joined(peers: 1))
+        #expect(sharing.isReconnecting == false)
+    }
+
+    @Test func aHostIsNeverReconnecting() throws {
+        let store = MatchStore(device: DeviceID(), transport: LoopbackTransport(), snapshotInterval: 0)
+        let sharing = SharedSession(store: store, link: LocalNetworkTransport())
+        store.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+        sharing.host()
+        sharing.apply(.searching)
+        #expect(sharing.isReconnecting == false, "a host does not go looking")
+    }
+}

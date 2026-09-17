@@ -62,7 +62,7 @@ struct RootView: View {
             #endif
         }
         .alert(
-            "Lost the shared match",
+            "Still looking for the shared match",
             isPresented: Binding(
                 get: { model.sharing.hasLostTheMatch },
                 set: { if !$0 { model.sharing.acknowledgeLostMatch() } }

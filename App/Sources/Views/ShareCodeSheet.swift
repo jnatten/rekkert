@@ -30,7 +30,7 @@ struct ShareCodeSheet: View {
 
                 VStack(spacing: 6) {
                     Text("Only you can finish this match.")
-                    Text("Keep this phone nearby and in Rekkert — sharing stops while the app is put away. The screen will not sleep while you are sharing.")
+                    Text("Keep this phone nearby. Sharing pauses while the app is put away and picks itself back up when you return. The screen will not sleep while you are sharing.")
                 }
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -57,10 +57,11 @@ struct ShareCodeSheet: View {
     }
 
     private var joinedDescription: String {
+        if model.sharing.isReconnecting { return "Looking for them again" }
         switch model.sharing.peers {
-        case 0: "Nobody has joined yet"
-        case 1: "1 phone joined"
-        case let count: "\(count) phones joined"
+        case 0: return "Nobody has joined yet"
+        case 1: return "1 phone joined"
+        case let count: return "\(count) phones joined"
         }
     }
 }

@@ -41,12 +41,17 @@ public final class SharedSession {
     private var noticing: Task<Void, Never>?
     /// Long enough to ride out a phone glanced at or a moment of bad Wi-Fi, short enough that
     /// somebody looking at a stale score finds out before the game moves on.
+    ///
+    /// Twenty seconds rather than eight: the keepalive takes up to eight to call a peer dead
+    /// and the redial runs every couple of seconds after that, so a shorter grace fired on
+    /// drops that were already healing. The badge carries the short-term truth now, which is
+    /// what lets this be reserved for a real absence.
     private let graceBeforeNotice: Duration
 
     public init(
         store: MatchStore,
         link: LocalNetworkTransport,
-        graceBeforeNotice: Duration = .seconds(8)
+        graceBeforeNotice: Duration = .seconds(20)
     ) {
         self.store = store
         self.link = link
@@ -60,6 +65,14 @@ public final class SharedSession {
         if case .off = phase { return false }
         if case .failed = phase { return false }
         return true
+    }
+
+    /// Looking for a match this device was already on, as against one it has never found. The
+    /// score on screen is the last that got through, and saying so is better than a badge that
+    /// reads as "nobody has joined yet".
+    public var isReconnecting: Bool {
+        guard case .searching = phase else { return false }
+        return hasJoinedBefore
     }
 
     /// The code being read out, if this device is the one reading it.
