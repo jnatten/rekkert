@@ -9,15 +9,28 @@ import Testing
 private final class RecordingTransport: PeerTransport, @unchecked Sendable {
     let inbound: AsyncStream<InboundPacket>
     let reachability: AsyncStream<Bool>
+    private let packets: AsyncStream<InboundPacket>.Continuation
     private let lock = NSLock()
     private var sent: [Wire] = []
 
     init() {
-        inbound = AsyncStream { _ in }
+        var continuation: AsyncStream<InboundPacket>.Continuation!
+        inbound = AsyncStream { continuation = $0 }
+        packets = continuation
         reachability = AsyncStream { _ in }
     }
 
     var carried: [Wire] { lock.withLock { sent } }
+
+    var workouts: [WorkoutSignal] {
+        carried.compactMap { if case .workout(let signal) = $0 { signal } else { nil } }
+    }
+
+    /// Puts a packet in as though the peer had sent it, which is how a reconnect gets staged.
+    func deliver(_ wire: Wire) {
+        guard let payload = try? wire.encoded() else { return }
+        packets.yield(InboundPacket(payload: payload))
+    }
 
     var isReachable: Bool { true }
     func activate() {}
@@ -58,16 +71,41 @@ struct WorkoutSyncTests {
     /// The guard that matters. `LocalNetworkTransport` reaches the other people at the
     /// court, and what somebody's heart was doing is not theirs to receive.
     @Test func aWorkoutIsNeverOfferedToSomebodyElsesPhone() {
-        for signal in [
-            WorkoutSignal.stop,
-            .idle,
-            .running(since: .now),
-            .finished(record),
-        ] {
+        for signal in Self.everySignal {
             #expect(
                 !FanOutTransport.Scope.sharedSession.carries(.workout(signal)),
                 "a shared session must not carry \(signal)"
             )
+        }
+    }
+
+    /// Every case, so a new one cannot be added without deciding what it does here. There is
+    /// no compiler help for this list — it is a literal, and a missing case is a leak that
+    /// builds.
+    private static let everySignal: [WorkoutSignal] = [
+        .stop,
+        .pause,
+        .resume,
+        .running(since: Date(timeIntervalSince1970: 768_000_000)),
+        .paused(since: Date(timeIntervalSince1970: 768_000_000), elapsed: 1_284),
+        .idle,
+        .finished(
+            WorkoutRecord(
+                id: UUID(),
+                startedAt: Date(timeIntervalSince1970: 768_000_000),
+                endedAt: Date(timeIntervalSince1970: 768_003_600),
+                duration: 3_600
+            )
+        ),
+    ]
+
+    /// What a version skew rests on: a signal the counterpart has never heard of throws on
+    /// decode and is dropped whole, rather than arriving half-read. Nothing here may lose a
+    /// field on the way through.
+    @Test func everySignalSurvivesTheRoundTrip() throws {
+        for signal in Self.everySignal {
+            let payload = try Wire.workout(signal).encoded()
+            #expect(try Wire.decode(payload) == .workout(signal), "\(signal) did not come back")
         }
     }
 
@@ -133,5 +171,28 @@ struct WorkoutSyncTests {
         await eventually { !seen.isEmpty }
         #expect(seen == [.stop])
         #expect(try store.workouts().isEmpty)
+    }
+
+    /// A phone coming back mid-pause has to be told it is a pause. It may never have heard
+    /// the start, and the one thing it must not be handed is the "running" that came before.
+    @Test func aReconnectIsToldTheLastThingSaidRatherThanTheFirst() async {
+        let links = FanOutTransport()
+        let paired = RecordingTransport()
+        links.attach(paired, as: .pairedDevice)
+        let store = MatchStore(device: DeviceID(), transport: links, snapshotInterval: 0)
+        let task = Task { await store.run() }
+        defer { task.cancel() }
+
+        let since = Date(timeIntervalSince1970: 768_000_000)
+        let held = WorkoutSignal.paused(since: since, elapsed: 1_284)
+        store.send(.running(since: since))
+        store.send(held)
+        await eventually { paired.workouts.contains(held) }
+
+        let announced = paired.workouts.count
+        paired.deliver(.hello(sessionID: UUID(), vector: VersionVector()))
+        await eventually { paired.workouts.count > announced }
+
+        #expect(paired.workouts.last == held)
     }
 }

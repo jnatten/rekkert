@@ -107,6 +107,16 @@ than a route map of a padel court.
 Starting it holds the watch app frontmost, which is the other half of why it exists — a
 lowered wrist comes back to the score rather than to the clock.
 
+It can be held part way through. Padel is played in blocks — you walk off for a coffee,
+wait for a court, sit out a round — and a workout left counting through that reads as an
+hour of tennis with the heart rate of a queue. Pause and resume sit beside the start and
+stop button, on the watch's menu page and its idle screen, and in the iPhone's menu, and
+the watch is the one that holds the session either way: the phone asks and the wrist
+answers. Health leaves a held stretch out of the duration it saves, so the clock on the
+watch and the workout in Health are the same number and always were. While it is held the
+heart on the scoreboard becomes a still grey pause mark, because a pause you have
+forgotten about quietly eats a match.
+
 The watch keeps no history of its own, so when the workout ends the summary travels to the
 phone on the same durable queue the outbox uses, and the phone files it under `workouts/`.
 If the phone is away it arrives whenever the phone next turns up. If it never arrives at
@@ -241,7 +251,7 @@ Debug builds accept `-rekkert-demo traditional|winnercourt|americano|mexicano` (
 `-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N`,
 `-rekkert-demo-open-court R,C`, `-rekkert-demo-roster`, `-rekkert-demo-presets`,
 `-rekkert-demo-watch-page menu|standings|controls`, `-rekkert-demo-fullscreen`,
-`-rekkert-demo-workouts`,
+`-rekkert-demo-workouts`, `-rekkert-demo-workout`, `-rekkert-demo-workout-paused`,
 `-rekkert-demo-voices` or
 `-rekkert-demo-new <mode>`) as
 launch arguments to put the app into a given state, since `simctl` cannot tap the screen.

@@ -31,10 +31,11 @@ public final class MatchStore {
     /// already exists between exactly those two devices, and no other.
     @ObservationIgnored public var onWorkout: ((WorkoutSignal) -> Void)?
     /// The last thing this device said about its own workout, so a reconnect can say it
-    /// again. Live state, deliberately not persisted: a "running" restored from disk would
-    /// be a lie the moment either app is relaunched.
-    @ObservationIgnored private var announcedWorkout: Date?
-    @ObservationIgnored private var hasAnnouncedWorkout = false
+    /// again. The whole signal rather than the moment it started: a held clock carries the
+    /// reading it stopped at, and repeating that later is still the truth. Live state,
+    /// deliberately not persisted: a "running" restored from disk would be a lie the moment
+    /// either app is relaunched.
+    @ObservationIgnored private var announcedWorkout: WorkoutSignal?
 
     private var outbox: Outbox
     private let device: DeviceID
@@ -714,13 +715,11 @@ public final class MatchStore {
     /// Health has the real copy, but the list should not need the Health app to explain it.
     public func send(_ signal: WorkoutSignal) {
         switch signal {
-        case .running(let since):
-            announcedWorkout = since
-            hasAnnouncedWorkout = true
-        case .idle:
-            announcedWorkout = nil
-            hasAnnouncedWorkout = true
-        case .stop, .finished:
+        case .running, .paused, .idle:
+            announcedWorkout = signal
+        // A request is not a state. Saying one again on reconnect would ask a second time
+        // for something already done.
+        case .stop, .pause, .resume, .finished:
             break
         }
         let payload = encode(.workout(signal))
@@ -735,9 +734,8 @@ public final class MatchStore {
     /// phone that has just come back has to be told again — and one that heard "running" and
     /// missed the ending has to be corrected, or its glyph stays on over nothing.
     private func shareWorkoutOnReconnect() {
-        guard hasAnnouncedWorkout else { return }
-        let signal: WorkoutSignal = announcedWorkout.map { .running(since: $0) } ?? .idle
-        Task { _ = await sendLive(encode(.workout(signal))) }
+        guard let announcedWorkout else { return }
+        Task { _ = await sendLive(encode(.workout(announcedWorkout))) }
     }
 
     private func sharePresets() {

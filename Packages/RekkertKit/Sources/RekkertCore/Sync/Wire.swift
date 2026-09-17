@@ -15,15 +15,25 @@ public enum JSONCoding {
 
 /// What a phone and its own watch tell each other about a workout.
 ///
-/// Only the watch can hold one, so the traffic is lopsided: the phone asks for it to stop,
-/// and the watch says what it is doing. Starting is not in here — the phone starts one by
-/// launching the watch app with a workout configuration, which is Health's own way of
-/// asking, and needs no message of ours.
+/// Only the watch can hold one, so the traffic is lopsided: the phone asks for something to
+/// happen to it, and the watch says what it is doing. Starting is not in here — the phone
+/// starts one by launching the watch app with a workout configuration, which is Health's
+/// own way of asking, and needs no message of ours.
+///
+/// Which direction a case travels is the only thing keeping `pause` and `paused` apart, so
+/// every one of them says so.
 public enum WorkoutSignal: Codable, Sendable, Hashable {
     /// Phone to watch: end the workout and save it.
     case stop
+    /// Phone to watch: hold it where it is, or pick it up again.
+    case pause
+    case resume
     /// Watch to phone: one is running, and has been since this moment.
     case running(since: Date)
+    /// Watch to phone: one is running but held, and the clock stopped at this reading. The
+    /// reading rather than the moment it stopped, because a held clock does not move: this
+    /// goes on being true however long afterwards it is repeated.
+    case paused(since: Date, elapsed: TimeInterval)
     /// Watch to phone: none is running.
     case idle
     /// Watch to phone: this one ended and Health kept it. The phone files it, because the

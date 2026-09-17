@@ -134,9 +134,10 @@ final class AppModel {
                 heartRateAverage: 126, heartRateMaximum: 166
             ))
         }
-        #if os(watchOS)
+        // Not behind `#if os(watchOS)`: the phone is only ever told about a workout by a real
+        // watch, so without this its badge and its rows cannot be put in front of `simctl`.
         if arguments.contains("-rekkert-demo-workout") { workout.pretendRunning() }
-        #endif
+        if arguments.contains("-rekkert-demo-workout-paused") { workout.pretendRunning(paused: true) }
         if arguments.contains("-rekkert-demo-roster") {
             remember(players: ["Jonas", "Ada", "Kim", "Sam", "Bjørn", "Ola", "Siri", "Tor", "Håkon"])
             remember(players: ["Jonas", "Ada", "Kim"])

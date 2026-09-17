@@ -1,7 +1,8 @@
 import SwiftUI
 import WatchKit
 
-/// Starting and stopping the workout, on whichever screen the watch happens to be showing.
+/// Starting, holding and stopping the workout, on whichever screen the watch happens to be
+/// showing.
 ///
 /// Absent altogether where Health is not available. Nothing here reports a workout that is
 /// not running: not running one is the ordinary case, not a thing gone wrong.
@@ -14,6 +15,10 @@ struct WatchWorkoutButton: View {
     var body: some View {
         if model.workout.isAvailable {
             VStack(spacing: 2) {
+                // Above the stop button rather than below it: holding one is the thing you
+                // reach for between rounds, and the one under the thumb should not be the
+                // one that ends it.
+                if model.workout.isTracking { hold }
                 button
                 if let failure = model.workout.failure {
                     // The one thing worth saying, and only ever just after a press: a button
@@ -42,8 +47,35 @@ struct WatchWorkoutButton: View {
         .font(.footnote)
     }
 
+    /// Untinted, where the stop button is pink: this one does not finish anything, and a
+    /// second coloured pill above it would read as the louder of the two.
+    private var hold: some View {
+        Button(action: toggleHold) {
+            Label(
+                model.workout.isPaused ? "Resume workout" : "Pause workout",
+                systemImage: model.workout.isPaused ? "play.circle" : "pause.circle"
+            )
+            .padding(.horizontal, isMenuRow ? 6 : 0)
+            .frame(maxWidth: .infinity, alignment: isMenuRow ? .leading : .center)
+        }
+        .buttonStyle(.bordered)
+        .font(.footnote)
+    }
+
     private var title: String { model.workout.isTracking ? "Stop workout" : "Start workout" }
     private var symbol: String { model.workout.isTracking ? "stop.circle" : "figure.tennis" }
+
+    /// The haptic is what covers the round trip: Health decides when the session has
+    /// actually changed, and the screen follows a moment later rather than on the press.
+    private func toggleHold() {
+        if model.workout.isPaused {
+            WKInterfaceDevice.current().play(.start)
+            model.workout.resume()
+        } else {
+            WKInterfaceDevice.current().play(.stop)
+            model.workout.pause()
+        }
+    }
 
     /// No confirmation either way. The menu's dialogs guard things that cannot be taken
     /// back; a workout started by mistake is stopped again, and one stopped by mistake has

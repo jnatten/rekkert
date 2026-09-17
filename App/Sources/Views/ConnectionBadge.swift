@@ -15,21 +15,22 @@ struct ConnectionBadge: View {
     }
 }
 
-/// Whether this phone's own watch is on a workout. Nothing at all when it is not: playing
-/// without one is the ordinary case, and there is no "no workout" worth reporting.
+/// Whether this phone's own watch is on a workout, and whether it is counting. Nothing at
+/// all when there is none: playing without one is the ordinary case, and there is no "no
+/// workout" worth reporting.
 ///
 /// A glyph rather than a control. The trailing side of this toolbar is already full, and a
-/// heart within thumb's reach of the score is a mis-tap waiting to happen — stopping lives in
-/// the options menu.
+/// heart within thumb's reach of the score is a mis-tap waiting to happen — holding and
+/// stopping both live in the options menu.
 struct WorkoutBadge: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         if model.workout.isTracking {
-            Image(systemName: "heart.fill")
-                .foregroundStyle(.pink)
-                .symbolEffect(.pulse)
-                .accessibilityLabel("Workout running")
+            Image(systemName: model.workout.isPaused ? "pause.fill" : "heart.fill")
+                .foregroundStyle(model.workout.isPaused ? Color.secondary : .pink)
+                .symbolEffect(.pulse, isActive: !model.workout.isPaused)
+                .accessibilityLabel(model.workout.isPaused ? "Workout paused" : "Workout running")
         }
     }
 }

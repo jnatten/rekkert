@@ -79,6 +79,24 @@ struct HomeView: View {
 
                 if model.workout.isAvailable {
                     Section {
+                        if model.workout.isTracking {
+                            Button {
+                                model.workout.isPaused ? model.workout.resume() : model.workout.pause()
+                            } label: {
+                                Label {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(model.workout.isPaused ? "Pick it back up" : "Hold the workout")
+                                            .foregroundStyle(.primary)
+                                        Text(model.workout.isPaused
+                                             ? "The clock is stopped and nothing is being collected"
+                                             : "For a break that should not count towards it")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                } icon: {
+                                    Image(systemName: model.workout.isPaused ? "play.circle" : "pause.circle")
+                                }
+                            }
+                        }
                         Button {
                             model.workout.isTracking ? model.workout.stop() : model.workout.start()
                         } label: {
@@ -86,9 +104,7 @@ struct HomeView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(model.workout.isTracking ? "Stop the workout" : "Start a workout")
                                         .foregroundStyle(.primary)
-                                    Text(model.workout.isTracking
-                                         ? "Running on your Apple Watch"
-                                         : "On your Apple Watch")
+                                    Text(subtitle)
                                         .font(.caption).foregroundStyle(.secondary)
                                 }
                             } icon: {
@@ -172,6 +188,14 @@ struct HomeView: View {
                 }
                 #endif
             }
+        }
+    }
+
+    private var subtitle: String {
+        switch (model.workout.isTracking, model.workout.isPaused) {
+        case (false, _): "On your Apple Watch"
+        case (true, false): "Running on your Apple Watch"
+        case (true, true): "Paused on your Apple Watch"
         }
     }
 }

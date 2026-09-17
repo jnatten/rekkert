@@ -19,7 +19,13 @@ import RekkertCore
 @Observable
 final class WorkoutController {
     private(set) var isTracking = false
+    /// Held where it is. Health has stopped collecting and the clock has stopped counting,
+    /// but the session is still this app's and stopping it still saves what was played.
+    private(set) var isPaused = false
     private(set) var startedAt: Date?
+    /// What the workout page counts, which is not the wall clock since `startedAt`: a held
+    /// stretch is no part of the workout, and Health leaves it out of the duration it saves.
+    private(set) var clock: WorkoutClock?
     /// The live reading, for the glyph on the scoreboard and the workout page. It stays on
     /// this wrist: nothing puts it on the wire.
     private(set) var heartRate: Double?
@@ -98,6 +104,19 @@ final class WorkoutController {
         session.end()
     }
 
+    /// Both of these are fire and forget. Nothing on screen moves until Health says the
+    /// session has changed, which is also what makes a pause the system or another app
+    /// caused look exactly like one of ours.
+    func pause() {
+        guard let session, isTracking, !isPaused else { return }
+        session.pause()
+    }
+
+    func resume() {
+        guard let session, isTracking, isPaused else { return }
+        session.resume()
+    }
+
     /// Picks a workout back up after the app was killed mid-match — the session outlives the
     /// process, and coming back to a stopped-looking button while Health is still recording
     /// would be a lie.
@@ -110,7 +129,14 @@ final class WorkoutController {
             // Collection has been going the whole time — beginning it again here would start
             // a second one over the top of it.
             attach(recovered)
-            running(since: recovered.startDate ?? .now)
+            let startedAt = recovered.startDate ?? .now
+            // Health's own count rather than the wall clock: a session picked back up may
+            // have spent some of its life held, and that is the part that does not count.
+            adopted(
+                startedAt: startedAt,
+                elapsed: builder?.elapsedTime ?? Date().timeIntervalSince(startedAt),
+                paused: recovered.state == .paused
+            )
         }
     }
 
@@ -121,11 +147,16 @@ final class WorkoutController {
         start()
     }
 
-    /// What the phone has to say. The only thing it can ask for is a stop: it has no session
-    /// of its own, and everything else on this channel is this watch's own voice coming back.
+    /// What the phone has to say. It has no session of its own, so everything it can send is
+    /// a request rather than a statement — and everything else on this channel is this
+    /// watch's own voice coming back.
     func heard(_ signal: WorkoutSignal) {
-        guard case .stop = signal else { return }
-        stop()
+        switch signal {
+        case .stop: stop()
+        case .pause: pause()
+        case .resume: resume()
+        case .running, .paused, .idle, .finished: break
+        }
     }
 
     private func begin() throws {
@@ -151,14 +182,17 @@ final class WorkoutController {
             guard let error else { return }
             Task { @MainActor in self?.stopped(with: error) }
         }
-        running(since: now)
+        adopted(startedAt: now, elapsed: 0, paused: false)
     }
 
     private func attach(_ session: HKWorkoutSession) {
         let relay = Relay(
-            onEnded: { [weak self] in Task { @MainActor in self?.sessionEnded() } },
+            onState: { [weak self] state, elapsed in
+                Task { @MainActor in self?.changed(to: state, elapsed: elapsed) }
+            },
             onFailure: { [weak self] error in Task { @MainActor in self?.failed(error) } },
-            onReading: { [weak self] reading in Task { @MainActor in self?.collected(reading) } }
+            onReading: { [weak self] reading in Task { @MainActor in self?.collected(reading) } },
+            onElapsed: { [weak self] elapsed in Task { @MainActor in self?.measured(elapsed) } }
         )
         self.relay = relay
         session.delegate = relay
@@ -169,6 +203,37 @@ final class WorkoutController {
     }
 
     // MARK: - What the relay reports back
+
+    /// Every change Health reports, rather than only the ending: a pause is a state the
+    /// session is put into, and it arrives here whether this app asked for it or something
+    /// else on the watch did.
+    fileprivate func changed(to state: HKWorkoutSessionState, elapsed: TimeInterval) {
+        switch state {
+        case .ended:
+            sessionEnded()
+        case .running, .paused:
+            guard isTracking, let startedAt else { return }
+            let paused = state == .paused
+            isPaused = paused
+            clock = .at(elapsed, paused: paused)
+            // Collection stops with the session, so the live reading would sit there at
+            // whatever the heart was doing when it did. The tallies under it are totals and
+            // stay true; this is the one figure that would quietly go stale.
+            if paused { heartRate = nil }
+            publish?(paused ? .paused(since: startedAt, elapsed: elapsed) : .running(since: startedAt))
+        // A session passes through `.stopped` on its way to `.ended`, and `.prepared` before
+        // it has ever run. Neither is anything the screen has to say.
+        default:
+            break
+        }
+    }
+
+    /// Health has settled its elapsed count, which it warns can move either way while a
+    /// session is live. Only the clock comes off this — nothing else on screen does.
+    fileprivate func measured(_ elapsed: TimeInterval) {
+        guard isTracking else { return }
+        clock = .at(elapsed, paused: isPaused)
+    }
 
     fileprivate func sessionEnded() {
         guard let builder else { return finished(nil) }
@@ -205,10 +270,12 @@ final class WorkoutController {
         stopped(with: error)
     }
 
-    private func running(since date: Date) {
+    private func adopted(startedAt: Date, elapsed: TimeInterval, paused: Bool) {
         isTracking = true
-        startedAt = date
-        publish?(.running(since: date))
+        isPaused = paused
+        self.startedAt = startedAt
+        clock = .at(elapsed, paused: paused)
+        publish?(paused ? .paused(since: startedAt, elapsed: elapsed) : .running(since: startedAt))
         Task { await loadZones() }
     }
 
@@ -290,7 +357,9 @@ final class WorkoutController {
         builder = nil
         relay = nil
         isTracking = false
+        isPaused = false
         startedAt = nil
+        clock = nil
         heartRate = nil
         heartRateAverage = nil
         heartRateMaximum = nil
@@ -305,10 +374,14 @@ final class WorkoutController {
     /// `-rekkert-demo-workout` dresses the screen as though one were running. The simulator
     /// has no wrist to read and Health will not start a session on it, so this is the only
     /// way the badge and the workout page get in front of `simctl`.
-    func pretendRunning() {
+    func pretendRunning(paused: Bool = false) {
         isTracking = true
+        isPaused = paused
         startedAt = Date().addingTimeInterval(-1_847)
-        heartRate = 148
+        clock = .at(1_847, paused: paused)
+        // Nil while held for the same reason the real thing is: there is no current reading
+        // when nothing is being collected.
+        heartRate = paused ? nil : 148
         heartRateAverage = 134
         heartRateMaximum = 171
         activeEnergyKilocalories = 386
@@ -345,6 +418,21 @@ final class WorkoutController {
             heartRateMaximum: heart?.maximumQuantity()?.doubleValue(for: beatsPerMinute),
             heartRateZoneTimes: zoneTimes(of: workout)
         )
+    }
+}
+
+/// What the clock on the workout page reads. Running, it is an anchor for the system to
+/// count up from without the view being redrawn; held, it is the reading it stopped at,
+/// because `Text(timerInterval:)` counts and cannot be told to stop.
+///
+/// Both come from the same number — Health's own elapsed time, which leaves the held
+/// stretches out — so the clock and the duration Health finally saves cannot disagree.
+enum WorkoutClock: Sendable, Hashable {
+    case running(from: Date)
+    case paused(at: TimeInterval)
+
+    static func at(_ elapsed: TimeInterval, paused: Bool) -> WorkoutClock {
+        paused ? .paused(at: elapsed) : .running(from: Date().addingTimeInterval(-elapsed))
     }
 }
 
@@ -403,18 +491,21 @@ nonisolated private final class Relay: NSObject,
     HKLiveWorkoutBuilderDelegate,
     @unchecked Sendable
 {
-    private let onEnded: @Sendable () -> Void
+    private let onState: @Sendable (HKWorkoutSessionState, TimeInterval) -> Void
     private let onFailure: @Sendable (any Error) -> Void
     private let onReading: @Sendable (Reading) -> Void
+    private let onElapsed: @Sendable (TimeInterval) -> Void
 
     init(
-        onEnded: @escaping @Sendable () -> Void,
+        onState: @escaping @Sendable (HKWorkoutSessionState, TimeInterval) -> Void,
         onFailure: @escaping @Sendable (any Error) -> Void,
-        onReading: @escaping @Sendable (Reading) -> Void
+        onReading: @escaping @Sendable (Reading) -> Void,
+        onElapsed: @escaping @Sendable (TimeInterval) -> Void
     ) {
-        self.onEnded = onEnded
+        self.onState = onState
         self.onFailure = onFailure
         self.onReading = onReading
+        self.onElapsed = onElapsed
     }
 
     func workoutSession(
@@ -423,8 +514,10 @@ nonisolated private final class Relay: NSObject,
         from fromState: HKWorkoutSessionState,
         date: Date
     ) {
-        guard toState == .ended else { return }
-        onEnded()
+        // The builder's count at the moment of the change, read here where the builder is
+        // legitimately in hand. `date` is when it happened rather than when this arrived,
+        // which Health warns can be much later if the app was suspended in between.
+        onState(toState, workoutSession.associatedWorkoutBuilder().elapsedTime(at: date))
     }
 
     func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: any Error) {
@@ -463,5 +556,9 @@ nonisolated private final class Relay: NSObject,
         ))
     }
 
-    func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {}
+    /// A pause or a resume being recorded, which is when Health says the elapsed count has
+    /// settled — it warns that until then the number can move either way.
+    func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {
+        onElapsed(workoutBuilder.elapsedTime)
+    }
 }

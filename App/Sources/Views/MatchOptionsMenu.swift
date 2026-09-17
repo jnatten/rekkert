@@ -39,6 +39,14 @@ struct MatchOptionsMenu: View {
                 // A button whose title flips rather than a toggle: the state belongs to the
                 // watch and arrives a moment later, and a switch that springs back is worse
                 // than a button that takes its time.
+                if model.workout.isTracking {
+                    Button(
+                        model.workout.isPaused ? "Resume workout" : "Pause workout",
+                        systemImage: model.workout.isPaused ? "play.circle" : "pause.circle"
+                    ) {
+                        model.workout.isPaused ? model.workout.resume() : model.workout.pause()
+                    }
+                }
                 Button(
                     model.workout.isTracking ? "Stop workout" : "Start workout",
                     systemImage: model.workout.isTracking ? "stop.circle" : "figure.tennis"

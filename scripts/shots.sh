@@ -120,6 +120,11 @@ shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/match.png" "${SCORE[@]}" -rekkert-demo
 echo "==> Apple Watch"
 shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch.png" "${SCORE[@]}"
 shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-controls.png" "${SCORE[@]}" -rekkert-demo-watch-page controls
+# The workout, counting and held. Raw only: docs/index.html declares the sizes of the ones
+# it uses, and the copy below would have to grow to match.
+shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-workout.png" "${SCORE[@]}" -rekkert-demo-workout -rekkert-demo-watch-page workout
+shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-workout-paused.png" "${SCORE[@]}" -rekkert-demo-workout-paused -rekkert-demo-watch-page workout
+shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-workout-menu.png" "${SCORE[@]}" -rekkert-demo-workout-paused -rekkert-demo-watch-page menu
 
 if [ "$DO_DOCS" = 1 ]; then
   echo "==> docs/images"

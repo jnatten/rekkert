@@ -86,15 +86,18 @@ struct WatchCourtPage: View {
         if model.workout.isTracking {
             Button { onShowWorkout?() } label: {
                 HStack(spacing: 2) {
-                    Image(systemName: "heart.fill")
+                    // A still grey pause mark where a beating pink heart was. A pause you
+                    // have forgotten about quietly eats a match, so this corner has to say
+                    // which of the two it is rather than only that a workout is on.
+                    Image(systemName: model.workout.isPaused ? "pause.fill" : "heart.fill")
                         .font(.system(size: 9))
-                        .symbolEffect(.pulse)
+                        .symbolEffect(.pulse, isActive: !model.workout.isPaused)
                     if let beats = model.workout.heartRate {
                         Text("\(Int(beats.rounded()))")
                             .font(.system(size: 11, weight: .semibold).monospacedDigit())
                     }
                 }
-                .foregroundStyle(.pink)
+                .foregroundStyle(model.workout.isPaused ? Color.secondary : .pink)
                 .padding(.horizontal, 4)
                 .padding(.vertical, 1)
                 .background(.black.opacity(0.4), in: .capsule)
@@ -103,8 +106,10 @@ struct WatchCourtPage: View {
             .disabled(onShowWorkout == nil)
             .padding(.leading, 3)
             .accessibilityLabel(
-                model.workout.heartRate.map { "Workout running, \(Int($0.rounded())) beats per minute" }
-                    ?? "Workout running"
+                model.workout.isPaused
+                    ? "Workout paused"
+                    : model.workout.heartRate.map { "Workout running, \(Int($0.rounded())) beats per minute" }
+                        ?? "Workout running"
             )
             .accessibilityHint("Opens the workout")
         }

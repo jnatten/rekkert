@@ -9,7 +9,8 @@ import SwiftUI
 /// points rather than one swipe from the numbers, and stopping one stays there with it.
 ///
 /// Read-only, and sized to be read in one look: nothing scrolls, so a glance takes in the
-/// whole of it and the crown is free for the page underneath.
+/// whole of it and the crown is free for the page underneath. Holding it lives with
+/// stopping it, on the menu.
 struct WatchWorkoutPage: View {
     @Environment(AppModel.self) private var model
 
@@ -28,21 +29,26 @@ struct WatchWorkoutPage: View {
 
     /// `Text(timerInterval:)` rather than a ticking `State`: the system keeps it counting
     /// without the view being redrawn, which is what lets it stay right through the minutes
-    /// this page spends dimmed on a lowered wrist.
+    /// this page spends dimmed on a lowered wrist. It is also why a held clock is a plain
+    /// string — the counting one cannot be told to stop. `WorkoutFormat.duration` writes the
+    /// same shape, so nothing jumps at the changeover but the colour.
     @ViewBuilder
     private var elapsed: some View {
         Group {
-            if let startedAt = model.workout.startedAt {
-                Text(timerInterval: startedAt ... .distantFuture, countsDown: false)
-            } else {
+            switch model.workout.clock {
+            case .running(let from):
+                Text(timerInterval: from ... .distantFuture, countsDown: false)
+            case .paused(let at):
+                Text(WorkoutFormat.duration(at))
+            case nil:
                 Text(verbatim: "0:00")
             }
         }
         .font(.system(size: 28, weight: .semibold, design: .rounded).monospacedDigit())
-        .foregroundStyle(.yellow)
+        .foregroundStyle(model.workout.isPaused ? Color.secondary : .yellow)
         .lineLimit(1)
         .minimumScaleFactor(0.6)
-        .accessibilityLabel("Workout time")
+        .accessibilityLabel(model.workout.isPaused ? "Workout time, paused" : "Workout time")
     }
 
     /// Dashes until the first sample lands, which takes a few seconds. An empty space there
@@ -51,7 +57,7 @@ struct WatchWorkoutPage: View {
         HStack(alignment: .firstTextBaseline, spacing: 3) {
             Image(systemName: "heart.fill")
                 .font(.system(size: 13))
-                .symbolEffect(.pulse)
+                .symbolEffect(.pulse, isActive: !model.workout.isPaused)
             Text(model.workout.heartRate.map { "\(Int($0.rounded()))" } ?? "––")
                 .font(.system(size: 28, weight: .semibold, design: .rounded).monospacedDigit())
             Text("BPM")

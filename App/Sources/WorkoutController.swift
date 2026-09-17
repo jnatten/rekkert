@@ -17,6 +17,9 @@ import WatchConnectivity
 @Observable
 final class WorkoutController {
     private(set) var isTracking = false
+    /// Running but held. A separate flag rather than a third state, because everything that
+    /// asks whether a workout is on still wants the answer yes.
+    private(set) var isPaused = false
     private(set) var startedAt: Date?
     /// Always nil on the phone. The property exists so the scoreboard can be written once
     /// for both devices rather than twice around an `#if`.
@@ -60,6 +63,19 @@ final class WorkoutController {
         publish?(.stop)
     }
 
+    /// Asked for rather than done. Nothing here changes until the watch says it has —
+    /// flipping the button's own state would show a pause over a wrist still counting, which
+    /// is exactly the lie this end of it cannot afford to tell.
+    func pause() {
+        guard isTracking, !isPaused else { return }
+        publish?(.pause)
+    }
+
+    func resume() {
+        guard isTracking, isPaused else { return }
+        publish?(.resume)
+    }
+
     /// What the watch says it is doing. The phone holds no opinion of its own — if the watch
     /// is out of range and stops saying anything, the last thing it said stands, and the
     /// glyph goes out when it next speaks.
@@ -67,15 +83,33 @@ final class WorkoutController {
         switch signal {
         case .running(let since):
             isTracking = true
+            isPaused = false
+            startedAt = since
+            failure = nil
+        case .paused(let since, _):
+            isTracking = true
+            isPaused = true
             startedAt = since
             failure = nil
         case .idle, .finished:
             isTracking = false
+            isPaused = false
             startedAt = nil
-        case .stop:
+        case .stop, .pause, .resume:
             break
         }
     }
 
     func acknowledgeFailure() { failure = nil }
+
+    #if DEBUG
+    /// `-rekkert-demo-workout` dresses the screen as though the watch had one running. This
+    /// end of it is only ever told by a real watch, so without this the badge and the row are
+    /// unreachable from `simctl`.
+    func pretendRunning(paused: Bool = false) {
+        isTracking = true
+        isPaused = paused
+        startedAt = Date().addingTimeInterval(-1_847)
+    }
+    #endif
 }
