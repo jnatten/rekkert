@@ -203,3 +203,87 @@ struct StarTests {
         #expect(star.guests[0].display.areColorsSwapped == false, "the guest draws it their own way")
     }
 }
+
+/// What survives a phone going into a pocket and coming back out of it.
+///
+/// `setReachable(false)` is a true blackout for a shared-session link rather than a pause:
+/// that scope is not durable, so `queue` is filtered out by the fan-out and the snapshot
+/// channel checks reachability before it publishes. Nothing is being held for later.
+@Suite("Apart, and back together")
+@MainActor
+struct SplitBrainTests {
+    @Test func bothSidesKeepWhatTheyScoredWhileApart() async throws {
+        let star = Star(guests: 1)
+        let tasks = star.run()
+        defer { tasks.forEach { $0.cancel() } }
+
+        star.host.configure(counting)
+        await star.ready()
+
+        star.links[0].setReachable(false)
+        for _ in 0 ..< 2 { star.host.tap(team: .a) }
+        for _ in 0 ..< 2 { star.guests[0].tap(team: .a) }
+        await eventually {
+            points(star.host) == BySide(a: 2, b: 0) && points(star.guests[0]) == BySide(a: 2, b: 0)
+        }
+        #expect(points(star.host) == BySide(a: 2, b: 0), "each of them scoring alone")
+        #expect(points(star.guests[0]) == BySide(a: 2, b: 0))
+
+        star.links[0].setReachable(true)
+        // Both ends, not just the host: the guest needs the host's two taps back as much as
+        // the host needs the guest's, and anchoring on one of them only asks half the question.
+        await eventually {
+            points(star.host) == BySide(a: 4, b: 0) && points(star.guests[0]) == BySide(a: 4, b: 0)
+        }
+
+        // Four taps happened and four points survive. Neither log is the authority, and
+        // neither needs to be: the union is what both of them come to.
+        #expect(points(star.host) == BySide(a: 4, b: 0), "nobody's points were thrown away")
+        #expect(points(star.guests[0]) == BySide(a: 4, b: 0))
+        #expect(star.host.state == star.guests[0].state)
+    }
+
+    /// A guest coming back is not a guest arriving. If the reconnect were read as a fresh
+    /// join, the match on screen would be filed away to History and handed back as somebody
+    /// else's — which is the loud version of losing the score.
+    @Test func aReconnectingGuestIsNotHandedTheMatchAsANewOne() async throws {
+        let star = Star(guests: 1)
+        let tasks = star.run()
+        defer { tasks.forEach { $0.cancel() } }
+
+        star.host.configure(counting)
+        await star.ready()
+        let session = star.guests[0].log.sessionID
+
+        star.links[0].setReachable(false)
+        star.guests[0].tap(team: .b)
+        star.host.tap(team: .a)
+        try await settle()
+        star.links[0].setReachable(true)
+        await eventually { points(star.guests[0]) == BySide(a: 1, b: 1) }
+
+        #expect(star.guests[0].log.sessionID == session, "the same match it was already on")
+        #expect(star.guests[0].replacedSessionTitle == nil, "nothing was archived behind them")
+    }
+
+    @Test func aGuestThatComesBackDoesNotEndTheMatchForAnybody() async throws {
+        let star = Star(guests: 2)
+        let tasks = star.run()
+        defer { tasks.forEach { $0.cancel() } }
+
+        star.host.configure(counting)
+        await star.ready()
+
+        star.links[0].setReachable(false)
+        star.guests[0].tap(team: .a)
+        star.host.tap(team: .b)
+        try await settle()
+        star.links[0].setReachable(true)
+        await eventually { points(star.guests[0]) == BySide(a: 1, b: 1) }
+
+        for store in star.everyone {
+            #expect(store.state != nil, "still in play")
+            #expect(store.lastResult == nil, "nobody was shown a result")
+        }
+    }
+}
