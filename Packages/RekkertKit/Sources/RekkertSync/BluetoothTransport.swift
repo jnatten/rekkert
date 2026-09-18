@@ -508,7 +508,10 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             let manager = lock.withLock { centralManager }
             lock.withLock {
                 rejected.insert(peripheral.identifier)
-                if server === peripheral { server = nil }
+                if server === peripheral {
+                    server = nil
+                    serverInbox = nil
+                }
             }
             manager?.cancelPeripheralConnection(peripheral)
             // Started over rather than left running: whatever else was found while this one

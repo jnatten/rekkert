@@ -664,10 +664,19 @@ public final class MatchStore {
             pairedRole = incoming
             // Dropping a session says solo, so this is the pair confirming it is off the one
             // left here. Until then it may still be pushing that session back; from now on
-            // the only way it can hold that session is by having walked back in.
+            // the only way it can hold that session is by having walked back in. This reads
+            // solo as a drop because nothing else from a watch says it: `shareRoleOnReconnect`
+            // keeps quiet about solo, and a watch never hosts.
             if incoming == .solo, let left = leftSessionID {
                 leftSessionID = nil
                 counterpartLeftSessionID = left
+            }
+            // The phone holds the whistle, so nothing this end left was a match it could step
+            // off. A Leave taken on a role the watch had wrong is undone by this, or the watch
+            // would refuse the phone's own match for the rest of it.
+            if incoming == .host {
+                leftSessionID = nil
+                counterpartLeftSessionID = nil
             }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
 
@@ -675,10 +684,18 @@ public final class MatchStore {
             // Only ever from this device's own phone or watch — the shared scope does not
             // carry it — so the one match it can name is the one mirrored from there. A host
             // is not taken off its own match: that is ending it, and a watch cannot do that.
-            if sessionID == log.sessionID, !log.isEmpty, role != .host {
-                counterpartLeftSessionID = sessionID
-                dropSession()
-                onLeft?()
+            if sessionID == log.sessionID, !log.isEmpty {
+                if role == .host {
+                    // The watch has already dropped its copy on a role it had wrong. Told
+                    // who holds the whistle, it lets go of the refusal, and is then handed
+                    // the match back.
+                    shareRole()
+                    offerOurSession()
+                } else {
+                    counterpartLeftSessionID = sessionID
+                    dropSession()
+                    onLeft?()
+                }
             }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
 
@@ -842,7 +859,8 @@ public final class MatchStore {
     /// Offered alongside the presets on reconnect, so the watch's flip button knows which
     /// way the phone is currently reading before it sends the opposite.
     /// Offered alongside the presets on reconnect, so a watch that has just woken knows
-    /// whether the phone it is paired to is holding the whistle.
+    /// whether the phone it is paired to is holding the whistle. Never solo: the counterpart
+    /// reads solo as this end having dropped a session, and a reconnect is not that.
     private func shareRoleOnReconnect() {
         guard role != .solo else { return }
         Task { _ = await sendLive(encode(.role(role))) }

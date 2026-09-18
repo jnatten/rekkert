@@ -181,6 +181,28 @@ struct OwnWatchTests {
         #expect(points(pair.watch) == BySide(a: 2, b: 0))
     }
 
+    /// A host is not taken off its own match by its watch: leaving is for somebody else's.
+    /// The watch has already dropped its copy by the time the phone hears, so it has to be
+    /// handed the match back rather than left refusing it for the rest of the evening.
+    @Test func aHostIsNotTakenOffItsOwnMatchByItsWatch() async throws {
+        let pair = PhoneWithWatch(phoneLog: seeded(DeviceID(), points: 1), hostLog: nil)
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        pair.phone.startSharing()
+        await eventually { pair.watch.log.sessionID == pair.phone.log.sessionID }
+        let match = pair.phone.log.sessionID
+
+        pair.watch.leaveSharedSession()
+        await eventually { pair.watch.log.sessionID == match && pair.watch.state != nil }
+        #expect(pair.phone.log.sessionID == match, "the host keeps its match")
+        #expect(pair.phone.role == .host)
+        #expect(points(pair.watch) == BySide(a: 1, b: 0), "and the watch is handed it back")
+
+        pair.phone.tap(team: .a)
+        await eventually { points(pair.watch) == BySide(a: 2, b: 0) }
+        #expect(points(pair.watch) == BySide(a: 2, b: 0), "and follows it from there")
+    }
+
     /// A counterpart that was not running when the phone left wakes up to the application
     /// context, and the queued notice has already landed on an empty log and done nothing.
     /// What it is handed must therefore not be the match that was left.
