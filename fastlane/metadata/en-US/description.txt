@@ -1,12 +1,14 @@
 Rekkert keeps the score for padel and tennis on your phone and on your wrist at the same time. Tap either one and the other follows, so it does not matter which is nearer when the point ends.
 
-FIVE WAYS TO PLAY
+SIX WAYS TO PLAY
 
 Match. Proper padel and tennis scoring: points, games, sets. Choose sets to win, games per set, tiebreaks, a super tiebreak for the deciding set, and what happens at 40-40: deuce, golden point, or the three star points the pro tour plays.
 
 Points. One round counted up to a target, for when all you want is a number.
 
 Winner court. Games pile up until the organiser blows the whistle, then you move up or down a court. The whistle banks the round and the next one starts at nil-nil.
+
+Friendly. Real matches with the partnerships redrawn after every one. Two players or twenty, with the bench rotating fairly.
 
 Americano. Everyone partners everyone. Each round is drawn to avoid repeat partners and repeat opponents.
 

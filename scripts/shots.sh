@@ -28,8 +28,9 @@ for arg in "$@"; do
   esac
 done
 
-# The Pro Max is the 6.9" slot App Store Connect insists on, and it is the only
-# iPhone tall enough to get "Join a match" into the home screen shot.
+# The Pro Max is the 6.9" slot App Store Connect insists on, and the tallest iPhone
+# there is — which is what gets the presets and all six ways to start into one shot.
+# "Join a match" sits below the fold now that there are six of them.
 PHONE_NAME=${REKKERT_SHOTS_PHONE:-"iPhone 17 Pro Max"}
 WATCH_NAME=${REKKERT_SHOTS_WATCH:-"Apple Watch Ultra 3 (49mm)"}
 
@@ -114,6 +115,9 @@ SCORE=(-rekkert-demo traditional -rekkert-demo-points 20)
 echo "==> iPhone"
 shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/home.png" -rekkert-demo-presets
 shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/americano.png" -rekkert-demo americano -rekkert-demo-rounds
+# The rounds list rather than the scoreboard: three rounds with three different
+# partnerships in them is what a friendly is, and a scoreboard cannot show that.
+shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/friendly.png" -rekkert-demo friendly -rekkert-demo-friendly-rounds 3 -rekkert-demo-rounds-sheet
 # Landscape last: the simulator stays turned until something turns it back.
 shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/match.png" "${SCORE[@]}" -rekkert-demo-landscape
 
@@ -129,7 +133,7 @@ shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-workout-menu.png" "${SCORE[@
 if [ "$DO_DOCS" = 1 ]; then
   echo "==> docs/images"
   cp "$RAW/watch.png" "$RAW/watch-controls.png" docs/images/
-  for name in home americano; do
+  for name in home americano friendly; do
     cp "$RAW/$name.png" "docs/images/$name.png"
     sips -z 1216 560 "docs/images/$name.png" >/dev/null
   done
@@ -164,7 +168,8 @@ if [ "$DO_STORE" = 1 ]; then
   mkdir -p "$STORE"
   cp "$RAW/home.png" "$STORE/iphone-1-home.png"
   cp "$RAW/americano.png" "$STORE/iphone-2-americano.png"
-  cp "$RAW/match.png" "$STORE/iphone-3-match.png"
+  cp "$RAW/friendly.png" "$STORE/iphone-3-friendly.png"
+  cp "$RAW/match.png" "$STORE/iphone-4-match.png"
   cp "$RAW/watch.png" "$STORE/watch-1-scoreboard.png"
   cp "$RAW/watch-controls.png" "$STORE/watch-2-controls.png"
   # App Store Connect rejects an upload whose pixel size is not one it lists for the
