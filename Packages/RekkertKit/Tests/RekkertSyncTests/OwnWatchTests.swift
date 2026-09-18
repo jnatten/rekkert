@@ -226,6 +226,58 @@ struct OwnWatchTests {
         #expect(late.state == nil, "a match nobody here is on is not handed out")
         #expect(pair.phone.state == nil)
     }
+
+    /// The shared match ended and the guest started one of its own. It was still a guest of
+    /// the host — on the link, and read as one by its own watch, which went on offering to
+    /// leave the phone's own match rather than to end it.
+    @Test func aGuestStartingItsOwnMatchAfterTheSharedOneEndedStepsOff() async throws {
+        let pair = PhoneWithWatch(phoneLog: nil, hostLog: seeded(DeviceID(), points: 1))
+        var letGo = false
+        pair.phone.onLeft = { letGo = true }
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        pair.phone.beginJoining()
+        await eventually { pair.phone.role == .guest && !pair.watch.canEndSession }
+
+        pair.host.finish()
+        await eventually { pair.phone.state == nil && pair.watch.state == nil }
+        #expect(pair.phone.role == .guest, "still the host's guest, for the next match it starts")
+
+        pair.phone.startNewSession()
+        pair.phone.configure(counting)
+
+        #expect(letGo, "off the host's match")
+        #expect(pair.phone.role == .solo)
+        #expect(pair.phone.canEndSession, "its own match is its own to end")
+        await eventually { pair.watch.canEndSession && points(pair.watch) == BySide(a: 0, b: 0) }
+        #expect(pair.watch.canEndSession, "and the watch no longer reads the phone as a guest")
+    }
+
+    /// The watch on a guest's wrist starts a match of its own once the shared one has ended.
+    /// The phone, empty and still a guest, used to take it up as a guest — of nobody — and so
+    /// could not end it, and offered a Leave that would have thrown it away.
+    @Test func aGuestsWatchStartingItsOwnMatchTakesThePhoneOffTheSharedOne() async throws {
+        let pair = PhoneWithWatch(phoneLog: nil, hostLog: seeded(DeviceID(), points: 1))
+        var letGo = false
+        pair.phone.onLeft = { letGo = true }
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        pair.phone.beginJoining()
+        await eventually { pair.phone.role == .guest && pair.watch.log.sessionID == pair.host.log.sessionID }
+
+        pair.host.finish()
+        await eventually { pair.phone.state == nil && pair.watch.state == nil }
+
+        pair.watch.configure(counting)
+        await eventually { pair.phone.state != nil }
+
+        #expect(pair.phone.log.sessionID == pair.watch.log.sessionID, "the phone mirrors the watch's match")
+        #expect(pair.phone.role == .solo, "as its own, not as anybody's guest")
+        #expect(pair.phone.canEndSession)
+        #expect(letGo, "and is off the host's match")
+        await eventually { pair.watch.canEndSession }
+        #expect(pair.watch.canEndSession)
+    }
 }
 
 /// Records what the store sends and lets the test speak back to it.

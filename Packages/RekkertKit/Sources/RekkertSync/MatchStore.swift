@@ -58,7 +58,14 @@ public final class MatchStore {
     /// What the counterpart on the paired channel says it is. A guest's watch must not offer
     /// to end a match that belongs to whoever started it.
     private var pairedRole: SessionRole = .solo
-    private var isJoining = false
+    /// Waiting to be handed somebody else's session. Readable so the screen that asked can
+    /// step aside when it has been, which the role alone does not say for a guest walking
+    /// back in.
+    public private(set) var isJoining = false
+    /// The logs the last few sessions ended on, by session id. The outbox is cleared with
+    /// the session, so this is the only copy of the point that ended a match once it has
+    /// been filed — and the thing to hand a counterpart that was out of reach for it.
+    private var farewells: [UUID: MatchLog]
     /// The session this device stepped off, so a peer still on it — the watch on the same
     /// wrist, or a host whose link has not been cut yet — cannot hand it straight back.
     private var leftSessionID: UUID?
@@ -97,6 +104,9 @@ public final class MatchStore {
         self.snapshotInterval = snapshotInterval
         self.log = session?.log ?? MatchLog()
         self.outbox = session?.outbox ?? Outbox()
+        self.farewells = Dictionary(
+            (store?.farewells() ?? []).map { ($0.sessionID, $0) }, uniquingKeysWith: { first, _ in first }
+        )
         self.presets = store?.loadPresets() ?? PresetLibrary()
         self.display = store?.loadDisplay() ?? DisplayPreferences()
         self.state = SessionReducer.state(of: self.log)
@@ -210,6 +220,9 @@ public final class MatchStore {
     public func startSharing() {
         guard role != .guest else { return }
         role = .host
+        // A search left running underneath would conclude on the first guest to say hello
+        // and make this phone a guest on its own match.
+        isJoining = false
         persist()
         shareRole()
     }
@@ -381,6 +394,10 @@ public final class MatchStore {
         // not ending it. Retiring it would answer the host's next packet with "this ended
         // here", and the host would end the match for everyone still playing it.
         let leaving = !canEndSession && !log.isEmpty
+        // A guest whose shared match has already ended is still a guest of that host, and
+        // still on the link: the host's next match would land here. Starting its own is
+        // stepping off just the same — and so is giving up on a join that never concluded.
+        let steppingOff = role == .guest || isJoining
         if leaving {
             leftSessionID = log.sessionID
             let notice = encode(.left(sessionID: log.sessionID))
@@ -390,6 +407,19 @@ public final class MatchStore {
             retire(log.sessionID)
             leftSessionID = nil
         }
+        clearSession()
+        if role == .guest {
+            role = .solo
+            // The watch on this wrist read this phone as a guest, and would go on offering to
+            // leave a match that is now this phone's own rather than to end it.
+            shareRole()
+        }
+        refresh()
+        if leaving || steppingOff { onLeft?() }
+    }
+
+    /// A fresh log, and nothing left over from the one before. The role is untouched.
+    private func clearSession() {
         log = MatchLog()
         outbox = Outbox()
         replacedSessionTitle = nil
@@ -397,9 +427,6 @@ public final class MatchStore {
         resultRewind = nil
         isJoining = false
         counterpartLeftSessionID = nil
-        if role == .guest { role = .solo }
-        refresh()
-        if leaving { onLeft?() }
     }
 
     /// A session is retired where it ends, and stays retired, so a counterpart that has not
@@ -453,11 +480,22 @@ public final class MatchStore {
 
         concludedSessionID = log.sessionID
         retire(log.sessionID, archive: wasAskedToArchive)
+        remember(farewell: log)
         log = MatchLog()
         outbox = Outbox()
         state = nil
         persist()
         return true
+    }
+
+    /// Bounded tighter than the retired list: these are whole logs.
+    private func remember(farewell: MatchLog) {
+        farewells[farewell.sessionID] = farewell
+        while farewells.count > SessionStore.farewellsKept,
+              let oldest = farewells.values.min(by: { $0.createdAt < $1.createdAt }) {
+            farewells.removeValue(forKey: oldest.sessionID)
+        }
+        try? store?.save(farewell: farewell)
     }
 
     public func acknowledgeReplacedSession() {
@@ -480,9 +518,10 @@ public final class MatchStore {
     public func undoResult() {
         guard let rewind = resultRewind else { return }
         let filed = concludedSessionID
-        let wasGuest = role == .guest
-        startNewSession()
-        if wasGuest { role = .guest }
+        // Not `startNewSession()`: the log is already empty and retired, and a guest taking
+        // a result back is not stepping off — the host takes the reopened match up.
+        leftSessionID = nil
+        clearSession()
         record(.restore(rewind.state))
         if keepsHistory, let filed { try? store?.deleteHistory(filed) }
     }
@@ -668,16 +707,25 @@ public final class MatchStore {
             relay(events)
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
 
-        case .retired(let sessionID, let archive):
+        case .retired(let sessionID, let archive, let farewell):
             // Only ever our own live session, and only once: concluding puts it in the
             // retired list here too, so a second notice is a no-op rather than a volley.
-            // Ending it locally is the same path the `.finish` event would have taken, so
-            // the match is archived and the result shown rather than quietly dropped.
-            // A host hears it only from its own watch. The match is its to end, and a guest
-            // that retired its copy is saying something about its own phone, not the match.
-            if sessionID == log.sessionID, !log.isEmpty, !retired.contains(sessionID),
-               role != .host || packet.isFromPairedDevice {
-                record(.finish(archive: archive))
+            if sessionID == log.sessionID, !log.isEmpty, !retired.contains(sessionID) {
+                // Everything the other end had when it ended, merged rather than obeyed: the
+                // log says whether the match is over. That is what lets a guest's copy that
+                // won the match out of earshot end it here too — the winning point is in
+                // there — while a guest that merely retired its copy ends nothing.
+                if let farewell, farewell.sessionID == sessionID {
+                    relay(farewell.ordered)
+                }
+                // Still in play after that, so the ending has to be said. The same path the
+                // `.finish` event would have taken, so the match is archived and the result
+                // shown rather than quietly dropped. A host hears it only from its own
+                // watch: the match is its to end, and a guest that retired its copy is
+                // saying something about its own phone, not the match.
+                if sessionID == log.sessionID, !log.isEmpty, role != .host || packet.isFromPairedDevice {
+                    record(.finish(archive: archive))
+                }
             }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
 
@@ -746,17 +794,30 @@ public final class MatchStore {
             } else if incoming.isEmpty {
                 // A peer that has not started anything yet is not a competing session, but
                 // it does need ours — and it cannot ask for it, since the reply it would
-                // ask down is the one it just used to tell us it has nothing.
-                offerOurSession()
+                // ask down is the one it just used to tell us it has nothing. Live as well
+                // as queued: the queue reaches only this device's own watch, and a phone
+                // saying this over Bluetooth would otherwise wait for its next hello, which
+                // is its next unlock.
+                offerOurSession(live: true)
             } else if isJoining, !packet.isFromPairedDevice {
-                // A code was typed, so this is the session that was asked for, whatever the
-                // clocks say about which of the two was started more recently — and even if
-                // there is nothing here to weigh it against. Unless it is this device's own
-                // watch talking, which repeats what is already here and offers nothing.
-                adopt(incoming)
-                role = .guest
-                isJoining = false
-                shareRole()
+                if incoming.sessionID == log.sessionID {
+                    // Already holding the match that was asked for — back from a relaunch,
+                    // or handed it before the code was typed. Taken up rather than adopted:
+                    // adopting would file the live match to History as displaced and drop
+                    // whatever was scored here while out of reach.
+                    arrive(on: incoming.sessionID, from: packet)
+                    relay(incoming.ordered)
+                } else {
+                    // A code was typed, so this is the session that was asked for, whatever
+                    // the clocks say about which of the two was started more recently — and
+                    // even if there is nothing here to weigh it against. Unless it is this
+                    // device's own watch talking, which repeats what is already here and
+                    // offers nothing.
+                    adopt(incoming)
+                    role = .guest
+                    isJoining = false
+                    shareRole()
+                }
             } else if incoming.sessionID == leftSessionID {
                 // Stepped off this one on purpose. Whoever is still on it is not being
                 // refused — nothing is retired — only not taken up again.
@@ -765,7 +826,18 @@ public final class MatchStore {
                 // pair itself can bring it back.
             } else if log.isEmpty {
                 log = incoming
+                // An empty guest is handed the host's next match; that is the code lasting
+                // an evening. But the only match its own watch can hand it that the host
+                // has not is one the watch started, and the pair is off the shared match
+                // with it — or the phone would be a guest on a match nobody hosts, unable
+                // to end it and offered a Leave that throws it away.
+                let steppingOff = role == .guest && packet.isFromPairedDevice
+                if steppingOff {
+                    role = .solo
+                    shareRole()
+                }
                 refresh()
+                if steppingOff { onLeft?() }
             } else if incoming.sessionID == log.sessionID {
                 arrive(on: incoming.sessionID, from: packet)
                 relay(incoming.ordered)
@@ -828,7 +900,7 @@ public final class MatchStore {
     /// Replaces the local session with the peer's. Anything already scored locally is
     /// archived first, so a session is never silently destroyed.
     private func adopt(_ incoming: MatchLog) {
-        if log.hasProgress, let state = SessionReducer.state(of: log) {
+        if keepsHistory, log.hasProgress, let state = SessionReducer.state(of: log) {
             try? store?.archive(HistoryRecord(
                 id: log.sessionID, title: state.title, state: state, startedAt: log.createdAt
             ))
@@ -901,9 +973,15 @@ public final class MatchStore {
     /// Hands our session to a counterpart that is not on it. The snapshot channel
     /// coalesces and the live one needs the counterpart awake, so the one thing that must
     /// not be missed — which session is being played — goes on the durable queue too.
-    private func offerOurSession() {
+    ///
+    /// `live` sends it to whoever is connected as well. Only for a counterpart known to hold
+    /// nothing: offered live to one holding a different match, two devices that each think
+    /// theirs is the one would sit pushing sessions at each other for ever.
+    private func offerOurSession(live: Bool = false) {
         guard !log.isEmpty else { return }
-        transport.queue(encode(.snapshot(log)))
+        let offer = encode(.snapshot(log))
+        transport.queue(offer)
+        if live { Task { _ = await sendLive(offer) } }
     }
 
     private func requestSnapshot(_ packet: InboundPacket) {
@@ -917,7 +995,9 @@ public final class MatchStore {
     /// scoring into a session every packet of which we refuse — silently, and for good,
     /// since the retired list outlives a relaunch.
     private func announceRetirement(of sessionID: UUID, to packet: InboundPacket) {
-        let notice = encode(.retired(sessionID: sessionID, archive: !discarded.contains(sessionID)))
+        let notice = encode(.retired(
+            sessionID: sessionID, archive: !discarded.contains(sessionID), farewell: farewells[sessionID]
+        ))
         if let reply = packet.reply {
             reply(notice)
         } else if role != .guest {

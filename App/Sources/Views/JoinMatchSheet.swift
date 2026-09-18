@@ -18,7 +18,7 @@ struct JoinMatchSheet: View {
             Group {
                 switch model.sharing.phase {
                 case .searching: waiting("Looking for the match…")
-                case .joined: waiting("Joining…")
+                case .joined: waiting("Joined. Waiting for the match…")
                 case .failed(let failure): trouble(failure)
                 default: entry
                 }
@@ -27,8 +27,10 @@ struct JoinMatchSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
+                    // Not `stop()`, which for a guest back from a relaunch would leave the
+                    // match it still holds.
                     Button("Cancel") {
-                        model.sharing.stop()
+                        model.sharing.cancelJoining()
                         dismiss()
                     }
                 }
@@ -38,11 +40,22 @@ struct JoinMatchSheet: View {
                 typing = true
                 if submitsImmediately { submit() }
             }
-            .onChange(of: model.store.role) { _, role in
-                // The scoreboard is already on screen behind this.
-                if role == .guest { dismiss() }
+            .onChange(of: model.store.isJoining) { _, joining in
+                // Keyed on the join concluding rather than on the role changing, which it
+                // does not for a guest walking back in. The scoreboard is already behind this.
+                if !joining, model.store.role == .guest, !hasFailed { dismiss() }
+            }
+            .onDisappear {
+                // Swiped away mid-search: a search left running would conclude with nobody
+                // watching, or make a phone that goes on to share a guest of its own guests.
+                if model.store.isJoining { model.sharing.cancelJoining() }
             }
         }
+    }
+
+    private var hasFailed: Bool {
+        if case .failed = model.sharing.phase { return true }
+        return false
     }
 
     private var entry: some View {

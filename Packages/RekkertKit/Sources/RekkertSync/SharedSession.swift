@@ -80,7 +80,13 @@ public final class SharedSession {
         if let bluetooth {
             watchingBluetooth = Task { [weak self] in
                 for await _ in bluetooth.reachability {
-                    self?.bluetoothPeers = bluetooth.reachableCount
+                    guard let self else { return }
+                    self.bluetoothPeers = bluetooth.reachableCount
+                    // The network may have been gone a while with the radio carrying the
+                    // match. When the radio goes too, that is the moment it is lost.
+                    if self.bluetoothPeers == 0, case .searching = self.phase, self.hasJoinedBefore {
+                        self.beginNoticingTheLoss()
+                    }
                 }
             }
         }
@@ -119,6 +125,10 @@ public final class SharedSession {
     /// through an evening.
     public func host(code: SessionCode = .random()) {
         guard store.state != nil else { return }
+        // A search still running underneath — the join sheet swiped away mid-look — would
+        // conclude on the first guest to say hello and make this phone a guest on its own
+        // match.
+        if wanted != nil { cancelJoining() }
         hosted = (code, UUID())
         store.startSharing()
         link.startHosting(code: code, share: hosted!.share)
@@ -167,6 +177,8 @@ public final class SharedSession {
     }
 
     public func join(_ code: SessionCode) {
+        // Joining somebody else's match is the end of hosting this one.
+        if hosted != nil { stop() }
         wanted = code
         hasJoinedBefore = false
         store.beginJoining()
@@ -177,14 +189,33 @@ public final class SharedSession {
 
     /// Stops sharing, or steps off somebody else's match, depending which end this is.
     public func stop() {
-        link.stop()
-        bluetooth?.stop()
-        bluetoothPeers = 0
+        cutLinks()
         switch store.role {
         case .host: store.stopSharing()
         case .guest: store.leaveSharedSession()
         case .solo: store.cancelJoining()
         }
+        forgetWhatWasAskedFor()
+    }
+
+    /// Gives up looking, and nothing more. A guest that is back from a relaunch still holds
+    /// the match and typed the code to reach the host again; a search that finds nothing must
+    /// not throw the match away, which is what `stop()` would do for a guest.
+    public func cancelJoining() {
+        cutLinks()
+        store.cancelJoining()
+        forgetWhatWasAskedFor()
+    }
+
+    /// Links first, store second: what the store says on its way off a match must not go out
+    /// over a link to the host that is about to close anyway.
+    private func cutLinks() {
+        link.stop()
+        bluetooth?.stop()
+        bluetoothPeers = 0
+    }
+
+    private func forgetWhatWasAskedFor() {
         peers = 0
         phase = .off
         hosted = nil
@@ -208,9 +239,11 @@ public final class SharedSession {
         hasLostTheMatch = false
     }
 
+    /// Back to the keyboard, or back to the match. A failed search is only ever a search: a
+    /// guest that already held the match keeps it.
     public func dismissFailure() {
         guard case .failed = phase else { return }
-        stop()
+        if store.role == .host { stop() } else { cancelJoining() }
     }
 
     private func beginNoticingTheLoss() {
@@ -218,12 +251,20 @@ public final class SharedSession {
         noticing = Task { [weak self, graceBeforeNotice] in
             try? await Task.sleep(for: graceBeforeNotice)
             guard let self, !Task.isCancelled else { return }
+            // Let go of first, whatever is decided: a task still on the books after it has
+            // run would stop the next loss from ever being noticed.
+            self.noticing = nil
             guard case .searching = self.phase else { return }
             // Nothing has been lost if Bluetooth is still carrying it.
             guard self.bluetoothPeers == 0 else { return }
             self.hasLostTheMatch = true
-            self.noticing = nil
         }
+    }
+
+    /// Whether the store has the match this coordinator went looking for, whichever link
+    /// brought it. The role alone cannot say: a guest walking back in was a guest already.
+    private var hasTheMatch: Bool {
+        !store.isJoining && store.role == .guest
     }
 
     /// Internal rather than private so the tests can drive the states a socket would.
@@ -262,6 +303,15 @@ public final class SharedSession {
             // go on looking rather than to throw away a match somebody is in the middle of
             // playing and send them back to the keyboard.
             guard !hasJoinedBefore else { return apply(.searching) }
+            // The network gave up, but the match is here — over Bluetooth, which is the only
+            // way in when the host's phone is locked and off the network altogether. That is
+            // a link to keep looking for, not a code to send somebody back to the keyboard
+            // over; and the transport stopped itself to say so, so it is put back to looking.
+            if let wanted, hasTheMatch || bluetoothPeers > 0 {
+                hasJoinedBefore = true
+                link.resumeJoining(code: wanted)
+                return apply(.searching)
+            }
             peers = 0
             store.cancelJoining()
             phase = .failed(failure)

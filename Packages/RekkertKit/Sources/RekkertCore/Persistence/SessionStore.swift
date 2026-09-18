@@ -131,6 +131,38 @@ public struct SessionStore: Sendable {
         try? FileManager.default.removeItem(at: activeURL)
     }
 
+    // MARK: - Farewells
+
+    private var farewellsDirectory: URL { directory.appending(path: "farewells", directoryHint: .isDirectory) }
+
+    /// The log a session ended on, kept so a counterpart that missed the ending can be
+    /// handed it later. Only the last few: the retired list outlives them, and a session old
+    /// enough to have fallen off is one nobody is still scoring into.
+    public static let farewellsKept = 3
+
+    public func save(farewell log: MatchLog) throws {
+        try write(
+            try encoder.encode(log),
+            to: farewellsDirectory.appending(path: "\(log.sessionID.uuidString).json")
+        )
+        for stale in farewells().dropFirst(Self.farewellsKept) {
+            try? FileManager.default.removeItem(
+                at: farewellsDirectory.appending(path: "\(stale.sessionID.uuidString).json")
+            )
+        }
+    }
+
+    /// Newest first.
+    public func farewells() -> [MatchLog] {
+        let urls = (try? FileManager.default.contentsOfDirectory(
+            at: farewellsDirectory, includingPropertiesForKeys: nil
+        )) ?? []
+        return urls
+            .filter { $0.pathExtension == "json" }
+            .compactMap { try? decoder.decode(MatchLog.self, from: Data(contentsOf: $0)) }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
     // MARK: - History
 
     public func archive(_ record: HistoryRecord) throws {

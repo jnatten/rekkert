@@ -53,7 +53,13 @@ public enum Wire: Codable, Sendable, Hashable {
     /// longer reach it. `archive` says how it ended — kept, or thrown away — so a counterpart
     /// that missed the ending files it the same way rather than keeping a match the people
     /// on it called off.
-    case retired(sessionID: UUID, archive: Bool)
+    ///
+    /// `farewell` is the log as it stood when it ended, when the sender still has it. The
+    /// point that ended a match is in there and nowhere else once the outbox is cleared, so
+    /// a counterpart that was out of reach for that one point files the same result as
+    /// everybody else instead of a match stopped a point short. Optional, and absent from
+    /// older builds, which decode this without it and go on as they did.
+    case retired(sessionID: UUID, archive: Bool, farewell: MatchLog? = nil)
     /// Saved configurations, so a session can be started from either device.
     case presets(PresetLibrary)
     /// How the phone should draw its scoreboard, so the watch can flip it.
