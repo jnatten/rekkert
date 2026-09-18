@@ -59,26 +59,29 @@ raise SystemExit("no available simulator named %r" % name)
 ' "$1"
 }
 
+# Resolved before the build so both steps name the very device the shots come off, by id.
+# A name alone means the newest runtime, which is where a device Apple has replaced stops
+# existing — and the pixel size of these is the whole point of them.
+PHONE=$(udid_for "$PHONE_NAME")
+WATCH=$(udid_for "$WATCH_NAME")
+
 if [ "$BUILD" = 1 ]; then
   echo "==> tuist generate"
   mise exec -- tuist generate --no-open >/dev/null
 
   echo "==> Build iOS app"
   xcodebuild -workspace Rekkert.xcworkspace -scheme Rekkert \
-    -destination "platform=iOS Simulator,name=$PHONE_NAME" \
+    -destination "id=$PHONE" \
     -derivedDataPath "$DD" -quiet build
 
   echo "==> Build watch app"
   xcodebuild -workspace Rekkert.xcworkspace -scheme RekkertWatch \
-    -destination "platform=watchOS Simulator,name=$WATCH_NAME" \
+    -destination "id=$WATCH" \
     -derivedDataPath "$DD" -quiet build
 fi
 
 test -d "$IOS_APP" || { echo "FAIL: no iOS app at $IOS_APP — drop --no-build"; exit 1; }
 test -d "$WATCH_APP" || { echo "FAIL: no watch app at $WATCH_APP — drop --no-build"; exit 1; }
-
-PHONE=$(udid_for "$PHONE_NAME")
-WATCH=$(udid_for "$WATCH_NAME")
 
 echo "==> Boot $PHONE_NAME and $WATCH_NAME"
 xcrun simctl bootstatus "$PHONE" -b >/dev/null
@@ -124,15 +127,16 @@ shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/match.png" "${SCORE[@]}" -rekkert-demo
 echo "==> Apple Watch"
 shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch.png" "${SCORE[@]}"
 shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-controls.png" "${SCORE[@]}" -rekkert-demo-watch-page controls
-# The workout, counting and held. Raw only: docs/index.html declares the sizes of the ones
-# it uses, and the copy below would have to grow to match.
+# The workout, counting and held. Only the counting one is shipped; the held one and the
+# menu stay raw, because a stopped clock and an open menu need a sentence to explain and
+# neither the page nor the listing has one to spare.
 shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-workout.png" "${SCORE[@]}" -rekkert-demo-workout -rekkert-demo-watch-page workout
 shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-workout-paused.png" "${SCORE[@]}" -rekkert-demo-workout-paused -rekkert-demo-watch-page workout
 shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-workout-menu.png" "${SCORE[@]}" -rekkert-demo-workout-paused -rekkert-demo-watch-page menu
 
 if [ "$DO_DOCS" = 1 ]; then
   echo "==> docs/images"
-  cp "$RAW/watch.png" "$RAW/watch-controls.png" docs/images/
+  cp "$RAW/watch.png" "$RAW/watch-controls.png" "$RAW/watch-workout.png" docs/images/
   for name in home americano friendly; do
     cp "$RAW/$name.png" "docs/images/$name.png"
     sips -z 1216 560 "docs/images/$name.png" >/dev/null
@@ -172,6 +176,7 @@ if [ "$DO_STORE" = 1 ]; then
   cp "$RAW/match.png" "$STORE/iphone-4-match.png"
   cp "$RAW/watch.png" "$STORE/watch-1-scoreboard.png"
   cp "$RAW/watch-controls.png" "$STORE/watch-2-controls.png"
+  cp "$RAW/watch-workout.png" "$STORE/watch-3-workout.png"
   # App Store Connect rejects an upload whose pixel size is not one it lists for the
   # device, and it is the only place that knows the current list — so print what came
   # out rather than assert anything about it.

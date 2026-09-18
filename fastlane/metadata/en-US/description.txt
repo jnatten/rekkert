@@ -48,12 +48,12 @@ Every match and tournament you finish is kept, with how it ended and what it was
 
 WORKOUTS
 
-Start a workout from your watch or your phone and the session is recorded to Apple Health as tennis, the nearest thing Health has to padel. It runs on its own: start it when you get on court, stop it when you leave, and play as many matches in between as you like, or none. It also keeps the watch awake, so a lowered wrist comes back to the score rather than to the clock.
+Press Start workout, on your watch or your phone, and the session is recorded to Apple Health as tennis, the nearest thing Health has to padel. Start it when you get on court, stop it when you leave, and play as many matches in between as you like, or none. It also keeps the watch awake, so a lowered wrist comes back to the score rather than to the clock.
 
-Rekkert lists them, with how long you played, the energy and the heart rate, and under each one the matches you scored while it was running.
+Rekkert lists them, with how long you played, the energy and the heart rate, and the matches you scored under each.
 
-Nothing is asked for and nothing recorded unless you press the button.
+Nothing is detected: no workout starts, and nothing is recorded, unless you press Start workout.
 
 PRIVACY
 
-No account, no server, no tracking, no ads. Your matches stay on your own devices and go no further than the phones you hand the code to. Workouts are saved to Apple Health on your own devices, and your heart rate never leaves your watch.
+No account, no server, no tracking, no ads. Your matches stay on your own devices and go no further than the phones you hand the code to. Workouts are saved to Apple Health on your own devices, and your heart rate never leaves your device.
