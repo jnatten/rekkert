@@ -155,7 +155,7 @@ struct HomeView: View {
             .navigationDestination(for: HomeRoute.self) { route in
                 switch route {
                 case .list: HistoryView()
-                case .record(let record): HistoryDetailView(record: record)
+                case .record(let id): HistoryDetailView(id: id)
                 case .voice: VoicePickerView()
                 case .workouts: WorkoutsView()
                 case .workout(let workout): WorkoutDetailView(workout: workout)
@@ -183,7 +183,7 @@ struct HomeView: View {
                 if DemoLaunch.openHistory {
                     path = [.list]
                     if let index = DemoLaunch.openHistoryRecord, model.history.indices.contains(index) {
-                        path.append(.record(model.history[index]))
+                        path.append(.record(model.history[index].id))
                     }
                 }
                 #endif

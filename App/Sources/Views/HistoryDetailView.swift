@@ -3,7 +3,28 @@ import SwiftUI
 
 /// A finished session opened back up: how it ended, the full table where there is one, and
 /// a way to carry on with it if it never actually ran its course.
+///
+/// Addressed by id and looked up on every redraw, rather than handed the record the list was
+/// holding — editing the names makes a new value, and a pushed copy would keep drawing the
+/// old ones.
 struct HistoryDetailView: View {
+    @Environment(AppModel.self) private var model
+    let id: UUID
+
+    var body: some View {
+        if let record = model.record(id) {
+            RecordDetail(record: record)
+        } else {
+            ContentUnavailableView(
+                "Nothing here",
+                systemImage: "clock",
+                description: Text("This match is no longer in History.")
+            )
+        }
+    }
+}
+
+private struct RecordDetail: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.teamPalette) private var palette
@@ -11,6 +32,7 @@ struct HistoryDetailView: View {
 
     @State private var confirmingResume = false
     @State private var startingAnother = false
+    @State private var editingNames = false
 
     private var result: SessionResult { SessionResult.make(from: record.state) }
 
@@ -66,10 +88,19 @@ struct HistoryDetailView: View {
         }
         .navigationTitle(record.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Edit") { editingNames = true }
+            }
+        }
         .task {
             #if DEBUG
             if DemoLaunch.rematch, case .tournament = record.state { startingAnother = true }
+            if DemoLaunch.editNames { editingNames = true }
             #endif
+        }
+        .sheet(isPresented: $editingNames) {
+            EditNamesView(record: record)
         }
         // Presented from the list itself: a sheet attached to a row goes with the row
         // when it scrolls out of a lazy List, and then never opens.

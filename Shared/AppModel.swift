@@ -319,22 +319,38 @@ final class AppModel {
         try? sessionStore?.save(updated)
     }
 
+    /// The shelves live on disk, where `@Observable` has nothing to watch. Reading this in
+    /// the getters and bumping it on every change is what redraws a list once a record has
+    /// been edited or deleted.
+    private var revision = 0
+
     var history: [HistoryRecord] {
-        (try? sessionStore?.history()) ?? []
+        _ = revision
+        return (try? sessionStore?.history()) ?? []
     }
 
     var workouts: [WorkoutRecord] {
-        (try? sessionStore?.workouts()) ?? []
+        _ = revision
+        return (try? sessionStore?.workouts()) ?? []
+    }
+
+    /// One record, read on its own rather than off the back of the whole shelf — a screen
+    /// showing a single match asks on every redraw.
+    func record(_ id: UUID) -> HistoryRecord? {
+        _ = revision
+        return sessionStore?.historyRecord(id)
     }
 
     /// Asked on every redraw of the start screen purely to decide whether a row is there, so
     /// it lists the directory rather than decoding everything in it.
     var hasWorkouts: Bool {
-        sessionStore?.hasWorkouts() ?? false
+        _ = revision
+        return sessionStore?.hasWorkouts() ?? false
     }
 
     func deleteWorkout(_ id: UUID) {
         try? sessionStore?.deleteWorkout(id)
+        revision += 1
     }
 
     /// The matches scored while a workout was running, worked out from the clock. A match
@@ -356,5 +372,13 @@ final class AppModel {
 
     func deleteHistory(_ id: UUID) {
         try? sessionStore?.deleteHistory(id)
+        revision += 1
+    }
+
+    /// Files an edited record back over the original. Archiving is keyed on the record's id,
+    /// so this replaces rather than adds.
+    func update(_ record: HistoryRecord) {
+        try? sessionStore?.archive(record)
+        revision += 1
     }
 }

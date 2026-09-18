@@ -3,7 +3,9 @@ import SwiftUI
 
 enum HomeRoute: Hashable {
     case list
-    case record(HistoryRecord)
+    /// By id rather than by value: a record whose names have been edited is a different
+    /// value, and a path holding the old one would keep drawing the old names.
+    case record(UUID)
     case voice
     case workouts
     case workout(WorkoutRecord)
@@ -15,7 +17,7 @@ struct HistoryView: View {
     var body: some View {
         List {
             ForEach(model.history) { record in
-                NavigationLink(value: HomeRoute.record(record)) {
+                NavigationLink(value: HomeRoute.record(record.id)) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(record.title).font(.headline)
                         HStack(spacing: 4) {

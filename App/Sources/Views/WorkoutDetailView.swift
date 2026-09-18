@@ -34,7 +34,7 @@ struct WorkoutDetailView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(matches) { record in
-                        NavigationLink(value: HomeRoute.record(record)) {
+                        NavigationLink(value: HomeRoute.record(record.id)) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(record.title).font(.headline)
                                 HStack(spacing: 4) {

@@ -80,6 +80,14 @@ A match can be played out or called off part way. Ending it offers to keep it in
 or to discard it, and that decision travels with the event so the other device does not
 file something you threw away. A match played to its end is kept without being asked.
 
+Opening a filed match has an **Edit** button on it, for the names. Whatever the mode is
+called by — the tournament's name, the friendly's, or the two team names a match is listed
+under — and everybody in it can be put right afterwards, so a typo or a "Them" nobody got
+round to filling in is not there for good. A corrected name follows through that match
+everywhere it appears: the rounds, the table and the result. Only that one match changes;
+the names remembered for next time, and every other match, are left alone. Nobody can be
+added or taken out — the rounds were drawn around the people who played them.
+
 ## Mid-match corrections
 
 Both apps carry two fixes for when reality and the app disagree. **Swap serving team**

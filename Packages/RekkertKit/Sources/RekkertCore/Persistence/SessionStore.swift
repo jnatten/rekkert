@@ -144,6 +144,14 @@ public struct SessionStore: Sendable {
             .sorted { $0.finishedAt > $1.finishedAt }
     }
 
+    /// One record, without decoding the rest of the shelf — what a screen showing a single
+    /// match needs on every redraw.
+    public func historyRecord(_ id: UUID) -> HistoryRecord? {
+        guard let data = try? Data(contentsOf: historyDirectory.appending(path: "\(id.uuidString).json"))
+        else { return nil }
+        return try? decoder.decode(HistoryRecord.self, from: data)
+    }
+
     public func deleteHistory(_ id: UUID) throws {
         try? FileManager.default.removeItem(at: historyDirectory.appending(path: "\(id.uuidString).json"))
     }

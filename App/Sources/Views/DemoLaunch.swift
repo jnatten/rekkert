@@ -52,6 +52,11 @@ enum DemoLaunch {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-rounds-sheet")
     }
 
+    /// Opens the sheet for putting a filed match's names right.
+    static var editNames: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-edit-names")
+    }
+
     /// Opens the sheet for running a past tournament's players again.
     static var rematch: Bool {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-rematch")
