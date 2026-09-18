@@ -16,8 +16,10 @@ struct EndSessionButton: View {
         if model.store.canEndSession {
             Button(title, systemImage: symbol, action: onEnd)
         } else {
+            // Through the coordinator, which cuts the links as well: a store that steps off
+            // while still connected is handed the match straight back by the next snapshot.
             Button("Leave", systemImage: "rectangle.portrait.and.arrow.right") {
-                model.store.leaveSharedSession()
+                model.sharing.stop()
             }
         }
     }

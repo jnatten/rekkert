@@ -14,9 +14,10 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         /// Whether `queue` reaches it. Only a channel that survives the counterpart not
         /// running is worth those bytes.
         public var isDurable: Bool
-        /// Whether its reply is the one `sendLive` hands back, and so whether it is allowed
-        /// to acknowledge the outbox.
-        public var acknowledges: Bool
+        /// Whether the counterpart is this device's own watch or phone. Its packets are marked
+        /// as such on the way in, because they repeat what this device already holds rather
+        /// than offering anything, and a join must not conclude on one.
+        public var isPairedDevice: Bool
         /// Personal things — saved setups, which side is blue — are dropped rather than sent
         /// to a phone that belongs to somebody else, where adopting them would overwrite
         /// what is already on it.
@@ -24,19 +25,19 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
 
         public init(
             isDurable: Bool,
-            acknowledges: Bool,
+            isPairedDevice: Bool = false,
             carries: @escaping @Sendable (Wire) -> Bool = { _ in true }
         ) {
             self.isDurable = isDurable
-            self.acknowledges = acknowledges
+            self.isPairedDevice = isPairedDevice
             self.carries = carries
         }
 
         /// This device's own watch: the whole conversation, and the only durable channel.
-        public static let pairedDevice = Scope(isDurable: true, acknowledges: true)
+        public static let pairedDevice = Scope(isDurable: true, isPairedDevice: true)
 
         /// Somebody else's phone: the match, and nothing personal.
-        public static let sharedSession = Scope(isDurable: false, acknowledges: false) { wire in
+        public static let sharedSession = Scope(isDurable: false) { wire in
             switch wire {
             case .hello, .events, .snapshot, .retired: true
             // Saved setups and which side is blue belong to whoever's phone this is. The
@@ -83,7 +84,9 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         let drain = Task { [weak self] in
             for await packet in transport.inbound {
                 guard let self else { return }
-                self.packets.yield(packet)
+                self.packets.yield(InboundPacket(
+                    payload: packet.payload, reply: packet.reply, isFromPairedDevice: scope.isPairedDevice
+                ))
             }
         }
         let watch = Task { [weak self] in
@@ -128,7 +131,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         let present = recipients.filter(\.transport.isReachable).count
         guard present > 0 else { return nil }
 
-        let answers = await withTaskGroup(of: (Bool, Data?).self) { group in
+        let answers = await withTaskGroup(of: (Data?, Bool).self) { group in
             for child in recipients {
                 group.addTask {
                     let reply = await child.transport.sendLive(payload)
@@ -136,20 +139,31 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
                     // survives the counterpart not running, or attaching a second child
                     // would quietly switch the watch's durable fallback off.
                     if reply == nil, child.scope.isDurable { child.transport.queue(payload) }
-                    return (child.scope.acknowledges, reply)
+                    return (reply, child.scope.isPairedDevice)
                 }
             }
-            var collected: [(Bool, Data?)] = []
+            var collected: [(Data?, Bool)] = []
             for await answer in group { collected.append(answer) }
             return collected
         }
 
-        // A paired device speaks for itself: its own reply is the acknowledgement, because it
-        // is the one channel with a durable queue behind it. Otherwise fold the room together.
-        let fromPaired = answers.first { $0.0 }?.1
-        let folded = ReplyFold.fold(answers.map(\.1), expected: present)
-        for payload in folded.unsolicited { packets.yield(InboundPacket(payload: payload)) }
-        return fromPaired ?? folded.acknowledgement
+        // Answers that were not acknowledgements — a snapshot, a retirement notice — reach the
+        // store as packets, marked with where they came from, since the store cannot tell.
+        var acknowledgements: [Data?] = []
+        for (reply, paired) in answers {
+            if let reply, case .hello? = try? Wire.decode(reply) {
+                acknowledgements.append(reply)
+            } else if let reply {
+                packets.yield(InboundPacket(payload: reply, isFromPairedDevice: paired))
+            } else {
+                acknowledgements.append(nil)
+            }
+        }
+
+        // The whole room folded together, the watch included. Letting the watch answer for
+        // everybody — it is the one with a durable queue behind it — meant a guest whose reply
+        // timed out was acknowledged past, and the outbox forgot the event it never got.
+        return ReplyFold.fold(acknowledgements, expected: present).acknowledgement
     }
 
     public func publishSnapshot(_ payload: Data) {

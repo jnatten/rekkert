@@ -14,6 +14,10 @@ nonisolated public final class LoopbackTransport: PeerTransport, @unchecked Send
     private var connected: Bool
     /// Messages dropped on the way out, to exercise the outbox.
     private var dropOutgoing = false
+    /// Live sends and snapshots that go nowhere while the link still counts as up — the
+    /// counterpart's app suspended mid-request, which is a timeout rather than an unreachable
+    /// peer. The durable queue still gets through, as it would.
+    private var swallowing = false
 
     public init(reachable: Bool = true) {
         var packetContinuation: AsyncStream<InboundPacket>.Continuation!
@@ -49,10 +53,15 @@ nonisolated public final class LoopbackTransport: PeerTransport, @unchecked Send
         reachabilityUpdates.yield(isReachable)
     }
 
+    public func setSwallowing(_ value: Bool) {
+        lock.withLock { swallowing = value }
+    }
+
     public func activate() {}
 
     public func sendLive(_ payload: Data) async -> Data? {
         guard isReachable, let peer = lock.withLock({ self.peer }) else { return nil }
+        guard !lock.withLock({ swallowing }) else { return nil }
         return await withCheckedContinuation { continuation in
             let once = SingleResume(continuation)
             peer.packets.yield(InboundPacket(payload: payload) { once.resume($0) })
@@ -68,6 +77,7 @@ nonisolated public final class LoopbackTransport: PeerTransport, @unchecked Send
 
     public func publishSnapshot(_ payload: Data) {
         guard isReachable, let peer = lock.withLock({ self.peer }) else { return }
+        guard !lock.withLock({ swallowing }) else { return }
         peer.packets.yield(InboundPacket(payload: payload))
     }
 

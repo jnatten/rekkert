@@ -223,12 +223,19 @@ public final class SharedSession {
 
     /// Internal rather than private so the tests can drive the states a socket would.
     func apply(_ status: LocalNetworkTransport.Status) {
+        // The transport reports on its own queue and this reads it later, so a status from
+        // before `stop()` can land after it. Nothing asked for is nothing to report on.
+        guard hosted != nil || wanted != nil else {
+            peers = 0
+            return
+        }
         switch status {
         case .idle:
             peers = 0
         case .hosting(let count):
             peers = count
-            if case .hosting = phase {} else if let code { phase = .hosting(code) }
+            // Back up after a listener that failed and was put back.
+            if case .hosting = phase {} else if let hosted { phase = .hosting(hosted.code) }
         case .searching:
             peers = 0
             if case .hosting = phase { return }

@@ -75,10 +75,16 @@ public enum Wire: Codable, Sendable, Hashable {
 public struct InboundPacket: Sendable {
     public let payload: Data
     public let reply: (@Sendable (Data) -> Void)?
+    /// Whether this came from this device's own watch or phone rather than from somebody
+    /// else's. Nothing on the wire says so — the pair holds the same match, so its packets
+    /// name the session already on screen — and a join has to be able to tell an offer from
+    /// its own wrist repeating what it has.
+    public let isFromPairedDevice: Bool
 
-    public init(payload: Data, reply: (@Sendable (Data) -> Void)? = nil) {
+    public init(payload: Data, reply: (@Sendable (Data) -> Void)? = nil, isFromPairedDevice: Bool = false) {
         self.payload = payload
         self.reply = reply
+        self.isFromPairedDevice = isFromPairedDevice
     }
 }
 

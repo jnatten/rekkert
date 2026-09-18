@@ -187,6 +187,42 @@ struct RoleTests {
         #expect(guest.log.sessionID == host.log.sessionID, "and can walk back in")
     }
 
+    /// The link is not always cut the moment somebody steps off — the button may not reach the
+    /// coordinator, or the cut lands a moment later — and a snapshot arriving in between used
+    /// to hand the match straight back, to a phone that now held the whistle.
+    @Test func leavingWhileStillConnectedDoesNotHandTheMatchBack() async throws {
+        let hostDevice = DeviceID()
+        let (one, two) = LoopbackTransport.pair()
+        let hostFan = FanOutTransport()
+        hostFan.attach(one, as: .sharedSession)
+        let guestFan = FanOutTransport()
+        guestFan.attach(two, as: .sharedSession)
+        let host = MatchStore(
+            device: hostDevice, transport: hostFan,
+            session: ActiveSession(log: seeded(hostDevice, startedAt: .now, points: 1), role: .host),
+            snapshotInterval: 0
+        )
+        let guest = MatchStore(device: DeviceID(), transport: guestFan, snapshotInterval: 0)
+        let tasks = [Task { await host.run() }, Task { await guest.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        guest.beginJoining()
+        await eventually { guest.role == .guest }
+        #expect(guest.role == .guest)
+
+        guest.leaveSharedSession()
+        await eventually { guest.state == nil }
+
+        host.tap(team: .b)
+        await eventually { points(host) == BySide(a: 1, b: 1) }
+        try await settle()
+
+        #expect(guest.state == nil, "left means left")
+        #expect(guest.canEndSession, "with nothing on it, this phone is nobody's guest")
+        #expect(points(host) == BySide(a: 1, b: 1), "and the host plays on")
+    }
+
     @Test func theRoleSurvivesARelaunch() throws {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }

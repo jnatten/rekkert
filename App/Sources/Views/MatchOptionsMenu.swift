@@ -21,8 +21,17 @@ struct MatchOptionsMenu: View {
                 Button("Rounds and standings", systemImage: "list.bullet.rectangle", action: onShowRounds)
             }
             if model.store.role == .host {
-                Button("Show the code", systemImage: "person.2.wave.2") {
-                    model.showingShareCode = true
+                if model.sharing.code != nil {
+                    Button("Show the code", systemImage: "person.2.wave.2") {
+                        model.showingShareCode = true
+                    }
+                } else {
+                    // The role outlives the app, the code does not. Back from a relaunch, the
+                    // match is still this phone's to share, on a code that has to be read out again.
+                    Button("Share this match again", systemImage: "person.2.wave.2") {
+                        model.sharing.host()
+                        model.showingShareCode = true
+                    }
                 }
                 // Only while somebody is there to hear it, which is also the only moment the
                 // two logs have caught up enough for it to be the last word.
@@ -30,6 +39,11 @@ struct MatchOptionsMenu: View {
                     Button("Use my score everywhere", systemImage: "checkmark.circle") {
                         settling = true
                     }
+                }
+            } else if model.store.role == .guest, !model.sharing.isSharing {
+                // A guest back from a relaunch still holds the match, but no longer the link.
+                Button("Rejoin the match", systemImage: "arrow.right.circle") {
+                    model.showingJoin = true
                 }
             } else if model.store.canEndSession {
                 Button("Share this match", systemImage: "person.2.wave.2") {

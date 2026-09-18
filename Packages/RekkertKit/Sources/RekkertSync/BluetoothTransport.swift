@@ -86,6 +86,10 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     private var nextCorrelation: UInt32 = 1
     private var intent: Intent = .none
     private var lastSnapshot: Data?
+    /// Hosts that turned out to be somebody else's court. A scan reports each peripheral once,
+    /// so one of these checked first would otherwise be checked again and again while the
+    /// right one, found in the meantime, was dropped for being second.
+    private var rejected: Set<UUID> = []
 
     private enum Intent: Sendable {
         case none
@@ -158,6 +162,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             waiting = [:]
             intent = .none
             lastSnapshot = nil
+            rejected = []
             return values
         }
         peripheral?.stopAdvertising()
@@ -430,7 +435,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     }
 
     fileprivate func discovered(_ peripheral: CBPeripheral, on manager: CBCentralManager) {
-        guard lock.withLock({ server == nil }) else { return }
+        guard lock.withLock({ server == nil && !rejected.contains(peripheral.identifier) }) else { return }
         lock.withLock { server = peripheral }
         peripheral.delegate = shim
         // No timeout, which is the reconnect: the system holds the request and wakes the app
@@ -497,8 +502,16 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
               greeting.fp == SessionKey.fingerprint(for: code, share: greeting.share)
         else {
             let manager = lock.withLock { centralManager }
-            lock.withLock { if server === peripheral { server = nil } }
+            lock.withLock {
+                rejected.insert(peripheral.identifier)
+                if server === peripheral { server = nil }
+            }
             manager?.cancelPeripheralConnection(peripheral)
+            // Started over rather than left running: whatever else was found while this one
+            // was being checked was reported once and dropped, and only a fresh scan says it
+            // again.
+            manager?.stopScan()
+            manager?.scanForPeripherals(withServices: [Self.serviceUUID], options: nil)
             return
         }
 

@@ -45,9 +45,14 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     /// connection's own callbacks arrive on one serial queue.
     private final class Link: @unchecked Sendable {
         let connection: NWConnection
+        /// Which advertised match this dialled, so it is not dialled twice. `nil` when accepted.
+        let share: UUID?
         var buffer = Data()
         var isReady = false
-        init(_ connection: NWConnection) { self.connection = connection }
+        init(_ connection: NWConnection, share: UUID? = nil) {
+            self.connection = connection
+            self.share = share
+        }
     }
 
     private let packets: AsyncStream<InboundPacket>.Continuation
@@ -413,24 +418,28 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
                   let raw = txt["id"], let share = UUID(uuidString: raw),
                   txt["fp"] == SessionKey.fingerprint(for: code, share: share)
             else { continue }
+            // The browser reports everything it can see every time anything changes, and it
+            // is rebuilt each time the app comes back — so a host this is already on comes
+            // round again, and dialling it again would hold two links to one phone.
+            guard !lock.withLock({ links.values.contains { $0.share == share } }) else { continue }
 
             let connection = NWConnection(
                 to: result.endpoint,
                 using: parameters(key: SessionKey.presharedKey(for: code, share: share))
             )
-            adopt(connection, dialled: true)
+            adopt(connection, share: share)
         }
     }
 
     private func accept(_ connection: NWConnection) {
-        adopt(connection, dialled: false)
+        adopt(connection, share: nil)
     }
 
-    private func adopt(_ connection: NWConnection, dialled: Bool) {
-        let link = Link(connection)
+    private func adopt(_ connection: NWConnection, share: UUID?) {
+        let link = Link(connection, share: share)
         let token = ObjectIdentifier(connection)
         lock.withLock { links[token] = link }
-        if dialled { giveUpOnDial(token, link) }
+        if share != nil { giveUpOnDial(token, link) }
 
         connection.stateUpdateHandler = { [weak self] state in
             guard let self else { return }

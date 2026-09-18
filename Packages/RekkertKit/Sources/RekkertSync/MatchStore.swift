@@ -51,6 +51,9 @@ public final class MatchStore {
     /// to end a match that belongs to whoever started it.
     private var pairedRole: SessionRole = .solo
     private var isJoining = false
+    /// The session this device stepped off, so a peer still on it — the watch on the same
+    /// wrist, or a host whose link has not been cut yet — cannot hand it straight back.
+    private var leftSessionID: UUID?
     /// Which session the result on screen came from, so taking it back can drop the record
     /// filed for it.
     private var concludedSessionID: UUID?
@@ -208,6 +211,7 @@ public final class MatchStore {
     /// showing whatever it had.
     public func beginJoining() {
         isJoining = true
+        leftSessionID = nil
         // Say hello straight away rather than waiting to be spoken to. The counterpart
         // answers a session id it does not recognise with its own, which is exactly the
         // offer being waited for.
@@ -229,6 +233,7 @@ public final class MatchStore {
                 id: log.sessionID, title: state.title, state: state, startedAt: log.createdAt
             ))
         }
+        leftSessionID = log.sessionID
         log = MatchLog()
         outbox = Outbox()
         role = .solo
@@ -346,6 +351,7 @@ public final class MatchStore {
         lastResult = nil
         resultRewind = nil
         isJoining = false
+        leftSessionID = nil
         if role == .guest { role = .solo }
         refresh()
     }
@@ -592,7 +598,7 @@ public final class MatchStore {
                 return announceRetirement(of: sessionID, to: packet)
             }
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
-            arrive(on: sessionID)
+            arrive(on: sessionID, from: packet)
             packet.reply?(encode(.events(sessionID: log.sessionID, events: log.events(missingRelativeTo: vector))))
 
         case .events(let sessionID, let events):
@@ -600,7 +606,7 @@ public final class MatchStore {
                 return announceRetirement(of: sessionID, to: packet)
             }
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
-            arrive(on: sessionID)
+            arrive(on: sessionID, from: packet)
             relay(events)
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
 
@@ -646,24 +652,34 @@ public final class MatchStore {
                 // it does need ours — and it cannot ask for it, since the reply it would
                 // ask down is the one it just used to tell us it has nothing.
                 offerOurSession()
-            } else if isJoining {
+            } else if isJoining, !packet.isFromPairedDevice {
                 // A code was typed, so this is the session that was asked for, whatever the
                 // clocks say about which of the two was started more recently — and even if
-                // there is nothing here to weigh it against.
+                // there is nothing here to weigh it against. Unless it is this device's own
+                // watch talking, which repeats what is already here and offers nothing.
                 adopt(incoming)
                 role = .guest
                 isJoining = false
                 shareRole()
+            } else if incoming.sessionID == leftSessionID {
+                // Stepped off this one on purpose. Whoever is still on it is not being
+                // refused — nothing is retired — only not taken up again.
             } else if log.isEmpty {
                 log = incoming
                 refresh()
             } else if incoming.sessionID == log.sessionID {
-                arrive(on: incoming.sessionID)
+                arrive(on: incoming.sessionID, from: packet)
                 relay(incoming.ordered)
-            } else if role == .host {
+            } else if role != .solo {
                 // A host is never taken over. The people in front of it are playing this
-                // match, and a phone that happened to start one a moment ago is not.
+                // match, and a phone that happened to start one a moment ago is not. Nor is a
+                // guest: it chose its match by code, and the only thing left to offer it
+                // another is its own watch, still holding what the phone had before.
                 offerOurSession()
+            } else if pairedRole == .guest {
+                // The phone this is paired to joined somebody else's match. Whatever it holds
+                // is that match, and it is not this end's to weigh against the clock.
+                adopt(incoming)
             } else if incoming.createdAt > log.createdAt {
                 adopt(incoming)
             } else if incoming.createdAt < log.createdAt {
@@ -688,8 +704,12 @@ public final class MatchStore {
     /// pair has always worked — so a guest can arrive already holding the right session and
     /// never be told anything about it. Without this it would go on holding the whistle for
     /// a match that belongs to whoever started it.
-    private func arrive(on sessionID: UUID) {
-        guard isJoining, sessionID == log.sessionID, !log.isEmpty else { return }
+    ///
+    /// The one voice that does not count is this device's own watch. It is on the same match
+    /// the phone is, so the first answer to a join is always its, naming the session already on
+    /// screen — and taking that as the host's would end the join on a stranger's behalf.
+    private func arrive(on sessionID: UUID, from packet: InboundPacket) {
+        guard isJoining, !packet.isFromPairedDevice, sessionID == log.sessionID, !log.isEmpty else { return }
         isJoining = false
         role = .guest
         shareRole()
@@ -700,6 +720,10 @@ public final class MatchStore {
         guard log.merge(fresh) else { return }
         outbox.enqueue(contentsOf: fresh)
         refresh()
+        // Something new arrived over the top of something missing: a push this device never
+        // got, acknowledged on the sender's behalf by a peer that did. Nothing is coming to
+        // fill it unprompted, so ask now rather than wait for the next reconnect.
+        if log.coverage != log.vector { Task { await synchronise() } }
     }
 
     /// Replaces the local session with the peer's. Anything already scored locally is

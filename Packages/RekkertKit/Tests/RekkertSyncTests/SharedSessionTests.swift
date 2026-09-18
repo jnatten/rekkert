@@ -97,6 +97,39 @@ struct SharedSessionTests {
         sharing.stop()
         #expect(sharing.phase == .off)
     }
+
+    /// The transport reports on its own queue, so a status from just before `stop()` can be
+    /// read just after it. It used to put the phase back to something with nothing behind it.
+    @Test func aStatusFromBeforeStoppingIsIgnored() throws {
+        let (sharing, store) = make()
+        sharing.join(try #require(SessionCode("K9M4PT")))
+        sharing.stop()
+
+        sharing.apply(.joined(peers: 1))
+        #expect(sharing.phase == .off)
+        #expect(sharing.isSharing == false)
+        #expect(sharing.peers == 0)
+
+        sharing.apply(.failed(.notFound))
+        #expect(sharing.phase == .off, "nor is a late refusal shown for a search already cancelled")
+        #expect(store.role == .solo)
+    }
+
+    /// A listener the system took away and the transport put back reports hosting again, and
+    /// the phase has to follow it out of the failure it was in meanwhile.
+    @Test func hostingComesBackWhenTheListenerIsPutBack() throws {
+        let (sharing, store) = make()
+        store.configure(setup)
+        sharing.host()
+        let code = try #require(sharing.code)
+
+        sharing.apply(.failed(.blocked))
+        #expect(sharing.phase == .failed(.blocked))
+
+        sharing.apply(.hosting(peers: 0))
+        #expect(sharing.phase == .hosting(code))
+        #expect(sharing.code == code, "the same code, which the guests still have")
+    }
 }
 
 @Suite("Losing the host")
