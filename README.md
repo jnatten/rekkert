@@ -303,9 +303,18 @@ opens the join sheet with it filled in and submits, and `-rekkert-demo-late-tap 
 point after N seconds — which is how a *live* update gets verified between two simulators
 that nothing can tap.
 
-Two things the Simulator cannot show you: the peer-to-peer radio path (there is no AWDL
-interface, so `includePeerToPeer` is quietly a no-op), and the iOS local-network permission
-prompt. Both need two real iPhones.
+`./scripts/share.sh` does all of that and asserts it: two phones and the paired watch on one
+match, everybody's `active.json` holding the same events, then the guest killed while the host
+scores and brought back to catch up from the log. `--no-build` reuses the last build, `--keep`
+leaves the simulators up.
+
+Four things the Simulator cannot show you. The peer-to-peer radio path — there is no AWDL
+interface, so `includePeerToPeer` is quietly a no-op — and the iOS local-network permission
+prompt. And `BluetoothTransport`, which is inert there: the simulator runs no `bluetoothd`, so
+CoreBluetooth's XPC connection is refused and everything above goes over the local network.
+And a phone in a pocket, because a backgrounded simulator app is not suspended — its listener
+and its sockets stay up, which is the one condition the Bluetooth link exists for. All of them
+need two real iPhones.
 
 `swift scripts/psk-spike.swift` checks, in a couple of seconds and with no devices at all,
 that a session code still works as a TLS pre-shared key.
