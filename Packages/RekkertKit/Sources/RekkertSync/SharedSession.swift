@@ -72,6 +72,11 @@ public final class SharedSession {
         watching = Task { [weak self] in
             for await status in link.status { self?.apply(status) }
         }
+        // The watch stepped off and the store went with it. The link to the host is still up,
+        // and left standing it would hand the match straight back on the next snapshot.
+        store.onLeft = { [weak self] in
+            Task { @MainActor in self?.stop() }
+        }
         if let bluetooth {
             watchingBluetooth = Task { [weak self] in
                 for await _ in bluetooth.reachability {

@@ -450,8 +450,10 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     fileprivate func disconnected(_ peripheral: CBPeripheral, on manager: CBCentralManager) {
         forget(ObjectIdentifier(peripheral))
         let wasRejected = lock.withLock {
-            serverInbox = nil
-            if server === peripheral { server = nil }
+            if server === peripheral {
+                server = nil
+                serverInbox = nil
+            }
             return rejected.contains(peripheral.identifier)
         }
         // The hang-up after a wrong greeting lands here too, and is not a link to put back.

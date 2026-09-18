@@ -30,6 +30,10 @@ public final class MatchStore {
     /// carries these — the workout is none of its business — but this is the channel that
     /// already exists between exactly those two devices, and no other.
     @ObservationIgnored public var onWorkout: ((WorkoutSignal) -> Void)?
+    /// The paired device stepped off the match and took this one with it. The store has
+    /// dropped the session by the time this fires; whatever is holding a link to the host
+    /// open has to let go of it too.
+    @ObservationIgnored public var onLeft: (() -> Void)?
     /// The last thing this device said about its own workout, so a reconnect can say it
     /// again. The whole signal rather than the moment it started: a held clock carries the
     /// reading it stopped at, and repeating that later is still the truth. Live state,
@@ -54,6 +58,11 @@ public final class MatchStore {
     /// The session this device stepped off, so a peer still on it — the watch on the same
     /// wrist, or a host whose link has not been cut yet — cannot hand it straight back.
     private var leftSessionID: UUID?
+    /// A session the pair is off together: one half stepped off and the other has said it
+    /// followed. Refused from a stranger — a host packet still in flight would otherwise put
+    /// the match straight back — but not from the pair, since only a phone can walk back in,
+    /// and its watch has to be free to follow it.
+    private var counterpartLeftSessionID: UUID?
     /// Which session the result on screen came from, so taking it back can drop the record
     /// filed for it.
     private var concludedSessionID: UUID?
@@ -212,6 +221,7 @@ public final class MatchStore {
     public func beginJoining() {
         isJoining = true
         leftSessionID = nil
+        counterpartLeftSessionID = nil
         // Say hello straight away rather than waiting to be spoken to. The counterpart
         // answers a session id it does not recognise with its own, which is exactly the
         // offer being waited for.
@@ -253,6 +263,12 @@ public final class MatchStore {
         lastResult = nil
         resultRewind = nil
         refresh()
+        // The application context and the fan-out's cache still hold the match just dropped,
+        // and would hand it to a counterpart waking up later — after the queued notice has
+        // already landed on an empty log and done nothing. An empty snapshot says "nothing
+        // here", which is what a counterpart arriving now should be told.
+        transport.publishSnapshot(encode(.snapshot(log)))
+        transport.forgetSnapshot()
         shareRole()
     }
 
@@ -364,6 +380,7 @@ public final class MatchStore {
         resultRewind = nil
         isJoining = false
         leftSessionID = nil
+        counterpartLeftSessionID = nil
         if role == .guest { role = .solo }
         refresh()
     }
@@ -645,12 +662,24 @@ public final class MatchStore {
 
         case .role(let incoming):
             pairedRole = incoming
+            // Dropping a session says solo, so this is the pair confirming it is off the one
+            // left here. Until then it may still be pushing that session back; from now on
+            // the only way it can hold that session is by having walked back in.
+            if incoming == .solo, let left = leftSessionID {
+                leftSessionID = nil
+                counterpartLeftSessionID = left
+            }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
 
         case .left(let sessionID):
             // Only ever from this device's own phone or watch — the shared scope does not
-            // carry it — so the one match it can name is the one mirrored from there.
-            if sessionID == log.sessionID, !log.isEmpty { dropSession() }
+            // carry it — so the one match it can name is the one mirrored from there. A host
+            // is not taken off its own match: that is ending it, and a watch cannot do that.
+            if sessionID == log.sessionID, !log.isEmpty, role != .host {
+                counterpartLeftSessionID = sessionID
+                dropSession()
+                onLeft?()
+            }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
 
         case .display(let incoming):
@@ -688,6 +717,9 @@ public final class MatchStore {
             } else if incoming.sessionID == leftSessionID {
                 // Stepped off this one on purpose. Whoever is still on it is not being
                 // refused — nothing is retired — only not taken up again.
+            } else if incoming.sessionID == counterpartLeftSessionID, !packet.isFromPairedDevice {
+                // Off this one as a pair, and the host's link may not be down yet. Only the
+                // pair itself can bring it back.
             } else if log.isEmpty {
                 log = incoming
                 refresh()

@@ -29,6 +29,8 @@ private final class PhoneWithWatch {
     let host: MatchStore
     /// The phone's end of the link to the other phone.
     let phoneToHost: LoopbackTransport
+    /// Everything the phone talks to, so a test can attach a latecomer.
+    let phoneFan: FanOutTransport
     private var tasks: [Task<Void, Never>] = []
 
     init(phoneLog: MatchLog?, hostLog: MatchLog?, retryInterval: Duration = .seconds(4)) {
@@ -37,6 +39,7 @@ private final class PhoneWithWatch {
         self.phoneToHost = phoneToHost
 
         let phoneFan = FanOutTransport()
+        self.phoneFan = phoneFan
         phoneFan.attach(phoneToWatch, as: .pairedDevice)
         phoneFan.attach(phoneToHost, as: .sharedSession)
         phone = MatchStore(
@@ -44,7 +47,10 @@ private final class PhoneWithWatch {
             session: phoneLog.map { ActiveSession(log: $0) },
             snapshotInterval: 0, retryInterval: retryInterval
         )
-        watch = MatchStore(device: DeviceID(), transport: watchToPhone, snapshotInterval: 0, keepsHistory: false)
+        // Through a fan-out as on the wrist, so the phone's packets arrive marked as the pair's.
+        let watchFan = FanOutTransport()
+        watchFan.attach(watchToPhone, as: .pairedDevice)
+        watch = MatchStore(device: DeviceID(), transport: watchFan, snapshotInterval: 0, keepsHistory: false)
 
         let hostFan = FanOutTransport()
         hostFan.attach(hostToPhone, as: .sharedSession)
@@ -146,6 +152,57 @@ struct OwnWatchTests {
         await eventually { pair.watch.log.sessionID == pair.host.log.sessionID && points(pair.watch) == BySide(a: 2, b: 0) }
         #expect(pair.phone.role == .guest, "having left is no bar to walking back in")
         #expect(points(pair.watch) == BySide(a: 2, b: 0), "and the watch follows")
+    }
+
+    /// The watch has a Leave of its own. The phone goes with it — and stays off, though its
+    /// link to the host is still up and the host's next snapshot would put the match back.
+    @Test func theWatchLeavingTakesThePhoneOffToo() async throws {
+        let pair = PhoneWithWatch(phoneLog: nil, hostLog: seeded(DeviceID(), points: 1))
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        pair.phone.beginJoining()
+        await eventually { pair.phone.role == .guest && pair.watch.log.sessionID == pair.host.log.sessionID }
+
+        pair.watch.leaveSharedSession()
+        await eventually { pair.phone.state == nil }
+        #expect(pair.phone.state == nil, "the phone stepped off with the watch")
+        #expect(pair.phone.role == .solo)
+
+        pair.host.tap(team: .a)
+        await eventually { points(pair.host) == BySide(a: 2, b: 0) }
+        await pair.phone.synchronise()
+        try await Task.sleep(for: .milliseconds(250))
+        #expect(pair.phone.state == nil, "the host's match is not taken back up")
+        #expect(pair.watch.state == nil)
+
+        pair.phone.beginJoining()
+        await eventually { pair.watch.log.sessionID == pair.host.log.sessionID && points(pair.watch) == BySide(a: 2, b: 0) }
+        #expect(pair.phone.role == .guest, "the pair walks back in together")
+        #expect(points(pair.watch) == BySide(a: 2, b: 0))
+    }
+
+    /// A counterpart that was not running when the phone left wakes up to the application
+    /// context, and the queued notice has already landed on an empty log and done nothing.
+    /// What it is handed must therefore not be the match that was left.
+    @Test func aWatchArrivingAfterALeaveIsNotHandedTheMatch() async throws {
+        let pair = PhoneWithWatch(phoneLog: nil, hostLog: seeded(DeviceID(), points: 1))
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        pair.phone.beginJoining()
+        await eventually { pair.phone.role == .guest && pair.watch.state != nil }
+
+        pair.phone.leaveSharedSession()
+        await eventually { pair.watch.state == nil }
+
+        let (phoneToLate, lateToPhone) = LoopbackTransport.pair()
+        let late = MatchStore(device: DeviceID(), transport: lateToPhone, snapshotInterval: 0, keepsHistory: false)
+        let running = Task { await late.run() }
+        defer { running.cancel() }
+        pair.phoneFan.attach(phoneToLate, as: .pairedDevice)
+
+        try await Task.sleep(for: .milliseconds(250))
+        #expect(late.state == nil, "a match nobody here is on is not handed out")
+        #expect(pair.phone.state == nil)
     }
 }
 

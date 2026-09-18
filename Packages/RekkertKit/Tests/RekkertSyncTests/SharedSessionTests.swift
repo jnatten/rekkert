@@ -86,6 +86,31 @@ struct SharedSessionTests {
         #expect(store.role == .solo)
     }
 
+    /// The watch's Leave reaches the phone as a notice. The store drops the match on it, and
+    /// the link to the host has to come down too, or the next snapshot puts the match back.
+    @Test func theWatchLeavingTakesSharingDownWithIt() async throws {
+        let (phoneToWatch, watchToPhone) = LoopbackTransport.pair()
+        var log = MatchLog()
+        log.append(.configure(setup), from: DeviceID())
+        let store = MatchStore(
+            device: DeviceID(), transport: phoneToWatch,
+            session: ActiveSession(log: log, role: .guest), snapshotInterval: 0
+        )
+        let sharing = SharedSession(store: store, link: LocalNetworkTransport())
+        let running = Task { await store.run() }
+        defer { running.cancel() }
+        sharing.join(try #require(SessionCode("K9M4PT")))
+        sharing.apply(.joined(peers: 1))
+        #expect(sharing.phase == .joined)
+
+        watchToPhone.queue(try Wire.left(sessionID: log.sessionID).encoded())
+
+        await eventually { sharing.phase == .off }
+        #expect(sharing.phase == .off)
+        #expect(store.state == nil)
+        #expect(store.role == .solo)
+    }
+
     @Test func aFailureCanBeDismissedBackToNothing() {
         let (sharing, store) = make()
         store.configure(setup)
