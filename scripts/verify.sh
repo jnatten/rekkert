@@ -16,12 +16,12 @@ mise exec -- tuist generate --no-open
 
 echo "==> Build iOS app (embeds watch app)"
 xcodebuild -workspace Rekkert.xcworkspace -scheme Rekkert \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -destination 'generic/platform=iOS Simulator' \
   -derivedDataPath "$DD" -quiet build
 
 echo "==> Build watch app"
 xcodebuild -workspace Rekkert.xcworkspace -scheme RekkertWatch \
-  -destination 'platform=watchOS Simulator,name=Apple Watch Series 11 (46mm)' \
+  -destination 'generic/platform=watchOS Simulator' \
   -derivedDataPath "$DD" -quiet build
 
 echo "==> Assert watch app is embedded and configured"
