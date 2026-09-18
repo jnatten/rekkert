@@ -30,9 +30,10 @@ public final class MatchStore {
     /// carries these — the workout is none of its business — but this is the channel that
     /// already exists between exactly those two devices, and no other.
     @ObservationIgnored public var onWorkout: ((WorkoutSignal) -> Void)?
-    /// The paired device stepped off the match and took this one with it. The store has
-    /// dropped the session by the time this fires; whatever is holding a link to the host
-    /// open has to let go of it too.
+    /// This device is off a match that belongs to somebody else — its watch stepped off and
+    /// took it along, or something of its own was started on top. The store has dropped the
+    /// session by the time this fires; whatever is holding a link to the host open has to let
+    /// go of it too.
     @ObservationIgnored public var onLeft: (() -> Void)?
     /// The last thing this device said about its own workout, so a reconnect can say it
     /// again. The whole signal rather than the moment it started: a held clock carries the
@@ -51,6 +52,9 @@ public final class MatchStore {
     private var snapshotPending = false
     private var lastQueued: [EventID] = []
     private var retired: [UUID]
+    /// The retired sessions that were called off rather than kept. The retirement notice
+    /// carries it, so a counterpart that missed the ending does not file a match nobody wanted.
+    private var discarded: [UUID]
     /// What the counterpart on the paired channel says it is. A guest's watch must not offer
     /// to end a match that belongs to whoever started it.
     private var pairedRole: SessionRole = .solo
@@ -85,6 +89,7 @@ public final class MatchStore {
         self.retryInterval = retryInterval
         self.keepsHistory = keepsHistory
         self.retired = session?.retired ?? []
+        self.discarded = session?.discarded ?? []
         self.role = session?.role ?? .solo
         self.device = device
         self.transport = transport
@@ -372,25 +377,39 @@ public final class MatchStore {
     }
 
     public func startNewSession() {
-        retire(log.sessionID)
+        // Starting something of your own while on somebody else's match is stepping off it,
+        // not ending it. Retiring it would answer the host's next packet with "this ended
+        // here", and the host would end the match for everyone still playing it.
+        let leaving = !canEndSession && !log.isEmpty
+        if leaving {
+            leftSessionID = log.sessionID
+            let notice = encode(.left(sessionID: log.sessionID))
+            transport.queue(notice)
+            Task { _ = await sendLive(notice) }
+        } else {
+            retire(log.sessionID)
+            leftSessionID = nil
+        }
         log = MatchLog()
         outbox = Outbox()
         replacedSessionTitle = nil
         lastResult = nil
         resultRewind = nil
         isJoining = false
-        leftSessionID = nil
         counterpartLeftSessionID = nil
         if role == .guest { role = .solo }
         refresh()
+        if leaving { onLeft?() }
     }
 
     /// A session is retired where it ends, and stays retired, so a counterpart that has not
-    /// caught up cannot hand it back.
-    private func retire(_ id: UUID) {
+    /// caught up cannot hand it back. `archive` is how it ended, for the notice that tells it.
+    private func retire(_ id: UUID, archive: Bool = true) {
         guard !log.isEmpty, !retired.contains(id) else { return }
         retired.append(id)
+        if !archive { discarded.append(id) }
         if retired.count > 20 { retired.removeFirst(retired.count - 20) }
+        discarded.removeAll { !retired.contains($0) }
     }
 
     /// Finishing is one path on both devices: the `.finish` event travels, and wherever it
@@ -433,7 +452,7 @@ public final class MatchStore {
         Task { _ = await sendLive(farewell) }
 
         concludedSessionID = log.sessionID
-        retire(log.sessionID)
+        retire(log.sessionID, archive: wasAskedToArchive)
         log = MatchLog()
         outbox = Outbox()
         state = nil
@@ -455,11 +474,15 @@ public final class MatchStore {
     /// that ended it, and drops the record that was filed for it.
     ///
     /// It comes back under a fresh session id rather than resurrecting the old one, which
-    /// both devices have already retired and would refuse to be handed back.
+    /// both devices have already retired and would refuse to be handed back. A guest stays a
+    /// guest: the host, standing on nothing since the ending, takes the reopened match up, and
+    /// it is still theirs.
     public func undoResult() {
         guard let rewind = resultRewind else { return }
         let filed = concludedSessionID
+        let wasGuest = role == .guest
         startNewSession()
+        if wasGuest { role = .guest }
         record(.restore(rewind.state))
         if keepsHistory, let filed { try? store?.deleteHistory(filed) }
     }
@@ -645,13 +668,16 @@ public final class MatchStore {
             relay(events)
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
 
-        case .retired(let sessionID):
+        case .retired(let sessionID, let archive):
             // Only ever our own live session, and only once: concluding puts it in the
             // retired list here too, so a second notice is a no-op rather than a volley.
             // Ending it locally is the same path the `.finish` event would have taken, so
             // the match is archived and the result shown rather than quietly dropped.
-            if sessionID == log.sessionID, !log.isEmpty, !retired.contains(sessionID) {
-                record(.finish(archive: true))
+            // A host hears it only from its own watch. The match is its to end, and a guest
+            // that retired its copy is saying something about its own phone, not the match.
+            if sessionID == log.sessionID, !log.isEmpty, !retired.contains(sessionID),
+               role != .host || packet.isFromPairedDevice {
+                record(.finish(archive: archive))
             }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
 
@@ -891,7 +917,7 @@ public final class MatchStore {
     /// scoring into a session every packet of which we refuse — silently, and for good,
     /// since the retired list outlives a relaunch.
     private func announceRetirement(of sessionID: UUID, to packet: InboundPacket) {
-        let notice = encode(.retired(sessionID: sessionID))
+        let notice = encode(.retired(sessionID: sessionID, archive: !discarded.contains(sessionID)))
         if let reply = packet.reply {
             reply(notice)
         } else if role != .guest {
@@ -951,7 +977,9 @@ public final class MatchStore {
     }
 
     private func persist() {
-        try? store?.save(ActiveSession(log: log, outbox: outbox, retired: retired, role: role))
+        try? store?.save(ActiveSession(
+            log: log, outbox: outbox, retired: retired, discarded: discarded, role: role
+        ))
     }
 }
 

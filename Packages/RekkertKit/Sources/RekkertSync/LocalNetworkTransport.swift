@@ -233,12 +233,29 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         // here and nowhere else: this is the search that follows somebody typing a code, and it
         // is the only one entitled to give up. A search that follows a link going away has a
         // score on the screen and has to go on looking.
+        armSearchDeadline(after: searchTimeout)
+    }
+
+    /// Gives up only over nothing. A dial still in flight at the deadline is given the time a
+    /// dial gets, once: it either comes up, or `giveUpOnDial` lets go of it and the next look
+    /// finds nothing on the books. Calling "not found" over the top of a dial that then landed
+    /// left the screen saying joined on a store that had already stopped joining.
+    private func armSearchDeadline(after delay: DispatchTimeInterval, extended: Bool = false) {
         let deadline = DispatchWorkItem { [weak self] in
             guard let self, !self.isReachable else { return }
+            let (dialling, foundOnce) = self.lock.withLock { (!self.links.isEmpty, self.hasEverJoined) }
+            // A match found once and lost is a reconnect, and the redial's to see through.
+            guard !foundOnce else { return }
+            if dialling, !extended {
+                return self.armSearchDeadline(after: self.dialTimeout, extended: true)
+            }
+            // Final rather than a notice: left running, the timer's next dial could still land
+            // after "not found", and the screen would say joined while nothing was joining.
+            self.stop()
             self.publish(.failed(.notFound))
         }
         lock.withLock { searchDeadline = deadline }
-        queue.asyncAfter(deadline: .now() + searchTimeout, execute: deadline)
+        queue.asyncAfter(deadline: .now() + delay, execute: deadline)
     }
 
     /// Goes back to looking after the app has been in a pocket.
@@ -438,7 +455,15 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     private func adopt(_ connection: NWConnection, share: UUID?) {
         let link = Link(connection, share: share)
         let token = ObjectIdentifier(connection)
-        lock.withLock { links[token] = link }
+        // Checked and entered under one lock. The browser's callback and a redial from the
+        // foreground can be looking at the same advertisement at once, and the check in
+        // `consider` alone let both of them through to hold two links to one phone.
+        let isNew = lock.withLock {
+            if let share, links.values.contains(where: { $0.share == share }) { return false }
+            links[token] = link
+            return true
+        }
+        guard isNew else { return connection.cancel() }
         if share != nil { giveUpOnDial(token, link) }
 
         connection.stateUpdateHandler = { [weak self] state in

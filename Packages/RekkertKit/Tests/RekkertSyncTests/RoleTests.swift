@@ -253,4 +253,120 @@ struct RoleTests {
         let session = try #require(try SessionStore(directory: directory).loadActive())
         #expect(session.role == .solo, "which is exactly how it behaved before")
     }
+
+    /// Starting something of your own on a match that belongs to somebody else used to retire
+    /// it, and the host's next packet was answered "this ended here" — which ended it for all.
+    @Test func aGuestStartingItsOwnMatchDoesNotEndTheHosts() async throws {
+        let hostDevice = DeviceID()
+        let (one, two) = LoopbackTransport.pair()
+        let hostFan = FanOutTransport()
+        hostFan.attach(one, as: .sharedSession)
+        let guestFan = FanOutTransport()
+        guestFan.attach(two, as: .sharedSession)
+        let host = MatchStore(
+            device: hostDevice, transport: hostFan,
+            session: ActiveSession(log: seeded(hostDevice, startedAt: .now, points: 1), role: .host),
+            snapshotInterval: 0
+        )
+        let guest = MatchStore(device: DeviceID(), transport: guestFan, snapshotInterval: 0)
+        var letGo = false
+        guest.onLeft = { letGo = true }
+        let tasks = [Task { await host.run() }, Task { await guest.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        guest.beginJoining()
+        await eventually { guest.role == .guest }
+        #expect(guest.role == .guest)
+
+        guest.startNewSession()
+        guest.configure(setup)
+        host.tap(team: .b)
+        await eventually { points(host) == BySide(a: 1, b: 1) }
+        try await settle()
+
+        #expect(points(host) == BySide(a: 1, b: 1), "the host plays on")
+        #expect(host.lastResult == nil, "and was shown no result")
+        #expect(guest.role == .solo)
+        #expect(points(guest) == BySide(a: 0, b: 0), "on a match of its own")
+        #expect(letGo, "and the link to the host was let go of")
+    }
+
+    /// The way back from the result screen makes a fresh session, and used to make whoever took
+    /// it solo on it — a guest then held the whistle on a match the host went on to take up.
+    @Test func aGuestTakingBackAResultIsStillAGuest() async throws {
+        let hostDevice = DeviceID()
+        let (one, two) = LoopbackTransport.pair()
+        let hostFan = FanOutTransport()
+        hostFan.attach(one, as: .sharedSession)
+        let guestFan = FanOutTransport()
+        guestFan.attach(two, as: .sharedSession)
+        let host = MatchStore(
+            device: hostDevice, transport: hostFan,
+            session: ActiveSession(log: seeded(hostDevice, startedAt: .now, points: 1), role: .host),
+            snapshotInterval: 0
+        )
+        let guest = MatchStore(device: DeviceID(), transport: guestFan, snapshotInterval: 0)
+        let tasks = [Task { await host.run() }, Task { await guest.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        guest.beginJoining()
+        await eventually { guest.role == .guest }
+
+        host.finish()
+        await eventually { guest.lastResult != nil && host.state == nil }
+        #expect(guest.resultRewind != nil)
+
+        guest.undoResult()
+        await eventually { host.state != nil }
+
+        #expect(guest.role == .guest, "still somebody else's match")
+        #expect(guest.canEndSession == false)
+        #expect(host.role == .host)
+        #expect(host.log.sessionID == guest.log.sessionID, "which the host took up again")
+    }
+
+    /// A guest out of reach when the host called the match off used to be told only that it
+    /// had ended, and filed a result for a match nobody wanted kept.
+    @Test func aGuestThatMissedACancelledEndingDoesNotKeepIt() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = SessionStore(directory: directory)
+
+        let hostDevice = DeviceID()
+        let (one, two) = LoopbackTransport.pair()
+        let hostFan = FanOutTransport()
+        hostFan.attach(one, as: .sharedSession)
+        let guestFan = FanOutTransport()
+        guestFan.attach(two, as: .sharedSession)
+        let host = MatchStore(
+            device: hostDevice, transport: hostFan,
+            session: ActiveSession(log: seeded(hostDevice, startedAt: .now, points: 1), role: .host),
+            snapshotInterval: 0, keepsHistory: false
+        )
+        let guest = MatchStore(device: DeviceID(), transport: guestFan, store: persistence, snapshotInterval: 0)
+        let tasks = [Task { await host.run() }, Task { await guest.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        guest.beginJoining()
+        await eventually { guest.role == .guest && points(guest) == BySide(a: 1, b: 0) }
+
+        one.setReachable(false)
+        two.setReachable(false)
+        host.discardSession()
+        await eventually { host.state == nil }
+        try await settle()
+        #expect(guest.state != nil, "out of reach, the guest heard nothing")
+
+        one.setReachable(true)
+        two.setReachable(true)
+        await eventually { guest.state == nil }
+
+        #expect(guest.state == nil, "told on reconnect that it ended")
+        #expect(guest.lastResult == nil, "and that it was called off")
+        let history = try persistence.history()
+        #expect(history.isEmpty, "so nothing was filed for it")
+    }
 }

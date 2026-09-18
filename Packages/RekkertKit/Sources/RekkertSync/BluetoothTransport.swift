@@ -260,7 +260,10 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
 
         let chunks = Chunking.split(sealed, mtu: mtu(for: peer))
         lock.withLock { peer.backlog.append(contentsOf: chunks) }
-        drain(peer)
+        // Drained on the one queue CoreBluetooth already calls back on, so a send from a reply
+        // closure, a send from the store and the "ready again" callback never drain the same
+        // backlog at once — two of them would put the same chunk on the air and skip the next.
+        queue.async { [weak self] in self?.drain(peer) }
     }
 
     private func mtu(for peer: Peer) -> Int {
@@ -530,12 +533,28 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         // kept awake for the length of a match.
         lock.withLock { centralManager }?.stopScan()
 
+        // Not ready yet. The host only learns of this peer when the subscription lands, and
+        // anything written before that is answered "success" and dropped on the floor — so the
+        // hello and the snapshot wait for `subscribed(to:on:)`, which the host has seen first.
         for service in peripheral.services ?? [] where service.uuid == Self.serviceUUID {
             for characteristic in service.characteristics ?? []
             where characteristic.uuid == Self.outboxUUID {
                 peripheral.setNotifyValue(true, for: characteristic)
             }
         }
+    }
+
+    fileprivate func subscribed(to characteristic: CBCharacteristic, on peripheral: CBPeripheral) {
+        guard characteristic.uuid == Self.outboxUUID,
+              let peer = lock.withLock({ peers[ObjectIdentifier(peripheral)] })
+        else { return }
+        guard characteristic.isNotifying else {
+            // A subscription the host would not take is a link that will never carry anything
+            // back. Hanging up is what puts the reconnect in motion.
+            lock.withLock { centralManager }?.cancelPeripheralConnection(peripheral)
+            return
+        }
+        guard lock.withLock({ !peer.isReady }) else { return }
         ready(peer)
     }
 }
@@ -643,6 +662,14 @@ nonisolated private final class Shim: NSObject, CBPeripheralManagerDelegate,
         error: (any Error)?
     ) {
         transport?.wroteChunk(to: peripheral)
+    }
+
+    func peripheral(
+        _ peripheral: CBPeripheral,
+        didUpdateNotificationStateFor characteristic: CBCharacteristic,
+        error: (any Error)?
+    ) {
+        transport?.subscribed(to: characteristic, on: peripheral)
     }
 }
 

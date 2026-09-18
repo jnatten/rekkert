@@ -6,6 +6,9 @@ public struct ActiveSession: Codable, Sendable, Hashable {
     /// Sessions that have been finished or replaced here. A counterpart that has not caught
     /// up yet will keep offering them back, and without this they would be adopted again.
     public var retired: [UUID]
+    /// The retired sessions that were thrown away rather than kept, so a counterpart told of
+    /// the ending later is told to throw it away too.
+    public var discarded: [UUID]
     /// Which end of a shared session this is, so a guest that relaunches mid-match does not
     /// come back holding the whistle.
     public var role: SessionRole
@@ -14,21 +17,24 @@ public struct ActiveSession: Codable, Sendable, Hashable {
         log: MatchLog,
         outbox: Outbox = Outbox(),
         retired: [UUID] = [],
+        discarded: [UUID] = [],
         role: SessionRole = .solo
     ) {
         self.log = log
         self.outbox = outbox
         self.retired = retired
+        self.discarded = discarded
         self.role = role
     }
 
-    private enum CodingKeys: String, CodingKey { case log, outbox, retired, role }
+    private enum CodingKeys: String, CodingKey { case log, outbox, retired, discarded, role }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         log = try container.decode(MatchLog.self, forKey: .log)
         outbox = try container.decode(Outbox.self, forKey: .outbox)
         retired = try container.decodeIfPresent([UUID].self, forKey: .retired) ?? []
+        discarded = try container.decodeIfPresent([UUID].self, forKey: .discarded) ?? []
         role = try container.decodeIfPresent(SessionRole.self, forKey: .role) ?? .solo
     }
 }

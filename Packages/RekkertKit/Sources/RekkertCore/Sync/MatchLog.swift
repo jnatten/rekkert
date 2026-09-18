@@ -115,8 +115,15 @@ public struct MatchLog: Codable, Sendable, Hashable {
     }
 
     /// The most recent still-effective event that an undo should target.
+    ///
+    /// Nothing before a `.restore` qualifies: the restore replays the whole state over
+    /// whatever came before it, so taking back an earlier point would change nothing on the
+    /// board while still spending the undo.
     public func lastUndoableEvent() -> MatchEvent? {
-        effectiveEvents.last { $0.isUndoable }
+        let effective = effectiveEvents
+        let floor = effective.lastIndex { if case .restore = $0.kind { true } else { false } }
+        let candidates = floor.map { effective[($0 + 1)...] } ?? effective[...]
+        return candidates.last { $0.isUndoable }
     }
 
     /// Encoded as an ordered array rather than a dictionary: half the bytes over the wire

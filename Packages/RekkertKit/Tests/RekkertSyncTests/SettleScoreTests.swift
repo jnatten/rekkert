@@ -106,4 +106,22 @@ struct SettleScoreTests {
         await eventually { points(host) == BySide(a: 1, b: 1) }
         #expect(points(host) == BySide(a: 1, b: 1), "a line in the sand, not a lock")
     }
+
+    /// The restore replays over everything before it, so an undo reaching past it would spend
+    /// the undo and change nothing on the board.
+    @Test func undoReachesNoFurtherBackThanTheSettlement() {
+        let (host, _, _) = pair()
+        host.configure(counting)
+        for _ in 0 ..< 3 { host.tap(team: .a) }
+        host.settleScore()
+
+        #expect(host.canUndo == false, "nothing before the line can be taken back")
+        host.undoLast()
+        #expect(points(host) == BySide(a: 3, b: 0))
+
+        host.tap(team: .b)
+        #expect(host.canUndo)
+        host.undoLast()
+        #expect(points(host) == BySide(a: 3, b: 0), "a point after it can still be taken back")
+    }
 }

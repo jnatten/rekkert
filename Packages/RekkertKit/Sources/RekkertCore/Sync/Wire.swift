@@ -50,8 +50,10 @@ public enum Wire: Codable, Sendable, Hashable {
     /// "The session you are offering ended here." Retiring a session is otherwise
     /// knowledge one device holds alone: it refuses every packet for that session, and a
     /// counterpart that never heard the ending goes on scoring into a match that can no
-    /// longer reach it.
-    case retired(sessionID: UUID)
+    /// longer reach it. `archive` says how it ended — kept, or thrown away — so a counterpart
+    /// that missed the ending files it the same way rather than keeping a match the people
+    /// on it called off.
+    case retired(sessionID: UUID, archive: Bool)
     /// Saved configurations, so a session can be started from either device.
     case presets(PresetLibrary)
     /// How the phone should draw its scoreboard, so the watch can flip it.
