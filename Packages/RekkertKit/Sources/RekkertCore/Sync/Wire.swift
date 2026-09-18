@@ -59,6 +59,10 @@ public enum Wire: Codable, Sendable, Hashable {
     /// Who is carrying the whistle. The log says nothing about it — a guest's log is the
     /// host's log — and a watch has no way to tell whose phone it is paired to.
     case role(SessionRole)
+    /// "I have stepped off this session" — between a phone and its own watch only, never to
+    /// anybody else's phone. The pair mirrors one match, so a leave on one side has to be a
+    /// leave on the other, and nothing is retired: the match goes on for whoever is still on it.
+    case left(sessionID: UUID)
     /// Whether this phone's own watch is on a workout, and the summary once it ends. The
     /// heart rate itself is never in here: it stays on the wrist it was read from.
     case workout(WorkoutSignal)

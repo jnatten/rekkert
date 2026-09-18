@@ -228,12 +228,24 @@ public final class MatchStore {
     /// device says a match is over, so a guest that left and came back would refuse the
     /// host's session and announce its retirement — ending the match it was trying to rejoin.
     public func leaveSharedSession() {
-        if log.hasProgress, let state = SessionReducer.state(of: log) {
+        leftSessionID = log.sessionID
+        // The watch on the same wrist mirrors this match and would go on showing it — and
+        // offering it back — unless told. Queued as well as sent: it may not be running.
+        let notice = encode(.left(sessionID: log.sessionID))
+        transport.queue(notice)
+        Task { _ = await sendLive(notice) }
+        dropSession()
+    }
+
+    /// Clears the match without retiring it. Remembering it as left is the leaver's alone: the
+    /// other half of the pair only ever hears of it from the leaver, and has to be free to
+    /// follow the same phone back in.
+    private func dropSession() {
+        if keepsHistory, log.hasProgress, let state = SessionReducer.state(of: log) {
             try? store?.archive(HistoryRecord(
                 id: log.sessionID, title: state.title, state: state, startedAt: log.createdAt
             ))
         }
-        leftSessionID = log.sessionID
         log = MatchLog()
         outbox = Outbox()
         role = .solo
@@ -510,6 +522,15 @@ public final class MatchStore {
     /// Anti-entropy. Cheap enough to call on activation, on reachability changes and
     /// whenever the app comes to the foreground.
     public func synchronise() async {
+        await askWhatIsMissing()
+        publishSnapshot(force: true)
+        sharePresets()
+        shareDisplay()
+    }
+
+    /// The hello, and whatever it brings back. On its own when a gap has been noticed, which
+    /// wants the question asked and not everything else said again.
+    private func askWhatIsMissing() async {
         isReachable = transport.isReachable
         // Coverage rather than the raw vector: this is the "what am I missing" question, and
         // the highest number seen is the wrong answer to it when something below is absent.
@@ -518,9 +539,6 @@ public final class MatchStore {
             handle(InboundPacket(payload: reply))
         }
         await flush()
-        publishSnapshot(force: true)
-        sharePresets()
-        shareDisplay()
     }
 
     private func record(_ kind: EventKind) {
@@ -629,6 +647,12 @@ public final class MatchStore {
             pairedRole = incoming
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
 
+        case .left(let sessionID):
+            // Only ever from this device's own phone or watch — the shared scope does not
+            // carry it — so the one match it can name is the one mirrored from there.
+            if sessionID == log.sessionID, !log.isEmpty { dropSession() }
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
+
         case .display(let incoming):
             let merged = display.adopting(incoming)
             if merged != display { apply(merged, publish: false) }
@@ -723,7 +747,7 @@ public final class MatchStore {
         // Something new arrived over the top of something missing: a push this device never
         // got, acknowledged on the sender's behalf by a peer that did. Nothing is coming to
         // fill it unprompted, so ask now rather than wait for the next reconnect.
-        if log.coverage != log.vector { Task { await synchronise() } }
+        if log.coverage != log.vector { Task { await askWhatIsMissing() } }
     }
 
     /// Replaces the local session with the peer's. Anything already scored locally is
@@ -738,6 +762,9 @@ public final class MatchStore {
         log = incoming
         outbox = Outbox()
         refresh()
+        // Nothing else says so. A watch holding nothing would otherwise learn of the match
+        // the phone just joined only from the next point scored on it.
+        publishSnapshot(force: true)
     }
 
     /// Offered on every reconnect, so a watch that has never seen them catches up without

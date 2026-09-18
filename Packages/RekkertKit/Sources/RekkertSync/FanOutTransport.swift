@@ -43,8 +43,9 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
             // Saved setups and which side is blue belong to whoever's phone this is. The
             // whistle is between a phone and its own watch, and says nothing to anyone else.
             // Neither does what somebody's heart is doing: a workout is between a wrist and
-            // the phone in the same pocket, and goes no further.
-            case .presets, .display, .role, .workout: false
+            // the phone in the same pocket, and goes no further. Nor does stepping off: a
+            // guest leaving is telling its own watch, not the host.
+            case .presets, .display, .role, .workout, .left: false
             }
         }
     }

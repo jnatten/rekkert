@@ -40,7 +40,7 @@ struct MatchOptionsMenu: View {
                         settling = true
                     }
                 }
-            } else if model.store.role == .guest, !model.sharing.isSharing {
+            } else if model.store.role == .guest, case .off = model.sharing.phase {
                 // A guest back from a relaunch still holds the match, but no longer the link.
                 Button("Rejoin the match", systemImage: "arrow.right.circle") {
                     model.showingJoin = true

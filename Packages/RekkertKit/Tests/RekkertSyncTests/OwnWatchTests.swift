@@ -119,6 +119,34 @@ struct OwnWatchTests {
         await eventually { points(pair.host) == BySide(a: 1, b: 0) }
         #expect(points(pair.host) == BySide(a: 1, b: 0), "the outbox kept it for the peer that had not answered")
     }
+
+    /// Stepping off is the phone's doing, and the watch on the same wrist has to come with it —
+    /// or it goes on showing a match nobody on that wrist is on, and offering it back to a
+    /// phone that will not take it.
+    @Test func leavingTakesTheWatchOffTheMatchToo() async throws {
+        let pair = PhoneWithWatch(phoneLog: nil, hostLog: seeded(DeviceID(), points: 1))
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        pair.phone.beginJoining()
+        await eventually { pair.phone.role == .guest && pair.watch.log.sessionID == pair.host.log.sessionID }
+        #expect(pair.watch.log.sessionID == pair.host.log.sessionID, "the watch mirrors the joined match")
+
+        pair.phone.leaveSharedSession()
+        await eventually { pair.watch.state == nil }
+        #expect(pair.watch.state == nil, "the watch stepped off with the phone")
+
+        // The host plays on, still connected, and its snapshot is not taken up.
+        pair.host.tap(team: .a)
+        await eventually { points(pair.host) == BySide(a: 2, b: 0) }
+        try await Task.sleep(for: .milliseconds(250))
+        #expect(pair.phone.state == nil, "left means left")
+        #expect(pair.watch.state == nil)
+
+        pair.phone.beginJoining()
+        await eventually { pair.watch.log.sessionID == pair.host.log.sessionID && points(pair.watch) == BySide(a: 2, b: 0) }
+        #expect(pair.phone.role == .guest, "having left is no bar to walking back in")
+        #expect(points(pair.watch) == BySide(a: 2, b: 0), "and the watch follows")
+    }
 }
 
 /// Records what the store sends and lets the test speak back to it.
