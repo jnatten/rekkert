@@ -13,6 +13,8 @@ final class AppModel {
     /// The phone does the talking. The watch is on a wrist, not propped at the side of
     /// the court, so it has no announcer at all.
     let announcer = ScoreAnnouncer()
+    /// The full-screen board is the phone's too.
+    let fullscreen = FullscreenPreferences()
     #endif
     /// The workout, which only the watch can actually hold — the phone's counterpart is a
     /// remote control with the same shape, so the scoreboards can be written once.
@@ -261,6 +263,9 @@ final class AppModel {
            index + 1 < arguments.count,
            let code = SessionCode(arguments[index + 1]) {
             sharing.host(code: code)
+        }
+        if arguments.contains("-rekkert-demo-blackout") {
+            fullscreen.isBlackout = true
         }
         #endif
         if arguments.contains("-rekkert-demo-finished") {

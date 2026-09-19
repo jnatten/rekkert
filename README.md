@@ -109,7 +109,9 @@ the court and read from the far end. Turn it landscape and the digits get about 
 as large. Tapping still scores; the controls dim after a few seconds but never vanish, so
 the way out is always there without having to tap a half and score a point by accident.
 Brightness and auto-lock are put back on the way out, and while the app is in the
-background.
+background. In bright sun the colours are the first thing to go, so the moon button blacks
+both halves out — white digits on black, the names in the team colours — and the setting
+stays on until you turn it off, from the board or from Settings.
 
 ## Presets
 
@@ -283,7 +285,7 @@ Debug builds accept `-rekkert-demo traditional|winnercourt|friendly|americano|me
 `-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N`,
 `-rekkert-demo-open-court R,C`, `-rekkert-demo-roster`, `-rekkert-demo-presets`,
 `-rekkert-demo-watch-page menu|standings|controls`, `-rekkert-demo-fullscreen`,
-`-rekkert-demo-settings`,
+`-rekkert-demo-blackout`, `-rekkert-demo-settings`,
 `-rekkert-demo-workouts`, `-rekkert-demo-workout`, `-rekkert-demo-workout-paused`,
 `-rekkert-demo-voices` or
 `-rekkert-demo-new <mode>`) as

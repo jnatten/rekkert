@@ -32,6 +32,7 @@ struct FullscreenScoreView: View {
                             half(side, snapshot: snapshot, in: geometry.size, insets: geometry.safeAreaInsets)
                         }
                     }
+                    .background(divider)
                     .ignoresSafeArea()
                 } else {
                     ContentUnavailableView("Nothing to show", systemImage: "sportscourt")
@@ -69,6 +70,13 @@ struct FullscreenScoreView: View {
     /// up, so a tap lands on whichever round is on the board now.
     private var tappedRound: Int { round ?? friendly?.currentIndex ?? 0 }
 
+    private var isBlackout: Bool { model.fullscreen.isBlackout }
+
+    /// Black halves would run into one another, so the gap between them lightens instead.
+    private var divider: Color { isBlackout ? Color(white: 0.3) : .black }
+    private var chrome: Color { isBlackout ? .white.opacity(0.16) : .black.opacity(0.45) }
+    private var panel: Color { isBlackout ? .white.opacity(0.16) : .black.opacity(0.6) }
+
     private func half(
         _ side: TeamSide,
         snapshot: ScoreboardSnapshot,
@@ -76,7 +84,7 @@ struct FullscreenScoreView: View {
         insets: EdgeInsets
     ) -> some View {
         ZStack {
-            palette.color(side)
+            (isBlackout ? Color.black : palette.color(side))
             serveCourt(snapshot, side: side, in: size, insets: insets)
 
             VStack(spacing: 0) {
@@ -84,7 +92,7 @@ struct FullscreenScoreView: View {
                     .font(.system(size: min(size.height * 0.06, 34), weight: .semibold, design: .rounded))
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
-                    .foregroundStyle(.white.opacity(0.9))
+                    .foregroundStyle(isBlackout ? palette.color(side) : Color.white.opacity(0.9))
                     // The colour bleeds under the island; the writing must not.
                     .padding(.top, insets.top + size.height * 0.02)
 
@@ -208,6 +216,15 @@ struct FullscreenScoreView: View {
                 controlButton("xmark", label: "Leave full screen") { dismiss() }
                     .opacity(showingControls ? 1 : 0.4)
 
+                controlButton(
+                    isBlackout ? "moon.fill" : "moon",
+                    label: isBlackout ? "Bring the colours back" : "Black out the colours"
+                ) {
+                    model.fullscreen.isBlackout.toggle()
+                    revealControls()
+                }
+                .opacity(showingControls ? 1 : 0.4)
+
                 Spacer(minLength: 0)
 
                 if let snapshot {
@@ -218,7 +235,7 @@ struct FullscreenScoreView: View {
                         .minimumScaleFactor(0.6)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 7)
-                        .background(.black.opacity(0.45), in: .capsule)
+                        .background(chrome, in: .capsule)
 
                     Spacer(minLength: 0)
 
@@ -265,7 +282,7 @@ struct FullscreenScoreView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 9)
-                .background(.black.opacity(0.6), in: .rect(cornerRadius: 18, style: .continuous))
+                .background(panel, in: .rect(cornerRadius: 18, style: .continuous))
             }
 
             Button {
@@ -292,7 +309,7 @@ struct FullscreenScoreView: View {
                 .font(.headline)
                 .foregroundStyle(.white)
                 .padding(12)
-                .background(.black.opacity(0.45), in: .circle)
+                .background(chrome, in: .circle)
         }
         .accessibilityLabel(label)
     }
