@@ -33,12 +33,14 @@ struct FullscreenScoreView: View {
                         }
                     }
                     .ignoresSafeArea()
-
-                    overlay(snapshot)
                 } else {
                     ContentUnavailableView("Nothing to show", systemImage: "sportscourt")
-                        .preferredColorScheme(.dark)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(.rect)
+                        .onTapGesture { revealControls() }
                 }
+
+                overlay(snapshot)
             }
         }
         .announcesScore(snapshot)
@@ -97,9 +99,11 @@ struct FullscreenScoreView: View {
         .animation(.snappy, value: snapshot.servingCourt)
         .contentShape(.rect)
         .onTapGesture {
+            // Woken before the lock is checked: a round that is over takes no more points,
+            // but the way out still has to answer a tap on it.
+            revealControls()
             guard !snapshot.isLocked else { return }
             model.store.tap(round: round ?? 0, court: court, team: side)
-            revealControls()
         }
         .animation(.snappy, value: snapshot.primary[side])
     }
@@ -179,9 +183,9 @@ struct FullscreenScoreView: View {
     }
 
     /// Fades out so the score is unobstructed once the phone is set down, and comes back on
-    /// a tap anywhere.
+    /// a tap anywhere. Drawn whether or not there is a board: the way out lives here.
     @ViewBuilder
-    private func overlay(_ snapshot: ScoreboardSnapshot) -> some View {
+    private func overlay(_ snapshot: ScoreboardSnapshot?) -> some View {
         VStack {
             Spacer()
 
@@ -191,23 +195,25 @@ struct FullscreenScoreView: View {
 
                 Spacer(minLength: 0)
 
-                Text(detail(snapshot))
-                    .font(.system(size: 17, weight: .semibold, design: .rounded).monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.9))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
-                    .background(.black.opacity(0.45), in: .capsule)
+                if let snapshot {
+                    Text(detail(snapshot))
+                        .font(.system(size: 17, weight: .semibold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.9))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(.black.opacity(0.45), in: .capsule)
 
-                Spacer(minLength: 0)
+                    Spacer(minLength: 0)
 
-                controlButton("arrow.uturn.backward", label: "Undo") {
-                    model.store.undoLast()
-                    revealControls()
+                    controlButton("arrow.uturn.backward", label: "Undo") {
+                        model.store.undoLast()
+                        revealControls()
+                    }
+                    .opacity(showingControls ? 1 : 0.4)
+                    .disabled(!model.store.canUndo)
                 }
-                .opacity(showingControls ? 1 : 0.4)
-                .disabled(!model.store.canUndo)
             }
             .padding(.horizontal, 14)
             .padding(.bottom, 8)

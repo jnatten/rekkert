@@ -434,4 +434,25 @@ struct FriendlyModeTests {
         #expect(board.suddenDeathCourt == .ad)
         #expect(board.detail == "Round 1 · sudden death")
     }
+
+    @Test func thereIsNoBoardForARoundThatIsNotThere() throws {
+        let friendly = try #require(session(log()))
+        #expect(ScoreboardSnapshot.make(from: .friendly(friendly), round: 5) == nil)
+        #expect(ScoreboardSnapshot.make(from: .friendly(setup()), round: nil) == nil, "nothing drawn yet")
+    }
+
+    @Test func undoingTheOnlyDrawLeavesNothingOnTheBoard() throws {
+        var value = log()
+        let draw = try #require(value.lastUndoableEvent())
+        value.append(.undo(draw.id), from: device)
+
+        let friendly = try #require(session(value))
+        #expect(friendly.rounds.isEmpty)
+        #expect(friendly.currentIndex == 0)
+        #expect(
+            ScoreboardSnapshot.make(from: .friendly(friendly), round: nil) == nil,
+            "nothing to draw, so a view showing it has to keep its own way out"
+        )
+        #expect(value.lastUndoableEvent() == nil, "nothing left to take back")
+    }
 }
