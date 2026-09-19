@@ -292,7 +292,7 @@ struct FriendlyModeTests {
         let friendly = try #require(session(value))
         #expect(friendly.rounds[1].score.firstServerIndex == 3)
         #expect(friendly.rounds[0].score.firstServerIndex == 0, "the round already played is untouched")
-        #expect(try #require(SessionReducer.state(of: value)).firstServerIndex(round: 1) == 3)
+        #expect(try #require(SessionReducer.state(of: value)).serveOrder(round: 1)?.firstServerIndex == 3)
     }
 
     @Test func drawingCarriesOnFromWhereARestoreLeftOff() throws {

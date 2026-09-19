@@ -133,4 +133,28 @@ struct SetAndMatchTests {
         }
         #expect(slots.map(\.playerIndex) == [0, 0, 1, 1, 0])
     }
+
+    @Test func theRotationCarriesOnIntoTheNextSet() {
+        var state = standard.winGames(6, for: .a, from: standard.initialState())
+        #expect(state.completedSets.count == 1)
+        #expect(standard.serve(state).slot == ServeSlot(team: .a, playerIndex: 1), "six games on, two steps round")
+
+        state = standard.winGames(1, for: .a, from: state)
+        #expect(standard.serve(state).slot == ServeSlot(team: .b, playerIndex: 1))
+
+        state.serversSwapped[.b] = true
+        #expect(standard.serve(state).slot == ServeSlot(team: .b, playerIndex: 0), "B's partners the other way round")
+    }
+
+    @Test func theTeamThatServedFirstInTheTiebreakReceivesFirstInTheNextSet() {
+        var state = standard.winGames(5, for: .a, from: standard.initialState())
+        state = standard.winGames(5, for: .b, from: state)
+        state = standard.winGames(1, for: .a, from: state)
+        state = standard.winGames(1, for: .b, from: state)
+        #expect(standard.serve(state).slot.team == .a, "A opens the tiebreak")
+
+        state = standard.play(Array(repeating: .a, count: 7), from: state)
+        #expect(state.completedSets.count == 1)
+        #expect(standard.serve(state).slot.team == .b, "so B serves the first game of the next set")
+    }
 }

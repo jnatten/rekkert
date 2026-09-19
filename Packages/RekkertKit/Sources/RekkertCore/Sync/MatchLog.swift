@@ -20,7 +20,7 @@ public struct MatchLog: Codable, Sendable, Hashable {
             // A restored session arrives with a score already on it, so it is worth
             // keeping if something else displaces it.
             case .point, .setScore, .setRoundConfirmed, .nextRound, .finish, .endRound, .restore: true
-            case .setFirstServer: false
+            case .setFirstServer, .setServeOrder: false
             case .configure, .undo, .chooseServeSide: false
             }
         }

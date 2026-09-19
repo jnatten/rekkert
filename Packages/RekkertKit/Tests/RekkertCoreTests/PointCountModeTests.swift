@@ -116,6 +116,26 @@ struct PointCountModeTests {
         #expect(state.engine.serve(state.score).slot.team == .b)
     }
 
+    @Test func swappingThePlayerFlipsWhoServesTheNextBlock() throws {
+        var value = log()
+        value.append(
+            .setServeOrder(round: 0, court: 0, order: ServeOrder().swappingPlayers(of: .a)),
+            from: device
+        )
+
+        var slots: [ServeSlot] = []
+        for _ in 0 ..< 6 {
+            let state = try #require(session(value))
+            slots.append(state.engine.serve(state.score).slot)
+            score(&value, [.a])
+        }
+        #expect(slots == [
+            ServeSlot(team: .a, playerIndex: 1), ServeSlot(team: .a, playerIndex: 1),
+            ServeSlot(team: .b, playerIndex: 0), ServeSlot(team: .b, playerIndex: 0),
+            ServeSlot(team: .a, playerIndex: 0), ServeSlot(team: .a, playerIndex: 0),
+        ])
+    }
+
     @Test func undoTakesAPointBack() throws {
         var value = log()
         score(&value, [.a, .a])

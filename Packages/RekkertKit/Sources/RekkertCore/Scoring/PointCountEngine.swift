@@ -1,10 +1,33 @@
 public struct PointCountState: Codable, Sendable, Hashable {
     public var points: BySide<Int>
     public var firstServerIndex: Int
+    public var serversSwapped: BySide<Bool>
 
-    public init(points: BySide<Int> = BySide(both: 0), firstServerIndex: Int = 0) {
+    public init(
+        points: BySide<Int> = BySide(both: 0),
+        firstServerIndex: Int = 0,
+        serversSwapped: BySide<Bool> = BySide(both: false)
+    ) {
         self.points = points
         self.firstServerIndex = firstServerIndex
+        self.serversSwapped = serversSwapped
+    }
+
+    public var serveOrder: ServeOrder {
+        get { ServeOrder(firstServerIndex: firstServerIndex, serversSwapped: serversSwapped) }
+        set {
+            firstServerIndex = newValue.firstServerIndex
+            serversSwapped = newValue.serversSwapped
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey { case points, firstServerIndex, serversSwapped }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        points = try container.decode(BySide<Int>.self, forKey: .points)
+        firstServerIndex = try container.decode(Int.self, forKey: .firstServerIndex)
+        serversSwapped = try container.decodeIfPresent(BySide<Bool>.self, forKey: .serversSwapped) ?? BySide(both: false)
     }
 }
 
@@ -45,7 +68,8 @@ public struct PointCountEngine: Sendable, Hashable {
         let slot = ServeRotation.pointCountingSlot(
             totalPointsPlayed: state.points.total,
             servesPerTeam: rules.servesPerTeam,
-            startIndex: state.firstServerIndex
+            startIndex: state.firstServerIndex,
+            swapping: state.serversSwapped
         )
         return ServeState(slot: slot, court: state.points.total.isMultiple(of: 2) ? .deuce : .ad)
     }

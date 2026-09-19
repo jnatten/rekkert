@@ -23,6 +23,9 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
     /// Which half the serve is struck from, as the server sees it: deuce is their right.
     public var servingCourt: ServeCourt?
     public var servingPlayer: String?
+    /// Whether "swap serving player" has anyone to swap: the serving side has two named
+    /// players and the board is still live.
+    public var canSwapServingPlayer: Bool
     public var isSuddenDeath: Bool
     public var suddenDeathCourt: ServeCourt?
     public var isLocked: Bool
@@ -61,7 +64,8 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             detail: detail(for: session, engine: engine),
             serving: score.isFinished ? nil : serve.slot.team,
             servingCourt: score.isFinished ? nil : serve.court,
-            servingPlayer: playerName(at: serve.slot, teams: session.teams),
+            servingPlayer: name(session.teams[serve.slot.team].players, at: serve.slot.playerIndex),
+            canSwapServingPlayer: !score.isFinished && hasTwoNamed(session.teams[serve.slot.team].players),
             isSuddenDeath: engine.isSuddenDeathPoint(score),
             suddenDeathCourt: score.suddenDeathCourt,
             isLocked: score.isFinished,
@@ -88,12 +92,14 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             snapshot.serving = nil
             snapshot.servingCourt = nil
             snapshot.servingPlayer = nil
+            snapshot.canSwapServingPlayer = false
         } else {
             // The padel rotation asks for the second player on a side, which a singles team
             // has not got — so the one who is there serves every time.
             let serve = match.engine.serve(round.score)
             let players = match.teams[serve.slot.team].players
-            snapshot.servingPlayer = players[safe: serve.slot.playerIndex] ?? players.first
+            snapshot.servingPlayer = name(players, at: serve.slot.playerIndex) ?? players.first
+            snapshot.canSwapServingPlayer = session.teamSize == 2 && hasTwoNamed(players)
         }
         return snapshot
     }
@@ -139,7 +145,8 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
                 : "Round \(session.roundNumber)",
             serving: session.isFinished ? nil : serve.slot.team,
             servingCourt: session.isFinished ? nil : serve.court,
-            servingPlayer: session.teams[serve.slot.team].players[safe: serve.slot.playerIndex],
+            servingPlayer: name(session.teams[serve.slot.team].players, at: serve.slot.playerIndex),
+            canSwapServingPlayer: !session.isFinished && hasTwoNamed(session.teams[serve.slot.team].players),
             isSuddenDeath: engine.isSuddenDeathPoint(score),
             suddenDeathCourt: score.suddenDeathCourt,
             isLocked: session.isFinished,
@@ -164,7 +171,8 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             detail: detail(for: session, names: names),
             serving: session.isFinished ? nil : serve.slot.team,
             servingCourt: session.isFinished ? nil : serve.court,
-            servingPlayer: session.teams[serve.slot.team].players[safe: serve.slot.playerIndex],
+            servingPlayer: name(session.teams[serve.slot.team].players, at: serve.slot.playerIndex),
+            canSwapServingPlayer: !session.isFinished && hasTwoNamed(session.teams[serve.slot.team].players),
             isSuddenDeath: false,
             suddenDeathCourt: nil,
             isLocked: session.isFinished,
@@ -192,7 +200,9 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             team.compactMap { tournament.player($0)?.name }.joined(separator: " & ")
         }
         let remaining = engine.pointsRemaining(match.state)
-        let servingID = match.teams[serve.slot.team][safe: serve.slot.playerIndex]
+        let servingSide = match.teams[serve.slot.team]
+        let servingID = servingSide[safe: serve.slot.playerIndex]
+        let isLive = !match.isConfirmed && !engine.isFinished(match.state)
 
         return ScoreboardSnapshot(
             kind: .tournament,
@@ -206,6 +216,8 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             serving: engine.isFinished(match.state) ? nil : serve.slot.team,
             servingCourt: engine.isFinished(match.state) ? nil : serve.court,
             servingPlayer: servingID.flatMap { tournament.player($0) }?.name,
+            canSwapServingPlayer: isLive && servingSide.count >= 2
+                && servingSide.allSatisfy { tournament.player($0) != nil },
             isSuddenDeath: false,
             suddenDeathCourt: nil,
             isLocked: match.isConfirmed,
@@ -231,8 +243,15 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
         return "Set \(setNumber)"
     }
 
-    private static func playerName(at slot: ServeSlot, teams: BySide<TeamInfo>) -> String? {
-        teams[slot.team].players[safe: slot.playerIndex]
+    /// A blank slot is nobody rather than an empty name: the line-up is positional, so the
+    /// second player can be typed without the first.
+    private static func name(_ players: [String], at index: Int) -> String? {
+        guard let name = players[safe: index], !name.isEmpty else { return nil }
+        return name
+    }
+
+    private static func hasTwoNamed(_ players: [String]) -> Bool {
+        players.count >= 2 && !players[0].isEmpty && !players[1].isEmpty
     }
 }
 

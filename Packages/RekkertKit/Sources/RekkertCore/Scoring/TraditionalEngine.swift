@@ -62,7 +62,7 @@ public struct TraditionalEngine: Sendable, Hashable {
         } else if isSuddenDeathPoint(state), let chosen = state.suddenDeathCourt {
             court = chosen
         }
-        return ServeState(slot: ServeRotation.slot(at: index), court: court)
+        return ServeState(slot: ServeRotation.slot(at: index, swapping: state.serversSwapped), court: court)
     }
 
     public func shouldChangeEnds(_ state: TraditionalState) -> Bool {

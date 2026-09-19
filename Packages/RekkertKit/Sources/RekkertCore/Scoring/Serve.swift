@@ -50,6 +50,34 @@ public struct ServeState: Codable, Sendable, Hashable {
     }
 }
 
+/// Where the rotation starts and, per side, whether the partners take their turns the other
+/// way round from how `ServeRotation.order` names them. Two plain fields rather than one
+/// canonical form, so a score filed before the second existed still reads.
+public struct ServeOrder: Codable, Sendable, Hashable {
+    public var firstServerIndex: Int
+    public var serversSwapped: BySide<Bool>
+
+    public init(firstServerIndex: Int = 0, serversSwapped: BySide<Bool> = BySide(both: false)) {
+        self.firstServerIndex = firstServerIndex
+        self.serversSwapped = serversSwapped
+    }
+
+    /// The other team starts, each side keeping its own first server. Moving the start on by
+    /// one also reverses the turns of the side that was starting, so that flag flips back.
+    public func swappingTeams() -> ServeOrder {
+        var next = self
+        next.serversSwapped[ServeRotation.slot(at: firstServerIndex).team].toggle()
+        next.firstServerIndex = (firstServerIndex + 1) % ServeRotation.order.count
+        return next
+    }
+
+    public func swappingPlayers(of team: TeamSide) -> ServeOrder {
+        var next = self
+        next.serversSwapped[team].toggle()
+        return next
+    }
+}
+
 public enum ServeRotation {
     /// Padel service order: one player from each team alternating, so partners never serve
     /// back to back.
@@ -65,10 +93,22 @@ public enum ServeRotation {
         return order[((index % count) + count) % count]
     }
 
+    /// The same slot with the partners of a swapped side taking their turns the other way round.
+    public static func slot(at index: Int, swapping swapped: BySide<Bool>) -> ServeSlot {
+        var slot = slot(at: index)
+        if swapped[slot.team] { slot.playerIndex = 1 - slot.playerIndex }
+        return slot
+    }
+
     /// Americano/Mexicano: every player serves `servesPerTeam` consecutive points, which
     /// makes service alternate between the teams at the same interval.
-    public static func pointCountingSlot(totalPointsPlayed: Int, servesPerTeam: Int, startIndex: Int = 0) -> ServeSlot {
+    public static func pointCountingSlot(
+        totalPointsPlayed: Int,
+        servesPerTeam: Int,
+        startIndex: Int = 0,
+        swapping swapped: BySide<Bool> = BySide(both: false)
+    ) -> ServeSlot {
         let stride = max(1, servesPerTeam)
-        return slot(at: startIndex + totalPointsPlayed / stride)
+        return slot(at: startIndex + totalPointsPlayed / stride, swapping: swapped)
     }
 }

@@ -75,6 +75,13 @@ public enum SessionReducer {
                 session.score.firstServerIndex = index
             }
 
+        case .setServeOrder(let round, let court, let order):
+            mutateCourt(round: round, court: court, in: &state) { _, match in
+                match.state.serveOrder = order
+            } traditional: { session in
+                session.score.serveOrder = order
+            }
+
         case .setRoundConfirmed(let round, let isConfirmed):
             guard case .tournament(var tournament) = state,
                   tournament.rounds.indices.contains(round) else { return }

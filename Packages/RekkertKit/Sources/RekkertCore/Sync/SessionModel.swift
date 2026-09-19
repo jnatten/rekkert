@@ -180,19 +180,35 @@ public enum SessionState: Codable, Sendable, Hashable {
         }
     }
 
-    /// Where the service rotation currently starts for this court, which is what a
-    /// correction shifts.
-    public func firstServerIndex(round: Int? = nil, court: Int = 0) -> Int? {
+    /// The service order on this court as it stands, which is what a correction rewrites.
+    public func serveOrder(round: Int? = nil, court: Int = 0) -> ServeOrder? {
         switch self {
-        case .traditional(let session): session.score.firstServerIndex
-        case .winnerCourt(let session): session.score.firstServerIndex
-        case .pointCount(let session): session.score.firstServerIndex
+        case .traditional(let session): session.score.serveOrder
+        case .winnerCourt(let session): session.score.serveOrder
+        case .pointCount(let session): session.score.serveOrder
         case .friendly(let session):
-            session.round(at: round ?? session.currentIndex)?.score.firstServerIndex
+            session.round(at: round ?? session.currentIndex)?.score.serveOrder
         case .tournament(let tournament):
             (round.map { tournament.round(at: $0) } ?? tournament.currentRound)?
                 .matches.first { $0.courtIndex == court }?
-                .state.firstServerIndex
+                .state.serveOrder
+        }
+    }
+
+    /// Who serves the next point on this court. Read here rather than off the scoreboard,
+    /// which is presentation: it drops the serve once a board is over and stands a singles
+    /// player in for a partner.
+    public func serve(round: Int? = nil, court: Int = 0) -> ServeState? {
+        switch self {
+        case .traditional(let session): session.engine.serve(session.score)
+        case .winnerCourt(let session): session.engine.serve(session.score)
+        case .pointCount(let session): session.engine.serve(session.score)
+        case .friendly(let session):
+            session.round(at: round ?? session.currentIndex).map { session.engine.serve($0.score) }
+        case .tournament(let tournament):
+            (round.map { tournament.round(at: $0) } ?? tournament.currentRound)?
+                .matches.first { $0.courtIndex == court }
+                .map { PointCountEngine(rules: tournament.config.pointRules).serve($0.state) }
         }
     }
 
