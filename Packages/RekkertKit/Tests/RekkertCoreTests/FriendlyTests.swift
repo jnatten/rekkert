@@ -44,8 +44,97 @@ private func benchCounts(_ session: FriendlySession) -> [String: Int] {
     return counts
 }
 
+/// Every round as a line of names, the only form a draw can be pinned in: `Player(name:)`
+/// mints a fresh id every run.
+private func drawn(_ session: FriendlySession) -> [String] {
+    session.rounds.map { round in
+        let sides = TeamSide.allCases.map { session.names($0, in: round) }.joined(separator: " v ")
+        let bench = session.sitOutNames(in: round)
+        return bench.isEmpty ? sides : "\(sides) (\(bench.joined(separator: ", ")) out)"
+    }
+}
+
+/// Who is paired with whom, regardless of sides and of who is listed first.
+private func partition(_ round: FriendlyRound) -> Set<Set<PlayerID>> {
+    [Set(round.teams.a), Set(round.teams.b)]
+}
+
 @Suite("Friendly draw")
 struct FriendlyTests {
+    /// A fingerprint of what five draw today. The cycle rule is for four alone, so everybody
+    /// else has to keep drawing exactly what they always have — a draw that is still fair but
+    /// different would silently re-partner a Thursday.
+    @Test func fivePlayersDrawTheRoundsTheyAlwaysHave() throws {
+        let session = try draw(makeFriendly(players: 5), rounds: 9)
+        #expect(drawn(session) == [
+            "P3 & P0 v P4 & P2 (P1 out)",
+            "P0 & P4 v P3 & P1 (P2 out)",
+            "P4 & P1 v P2 & P0 (P3 out)",
+            "P3 & P2 v P1 & P0 (P4 out)",
+            "P2 & P1 v P4 & P3 (P0 out)",
+            "P2 & P0 v P4 & P3 (P1 out)",
+            "P0 & P1 v P4 & P2 (P3 out)",
+            "P0 & P3 v P2 & P1 (P4 out)",
+            "P3 & P1 v P4 & P0 (P2 out)",
+        ])
+    }
+
+    /// The first three rounds of four are the ordinary draw; only what follows them changes.
+    @Test func fourPlayersOpenWithTheRoundsTheyAlwaysHave() throws {
+        let session = try draw(makeFriendly(players: 4), rounds: 3)
+        #expect(drawn(session) == ["P0 & P2 v P3 & P1", "P1 & P0 v P3 & P2", "P2 & P1 v P3 & P0"])
+    }
+
+    @Test func fourPlayersReplayTheFirstThreeRoundsInOrder() throws {
+        let session = try draw(makeFriendly(players: 4), rounds: 9)
+        #expect(Set(session.rounds.prefix(3).map(partition)).count == 3, "the opening three are all different")
+        for round in session.rounds {
+            #expect(
+                round.teams == session.rounds[round.index % 3].teams,
+                "round \(round.index + 1) is round \(round.index % 3 + 1) again, sides and all"
+            )
+            #expect(round.sitOuts.isEmpty)
+        }
+    }
+
+    @Test func fourPlayersNeverKeepThePartnersFromTheRoundBefore() throws {
+        let session = try draw(makeFriendly(players: 4), rounds: 9)
+        for (previous, next) in zip(session.rounds, session.rounds.dropFirst()) {
+            #expect(partition(previous) != partition(next))
+        }
+    }
+
+    @Test func aFriendlyDrawnByTheOldRuleSettlesIntoTheCycle() throws {
+        var session = makeFriendly(players: 4)
+        let p = session.players.map(\.id)
+        let x = BySide(a: [p[0], p[1]], b: [p[2], p[3]])
+        let y = BySide(a: [p[0], p[2]], b: [p[1], p[3]])
+        let z = BySide(a: [p[0], p[3]], b: [p[1], p[2]])
+        // The old draw could follow X, Y, Z with any of the three — here Y again, the other
+        // way round — and a session in progress carries that history over.
+        session.rounds = [x, y, z, BySide(a: y.b, b: y.a)].enumerated().map {
+            FriendlyRound(index: $0.offset, teams: $0.element)
+        }
+        let healed = try draw(session, rounds: 5)
+        #expect(
+            healed.rounds.dropFirst(4).map(\.teams) == [x, z, x, y, z],
+            "the least played goes next, then the three as they were first drawn"
+        )
+        #expect(healed.rounds[7].teams == y, "as first drawn, not as the repeat had it")
+    }
+
+    @Test func theFourPlayerCycleIsTheSameOnBothDevicesAndInThePreview() throws {
+        let base = makeFriendly(players: 4)
+        let one = try draw(base, rounds: 9)
+        #expect(try draw(base, rounds: 9).rounds == one.rounds)
+        for count in 0 ..< 9 {
+            #expect(
+                try draw(base, rounds: count).nextDraw() == one.rounds[count],
+                "what the button offers is what the event draws"
+            )
+        }
+    }
+
     @Test func fourPlayersPlayTwoAgainstTwoWithNobodyOut() throws {
         let session = try draw(makeFriendly(players: 4), rounds: 1)
         let round = try #require(session.currentRound)

@@ -41,10 +41,13 @@ round can also be stopped where it stands, and the games played still count.
 Four or more play doubles; two or three play singles. Anyone over the four seats sits the
 round out, and the bench goes to whoever has sat out least, so it comes round evenly. The
 draw puts nobody with the same partner twice while a fresh pairing is available and, after
-that, avoids repeating match-ups — Americano's own cost function, on one court. It is seeded
-on the session id and the round number and reads only who has played with and against whom,
-never the scores, so the phone and the watch draw the same round without negotiating it, and
-correcting a point can never re-partner a round already drawn.
+that, avoids repeating match-ups — Americano's own cost function, on one court. With exactly
+four there are only three ways to pair up and the first three rounds use them all; after that
+they come round again in the order they were first drawn, so round four is round one again,
+same pairs on the same sides. It is seeded on the session id and the round number and reads
+only who has played with and against whom, never the scores, so the phone and the watch draw
+the same round without negotiating it, and correcting a point can never re-partner a round
+already drawn.
 
 Rounds go on until somebody finishes the session. The rounds list, in the match menu, holds
 every round played and the table so far — ranked on rounds won, ties broken on games won —

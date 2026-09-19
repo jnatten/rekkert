@@ -37,6 +37,9 @@ public enum FriendlyScheduler {
             // colours every round, which reads as a bug rather than as a draw.
             teams = BySide(a: [session.players[0].id], b: [session.players[1].id])
             sitting = []
+        } else if let replay = replayedTeams(for: session) {
+            teams = replay
+            sitting = []
         } else {
             let split = RoundScheduler.split(
                 players: session.players, seats: session.seats,
@@ -57,5 +60,36 @@ public enum FriendlyScheduler {
             // slot every round.
             score: TraditionalState(firstServerIndex: index % ServeRotation.order.count)
         )
+    }
+
+    /// Four pair up in only three ways, and the draw gets through all three in as many rounds.
+    /// From then on every candidate costs the same and the shuffle alone would decide, so each
+    /// block of three would come out in a fresh order. Instead the partition played least is
+    /// replayed as it stood, sides and all, ties going to the one that came up first: round
+    /// four is round one again. Nil for any other number of players, and while a fresh
+    /// partition is still to be had, so the ordinary draw runs exactly as before.
+    private static func replayedTeams(for session: FriendlySession) -> BySide<[PlayerID]>? {
+        guard session.players.count == 4 else { return nil }
+        let four = Set(session.players.map(\.id))
+
+        // The list can be corrected mid-session, so only rounds that were a partition of
+        // exactly these four count.
+        var seen: [Set<PairKey>: (plays: Int, first: Int, teams: BySide<[PlayerID]>)] = [:]
+        for (position, round) in session.rounds.enumerated()
+        where round.teams.a.count == 2 && round.teams.b.count == 2
+            && Set(round.teams.a + round.teams.b) == four
+        {
+            let key: Set<PairKey> = [
+                PairKey(round.teams.a[0], round.teams.a[1]),
+                PairKey(round.teams.b[0], round.teams.b[1]),
+            ]
+            if seen[key] == nil { seen[key] = (plays: 0, first: position, teams: round.teams) }
+            seen[key]?.plays += 1
+        }
+
+        // Three ways to split four into pairs. `first` differs between them, so the minimum is
+        // unique and the dictionary's order cannot leak into the draw.
+        guard seen.count == 3 else { return nil }
+        return seen.values.min { ($0.plays, $0.first) < ($1.plays, $1.first) }?.teams
     }
 }
