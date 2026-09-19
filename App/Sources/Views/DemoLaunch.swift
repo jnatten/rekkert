@@ -47,6 +47,11 @@ enum DemoLaunch {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-voices")
     }
 
+    /// Opens the settings screen.
+    static var openSettings: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-settings")
+    }
+
     /// Opens a friendly's rounds-and-standings sheet.
     static var openRounds: Bool {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-rounds-sheet")

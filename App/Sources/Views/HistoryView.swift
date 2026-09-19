@@ -7,6 +7,7 @@ enum HomeRoute: Hashable {
     /// value, and a path holding the old one would keep drawing the old names.
     case record(UUID)
     case voice
+    case settings
     case workouts
     case workout(WorkoutRecord)
 }

@@ -7,7 +7,6 @@ struct HomeView: View {
     @State private var path: [HomeRoute] = []
 
     var body: some View {
-        @Bindable var announcer = model.announcer
         NavigationStack(path: $path) {
             List {
                 if !model.store.presets.isEmpty {
@@ -118,25 +117,6 @@ struct HomeView: View {
                     }
                 }
 
-                Section {
-                    Toggle(isOn: $announcer.isEnabled) {
-                        Label("Call the score", systemImage: "speaker.wave.2")
-                    }
-                    if announcer.isEnabled {
-                        NavigationLink(value: HomeRoute.voice) {
-                            LabeledContent("Voice", value: announcer.currentVoiceName)
-                        }
-                        Picker("Speed", selection: $announcer.speed) {
-                            ForEach(ScoreAnnouncer.Speed.allCases) { speed in
-                                Text(speed.title).tag(speed)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                    }
-                } footer: {
-                    Text("Reads every point out loud, server first: \"thirty, fifteen\", \"deuce\", \"game\". The phone does the talking; the watch stays quiet.")
-                }
-
                 if !model.history.isEmpty || model.hasWorkouts {
                     Section("History") {
                         if !model.history.isEmpty {
@@ -157,11 +137,17 @@ struct HomeView: View {
                 case .list: HistoryView()
                 case .record(let id): HistoryDetailView(id: id)
                 case .voice: VoicePickerView()
+                case .settings: SettingsView()
                 case .workouts: WorkoutsView()
                 case .workout(let workout): WorkoutDetailView(workout: workout)
                 }
             }
             .navigationTitle("Rekkert")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Settings", systemImage: "gearshape") { path.append(.settings) }
+                }
+            }
             .sheet(item: $newMatch) { mode in
                 NewSessionView(mode: mode)
             }
@@ -170,9 +156,12 @@ struct HomeView: View {
                 if let raw = DemoLaunch.newSession {
                     newMatch = GameMode(rawValue: raw)
                 }
+                if DemoLaunch.openSettings {
+                    path = [.settings]
+                }
                 if DemoLaunch.openVoices {
                     model.announcer.isEnabled = true
-                    path = [.voice]
+                    path = [.settings, .voice]
                 }
                 if DemoLaunch.openWorkouts {
                     path = [.workouts]
