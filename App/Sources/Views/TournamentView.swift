@@ -229,7 +229,9 @@ private struct CourtRow: View {
             ForEach(TeamSide.allCases, id: \.self) { side in
                 HStack {
                     Circle().fill(palette.color(side)).frame(width: 8, height: 8)
-                    Text(names(side)).lineLimit(1)
+                    names(side)
+                        .lineLimit(1)
+                        .accessibilityLabel(spokenNames(side))
                     Spacer()
                     Text("\(match.state.points[side])")
                         .font(.title3.bold().monospacedDigit())
@@ -240,7 +242,32 @@ private struct CourtRow: View {
         .padding(.vertical, 4)
     }
 
-    private func names(_ side: TeamSide) -> String {
-        match.teams[side].compactMap { tournament.player($0)?.name }.joined(separator: " & ")
+    /// Who serves next on this court, or nobody once it is over.
+    private var server: PlayerID? {
+        let engine = PointCountEngine(rules: tournament.config.pointRules)
+        guard !match.isConfirmed, !engine.isFinished(match.state) else { return nil }
+        let slot = engine.serve(match.state).slot
+        let line = match.teams[slot.team]
+        return line.indices.contains(slot.playerIndex) ? line[slot.playerIndex] : nil
+    }
+
+    /// The pair, with the server in bold.
+    private func names(_ side: TeamSide) -> Text {
+        var line = Text("")
+        var first = true
+        for id in match.teams[side] {
+            guard let player = tournament.player(id) else { continue }
+            if !first { line = line + Text(" & ") }
+            first = false
+            line = line + (id == server ? Text(player.name).bold() : Text(player.name))
+        }
+        return line
+    }
+
+    private func spokenNames(_ side: TeamSide) -> String {
+        let players = match.teams[side].compactMap { tournament.player($0) }
+        let line = players.map(\.name).joined(separator: " and ")
+        guard let serving = players.first(where: { $0.id == server }) else { return line }
+        return "\(line), \(serving.name) serving"
     }
 }

@@ -14,6 +14,10 @@ struct MatchOptionsMenu: View {
     /// ellipsis on every screen that has one.
     var onShowRounds: (() -> Void)?
 
+    private var snapshot: ScoreboardSnapshot? {
+        model.store.state.flatMap { ScoreboardSnapshot.make(from: $0, round: round, court: court) }
+    }
+
     var body: some View {
         @Bindable var announcer = model.announcer
         Menu {
@@ -80,6 +84,11 @@ struct MatchOptionsMenu: View {
             }
             Button("Swap serving team", systemImage: "arrow.left.arrow.right") {
                 model.store.swapServingTeam(round: round, court: court)
+            }
+            if snapshot?.canSwapServingPlayer == true {
+                Button("Swap serving player", systemImage: "person.2.arrow.trianglehead.counterclockwise") {
+                    model.store.swapServingPlayer(round: round, court: court)
+                }
             }
             Button("Swap sides", systemImage: "rectangle.2.swap") {
                 model.store.toggleScoreboardMirrored()

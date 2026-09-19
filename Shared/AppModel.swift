@@ -256,6 +256,9 @@ final class AppModel {
         if arguments.contains("-rekkert-demo-swap-colours") {
             store.toggleTeamColors()
         }
+        if arguments.contains("-rekkert-demo-swap-player") {
+            store.swapServingPlayer()
+        }
         #if os(iOS)
         // `-rekkert-share-host H7K3MR` starts sharing on a pinned code, so two simulators can
         // be pointed at each other from a script.

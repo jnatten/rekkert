@@ -5,6 +5,8 @@ import SwiftUI
 /// behind the server — so the lit half is on the same hand they will be standing on.
 struct ServeSideBadge: View {
     let court: ServeCourt
+    /// Named when the line-up is known, so the label says who as well as where.
+    var playerName: String? = nil
     /// True when the server is at the far end. You face each other, so their right is your
     /// left: the court has to be drawn the way you see it, not the way they do.
     var fromAcrossTheNet = false
@@ -26,10 +28,11 @@ struct ServeSideBadge: View {
         fromAcrossTheNet ? court.seenFromTheOtherEnd : court
     }
 
-    private var spokenDescription: String {
-        fromAcrossTheNet
-            ? "Serving from your \(asYouSeeIt.sideName.lowercased()), their \(court.displayName.lowercased()) court"
-            : "Serving from your \(asYouSeeIt.sideName.lowercased()), the \(court.displayName.lowercased()) court"
+    var spokenDescription: String {
+        let who = playerName.map { "\($0) serving" } ?? "Serving"
+        return fromAcrossTheNet
+            ? "\(who) from your \(asYouSeeIt.sideName.lowercased()), their \(court.displayName.lowercased()) court"
+            : "\(who) from your \(asYouSeeIt.sideName.lowercased()), the \(court.displayName.lowercased()) court"
     }
 
     private func half(lit: Bool) -> some View {
@@ -44,17 +47,31 @@ struct ServeSideBadge: View {
 /// line whoever happens to be serving.
 struct ServeSideSlot: View {
     let court: ServeCourt?
+    /// Rides on the badge's own line, so naming the server costs the board no height.
+    var playerName: String? = nil
     var fromAcrossTheNet = false
     var height: CGFloat = 12
 
     var body: some View {
         Group {
             if let court {
-                ServeSideBadge(
+                let badge = ServeSideBadge(
                     court: court,
+                    playerName: playerName,
                     fromAcrossTheNet: fromAcrossTheNet,
                     height: height
                 )
+                HStack(spacing: height * 0.5) {
+                    badge
+                    if let playerName {
+                        Text(playerName)
+                            .font(.system(size: height, weight: .semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(badge.spokenDescription)
             } else {
                 Color.clear
             }

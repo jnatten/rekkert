@@ -24,6 +24,7 @@ struct ScoreboardView<Badge: View>: View {
                         teamName: snapshot.teamNames[side],
                         isServing: snapshot.serving == side,
                         servingCourt: snapshot.servingCourt,
+                        servingPlayer: snapshot.serving == side ? snapshot.servingPlayer : nil,
                         isEnabled: !snapshot.isLocked,
                         compact: compact,
                         onTap: { onTap(side) },

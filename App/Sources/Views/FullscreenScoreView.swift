@@ -96,6 +96,8 @@ struct FullscreenScoreView: View {
                     // The colour bleeds under the island; the writing must not.
                     .padding(.top, insets.top + size.height * 0.02)
 
+                serverLine(snapshot, side: side, in: size)
+
                 Spacer(minLength: 0)
 
                 Text(snapshot.primary[side])
@@ -114,6 +116,7 @@ struct FullscreenScoreView: View {
         }
         .animation(.snappy, value: snapshot.serving)
         .animation(.snappy, value: snapshot.servingCourt)
+        .animation(.snappy, value: snapshot.servingPlayer)
         .contentShape(.rect)
         .onTapGesture {
             // Woken before the lock is checked: a round that is over takes no more points,
@@ -136,6 +139,7 @@ struct FullscreenScoreView: View {
     ) -> some View {
         let court = snapshot.serving == side ? snapshot.servingCourt : nil
         let servingFromTheTop = court.map { servesFromTheTop($0, side: side) }
+        let who = snapshot.servingPlayer.map { "\($0) serving" } ?? "Serving"
         let radius = min(size.width * 0.05, 26)
         let frame = max(8, min(size.width, size.height) * 0.022)
 
@@ -144,12 +148,35 @@ struct FullscreenScoreView: View {
             cell(state(top: false, serving: servingFromTheTop), radius: radius, frame: frame, rounded: .bottom)
         }
         .padding(.horizontal, max(6, size.width * 0.014))
-        .padding(.top, insets.top + size.height * 0.105)
+        .padding(.top, insets.top + size.height * 0.105 + serverLineHeight(in: size) + 4)
         .padding(.bottom, insets.bottom + 52)
         .accessibilityElement()
         .accessibilityHidden(court == nil)
-        .accessibilityLabel(court.map { "Serving from the \($0.displayName.lowercased()) court" } ?? "")
+        .accessibilityLabel(court.map { "\(who) from the \($0.displayName.lowercased()) court" } ?? "")
     }
+
+    /// Who is serving, under the team's name and on their half only. Reserved on both halves
+    /// so the digits never move when service changes ends.
+    private func serverLine(_ snapshot: ScoreboardSnapshot, side: TeamSide, in size: CGSize) -> some View {
+        Group {
+            if snapshot.serving == side, let name = snapshot.servingPlayer, name != snapshot.teamNames[side] {
+                Text(name)
+                    .font(.system(size: min(size.height * 0.035, 17), weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .foregroundStyle(.white.opacity(0.9))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                    .background(panel, in: .capsule)
+            } else {
+                Color.clear
+            }
+        }
+        .frame(height: serverLineHeight(in: size))
+        .padding(.top, 4)
+    }
+
+    private func serverLineHeight(in size: CGSize) -> CGFloat { min(size.height * 0.07, 30) }
 
     /// The two teams stand at opposite ends facing each other, so one team's right-hand
     /// court is at the near end of the screen and the other's is at the far end. Which is

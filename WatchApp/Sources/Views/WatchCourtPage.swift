@@ -146,7 +146,7 @@ struct WatchCourtPage: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.secondary)
                 }
-                courtControls
+                courtControls(snapshot)
                 correction(snapshot)
             }
             .padding(.top, 6)
@@ -164,11 +164,17 @@ struct WatchCourtPage: View {
         ScoreboardLayout(isMirrored: model.store.display.areColorsSwapped)
     }
 
-    private var courtControls: some View {
+    private func courtControls(_ snapshot: ScoreboardSnapshot) -> some View {
         VStack(spacing: 4) {
             Button("Swap serve", systemImage: "arrow.left.arrow.right") {
                 WKInterfaceDevice.current().play(.click)
                 model.store.swapServingTeam(round: round, court: court)
+            }
+            if snapshot.canSwapServingPlayer {
+                Button("Swap player", systemImage: "person.2.arrow.trianglehead.counterclockwise") {
+                    WKInterfaceDevice.current().play(.click)
+                    model.store.swapServingPlayer(round: round, court: court)
+                }
             }
             Button("Swap colours", systemImage: "circle.lefthalf.filled") {
                 WKInterfaceDevice.current().play(.click)

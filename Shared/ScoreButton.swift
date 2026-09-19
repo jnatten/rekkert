@@ -9,6 +9,8 @@ struct ScoreButton: View {
     let teamName: String
     let isServing: Bool
     let servingCourt: ServeCourt?
+    /// Who on this side is serving, when the line-up is known.
+    var servingPlayer: String? = nil
     let isEnabled: Bool
     var compact = false
     let onTap: () -> Void
@@ -32,11 +34,18 @@ struct ScoreButton: View {
     private func serveSlot(showing isThisEnd: Bool) -> some View {
         ServeSideSlot(
             court: isServing && isThisEnd ? servingCourt : nil,
+            playerName: namedServer,
             // Team B is the far end, so their court is drawn as you see it.
             fromAcrossTheNet: side == .b,
             height: compact ? 10 : 13
         )
         .foregroundStyle(.white.opacity(0.9))
+    }
+
+    /// In singles the team is the player, and that name is already on the line above.
+    private var namedServer: String? {
+        guard isServing, let servingPlayer, servingPlayer != teamName else { return nil }
+        return servingPlayer
     }
 
     var body: some View {
@@ -67,7 +76,11 @@ struct ScoreButton: View {
         .opacity(isEnabled ? 1 : 0.55)
         .contentShape(.rect)
         .onLongPressGesture(perform: onUndo)
-        .accessibilityLabel("\(teamName), \(value)")
+        .accessibilityLabel(
+            isServing
+                ? "\(teamName), \(value), \(servingPlayer.map { "\($0) serving" } ?? "serving")"
+                : "\(teamName), \(value)"
+        )
         .accessibilityHint(isEnabled ? "Double tap to add a point" : "Scoring is closed")
         .animation(.snappy, value: value)
     }

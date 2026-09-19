@@ -21,7 +21,9 @@ hand you will see it on. Your own serve is drawn as you stand; theirs is drawn f
 side of the net, so their deuce court — their right — shows on your left, which is where
 you will actually see them. It sits below your own score and above theirs, matching the
 court in front of you where their end is the far one. It follows the receivers' choice on a
-golden or star point rather than just alternating.
+golden or star point rather than just alternating. When the players are named, the server's
+name sits beside the badge, and the four take their turns in the usual order — one from each
+side, so partners never serve back to back.
 
 **Winner court** — you play games on a court until the organiser blows the whistle, then
 move up or down. A round is a set with no end: games just accumulate. The whistle banks
@@ -93,9 +95,12 @@ added or taken out — the rounds were drawn around the people who played them.
 
 ## Mid-match corrections
 
-Both apps carry two fixes for when reality and the app disagree. **Swap serving team**
-moves service to the other side and carries through the rest of the rotation; it is match
-state, so it travels between the devices. **Swap sides** flips which half of the screen each
+Both apps carry three fixes for when reality and the app disagree. **Swap serving team**
+moves service to the other side and carries through the rest of the rotation, each pair
+keeping its own first server; it is match state, so it travels between the devices.
+**Swap serving player** hands the serve to the server's partner, for a pair that began with
+the wrong one, and carries through that pair's later turns; it only appears when both
+players on the serving side are named. **Swap sides** flips which half of the screen each
 team occupies, for when you have changed ends. Only the phone mirrors — it is the one
 propped up with a side of the court in front of it — but the button is on both, so the
 watch flips the phone from the wrist without anyone walking over to it. Flipping also turns
@@ -285,7 +290,7 @@ Debug builds accept `-rekkert-demo traditional|winnercourt|friendly|americano|me
 `-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N`,
 `-rekkert-demo-open-court R,C`, `-rekkert-demo-roster`, `-rekkert-demo-presets`,
 `-rekkert-demo-watch-page menu|standings|controls`, `-rekkert-demo-fullscreen`,
-`-rekkert-demo-blackout`, `-rekkert-demo-settings`,
+`-rekkert-demo-blackout`, `-rekkert-demo-settings`, `-rekkert-demo-swap-player`,
 `-rekkert-demo-workouts`, `-rekkert-demo-workout`, `-rekkert-demo-workout-paused`,
 `-rekkert-demo-voices` or
 `-rekkert-demo-new <mode>`) as
