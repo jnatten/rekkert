@@ -79,10 +79,7 @@ struct NewSessionView: View {
     private var traditionalSections: some View {
         sportSection
 
-        Section("Teams") {
-            teamRows(name: $teamA, players: $playersA, side: .a)
-            teamRows(name: $teamB, players: $playersB, side: .b)
-        }
+        teamsSection
 
         scoringSection
         formatSection
@@ -143,6 +140,17 @@ struct NewSessionView: View {
         .textInputAutocapitalization(.words)
     }
 
+    private var teamsSection: some View {
+        Section {
+            teamRows(name: $teamA, players: $playersA, side: .a)
+            teamRows(name: $teamB, players: $playersB, side: .b)
+        } header: {
+            Text("Teams")
+        } footer: {
+            Text("Player 1 serves first for their side.")
+        }
+    }
+
     private func advanceFromTeamPlayer(_ side: TeamSide, _ index: Int) {
         if index == 0 {
             focused = .teamPlayer(side, 1)
@@ -181,10 +189,7 @@ struct NewSessionView: View {
 
     @ViewBuilder
     private var pointCountSections: some View {
-        Section("Teams") {
-            teamRows(name: $teamA, players: $playersA, side: .a)
-            teamRows(name: $teamB, players: $playersB, side: .b)
-        }
+        teamsSection
 
         Section {
             Picker("Play to", selection: $pointRules.target) {
@@ -201,7 +206,7 @@ struct NewSessionView: View {
         } header: {
             Text("Points")
         } footer: {
-            Text(pointExplanation)
+            Text("\(pointExplanation) \(servesExplanation(pointRules))")
         }
     }
 
@@ -212,6 +217,12 @@ struct NewSessionView: View {
         case .firstToTarget:
             "The round ends as soon as one team reaches \(pointRules.target)."
         }
+    }
+
+    private func servesExplanation(_ rules: PointCountRules) -> String {
+        rules.servesPerTeam == 1
+            ? "Service changes hands every point."
+            : "Each player serves \(rules.servesPerTeam) points in a row before it passes to the other side."
     }
 
     // MARK: - Presets
@@ -270,10 +281,7 @@ struct NewSessionView: View {
             .pickerStyle(.segmented)
         }
 
-        Section("Teams") {
-            teamRows(name: $teamA, players: $playersA, side: .a)
-            teamRows(name: $teamB, players: $playersB, side: .b)
-        }
+        teamsSection
 
         Section {
             Picker("At 40–40", selection: $winnerCourtRules.deuceRule) {
@@ -388,7 +396,7 @@ struct NewSessionView: View {
             Stepper("Courts: \(config.courtCount)", value: $config.courtCount, in: 1 ... 8)
         }
 
-        Section("Points") {
+        Section {
             Picker("Play to", selection: $config.pointRules.target) {
                 ForEach(PointCountRules.commonTargets, id: \.self) { Text("\($0)").tag($0) }
                 if !PointCountRules.commonTargets.contains(config.pointRules.target) {
@@ -399,9 +407,14 @@ struct NewSessionView: View {
             Picker("Ends when", selection: $config.pointRules.targetKind) {
                 ForEach(TargetKind.allCases, id: \.self) { Text($0.displayName).tag($0) }
             }
-            Text(targetExplanation)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Stepper(
+                "Serves each: \(config.pointRules.servesPerTeam)",
+                value: $config.pointRules.servesPerTeam, in: 1 ... 5
+            )
+        } header: {
+            Text("Points")
+        } footer: {
+            Text("\(targetExplanation) \(servesExplanation(config.pointRules))")
         }
 
         Section("Sit-outs") {
@@ -539,9 +552,18 @@ struct NewSessionView: View {
 
     private var teams: BySide<TeamInfo> {
         BySide(
-            a: TeamInfo(name: teamA, players: playersA.filter { !$0.isEmpty }),
-            b: TeamInfo(name: teamB, players: playersB.filter { !$0.isEmpty })
+            a: TeamInfo(name: teamA, players: lineUp(playersA)),
+            b: TeamInfo(name: teamB, players: lineUp(playersB))
         )
+    }
+
+    /// Kept where they were typed: the rotation picks the server out of this list by position,
+    /// so Player 1 serves first for their side whether or not Player 2 is named. Only blanks
+    /// after the last name go — the rule a rename follows too.
+    private func lineUp(_ entered: [String]) -> [String] {
+        var names = entered.map { $0.trimmingCharacters(in: .whitespaces) }
+        while names.last?.isEmpty == true { names.removeLast() }
+        return names
     }
 
     private var namedPlayers: [Player] {
@@ -607,6 +629,6 @@ struct NewSessionView: View {
     }
 
     private var namedTeamPlayers: [String] {
-        (playersA + playersB).filter { !$0.isEmpty }
+        (playersA + playersB).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
     }
 }
