@@ -29,6 +29,15 @@ struct FriendlyMatchView: View {
                         footer(session)
                     }
                     .ignoresSafeArea(edges: .bottom)
+                } else if let session, session.rounds.isEmpty {
+                    ContentUnavailableView {
+                        Label("Nothing on the board", systemImage: "sportscourt")
+                    } description: {
+                        Text("The first round was taken back.")
+                    } actions: {
+                        Button("Start round 1", systemImage: "play.fill") { model.store.nextRound() }
+                            .buttonStyle(.borderedProminent)
+                    }
                 }
             }
             .navigationTitle(title)
@@ -59,10 +68,7 @@ struct FriendlyMatchView: View {
                 }
             }
             .fullScreenCover(isPresented: $fullscreen) {
-                FullscreenScoreView(
-                    round: session?.currentIndex,
-                    mirrored: model.store.display.isMirrored
-                )
+                FullscreenScoreView(mirrored: model.store.display.isMirrored)
             }
             .sheet(isPresented: $showingRounds) {
                 if let session { FriendlyRoundsSheet(session: session) }

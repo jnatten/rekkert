@@ -60,6 +60,15 @@ struct FullscreenScoreView: View {
         model.store.state.flatMap { ScoreboardSnapshot.make(from: $0, round: round, court: court) }
     }
 
+    private var friendly: FriendlySession? {
+        guard case .friendly(let value)? = model.store.state else { return nil }
+        return value
+    }
+
+    /// A friendly's board follows the session rather than a round fixed when the cover went
+    /// up, so a tap lands on whichever round is on the board now.
+    private var tappedRound: Int { round ?? friendly?.currentIndex ?? 0 }
+
     private func half(
         _ side: TeamSide,
         snapshot: ScoreboardSnapshot,
@@ -103,7 +112,7 @@ struct FullscreenScoreView: View {
             // but the way out still has to answer a tap on it.
             revealControls()
             guard !snapshot.isLocked else { return }
-            model.store.tap(round: round ?? 0, court: court, team: side)
+            model.store.tap(round: tappedRound, court: court, team: side)
         }
         .animation(.snappy, value: snapshot.primary[side])
     }
@@ -189,6 +198,12 @@ struct FullscreenScoreView: View {
         VStack {
             Spacer()
 
+            if let friendly, let round = friendly.currentRound, round.isFinished {
+                upNext(friendly, after: round)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 14)
+            }
+
             HStack(alignment: .center, spacing: 10) {
                 controlButton("xmark", label: "Leave full screen") { dismiss() }
                     .opacity(showingControls ? 1 : 0.4)
@@ -220,6 +235,51 @@ struct FullscreenScoreView: View {
         }
         .animation(.easeInOut(duration: 0.35), value: showingControls)
         .onAppear { revealControls() }
+    }
+
+    /// Between rounds the phone stays propped up, so the partnership waiting to play and the
+    /// button that starts them are here as well as on the screen behind the cover. Nothing
+    /// here ends a round: a stray tap on a propped-up phone must never do that.
+    private func upNext(_ session: FriendlySession, after round: FriendlyRound) -> some View {
+        VStack(spacing: 12) {
+            if let next = session.nextDraw() {
+                VStack(spacing: 3) {
+                    Text("Up next")
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.7))
+                    HStack(spacing: 6) {
+                        Text(session.names(.a, in: next)).foregroundStyle(palette.color(.a))
+                        Text("vs").foregroundStyle(.white.opacity(0.7))
+                        Text(session.names(.b, in: next)).foregroundStyle(palette.color(.b))
+                    }
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    if !next.sitOuts.isEmpty {
+                        Text("Sitting out: \(session.sitOutNames(in: next).joined(separator: ", "))")
+                            .font(.system(size: 13, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .background(.black.opacity(0.6), in: .rect(cornerRadius: 18, style: .continuous))
+            }
+
+            Button {
+                model.store.nextRound()
+                revealControls()
+            } label: {
+                Label("Start round \(round.index + 2)", systemImage: "play.fill")
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 12)
+                    .background(.white, in: .capsule)
+            }
+        }
     }
 
     private func controlButton(
