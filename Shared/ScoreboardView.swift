@@ -45,26 +45,50 @@ struct ScoreboardView<Badge: View>: View {
                 if let label = snapshot.courtLabel {
                     Text(label).font(.subheadline.weight(.semibold))
                 }
-                Text(snapshot.detail)
-                    .font(.caption)
-                    .foregroundStyle(snapshot.isSuddenDeath ? Color.orange : .secondary)
+                HStack(spacing: 6) {
+                    Text(snapshot.detail)
+                        .foregroundStyle(snapshot.isSuddenDeath ? Color.orange : .secondary)
+                    if let start = snapshot.clockStart {
+                        Text(verbatim: "·").foregroundStyle(.secondary)
+                        clock(from: start)
+                    }
+                }
+                .font(.caption)
             }
             .padding(.vertical, 6)
         } else {
             HStack(spacing: 4) {
                 badge()
                 Text(snapshot.detail)
-                    .font(.system(size: 11))
                     .foregroundStyle(snapshot.isSuddenDeath ? Color.orange : .secondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                     .frame(maxWidth: .infinity)
+                // Given its width before the detail is, so it is the sentence that shrinks
+                // to fit rather than the clock losing a digit.
+                if let start = snapshot.clockStart {
+                    clock(from: start).fixedSize()
+                }
                 // The far end is where the watch draws the dots for the page below this one,
                 // at exactly this height. A line pushed across by a badge has to stop short
                 // of them rather than run underneath.
                 Color.clear.frame(width: 10, height: 0)
             }
+            .font(.system(size: 11))
         }
+    }
+
+    /// How long the round on the board has been going. Counted by the system rather than by
+    /// a ticking `State`, which is what keeps it moving on a wrist that has dimmed — the same
+    /// reason the workout clock is drawn this way. It cannot be told to stop, and does not
+    /// need to be: a board that is over carries no start.
+    ///
+    /// Clamped to now, because the start is the stamp the device that drew the round wrote,
+    /// and a device whose clock runs behind that one would otherwise be handed a future.
+    private func clock(from start: Date) -> some View {
+        Text(timerInterval: min(start, Date()) ... .distantFuture, countsDown: false)
+            .monospacedDigit()
+            .foregroundStyle(.secondary)
     }
 
     private func gameLine(_ games: BySide<Int>) -> some View {

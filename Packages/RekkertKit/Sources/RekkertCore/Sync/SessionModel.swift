@@ -29,22 +29,27 @@ public struct TraditionalSession: Codable, Sendable, Hashable {
     /// Called off before anyone won it. A match can end either by being played out or by
     /// being stopped, and only the first shows up in the score.
     public var isStopped: Bool
+    /// When the match started, which is what the clock on the board counts from. A match has
+    /// no rounds, so this one clock runs the whole way through.
+    public var startedAt: Date?
 
     public init(
         rules: TraditionalRules,
         teams: BySide<TeamInfo>,
         score: TraditionalState = TraditionalState(),
-        isStopped: Bool = false
+        isStopped: Bool = false,
+        startedAt: Date? = nil
     ) {
         self.rules = rules
         self.teams = teams
         self.score = score
         self.isStopped = isStopped
+        self.startedAt = startedAt
     }
 
     public var engine: TraditionalEngine { TraditionalEngine(rules: rules) }
 
-    private enum CodingKeys: String, CodingKey { case rules, teams, score, isStopped }
+    private enum CodingKeys: String, CodingKey { case rules, teams, score, isStopped, startedAt }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -52,6 +57,7 @@ public struct TraditionalSession: Codable, Sendable, Hashable {
         teams = try container.decode(BySide<TeamInfo>.self, forKey: .teams)
         score = try container.decode(TraditionalState.self, forKey: .score)
         isStopped = try container.decodeIfPresent(Bool.self, forKey: .isStopped) ?? false
+        startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
     }
 }
 
@@ -64,17 +70,23 @@ public struct WinnerCourtSession: Codable, Sendable, Hashable {
     /// A round is a set that never completes on its own; the whistle closes it.
     public var score: TraditionalState
     public var isFinished: Bool
+    /// When the round now on the board began — the session, for the first one, and the last
+    /// whistle for every one after it. Only the current round's, because a round here is a
+    /// completed set rather than a struct with somewhere to keep one.
+    public var roundStartedAt: Date?
 
     public init(
         rules: WinnerCourtRules,
         teams: BySide<TeamInfo>,
         score: TraditionalState = TraditionalState(),
-        isFinished: Bool = false
+        isFinished: Bool = false,
+        roundStartedAt: Date? = nil
     ) {
         self.rules = rules
         self.teams = teams
         self.score = score
         self.isFinished = isFinished
+        self.roundStartedAt = roundStartedAt
     }
 
     public var engine: TraditionalEngine { TraditionalEngine(rules: rules.scoring) }
@@ -102,17 +114,21 @@ public struct PointCountSession: Codable, Sendable, Hashable {
     public var score: PointCountState
     /// Called off before the target was reached.
     public var isStopped: Bool
+    /// When the counting started, which is what the clock on the board counts from.
+    public var startedAt: Date?
 
     public init(
         rules: PointCountRules,
         teams: BySide<TeamInfo>,
         score: PointCountState = PointCountState(),
-        isStopped: Bool = false
+        isStopped: Bool = false,
+        startedAt: Date? = nil
     ) {
         self.rules = rules
         self.teams = teams
         self.score = score
         self.isStopped = isStopped
+        self.startedAt = startedAt
     }
 
     public var engine: PointCountEngine { PointCountEngine(rules: rules) }
@@ -265,6 +281,41 @@ public enum SessionState: Codable, Sendable, Hashable {
 
         case .tournament(var tournament):
             tournament.isFinished = false
+            return .tournament(tournament)
+        }
+    }
+
+    /// The same session with the clock on the board started again.
+    ///
+    /// Kept apart from `resumed()`, which `canResume` reads on every redraw and which taking
+    /// a result back goes through: a session picked up out of history stopped being played
+    /// and the round it left off in did not go on running, but a result taken back a second
+    /// after it was reached never stopped at all.
+    ///
+    /// Stamped before the event is recorded rather than when it is applied, so the new start
+    /// travels inside the payload and every device reads the one this device chose.
+    public func restarted(at date: Date) -> SessionState {
+        switch self {
+        case .traditional(var session):
+            session.startedAt = date
+            return .traditional(session)
+
+        case .pointCount(var session):
+            session.startedAt = date
+            return .pointCount(session)
+
+        case .winnerCourt(var session):
+            session.roundStartedAt = date
+            return .winnerCourt(session)
+
+        case .friendly(var session):
+            guard let index = session.rounds.indices.last else { return .friendly(session) }
+            session.rounds[index].startedAt = date
+            return .friendly(session)
+
+        case .tournament(var tournament):
+            guard let index = tournament.rounds.indices.last else { return .tournament(tournament) }
+            tournament.rounds[index].startedAt = date
             return .tournament(tournament)
         }
     }

@@ -116,7 +116,7 @@ public final class MatchStore {
 
     public func configure(_ setup: SessionSetup) {
         resetDisplayForNewMatch()
-        record(.configure(setup))
+        record(.configure(setup, at: Date()))
     }
     public func tap(round: Int = 0, court: Int = 0, team: TeamSide) {
         record(.point(round: round, court: court, team: team))
@@ -152,9 +152,9 @@ public final class MatchStore {
         switch state {
         // -1 when nothing has been drawn yet, so the first round is "the one after none".
         case .tournament(let tournament):
-            record(.nextRound(after: tournament.rounds.count - 1))
+            record(.nextRound(after: tournament.rounds.count - 1, at: Date()))
         case .friendly(let session):
-            record(.nextRound(after: session.rounds.count - 1))
+            record(.nextRound(after: session.rounds.count - 1, at: Date()))
         case .traditional, .winnerCourt, .pointCount, .none:
             break
         }
@@ -164,9 +164,9 @@ public final class MatchStore {
     public func endRound() {
         switch state {
         case .winnerCourt(let session):
-            record(.endRound(round: session.completedRounds.count))
+            record(.endRound(round: session.completedRounds.count, at: Date()))
         case .friendly(let session):
-            record(.endRound(round: session.currentIndex))
+            record(.endRound(round: session.currentIndex, at: Date()))
         case .traditional, .tournament, .pointCount, .none:
             break
         }
@@ -334,7 +334,7 @@ public final class MatchStore {
         guard let resumable = archived.resumed() else { return }
         startNewSession()
         resetDisplayForNewMatch()
-        record(.restore(resumable))
+        record(.restore(resumable.restarted(at: Date())))
     }
 
     /// Flips which way round the phone's scoreboard reads, from either device. Sends the

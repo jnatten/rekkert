@@ -1,3 +1,4 @@
+import Foundation
 import RekkertCore
 
 extension TraditionalEngine {
@@ -25,30 +26,32 @@ func repeated(_ pattern: [TeamSide], _ times: Int) -> [TeamSide] {
 
 extension MatchLog {
     /// Mirrors `MatchStore.nextRound()`: the draw is addressed to the round on screen now.
+    /// `at` is left off by everything that is not about the clock, so those logs fold to the
+    /// same rounds they always did.
     @discardableResult
-    mutating func drawRound(from device: DeviceID) -> MatchEvent {
+    mutating func drawRound(from device: DeviceID, at: Date? = nil) -> MatchEvent {
         guard case .tournament(let tournament)? = SessionReducer.state(of: self) else {
-            return append(.nextRound(after: -1), from: device)
+            return append(.nextRound(after: -1, at: at), from: device)
         }
-        return append(.nextRound(after: tournament.rounds.count - 1), from: device)
+        return append(.nextRound(after: tournament.rounds.count - 1, at: at), from: device)
     }
 
     /// Mirrors `MatchStore.nextRound()` for a friendly, which addresses the round on screen
     /// now so two devices tapping at once still produce one.
     @discardableResult
-    mutating func drawFriendlyRound(from device: DeviceID) -> MatchEvent {
+    mutating func drawFriendlyRound(from device: DeviceID, at: Date? = nil) -> MatchEvent {
         guard case .friendly(let session)? = SessionReducer.state(of: self) else {
-            return append(.nextRound(after: -1), from: device)
+            return append(.nextRound(after: -1, at: at), from: device)
         }
-        return append(.nextRound(after: session.rounds.count - 1), from: device)
+        return append(.nextRound(after: session.rounds.count - 1, at: at), from: device)
     }
 
     /// Mirrors `MatchStore.endRound()`.
     @discardableResult
-    mutating func blowWhistle(from device: DeviceID) -> MatchEvent {
+    mutating func blowWhistle(from device: DeviceID, at: Date? = nil) -> MatchEvent {
         guard case .winnerCourt(let session)? = SessionReducer.state(of: self) else {
-            return append(.endRound(round: 0), from: device)
+            return append(.endRound(round: 0, at: at), from: device)
         }
-        return append(.endRound(round: session.completedRounds.count), from: device)
+        return append(.endRound(round: session.completedRounds.count, at: at), from: device)
     }
 }

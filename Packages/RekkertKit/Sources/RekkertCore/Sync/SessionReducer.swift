@@ -1,3 +1,5 @@
+import Foundation
+
 public enum SessionReducer {
     public static func state(of log: MatchLog) -> SessionState? {
         var state: SessionState?
@@ -9,8 +11,8 @@ public enum SessionReducer {
 
     static func apply(_ kind: EventKind, to state: inout SessionState?) {
         switch kind {
-        case .configure(let setup):
-            configure(setup, into: &state)
+        case .configure(let setup, let at):
+            configure(setup, at: at, into: &state)
 
         case .restore(let archived):
             state = archived
@@ -46,11 +48,14 @@ public enum SessionReducer {
                 break
             }
 
-        case .endRound(let round):
+        case .endRound(let round, let at):
             switch state {
             case .winnerCourt(var session):
                 guard !session.isFinished, session.score.completedSets.count == round else { return }
                 session.score = session.engine.endingRound(session.score)
+                // The whistle closes one round and opens the next in the same move, so it is
+                // also where the clock starts again.
+                session.roundStartedAt = at
                 state = .winnerCourt(session)
 
             case .friendly(var session):
@@ -90,16 +95,22 @@ public enum SessionReducer {
             }
             state = .tournament(tournament)
 
-        case .nextRound(let after):
+        case .nextRound(let after, let at):
             switch state {
             case .tournament(let tournament):
                 guard tournament.rounds.count == after + 1,
-                      let next = try? TournamentEngine.appendingRound(to: tournament) else { return }
+                      var next = try? TournamentEngine.appendingRound(to: tournament),
+                      let drawn = next.rounds.indices.last else { return }
+                // Stamped here rather than read back off the log: a second device drawing at
+                // the same moment is turned away by the guard above, and only this knows it.
+                next.rounds[drawn].startedAt = at
                 state = .tournament(next)
 
             case .friendly(let session):
                 guard !session.isFinished, session.rounds.count == after + 1,
-                      let next = try? FriendlyScheduler.appendingRound(to: session) else { return }
+                      var next = try? FriendlyScheduler.appendingRound(to: session),
+                      let drawn = next.rounds.indices.last else { return }
+                next.rounds[drawn].startedAt = at
                 state = .friendly(next)
 
             case .traditional, .winnerCourt, .pointCount, .none:
@@ -132,7 +143,10 @@ public enum SessionReducer {
         }
     }
 
-    private static func configure(_ setup: SessionSetup, into state: inout SessionState?) {
+    /// A configure that lands on a session of the same kind is the setup being corrected
+    /// rather than a session starting, so only the fresh branches take the stamp — putting a
+    /// name right must not restart the clock.
+    private static func configure(_ setup: SessionSetup, at: Date?, into state: inout SessionState?) {
         switch (setup, state) {
         case (.traditional(let rules, let teams), .traditional(var session)):
             session.rules = rules
@@ -141,7 +155,7 @@ public enum SessionReducer {
 
         case (.traditional(let rules, let teams), _):
             state = .traditional(
-                TraditionalSession(rules: rules, teams: teams, score: TraditionalState())
+                TraditionalSession(rules: rules, teams: teams, score: TraditionalState(), startedAt: at)
             )
 
         case (.tournament(let incoming), .tournament(var tournament)):
@@ -151,6 +165,8 @@ public enum SessionReducer {
             state = .tournament(tournament)
 
         case (.tournament(let incoming), _):
+            // The rounds come from the draw, which has not happened yet, so there is nothing
+            // to stamp here — `nextRound` starts the first one's clock.
             state = .tournament(incoming)
 
         case (.winnerCourt(let rules, let teams), .winnerCourt(var session)):
@@ -159,7 +175,7 @@ public enum SessionReducer {
             state = .winnerCourt(session)
 
         case (.winnerCourt(let rules, let teams), _):
-            state = .winnerCourt(WinnerCourtSession(rules: rules, teams: teams))
+            state = .winnerCourt(WinnerCourtSession(rules: rules, teams: teams, roundStartedAt: at))
 
         case (.pointCount(let rules, let teams), .pointCount(var session)):
             session.rules = rules
@@ -167,7 +183,7 @@ public enum SessionReducer {
             state = .pointCount(session)
 
         case (.pointCount(let rules, let teams), _):
-            state = .pointCount(PointCountSession(rules: rules, teams: teams))
+            state = .pointCount(PointCountSession(rules: rules, teams: teams, startedAt: at))
 
         case (.friendly(let incoming), .friendly(var session)):
             // The rounds already played stay where they are; the rest is the setup being

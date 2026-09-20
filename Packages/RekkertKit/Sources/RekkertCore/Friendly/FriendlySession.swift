@@ -15,19 +15,24 @@ public struct FriendlyRound: Codable, Sendable, Hashable, Identifiable {
     public var score: TraditionalState
     /// Called off where it stood rather than played out. The games still count; nobody won it.
     public var isStopped: Bool
+    /// When the round was drawn, which is what the clock on the board counts from. Stamped by
+    /// the reducer from the event that drew it, so both devices read the same one.
+    public var startedAt: Date?
 
     public init(
         index: Int,
         teams: BySide<[PlayerID]>,
         sitOuts: [PlayerID] = [],
         score: TraditionalState = TraditionalState(),
-        isStopped: Bool = false
+        isStopped: Bool = false,
+        startedAt: Date? = nil
     ) {
         self.index = index
         self.teams = teams
         self.sitOuts = sitOuts
         self.score = score
         self.isStopped = isStopped
+        self.startedAt = startedAt
     }
 
     /// Over, either way: won outright or stopped short. Nothing more is scored on it.
@@ -46,7 +51,7 @@ public struct FriendlyRound: Codable, Sendable, Hashable, Identifiable {
         }
     }
 
-    private enum CodingKeys: String, CodingKey { case index, teams, sitOuts, score, isStopped }
+    private enum CodingKeys: String, CodingKey { case index, teams, sitOuts, score, isStopped, startedAt }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -55,6 +60,7 @@ public struct FriendlyRound: Codable, Sendable, Hashable, Identifiable {
         sitOuts = try container.decodeIfPresent([PlayerID].self, forKey: .sitOuts) ?? []
         score = try container.decode(TraditionalState.self, forKey: .score)
         isStopped = try container.decodeIfPresent(Bool.self, forKey: .isStopped) ?? false
+        startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
     }
 }
 
@@ -144,6 +150,8 @@ public struct FriendlySession: Codable, Sendable, Hashable {
     /// The round that drawing the next one would produce. The draw is a pure function of
     /// the session, so this is the same answer the event will reach — which is what lets the
     /// button offering the next round name the partnership before anybody commits to it.
+    ///
+    /// Unstamped: nothing has started, so it has no `startedAt` to carry.
     public func nextDraw() -> FriendlyRound? {
         try? FriendlyScheduler.nextRound(for: self)
     }

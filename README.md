@@ -93,6 +93,26 @@ everywhere it appears: the rounds, the table and the result. Only that one match
 the names remembered for next time, and every other match, are left alone. Nobody can be
 added or taken out — the rounds were drawn around the people who played them.
 
+## The clock
+
+Beside the line above the score, the board says how long it has been going. In the modes
+that play in rounds it times the round — the americano round, the friendly, the stretch
+between two whistles on a winner court — and starts again at nil when the next one is
+drawn. Match and Points have no rounds to time, so theirs runs the length of the session.
+It only counts; there is no round length to set and nothing happens when it reaches a
+number.
+
+The moment a round started travels with the round, so the phone, the watch and a guest's
+phone all count from the same one — a guest joining halfway through picks the round up
+where it actually is rather than at nil. Two devices drawing a round at the same instant
+settle on one of the two stamps, the same way they settle on one draw. Clocks that disagree
+by a second or two show it, which is as close as two wristwatches ever get.
+
+A board that is over is not timed: a match somebody has won, a friendly round that has been
+played out or called off, a tournament round already confirmed, and any earlier round you
+have gone back to look at. The full-screen board has no clock either — it is the two
+numbers and nothing else, read from the far end of the court.
+
 ## Mid-match corrections
 
 Both apps carry three fixes for when reality and the app disagree. **Swap serving team**

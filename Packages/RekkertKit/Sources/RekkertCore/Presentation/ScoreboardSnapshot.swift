@@ -1,3 +1,5 @@
+import Foundation
+
 /// Everything a scoreboard needs to draw itself, derived from session state. Keeping this
 /// in the core means the phone and the watch render the same truth from the same code.
 public struct ScoreboardSnapshot: Sendable, Hashable {
@@ -31,6 +33,11 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
     public var isLocked: Bool
     public var isFinished: Bool
     public var winner: TeamSide?
+    /// When the clock on the board started counting: this round, for the modes that play in
+    /// rounds, and the session for the ones that do not. `nil` once there is nothing to
+    /// time — a board that is over or being looked back at, or a session played before the
+    /// clock existed. The date is state; the ticking is the view's business.
+    public var clockStart: Date?
 
     /// The two big numbers as drawn.
     public var primary: BySide<String> { points.map(\.text) }
@@ -70,7 +77,8 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             suddenDeathCourt: score.suddenDeathCourt,
             isLocked: score.isFinished,
             isFinished: score.isFinished,
-            winner: score.winner
+            winner: score.winner,
+            clockStart: score.isFinished ? nil : session.startedAt
         )
     }
 
@@ -87,6 +95,9 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
         snapshot.detail = detail(for: session, round: round)
         snapshot.isLocked = round.isFinished
         snapshot.isFinished = round.isFinished
+        // `match(at:)` packages the round as a match and has no stamp of its own to carry,
+        // so the round's own is put back here.
+        snapshot.clockStart = round.isFinished ? nil : round.startedAt
 
         if round.isFinished {
             snapshot.serving = nil
@@ -151,7 +162,8 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             suddenDeathCourt: score.suddenDeathCourt,
             isLocked: session.isFinished,
             isFinished: session.isFinished,
-            winner: nil
+            winner: nil,
+            clockStart: session.isFinished ? nil : session.roundStartedAt
         )
     }
 
@@ -177,7 +189,8 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             suddenDeathCourt: nil,
             isLocked: session.isFinished,
             isFinished: session.isFinished,
-            winner: session.winner
+            winner: session.winner,
+            clockStart: session.isFinished ? nil : session.startedAt
         )
     }
 
@@ -222,7 +235,9 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             suddenDeathCourt: nil,
             isLocked: match.isConfirmed,
             isFinished: engine.isFinished(match.state),
-            winner: engine.winner(match.state)
+            winner: engine.winner(match.state),
+            // The clock belongs to the round, so every court in it reads the same one.
+            clockStart: isLive ? round.startedAt : nil
         )
     }
 

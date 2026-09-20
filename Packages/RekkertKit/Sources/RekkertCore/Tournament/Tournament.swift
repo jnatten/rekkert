@@ -38,11 +38,16 @@ public struct Round: Codable, Sendable, Hashable, Identifiable {
     public var index: Int
     public var matches: [CourtMatch]
     public var sitOuts: [PlayerID]
+    /// When the round was drawn, which is what the clock on the board counts from. Stamped
+    /// by the reducer from the event that drew it, so every device reads the same one. Nil
+    /// on a round drawn before the clock existed, and on a draw that is only being previewed.
+    public var startedAt: Date?
 
-    public init(index: Int, matches: [CourtMatch], sitOuts: [PlayerID]) {
+    public init(index: Int, matches: [CourtMatch], sitOuts: [PlayerID], startedAt: Date? = nil) {
         self.index = index
         self.matches = matches
         self.sitOuts = sitOuts
+        self.startedAt = startedAt
     }
 }
 
