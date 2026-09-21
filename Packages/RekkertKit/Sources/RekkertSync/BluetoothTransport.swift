@@ -242,7 +242,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             // sync. Every child of the fan-out is waited on, so a quiet peer here is a pause
             // for everybody.
             queue.asyncAfter(deadline: .now() + replyTimeout) { [weak self] in
-                self?.lock.withLock { self?.waiting.removeValue(forKey: correlation) }
+                self?.lock.withLock { _ = self?.waiting.removeValue(forKey: correlation) }
                 once.resume(nil)
             }
         }

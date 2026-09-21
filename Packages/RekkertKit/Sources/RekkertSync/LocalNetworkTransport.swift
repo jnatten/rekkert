@@ -671,7 +671,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             // Resolved here rather than left to the store's own timeout, so a silent peer
             // never holds up the answer the others already gave.
             queue.asyncAfter(deadline: .now() + replyTimeout) { [weak self] in
-                self?.lock.withLock { self?.waiting.removeValue(forKey: correlation) }
+                self?.lock.withLock { _ = self?.waiting.removeValue(forKey: correlation) }
                 once.resume(nil)
             }
         }

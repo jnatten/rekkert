@@ -253,15 +253,12 @@ private struct CourtRow: View {
 
     /// The pair, with the server in bold.
     private func names(_ side: TeamSide) -> Text {
-        var line = Text("")
-        var first = true
-        for id in match.teams[side] {
-            guard let player = tournament.player(id) else { continue }
-            if !first { line = line + Text(" & ") }
-            first = false
-            line = line + (id == server ? Text(player.name).bold() : Text(player.name))
+        let names = match.teams[side].compactMap(tournament.player).map { player in
+            player.id == server ? Text(player.name).bold() : Text(player.name)
         }
-        return line
+        return names.dropFirst().reduce(names.first ?? Text("")) { line, name in
+            Text("\(line) & \(name)")
+        }
     }
 
     private func spokenNames(_ side: TeamSide) -> String {
