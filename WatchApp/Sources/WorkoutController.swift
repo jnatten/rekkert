@@ -65,8 +65,15 @@ final class WorkoutController {
         return configuration
     }
 
+    /// Basal alongside active, because total calories is the two of them added up. Without
+    /// the resting burn saved beside the workout, Health has nothing to add and shows the
+    /// same number under both headings.
     private static var shared: Set<HKSampleType> {
-        [HKQuantityType.workoutType(), HKQuantityType(.activeEnergyBurned)]
+        [
+            HKQuantityType.workoutType(),
+            HKQuantityType(.activeEnergyBurned),
+            HKQuantityType(.basalEnergyBurned),
+        ]
     }
 
     /// The last two are for the zones rather than the workout: an age to estimate the
@@ -172,9 +179,14 @@ final class WorkoutController {
         // Apple's own defaults for tennis, rather than a hand-picked list: this is what
         // makes the calories and the heart rate the same numbers the Workout app would have
         // recorded for the same hour.
-        builder.dataSource = HKLiveWorkoutDataSource(
+        let dataSource = HKLiveWorkoutDataSource(
             healthStore: health, workoutConfiguration: Self.configuration
         )
+        // The one addition to those defaults: tennis collects active energy and not the
+        // resting burn underneath it, which is the half of total calories that makes the
+        // two figures differ.
+        dataSource.enableCollection(for: HKQuantityType(.basalEnergyBurned), predicate: nil)
+        builder.dataSource = dataSource
 
         let now = Date()
         session.startActivity(with: now)
@@ -237,7 +249,13 @@ final class WorkoutController {
 
     fileprivate func sessionEnded() {
         guard let builder else { return finished(nil) }
-        builder.addMetadata([HKMetadataKeyIndoorWorkout: true]) { [weak self] _, _ in
+        builder.addMetadata([
+            HKMetadataKeyIndoorWorkout: true,
+            // The nearest thing to a name. Health titles a workout from its activity type
+            // and there is no padel to pick, so the word goes where Health does let an app
+            // put one of its own.
+            HKMetadataKeyWorkoutBrandName: "Padel",
+        ]) { [weak self] _, _ in
             builder.endCollection(withEnd: Date()) { [weak self] _, _ in
                 builder.finishWorkout { [weak self] workout, _ in
                     Task { @MainActor in self?.finished(workout) }
