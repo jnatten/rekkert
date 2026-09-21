@@ -170,6 +170,7 @@ print(json.dumps({
     --skip_metadata "$skip_meta" \
     --skip_screenshots "$skip_shots" \
     --overwrite_screenshots true \
+    --precheck_include_in_app_purchases false \
     --force true
   echo "==> Uploaded, onto the version you are preparing."
   exit 0
