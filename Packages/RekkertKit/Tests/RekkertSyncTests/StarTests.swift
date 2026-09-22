@@ -186,6 +186,24 @@ struct StarTests {
         #expect(star.guests[0].presets.presets.map(\.name) == ["Mine"], "and so did the guest")
     }
 
+    /// Somebody else's phone has no business telling this wrist how hard to tap.
+    @Test func howTheWatchBuzzesStaysPersonal() async throws {
+        let star = Star(guests: 1)
+        let tasks = star.run()
+        defer { tasks.forEach { $0.cancel() } }
+
+        star.host.configure(setup)
+        await star.ready()
+
+        star.host.setHaptics(mode: .byTeam, strength: .strong)
+        // Nothing to wait for on the guest — the point is that it stays put — so the only
+        // honest way to say "it did not travel" is to give it time to.
+        try await settle()
+
+        #expect(star.host.haptics.mode == .byTeam)
+        #expect(star.guests[0].haptics.mode == .off, "the guest's wrist is its own business")
+    }
+
     @Test func whichSideIsBlueStaysPersonal() async throws {
         let star = Star(guests: 1)
         let tasks = star.run()

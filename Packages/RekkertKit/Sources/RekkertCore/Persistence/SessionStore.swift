@@ -272,6 +272,19 @@ public struct SessionStore: Sendable {
         try write(try encoder.encode(preferences), to: displayURL)
     }
 
+    private var hapticsURL: URL { directory.appending(path: "haptics.json") }
+
+    public func loadHaptics() -> HapticPreferences {
+        guard let data = try? Data(contentsOf: hapticsURL),
+              let preferences = try? decoder.decode(HapticPreferences.self, from: data)
+        else { return HapticPreferences() }
+        return preferences
+    }
+
+    public func save(_ preferences: HapticPreferences) throws {
+        try write(try encoder.encode(preferences), to: hapticsURL)
+    }
+
     // MARK: - Plumbing
 
     private var encoder: JSONEncoder { JSONCoding.encoder }

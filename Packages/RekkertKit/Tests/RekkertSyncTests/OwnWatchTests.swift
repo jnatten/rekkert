@@ -70,6 +70,22 @@ private final class PhoneWithWatch {
 @Suite("A phone's own watch on a shared match")
 @MainActor
 struct OwnWatchTests {
+    /// "Somebody else scored that" has to mean somebody other than the two devices this one
+    /// person is carrying. A point tapped on the phone propped at the net post is still your
+    /// own, and the wrist should not be told about it as though a partner had entered it.
+    @Test func aPhoneAndItsOwnWatchCountAsOnePerson() async throws {
+        let pair = PhoneWithWatch(phoneLog: seeded(DeviceID(), points: 1), hostLog: nil)
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        await eventually { pair.watch.log.sessionID == pair.phone.log.sessionID && pair.watch.state != nil }
+
+        await eventually { pair.watch.isOurs(pair.phone.device) }
+        #expect(pair.watch.isOurs(pair.phone.device), "the watch learnt whose phone it is on")
+        #expect(pair.phone.isOurs(pair.watch.device), "and the phone learnt whose watch it has")
+        #expect(pair.watch.isOurs(pair.watch.device), "its own work is its own either way")
+        #expect(!pair.watch.isOurs(pair.host.device), "a stranger's phone is somebody else")
+    }
+
     /// The first thing to answer a join is the watch on the same wrist, saying the session the
     /// phone already has. That is not the offer that was asked for.
     @Test func joiningFromYourOwnMatchStillTakesTheHosts() async throws {

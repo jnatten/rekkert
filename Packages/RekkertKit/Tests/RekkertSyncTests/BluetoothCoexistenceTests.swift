@@ -165,7 +165,7 @@ struct TwoLinkReplyTests {
         let folded = ReplyFold.fold([reply, reply], expected: 2)
 
         let acknowledgement = try #require(folded.acknowledgement, "both links answered")
-        guard case .hello(_, let bound) = try Wire.decode(acknowledgement) else {
+        guard case .hello(_, let bound, _) = try Wire.decode(acknowledgement) else {
             Issue.record("an acknowledgement is a hello")
             return
         }
@@ -196,7 +196,7 @@ struct TwoLinkReplyTests {
         ], expected: 2)
 
         let acknowledgement = try #require(folded.acknowledgement)
-        guard case .hello(_, let bound) = try Wire.decode(acknowledgement) else {
+        guard case .hello(_, let bound, _) = try Wire.decode(acknowledgement) else {
             Issue.record("an acknowledgement is a hello")
             return
         }

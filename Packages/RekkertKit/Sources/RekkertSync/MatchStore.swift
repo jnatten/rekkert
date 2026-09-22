@@ -26,6 +26,12 @@ public final class MatchStore {
     /// How the phone draws its scoreboard. Shared so the watch can flip it from the wrist;
     /// only the phone acts on it.
     public private(set) var display = DisplayPreferences()
+    /// When the watch buzzes for a point. Shared so either device can set it; only the watch
+    /// acts on it, having the only wrist between them.
+    public private(set) var haptics = HapticPreferences()
+    /// One point, just played, on a board that just moved. Everything that is not that is
+    /// filtered out here rather than left to the listener — see `announce(_:before:after:)`.
+    @ObservationIgnored public var onPoint: ((ScoredPoint) -> Void)?
     /// What a phone and its own watch say to each other about a workout. `MatchStore` only
     /// carries these — the workout is none of its business — but this is the channel that
     /// already exists between exactly those two devices, and no other.
@@ -43,7 +49,20 @@ public final class MatchStore {
     @ObservationIgnored private var announcedWorkout: WorkoutSignal?
 
     private var outbox: Outbox
-    private let device: DeviceID
+    /// This install's own id. Public because an event carries its author's, and telling the
+    /// two apart is the whole of "did somebody else score that".
+    public let device: DeviceID
+    /// The other half of this pair — a phone's own watch, or a watch's own phone — learnt from
+    /// its hello. Live state rather than stored: it costs one exchange to relearn, and a
+    /// remembered id for a watch somebody has since unpaired would be worse than not knowing.
+    @ObservationIgnored private var pairedDevice: DeviceID?
+
+    /// Whether that point was put in by one of these two devices rather than by somebody else.
+    /// A phone propped at the net post is still you, so a point tapped on it is not news to
+    /// the wrist in the way a partner's tap is.
+    public func isOurs(_ author: DeviceID) -> Bool {
+        author == device || author == pairedDevice
+    }
     private let transport: any PeerTransport
     private let store: SessionStore?
     private var lastSnapshotPublished = Date.distantPast
@@ -109,6 +128,7 @@ public final class MatchStore {
         )
         self.presets = store?.loadPresets() ?? PresetLibrary()
         self.display = store?.loadDisplay() ?? DisplayPreferences()
+        self.haptics = store?.loadHaptics() ?? HapticPreferences()
         self.state = SessionReducer.state(of: self.log)
     }
 
@@ -360,6 +380,25 @@ public final class MatchStore {
         setTeamColorsSwapped(!display.areColorsSwapped)
     }
 
+    /// Changes how the watch buzzes, from either device. Absolute values rather than steps,
+    /// so a repeated delivery settles on the same answer instead of walking past it.
+    public func setHaptics(
+        mode: HapticMode? = nil,
+        onlyWhenSomeoneElseScores: Bool? = nil,
+        strength: HapticStrength? = nil
+    ) {
+        let next = haptics.setting(
+            mode: mode,
+            onlyWhenSomeoneElseScores: onlyWhenSomeoneElseScores,
+            strength: strength
+        )
+        guard next.mode != haptics.mode
+            || next.onlyWhenSomeoneElseScores != haptics.onlyWhenSomeoneElseScores
+            || next.strength != haptics.strength
+        else { return }
+        apply(next, publish: true)
+    }
+
     /// A match starts the way everyone reads it — us blue on the left, them orange on the
     /// right — whatever the last one was flipped to. A flip answers where you are standing
     /// and which side of the draw you are on today, and neither survives the match it was
@@ -368,6 +407,15 @@ public final class MatchStore {
     private func resetDisplayForNewMatch() {
         guard !display.isDefault else { return }
         apply(display.reset(), publish: true)
+    }
+
+    private func apply(_ preferences: HapticPreferences, publish: Bool) {
+        haptics = preferences
+        try? store?.save(preferences)
+        guard publish else { return }
+        let payload = encode(.haptics(preferences))
+        transport.queue(payload)
+        Task { _ = await sendLive(payload) }
     }
 
     private func apply(_ preferences: DisplayPreferences, publish: Bool) {
@@ -611,6 +659,7 @@ public final class MatchStore {
         publishSnapshot(force: true)
         sharePresets()
         shareDisplay()
+        shareHaptics()
     }
 
     /// The hello, and whatever it brings back. On its own when a gap has been noticed, which
@@ -619,7 +668,7 @@ public final class MatchStore {
         isReachable = transport.isReachable
         // Coverage rather than the raw vector: this is the "what am I missing" question, and
         // the highest number seen is the wrong answer to it when something below is absent.
-        guard let payload = try? Wire.hello(sessionID: log.sessionID, vector: log.coverage).encoded() else { return }
+        guard let payload = try? Wire.hello(sessionID: log.sessionID, vector: log.coverage, from: device).encoded() else { return }
         if let reply = await transport.sendLive(payload) {
             handle(InboundPacket(payload: reply))
         }
@@ -627,11 +676,63 @@ public final class MatchStore {
     }
 
     private func record(_ kind: EventKind) {
+        let before = state
+        let session = log.sessionID
         let event = log.append(kind, from: device)
         outbox.enqueue(event)
+        // Reduced before `refresh()` rather than read after it: the point that wins a match
+        // takes the log and the state with it, and this is the only moment the board it
+        // produced still exists.
+        let after = SessionReducer.state(of: log)
         refresh()
+        announce([event], before: before, after: after, session: session)
         publishSnapshot(force: false)
         Task { await self.flush() }
+    }
+
+    /// Tells whoever is listening that a point was played, and only when one really was.
+    ///
+    /// Four things have to be true, and every one of them silences a way this could go off
+    /// when nothing happened:
+    ///
+    /// - It is a `.point`. Taking one back appends an `.undo` rather than removing anything,
+    ///   and a score put right by hand or a whole state restored are not points being played.
+    /// - There is exactly one in the batch. More than one is a catch-up — a watch that has
+    ///   been asleep is handed everything it missed at once, and counting those out on
+    ///   somebody's wrist would be an alarm rather than a score.
+    /// - The board actually moved. A point for a round already finished, or a tournament
+    ///   court already confirmed, is dropped by the reducer and changes nothing.
+    /// - There is still a session. A farewell carries the whole log of a match already over.
+    private func announce(
+        _ events: [MatchEvent],
+        before: SessionState?,
+        after: SessionState?,
+        session: UUID
+    ) {
+        guard onPoint != nil, let after else { return }
+        let points = events.compactMap { event -> ScoredPoint? in
+            guard case .point(let round, let court, let team) = event.kind else { return nil }
+            return ScoredPoint(
+                team: team, round: round, court: court,
+                session: session, scoredBy: event.id.device
+            )
+        }
+        guard points.count == 1, let point = points.first else { return }
+        guard moved(from: before, to: after, round: point.round, court: point.court) else { return }
+        onPoint?(point)
+    }
+
+    /// Whether the board on that court reads differently than it did. Points alone are not
+    /// enough: a point that wins a game puts them back to love-all, which is the same two
+    /// numbers the game started with.
+    private func moved(from before: SessionState?, to after: SessionState, round: Int, court: Int) -> Bool {
+        let old = before.flatMap { ScoreboardSnapshot.make(from: $0, round: round, court: court) }
+        guard let new = ScoreboardSnapshot.make(from: after, round: round, court: court) else { return false }
+        guard let old else { return true }
+        return old.points != new.points
+            || old.games != new.games
+            || old.completedSets != new.completedSets
+            || old.isFinished != new.isFinished
     }
 
     private func flush() async {
@@ -656,7 +757,7 @@ public final class MatchStore {
             queuePending()
             return
         }
-        if case .hello(_, let vector)? = try? Wire.decode(reply) {
+        if case .hello(_, let vector, _)? = try? Wire.decode(reply) {
             outbox.acknowledge(upTo: vector)
             persist()
         } else {
@@ -687,14 +788,18 @@ public final class MatchStore {
     private func handle(_ packet: InboundPacket) {
         guard let wire = try? Wire.decode(packet.payload) else {
             // Always answer, so a peer awaiting a reply can never hang on bad input.
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
             return
         }
 
         switch wire {
-        case .hello(let sessionID, let vector):
+        case .hello(let sessionID, let vector, let sender):
+            // Only the pair's: a stranger's phone is somebody else by definition, and on a
+            // watch every packet arrives through its own phone anyway.
+            if packet.isFromPairedDevice, let sender, sender != device { pairedDevice = sender }
             sharePresets()
             shareDisplay()
+            shareHaptics()
             shareRoleOnReconnect()
             shareWorkoutOnReconnect()
             guard !retired.contains(sessionID) else {
@@ -711,7 +816,7 @@ public final class MatchStore {
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
             arrive(on: sessionID, from: packet)
             relay(events)
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
         case .retired(let sessionID, let archive, let farewell):
             // Only ever our own live session, and only once: concluding puts it in the
@@ -733,12 +838,12 @@ public final class MatchStore {
                     record(.finish(archive: archive))
                 }
             }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
         case .presets(let incoming):
             let merged = presets.adopting(incoming)
             if merged != presets { apply(merged, publish: false) }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
         case .role(let incoming):
             pairedRole = incoming
@@ -758,7 +863,7 @@ public final class MatchStore {
                 leftSessionID = nil
                 counterpartLeftSessionID = nil
             }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
         case .left(let sessionID):
             // Only ever from this device's own phone or watch — the shared scope does not
@@ -777,12 +882,17 @@ public final class MatchStore {
                     onLeft?()
                 }
             }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
         case .display(let incoming):
             let merged = display.adopting(incoming)
             if merged != display { apply(merged, publish: false) }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+
+        case .haptics(let incoming):
+            let merged = haptics.adopting(incoming)
+            if merged != haptics { apply(merged, publish: false) }
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
         case .workout(let signal):
             // A finished workout is filed here because the watch that recorded it keeps no
@@ -792,7 +902,7 @@ public final class MatchStore {
                 try? store?.archive(record)
             }
             onWorkout?(signal)
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
         case .snapshot(let incoming):
             if retired.contains(incoming.sessionID) {
@@ -864,7 +974,7 @@ public final class MatchStore {
                 // so two devices can never sit pushing sessions at each other.
                 offerOurSession()
             }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage)))
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
         }
     }
 
@@ -894,9 +1004,15 @@ public final class MatchStore {
 
     private func relay(_ incoming: [MatchEvent]) {
         let fresh = incoming.filter { log.events[$0.id] == nil }
+        let before = state
+        let session = log.sessionID
         guard log.merge(fresh) else { return }
         outbox.enqueue(contentsOf: fresh)
+        // Only what was genuinely new, so the same point arriving over both radios is
+        // mentioned once, and the board as it stands before this device redraws it.
+        let after = SessionReducer.state(of: log)
         refresh()
+        announce(fresh, before: before, after: after, session: session)
         // Something new arrived over the top of something missing: a push this device never
         // got, acknowledged on the sender's behalf by a peer that did. Nothing is coming to
         // fill it unprompted, so ask now rather than wait for the next reconnect.
@@ -973,6 +1089,12 @@ public final class MatchStore {
     private func shareDisplay() {
         guard display.hasBeenSet else { return }
         let payload = encode(.display(display))
+        Task { _ = await sendLive(payload) }
+    }
+
+    private func shareHaptics() {
+        guard haptics.hasBeenSet else { return }
+        let payload = encode(.haptics(haptics))
         Task { _ = await sendLive(payload) }
     }
 

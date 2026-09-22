@@ -390,6 +390,167 @@ struct SyncTests {
         #expect(pair.watch.display.isDefault, "and the watch reads the new one the same way")
     }
 
+    // MARK: - Buzzing
+
+    @Test func howTheWatchBuzzesCanBeSetFromEitherDevice() async throws {
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        pair.phone.setHaptics(mode: .byTeam, strength: .strong)
+        try await settle()
+        #expect(pair.watch.haptics.mode == .byTeam, "the phone sets the wrist's buzz")
+        #expect(pair.watch.haptics.strength == .strong)
+
+        pair.watch.setHaptics(onlyWhenSomeoneElseScores: false)
+        try await settle()
+        #expect(pair.phone.haptics.onlyWhenSomeoneElseScores == false, "and the wrist answers back")
+        #expect(pair.phone.haptics.mode == .byTeam, "without losing what the phone said")
+    }
+
+    /// How hard somebody likes their wrist tapped is not a thing about today's match, so a
+    /// new one leaves it exactly where it was. The deliberate opposite of the flips above.
+    @Test func theBuzzOutlivesTheMatchItWasSetIn() async throws {
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        pair.phone.configure(setup)
+        pair.phone.setHaptics(mode: .byTeam, strength: .light)
+        try await settle()
+
+        pair.phone.startNewSession()
+        pair.phone.configure(setup)
+        try await settle()
+
+        #expect(pair.phone.haptics.mode == .byTeam, "still set for the next match")
+        #expect(pair.phone.haptics.strength == .light)
+        #expect(pair.watch.haptics.mode == .byTeam, "and the watch still agrees")
+    }
+
+    @Test func aRepeatedBuzzInstructionDoesNotUndoItself() async throws {
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        pair.phone.setHaptics(mode: .everyPoint)
+        try await settle()
+        #expect(pair.watch.haptics.mode == .everyPoint)
+
+        // The durable queue can deliver the same payload again; an absolute value survives
+        // that where a step would walk past it.
+        pair.phone.setHaptics(mode: .everyPoint)
+        await pair.phone.synchronise()
+        await pair.watch.synchronise()
+        try await settle()
+
+        #expect(pair.watch.haptics.mode == .everyPoint, "still on rather than back off")
+    }
+
+    /// The store says a point was played only when one really was. Everything below is a way
+    /// the board can change without that being true.
+    @Test func onlyAPointThatMovedTheBoardIsAnnounced() async throws {
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        var announced: [ScoredPoint] = []
+        pair.watch.onPoint = { announced.append($0) }
+
+        pair.phone.configure(setup)
+        try await settle()
+        #expect(announced.isEmpty, "setting a match up is not a point")
+
+        pair.phone.tap(team: .a)
+        try await settle()
+        #expect(announced.count == 1, "a point is")
+        #expect(announced.last?.team == .a)
+
+        pair.phone.undoLast()
+        try await settle()
+        #expect(announced.count == 1, "and taking it back is not another one")
+
+        pair.phone.setScore(round: 0, court: 0, points: BySide(a: 3, b: 1))
+        try await settle()
+        #expect(announced.count == 1, "nor is putting the score right by hand")
+
+        pair.phone.swapServingTeam()
+        try await settle()
+        #expect(announced.count == 1, "nor is correcting the serve")
+    }
+
+    /// A watch that has been away is handed everything it missed at once. Those points are
+    /// old news, and counting them out on somebody's wrist would be an alarm.
+    @Test func aCatchUpOfSeveralPointsIsNotAnnouncedAtAll() async throws {
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        pair.phone.configure(setup)
+        try await settle()
+
+        var announced: [ScoredPoint] = []
+        pair.watch.onPoint = { announced.append($0) }
+
+        // Scored while nothing is carrying them across, then delivered in one go.
+        pair.phoneLink.setReachable(false)
+        for _ in 0 ..< 5 { pair.phone.tap(team: .b) }
+        try await settle()
+        #expect(announced.isEmpty, "nothing arrived yet")
+
+        pair.phoneLink.setReachable(true)
+        await pair.phone.synchronise()
+        await pair.watch.synchronise()
+        try await settle()
+
+        #expect(pair.watch.state != nil, "the points did arrive")
+        #expect(announced.isEmpty, "but five at once is a catch-up, not five points")
+    }
+
+    @Test func aPointCarriesWhoEnteredIt() async throws {
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        pair.phone.configure(setup)
+        try await settle()
+
+        var announced: [ScoredPoint] = []
+        pair.watch.onPoint = { announced.append($0) }
+
+        pair.phone.tap(team: .a)
+        try await settle()
+        #expect(announced.last?.scoredBy == pair.phone.device, "and it is the phone's, not the watch's")
+        #expect(pair.watch.isOurs(pair.watch.device), "its own work is always its own")
+    }
+
+    /// Across days, not just across matches: `Pair()` keeps nothing on disk, so surviving a
+    /// new session in memory says nothing about surviving the app being closed.
+    @Test func theBuzzIsStillSetAfterARelaunch() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appending(path: "rekkert-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SessionStore(directory: directory)
+        let device = DeviceID()
+
+        let first = MatchStore(device: device, transport: LoopbackTransport(), store: store)
+        first.setHaptics(mode: .byTeam, onlyWhenSomeoneElseScores: false, strength: .strong)
+        #expect(first.haptics.mode == .byTeam)
+
+        // A fresh store over the same directory, the way a relaunch reads what was left.
+        let second = MatchStore(device: device, transport: LoopbackTransport(), store: store)
+        #expect(second.haptics.mode == .byTeam, "still set a day later")
+        #expect(second.haptics.strength == .strong)
+        #expect(second.haptics.onlyWhenSomeoneElseScores == false)
+        #expect(second.haptics.hasBeenSet, "and worth telling the watch about again")
+    }
+
     @Test func theTwoDisplayPreferencesDoNotDisturbEachOther() async throws {
         let pair = Pair()
         let tasks = pair.run()

@@ -20,6 +20,9 @@ final class AppModel {
     /// Which way this wrist reads the court. Device-local, like the phone's full-screen
     /// preferences — two people on one match read their own the way they are facing.
     let sides = WatchSidePreferences()
+    /// The wrist itself. Only the watch has one, so only the watch buzzes — but what it does
+    /// is set from either device and travels with the match.
+    let haptics = WatchHaptics()
     #endif
     /// The workout, which only the watch can actually hold — the phone's counterpart is a
     /// remote control with the same shape, so the scoreboards can be written once.
@@ -91,6 +94,15 @@ final class AppModel {
         workout.publish = { [store] signal in store.send(signal) }
         store.onWorkout = { [workout] signal in workout.heard(signal) }
         #if os(watchOS)
+        // The store carries the points and holds no opinion about them; the wrist has the
+        // opinions and cannot reach a transport. Exactly the shape the workout uses.
+        haptics.sides = sides
+        haptics.preferences = { [store] in store.haptics }
+        haptics.display = { [store] in store.display }
+        haptics.isOurs = { [store] author in store.isOurs(author) }
+        store.onPoint = { [haptics] point in haptics.heard(point) }
+        #endif
+        #if os(watchOS)
         // A session outlives the process that started it, so coming back to a stopped-looking
         // button while Health is still recording would be a lie.
         workout.recover()
@@ -150,6 +162,13 @@ final class AppModel {
         // watch, so without this its badge and its rows cannot be put in front of `simctl`.
         if arguments.contains("-rekkert-demo-workout") { workout.pretendRunning() }
         if arguments.contains("-rekkert-demo-workout-paused") { workout.pretendRunning(paused: true) }
+        // `-rekkert-demo-buzz [everyPoint|byTeam]` turns the wrist on, which is the only way
+        // to photograph the rows that come with it — simctl cannot work a picker. Out here
+        // with the other standalone flags, since the settings screen needs no match behind it.
+        if let index = arguments.firstIndex(of: "-rekkert-demo-buzz") {
+            let named = index + 1 < arguments.count ? HapticMode(rawValue: arguments[index + 1]) : nil
+            store.setHaptics(mode: named ?? .byTeam)
+        }
         if arguments.contains("-rekkert-demo-roster") {
             remember(players: ["Jonas", "Ada", "Kim", "Sam", "Bjørn", "Ola", "Siri", "Tor", "Håkon"])
             remember(players: ["Jonas", "Ada", "Kim"])

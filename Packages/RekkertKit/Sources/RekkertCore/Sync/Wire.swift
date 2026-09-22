@@ -43,7 +43,13 @@ public enum WorkoutSignal: Codable, Sendable, Hashable {
 
 public enum Wire: Codable, Sendable, Hashable {
     /// "Here is what I have" — the reply carries whatever the sender is missing.
-    case hello(sessionID: UUID, vector: VersionVector)
+    ///
+    /// `from` is the sender's own device id, which is how a phone and its own watch learn to
+    /// recognise each other's work. Every event already carries its author, but nothing else
+    /// says which of those authors is the other half of this pair — and "somebody else scored
+    /// that" has to mean somebody other than the two of you. Optional, and absent from older
+    /// builds, which decode this without it and go on as they did.
+    case hello(sessionID: UUID, vector: VersionVector, from: DeviceID? = nil)
     case events(sessionID: UUID, events: [MatchEvent])
     /// Whole-log backstop, used on the coalescing application-context channel.
     case snapshot(MatchLog)
@@ -74,6 +80,9 @@ public enum Wire: Codable, Sendable, Hashable {
     /// Whether this phone's own watch is on a workout, and the summary once it ends. The
     /// heart rate itself is never in here: it stays on the wrist it was read from.
     case workout(WorkoutSignal)
+    /// When the watch buzzes, so it can be set from whichever device is in your hand. Only
+    /// the watch acts on it — the phone has no wrist to tap.
+    case haptics(HapticPreferences)
 
     public func encoded() throws -> Data {
         try JSONCoding.encoder.encode(self)

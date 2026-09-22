@@ -24,7 +24,7 @@ nonisolated enum ReplyFold {
         var vectors: [VersionVector] = []
 
         for reply in replies.compactMap({ $0 }) {
-            guard case .hello(let session, let vector)? = try? Wire.decode(reply) else {
+            guard case .hello(let session, let vector, _)? = try? Wire.decode(reply) else {
                 folded.unsolicited.append(reply)
                 continue
             }

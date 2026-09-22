@@ -54,7 +54,9 @@ struct WatchCourtPage: View {
                 compact: true,
                 layout: layout,
                 onTap: { side in
-                    WKInterfaceDevice.current().play(.click)
+                    // Silent when the buzz is on: it lands a moment later and says more, and
+                    // a click in front of it is the same news twice.
+                    if model.haptics.clicksOnTap { WKInterfaceDevice.current().play(.click) }
                     model.store.tap(round: round, court: court, team: side)
                 },
                 onUndo: undo,

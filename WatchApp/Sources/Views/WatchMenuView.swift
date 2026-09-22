@@ -87,6 +87,14 @@ struct WatchMenuView: View {
                     )
                 }
 
+                // This wrist again, though it is set on the phone too. Mode only here: how
+                // hard and whose points are set once and belong on the bigger screen.
+                action("Buzz: \(model.store.haptics.mode.displayName)", systemImage: "hand.tap") {
+                    WKInterfaceDevice.current().play(.click)
+                    model.store.setHaptics(mode: model.store.haptics.mode.next)
+                }
+                .accessibilityHint(model.store.haptics.mode.explanation)
+
                 // Flips the phone, not this watch: it is the phone that is propped up
                 // somewhere with a side of the court in front of it.
                 action("Swap phone sides", systemImage: "rectangle.2.swap") {
