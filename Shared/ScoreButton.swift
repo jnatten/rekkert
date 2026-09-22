@@ -4,6 +4,7 @@ import SwiftUI
 /// One of the two big numbers. Tap scores a point, long press undoes.
 struct ScoreButton: View {
     @Environment(\.teamPalette) private var palette
+    @Environment(\.nearTeam) private var nearTeam
     let side: TeamSide
     let value: String
     let teamName: String
@@ -35,8 +36,8 @@ struct ScoreButton: View {
         ServeSideSlot(
             court: isServing && isThisEnd ? servingCourt : nil,
             playerName: namedServer,
-            // Team B is the far end, so their court is drawn as you see it.
-            fromAcrossTheNet: side == .b,
+            // The other team is the far end, so their court is drawn as you see it.
+            fromAcrossTheNet: side != nearTeam,
             height: compact ? 10 : 13
         )
         .foregroundStyle(.white.opacity(0.9))
@@ -57,7 +58,7 @@ struct ScoreButton: View {
 
                     // Above the number for them, below it for us — the same way round as
                     // the court in front of you, where their end is the far one.
-                    serveSlot(showing: side == .b)
+                    serveSlot(showing: side != nearTeam)
 
                     Text(value)
                         .font(.system(size: compact ? 54 : 120, weight: .bold, design: .rounded))
@@ -66,7 +67,7 @@ struct ScoreButton: View {
                         .foregroundStyle(.white)
                         .contentTransition(.numericText())
 
-                    serveSlot(showing: side == .a)
+                    serveSlot(showing: side == nearTeam)
                 }
                 .padding(compact ? 4 : 12)
             }

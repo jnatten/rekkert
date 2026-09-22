@@ -63,6 +63,58 @@ final class WatchSidePreferences {
         }
     }
 
+    /// Which of the two the wearer said they were, on each board they said it on.
+    ///
+    /// Kept per board rather than as one answer for the watch. A friendly redraws the
+    /// partnerships every round and a tournament shows a page per court, so an answer given
+    /// for one board is not an answer for another — and an answer given for a match that is
+    /// over is not an answer for the next one, which is why the session is in the key and why
+    /// writing throws the other sessions away.
+    private var chosen: [String: String] {
+        didSet {
+            guard chosen != oldValue else { return }
+            UserDefaults.standard.set(chosen, forKey: Self.mineKey)
+        }
+    }
+
+    /// Which team is the wearer's on this board: the blue one, unless they have said
+    /// otherwise. Their end of the court is the near one, and the serve is drawn the way they
+    /// see it from there.
+    ///
+    /// Blue is the default rather than the first team because staying the blue one is already
+    /// how this app answers "which of these am I" — so anyone using the colour swap for that
+    /// is telling the board which end they are at without knowing it.
+    func nearTeam(display: DisplayPreferences, board: Board) -> TeamSide {
+        #if DEBUG
+        if let demo = WatchDemoLaunch.isMineSwapped {
+            return demo ? display.blueSide.other : display.blueSide
+        }
+        #endif
+        return chosen[board.key].flatMap(TeamSide.init(rawValue:)) ?? display.blueSide
+    }
+
+    /// Moves the wearer to the other team on this board.
+    ///
+    /// Stored as the side itself rather than as "the one that is not blue": having said out
+    /// loud which of the two they are, a later colour swap should recolour the board without
+    /// walking them to the other end of the court.
+    func chooseOtherSide(display: DisplayPreferences, board: Board) {
+        let next = nearTeam(display: display, board: board).other
+        var kept = chosen.filter { $0.key.hasPrefix(board.sessionPrefix) }
+        kept[board.key] = next.rawValue
+        chosen = kept
+    }
+
+    /// The board an answer belongs to: this match, this round, this court.
+    struct Board: Hashable {
+        var session: UUID
+        var round: Int
+        var court: Int
+
+        var sessionPrefix: String { "\(session.uuidString):" }
+        var key: String { "\(sessionPrefix)\(round):\(court)" }
+    }
+
     /// The court as this wrist wants it, given which end the match says the sides are at.
     ///
     /// `.fixed` is blue on the left whatever the court does — the wrist is glanced at rather
@@ -93,13 +145,15 @@ final class WatchSidePreferences {
 
     private static let modeKey = "watchSideMode"
     private static let flippedKey = "watchSidesFlippedFor"
+    private static let mineKey = "watchSidesChosen"
 
     init() {
         let defaults = UserDefaults.standard
         mode = defaults.string(forKey: Self.modeKey).flatMap(Mode.init(rawValue:)) ?? .fixed
         flippedFor = defaults.string(forKey: Self.flippedKey)
+        chosen = defaults.dictionary(forKey: Self.mineKey) as? [String: String] ?? [:]
         #if DEBUG
-        if let chosen = WatchDemoLaunch.sides.flatMap(Mode.init(rawValue:)) { mode = chosen }
+        if let picked = WatchDemoLaunch.sides.flatMap(Mode.init(rawValue:)) { mode = picked }
         #endif
     }
 }

@@ -33,6 +33,10 @@ public struct DisplayPreferences: Codable, Sendable, Hashable {
 
     public var hasBeenSet: Bool { revision > 0 }
 
+    /// The side drawn blue. Which is also, unless somebody says otherwise, the side they are
+    /// on: staying the blue one is what this preference is for.
+    public var blueSide: TeamSide { areColorsSwapped ? .b : .a }
+
     /// The way a scoreboard reads before anyone has flipped it: the first team on the left
     /// and drawn blue.
     public var isDefault: Bool { !isMirrored && !areColorsSwapped }

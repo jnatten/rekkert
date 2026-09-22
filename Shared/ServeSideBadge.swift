@@ -1,6 +1,16 @@
 import RekkertCore
 import SwiftUI
 
+/// Which team the reader is standing with. Their end is the near one, and a serve is drawn
+/// the way it looks from there.
+///
+/// The phone leaves it at the first team, which is how its board has always read: a phone is
+/// propped at the side of the court and looked at by everyone. A watch is on one person's
+/// wrist, and that person is not always team A — a draw puts them where it puts them.
+extension EnvironmentValues {
+    @Entry var nearTeam: TeamSide = .a
+}
+
 /// Which half the serve is struck from, drawn as the two halves of a court seen from
 /// behind the server — so the lit half is on the same hand they will be standing on.
 struct ServeSideBadge: View {

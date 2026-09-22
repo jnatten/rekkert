@@ -216,6 +216,14 @@ struct DisplayPreferenceTests {
         #expect(decoded.areColorsSwapped == false, "defaulting to the colours it was drawn in")
     }
 
+    /// Which side is blue is also the answer to which side you are on, unless you say
+    /// otherwise — the watch reads its serve badge off this.
+    @Test func theBlueSideIsTheFirstTeamUntilTheColoursAreSwapped() {
+        #expect(DisplayPreferences().blueSide == .a)
+        #expect(DisplayPreferences().setting(colorsSwapped: true).blueSide == .b)
+        #expect(DisplayPreferences().setting(mirrored: true).blueSide == .a, "flipping the board paints nothing")
+    }
+
     @Test func theNewerRevisionWinsWhicheverFieldChanged() {
         let mine = DisplayPreferences().setting(mirrored: true)
         let theirs = mine.setting(colorsSwapped: true)
