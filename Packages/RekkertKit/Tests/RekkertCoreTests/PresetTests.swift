@@ -134,6 +134,68 @@ struct PresetTests {
     }
 }
 
+/// The active match, the preset library and the history are all read back with `try?`, and
+/// each drops what it cannot decode without saying so — a whole file, in the library's case.
+/// So a rules blob written before a field existed has to keep reading, or upgrading takes
+/// the match off the phone.
+@Suite("Rules written by an older build")
+struct LegacyRulesTests {
+    /// Built by taking the key back out of real encoded output rather than written by hand,
+    /// so it cannot drift away from how the rest of the struct is actually stored.
+    private func withoutChangeEnds(_ rules: TraditionalRules) throws -> Data {
+        let encoded = try JSONCoding.encoder.encode(rules)
+        var fields = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        #expect(fields.removeValue(forKey: "changeEnds") != nil, "the key is there to remove")
+        return try JSONSerialization.data(withJSONObject: fields)
+    }
+
+    @Test func rulesFiledBeforeEndsCouldChangeStillRead() throws {
+        let original = TraditionalRules(
+            setsToWin: 3,
+            gamesPerSet: 4,
+            tiebreakAtGames: nil,
+            decidingSet: .standardSuperTiebreak,
+            deuceRule: .goldenPoint
+        )
+        let decoded = try JSONCoding.decoder.decode(TraditionalRules.self, from: try withoutChangeEnds(original))
+
+        #expect(decoded.changeEnds == .off, "playing on at the ends it was played at")
+        #expect(decoded == original, "and nothing else is lost on the way")
+    }
+
+    /// The `active.json` path: the rules travel inside a session, so the whole thing has to
+    /// survive, not just the struct on its own.
+    @Test func aMatchInProgressSurvivesTheUpgrade() throws {
+        let session = TraditionalSession(
+            rules: TraditionalRules(deuceRule: .starPoint),
+            teams: BySide(a: .home, b: .away),
+            score: TraditionalEngine(rules: TraditionalRules()).winGames(3, for: .a, from: TraditionalState())
+        )
+        let encoded = try JSONCoding.encoder.encode(SessionState.traditional(session))
+        var fields = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        strip(&fields)
+
+        let decoded = try JSONCoding.decoder.decode(
+            SessionState.self, from: try JSONSerialization.data(withJSONObject: fields)
+        )
+        guard case .traditional(let restored) = decoded else { return #expect(Bool(false), "still a match") }
+        #expect(restored.rules.changeEnds == .off)
+        #expect(restored.rules.deuceRule == .starPoint)
+        #expect(restored.score.games.a == 3, "and the score it was left at")
+    }
+
+    /// The enum's payload is nested, and how deep depends on how `SessionState` encodes its
+    /// cases — so the key is hunted rather than reached for by path.
+    private func strip(_ fields: inout [String: Any]) {
+        fields.removeValue(forKey: "changeEnds")
+        for (key, value) in fields {
+            guard var nested = value as? [String: Any] else { continue }
+            strip(&nested)
+            fields[key] = nested
+        }
+    }
+}
+
 @Suite("Display preferences")
 struct DisplayPreferenceTests {
     @Test func settingOneLeavesTheOtherAlone() {

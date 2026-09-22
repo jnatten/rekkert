@@ -38,6 +38,16 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
     /// time — a board that is over or being looked back at, or a session played before the
     /// clock existed. The date is state; the ticking is the view's business.
     public var clockStart: Date?
+    /// How many times the two sides have changed ends. Zero for the modes that have no ends
+    /// rule, and for the matches that were not set up to use one.
+    ///
+    /// The count rather than a flag: which way round the court is reads off its parity, and
+    /// a changeover to call out is the one step it takes forward. One number cannot disagree
+    /// with itself the way two derived flags can.
+    public var changeovers = 0
+
+    /// Which way round the court is standing now.
+    public var endsSwapped: Bool { !changeovers.isMultiple(of: 2) }
 
     /// The two big numbers as drawn.
     public var primary: BySide<String> { points.map(\.text) }
@@ -78,7 +88,8 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             isLocked: score.isFinished,
             isFinished: score.isFinished,
             winner: score.winner,
-            clockStart: score.isFinished ? nil : session.startedAt
+            clockStart: score.isFinished ? nil : session.startedAt,
+            changeovers: engine.changeovers(score)
         )
     }
 

@@ -111,12 +111,36 @@ struct NewSessionView: View {
 
     @ViewBuilder
     private var formatSection: some View {
-        Section("Format") {
+        Section {
             Stepper("Sets to win: \(rules.setsToWin)", value: $rules.setsToWin, in: 1 ... 5)
             Stepper("Games per set: \(rules.gamesPerSet)", value: $rules.gamesPerSet, in: 1 ... 9)
             Toggle("Tiebreak at \(rules.gamesPerSet)–\(rules.gamesPerSet)", isOn: tiebreakBinding)
             Toggle("Super tiebreak in deciding set", isOn: superTiebreakBinding)
                 .disabled(rules.setsToWin < 2)
+            Picker("Swap sides", selection: $rules.changeEnds) {
+                ForEach(ChangeEndsRule.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+        } header: {
+            Text("Format")
+        } footer: {
+            // Only once somebody has asked for it: a line explaining a board that never
+            // moves is noise under every match anybody sets up.
+            if let changeEndsExplanation {
+                Text(changeEndsExplanation)
+            }
+        }
+    }
+
+    private var changeEndsExplanation: String? {
+        switch rules.changeEnds {
+        case .off:
+            nil
+        case .oddGames:
+            "Swap after the first game and every odd game after it, and every six points in a tiebreak. The board turns over with you."
+        case .everySet:
+            rules.setsToWin == 1
+                ? "Swap at the end of every set — which a match of a single set never reaches."
+                : "Swap at the end of every set. The board turns over with you."
         }
     }
 

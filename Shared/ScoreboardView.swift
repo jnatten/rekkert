@@ -36,6 +36,10 @@ struct ScoreboardView<Badge: View>: View {
                 gameLine(games)
             }
         }
+        // A court that turns over on its own moves the halves and reverses the set line with
+        // them. As a turn that reads as a turn; as an instant swap it reads as the score
+        // being edited.
+        .animation(.snappy, value: layout.isMirrored)
     }
 
     @ViewBuilder

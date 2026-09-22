@@ -24,6 +24,22 @@ public enum DeuceRule: String, Codable, Sendable, Hashable, CaseIterable {
     }
 }
 
+/// When the two sides swap ends. Off unless a match asks for it: a board that turns itself
+/// over is a surprise to anyone who did not set it up that way.
+public enum ChangeEndsRule: String, Codable, Sendable, Hashable, CaseIterable {
+    case off
+    case oddGames
+    case everySet
+
+    public var displayName: String {
+        switch self {
+        case .off: "Never"
+        case .oddGames: "Odd games"
+        case .everySet: "Every set"
+        }
+    }
+}
+
 public enum DecidingSet: Codable, Sendable, Hashable {
     case normal
     case superTiebreak(points: Int)
@@ -40,6 +56,7 @@ public struct TraditionalRules: Codable, Sendable, Hashable {
     public var tiebreakPoints: Int
     public var decidingSet: DecidingSet
     public var deuceRule: DeuceRule
+    public var changeEnds: ChangeEndsRule
 
     public init(
         sport: Sport = .padel,
@@ -48,7 +65,8 @@ public struct TraditionalRules: Codable, Sendable, Hashable {
         tiebreakAtGames: Int? = 6,
         tiebreakPoints: Int = 7,
         decidingSet: DecidingSet = .normal,
-        deuceRule: DeuceRule = .advantage
+        deuceRule: DeuceRule = .advantage,
+        changeEnds: ChangeEndsRule = .off
     ) {
         self.sport = sport
         self.setsToWin = setsToWin
@@ -57,6 +75,28 @@ public struct TraditionalRules: Codable, Sendable, Hashable {
         self.tiebreakPoints = tiebreakPoints
         self.decidingSet = decidingSet
         self.deuceRule = deuceRule
+        self.changeEnds = changeEnds
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sport, setsToWin, gamesPerSet, tiebreakAtGames, tiebreakPoints, decidingSet, deuceRule, changeEnds
+    }
+
+    /// Hand-rolled so a match, preset or history record filed before ends could change still
+    /// reads. A synthesised decoder asks for every key it knows about, and the three places
+    /// these are loaded from all swallow the failure: `active.json` is quarantined, the
+    /// history drops the records it cannot read, and the preset library is replaced whole by
+    /// an empty one — so the match, the history and the presets would go without a word.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sport = try container.decode(Sport.self, forKey: .sport)
+        setsToWin = try container.decode(Int.self, forKey: .setsToWin)
+        gamesPerSet = try container.decode(Int.self, forKey: .gamesPerSet)
+        tiebreakAtGames = try container.decodeIfPresent(Int.self, forKey: .tiebreakAtGames)
+        tiebreakPoints = try container.decode(Int.self, forKey: .tiebreakPoints)
+        decidingSet = try container.decode(DecidingSet.self, forKey: .decidingSet)
+        deuceRule = try container.decode(DeuceRule.self, forKey: .deuceRule)
+        changeEnds = try container.decodeIfPresent(ChangeEndsRule.self, forKey: .changeEnds) ?? .off
     }
 }
 

@@ -68,6 +68,25 @@ struct WatchMenuView: View {
                     }
                 }
 
+                // This wrist. Cycles rather than opening a picker: the page is a column of
+                // buttons rather than a form, and there are only three of them to walk past.
+                action("Sides: \(model.sides.mode.title)", systemImage: model.sides.mode.symbol) {
+                    WKInterfaceDevice.current().play(.click)
+                    model.sides.mode = model.sides.mode.next
+                }
+                .accessibilityHint(sidesHint)
+
+                // Whatever the mode, this means this watch: it takes it to manual and turns
+                // the board from wherever it is now.
+                action("Swap sides", systemImage: "rectangle.2.swap") {
+                    WKInterfaceDevice.current().play(.click)
+                    model.sides.flip(
+                        from: layout,
+                        display: model.store.display,
+                        session: model.store.log.sessionID
+                    )
+                }
+
                 // Flips the phone, not this watch: it is the phone that is propped up
                 // somewhere with a side of the court in front of it.
                 action("Swap phone sides", systemImage: "rectangle.2.swap") {
@@ -180,6 +199,32 @@ struct WatchMenuView: View {
             model.discard()
         }
         confirming = nil
+    }
+
+    /// What the scoreboard page is drawing now, so "Swap sides" turns the board the wearer
+    /// is actually looking at rather than one worked out a second way.
+    private var layout: ScoreboardLayout {
+        model.sides.layout(
+            court: model.store.state
+                .flatMap { ScoreboardSnapshot.make(from: $0, round: currentRoundIndex, court: 0) }?
+                .endsSwapped ?? false,
+            display: model.store.display,
+            session: model.store.log.sessionID
+        )
+    }
+
+    /// Named apart from the `round` a friendly binds above, which is the round itself.
+    private var currentRoundIndex: Int {
+        guard case .friendly(let session)? = model.store.state else { return 0 }
+        return session.currentIndex
+    }
+
+    private var sidesHint: String {
+        switch model.sides.mode {
+        case .fixed: "Blue stays on the left"
+        case .followPhone: "Turns over whenever the phone does"
+        case .manual: "Turns over only when you say so"
+        }
     }
 
     private var hasResults: Bool { model.store.state?.hasResults ?? false }

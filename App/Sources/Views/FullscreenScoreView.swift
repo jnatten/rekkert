@@ -12,9 +12,10 @@ struct FullscreenScoreView: View {
 
     var round: Int?
     var court = 0
-    var mirrored = false
 
-    private var layout: ScoreboardLayout { ScoreboardLayout(isMirrored: mirrored) }
+    /// Built here rather than handed in: the court turns over on its own now, and a value
+    /// captured when the cover went up would hold the board at the end it was opened at.
+    private var layout: ScoreboardLayout { .phone(snapshot, model.store.display) }
 
     @State private var display = DisplayOverride()
     @State private var showingControls = true

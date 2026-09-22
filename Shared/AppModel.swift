@@ -16,6 +16,11 @@ final class AppModel {
     /// The full-screen board is the phone's too.
     let fullscreen = FullscreenPreferences()
     #endif
+    #if os(watchOS)
+    /// Which way this wrist reads the court. Device-local, like the phone's full-screen
+    /// preferences — two people on one match read their own the way they are facing.
+    let sides = WatchSidePreferences()
+    #endif
     /// The workout, which only the watch can actually hold — the phone's counterpart is a
     /// remote control with the same shape, so the scoreboards can be written once.
     let workout = WorkoutController()
@@ -192,7 +197,7 @@ final class AppModel {
 
         case "traditional":
             store.configure(.traditional(
-                rules: TraditionalRules(deuceRule: .starPoint),
+                rules: TraditionalRules(deuceRule: .starPoint, changeEnds: demoChangeEnds(arguments)),
                 teams: BySide(
                     a: TeamInfo(name: "Blues", players: ["Jonas", "Ada"]),
                     b: TeamInfo(name: "Oranges", players: ["Kim", "Sam"])
@@ -203,7 +208,11 @@ final class AppModel {
                 // Pinned, so a screenshot draws the same partnerships every time.
                 id: FriendlyID(UUID(uuidString: "00000000-0000-0000-0000-0000000000C0")!),
                 name: "Thursday",
-                rules: TraditionalRules(setsToWin: 1, deuceRule: .goldenPoint),
+                rules: TraditionalRules(
+                    setsToWin: 1,
+                    deuceRule: .goldenPoint,
+                    changeEnds: demoChangeEnds(arguments)
+                ),
                 // `-rekkert-demo-friendly-players 3` cuts the group down, which is how the
                 // singles and the bench get onto a screenshot.
                 players: Array(
@@ -288,6 +297,14 @@ final class AppModel {
     #endif
 
     #if DEBUG
+    /// `-rekkert-demo-swap-sides [oddGames|everySet]` starts the match with a changeover rule
+    /// on, so the board turning over can be photographed by a script that cannot tap anything.
+    private func demoChangeEnds(_ arguments: [String]) -> ChangeEndsRule {
+        guard let index = arguments.firstIndex(of: "-rekkert-demo-swap-sides") else { return .off }
+        guard index + 1 < arguments.count else { return .oddGames }
+        return ChangeEndsRule(rawValue: arguments[index + 1]) ?? .oddGames
+    }
+
     private func friendlyPlayerCount(_ arguments: [String]) -> Int {
         guard let index = arguments.firstIndex(of: "-rekkert-demo-friendly-players"),
               index + 1 < arguments.count,

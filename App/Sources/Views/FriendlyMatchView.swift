@@ -17,7 +17,7 @@ struct FriendlyMatchView: View {
                     VStack(spacing: 0) {
                         ScoreboardView(
                             snapshot: snapshot,
-                            layout: ScoreboardLayout(isMirrored: model.store.display.isMirrored),
+                            layout: .phone(snapshot, model.store.display),
                             // Addressed to the round on screen, so a tap that arrives late
                             // lands where it was aimed rather than on whatever is current.
                             onTap: { model.store.tap(round: session.currentIndex, court: 0, team: $0) },
@@ -68,7 +68,7 @@ struct FriendlyMatchView: View {
                 }
             }
             .fullScreenCover(isPresented: $fullscreen) {
-                FullscreenScoreView(mirrored: model.store.display.isMirrored)
+                FullscreenScoreView()
             }
             .sheet(isPresented: $showingRounds) {
                 if let session { FriendlyRoundsSheet(session: session) }

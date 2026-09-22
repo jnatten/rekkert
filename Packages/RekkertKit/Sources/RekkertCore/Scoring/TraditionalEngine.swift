@@ -65,11 +65,47 @@ public struct TraditionalEngine: Sendable, Hashable {
         return ServeState(slot: ServeRotation.slot(at: index, swapping: state.serversSwapped), court: court)
     }
 
-    public func shouldChangeEnds(_ state: TraditionalState) -> Bool {
-        switch phase(state) {
-        case .finished: false
-        case .tiebreak: state.points.total > 0 && state.points.total.isMultiple(of: 6)
-        case .game: state.points.total == 0 && !totalGamesPlayed(state).isMultiple(of: 2)
+    /// How many times the two sides have walked over. Counted off the score rather than
+    /// remembered, so undo, a late joiner and a replayed log all arrive at the same court
+    /// without an event of their own to carry it.
+    ///
+    /// Games are counted across the match rather than within each set. A set that ran to an
+    /// odd number of games leaves everyone on the wrong end for the next one, and one running
+    /// total carries that over by itself.
+    public func changeovers(_ state: TraditionalState) -> Int {
+        switch rules.changeEnds {
+        case .off:
+            0
+        case .everySet:
+            // Nobody walks over to shake hands, so the set that won the match is not one.
+            max(0, state.completedSets.count - (state.isFinished ? 1 : 0))
+        case .oddGames:
+            gameChangeovers(state) + tiebreakChangeovers(state)
+        }
+    }
+
+    /// Which way round the court is standing now.
+    public func endsSwapped(_ state: TraditionalState) -> Bool {
+        !changeovers(state).isMultiple(of: 2)
+    }
+
+    /// One after the first game, one after the third, and so on. Halved rather than taken as
+    /// a parity: the walks come a pair of games apart, so which end you are at repeats every
+    /// four games rather than every two.
+    private func gameChangeovers(_ state: TraditionalState) -> Int {
+        let played = totalGamesPlayed(state) - (state.isFinished ? 1 : 0)
+        return (max(0, played) + 1) / 2
+    }
+
+    /// Six points at a time inside a tiebreak. A finished one drops the walk that would have
+    /// landed on its very last point: that walk is the one between the sets, and the game the
+    /// tiebreak just added has counted it already.
+    private func tiebreakChangeovers(_ state: TraditionalState) -> Int {
+        var live = 0
+        if case .tiebreak = phase(state) { live = state.points.total / 6 }
+        return state.completedSets.reduce(live) { running, set in
+            guard let tiebreak = set.tiebreak else { return running }
+            return running + (tiebreak.total - 1) / 6
         }
     }
 

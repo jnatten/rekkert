@@ -179,6 +179,63 @@ struct ScoreCallTests {
         #expect(ScoreCaller.call(from: midway, to: done)?.phrases == ["9, 7", "Court 1 finished"])
     }
 
+    // MARK: - Changing ends
+
+    @Test func theChangeoverIsCalledAfterTheOddGames() {
+        var umpire = Umpire(TraditionalRules(changeEnds: .oddGames))
+        #expect(umpire.game(.a)?.phrases == ["Game, Blue", "1 game to 0, Blue", "Swap sides"])
+        #expect(umpire.game(.b)?.phrases == ["Game, Orange", "1 game all"], "nothing after the second")
+        #expect(umpire.game(.a)?.phrases == ["Game, Blue", "2 games to 1, Blue", "Swap sides"])
+    }
+
+    @Test func aMatchThatDoesNotChangeEndsNeverMentionsIt() {
+        var umpire = Umpire()
+        for _ in 0 ..< 3 {
+            #expect(umpire.game(.a)?.phrases.contains("Swap sides") == false)
+        }
+    }
+
+    /// Both directions. Taking back the point that won the game is the easy one; taking back
+    /// the first point of the game after it is the one that catches a trigger reading only
+    /// whether the score is sitting at a changeover, because that goes back to sitting at one.
+    @Test func undoingAcrossAChangeoverSaysNothingAboutIt() throws {
+        var umpire = Umpire(TraditionalRules(changeEnds: .oddGames))
+        for _ in 0 ..< 3 { umpire.point(.a) }
+        let atFortyLove = umpire.scoreboard
+
+        umpire.point(.a)
+        let afterTheGame = umpire.scoreboard
+        let takingBackTheGame = umpire.rewind(to: atFortyLove)
+        #expect(try #require(takingBackTheGame).phrases.contains("Swap sides") == false)
+
+        umpire = Umpire(TraditionalRules(changeEnds: .oddGames))
+        umpire.game(.a)
+        umpire.point(.a)
+        let takingBackTheNextPoint = umpire.rewind(to: afterTheGame)
+        #expect(takingBackTheNextPoint == nil, "nothing at all: it went back to love-all")
+    }
+
+    @Test func theTiebreakChangeoverIsCalled() {
+        var umpire = Umpire(TraditionalRules(changeEnds: .oddGames))
+        for _ in 0 ..< 6 { umpire.game(.a); umpire.game(.b) }
+        for _ in 0 ..< 2 { umpire.point(.a); umpire.point(.b) }
+        #expect(umpire.point(.a)?.phrases.contains("Swap sides") == false, "nothing at five points")
+        #expect(umpire.point(.b)?.phrases.last == "Swap sides", "and a walk at six")
+    }
+
+    @Test func everySetCallsItBetweenSetsOnly() {
+        var umpire = Umpire(TraditionalRules(setsToWin: 3, changeEnds: .everySet))
+        #expect(umpire.game(.a)?.phrases.contains("Swap sides") == false)
+        for _ in 0 ..< 4 { umpire.game(.a) }
+        #expect(umpire.game(.a)?.phrases == ["Game and set, Blue, 6 to 0", "1 set to 0, Blue", "Swap sides"])
+    }
+
+    @Test func nobodyIsToldToChangeEndsAsTheMatchIsWon() {
+        var umpire = Umpire(TraditionalRules(setsToWin: 1, changeEnds: .oddGames))
+        for _ in 0 ..< 5 { umpire.game(.a) }
+        #expect(umpire.game(.a)?.phrases == ["Game, set and match, Blue"])
+    }
+
     @Test func theSpokenLineReadsAsSentences() {
         let call = ScoreCall(phrases: ["Game, Blue", "1 game to 0, Blue"])
         #expect(call.spoken == "Game, Blue. 1 game to 0, Blue.")

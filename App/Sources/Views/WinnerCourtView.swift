@@ -14,7 +14,7 @@ struct WinnerCourtView: View {
                     VStack(spacing: 0) {
                         ScoreboardView(
                             snapshot: snapshot,
-                            layout: ScoreboardLayout(isMirrored: model.store.display.isMirrored),
+                            layout: .phone(snapshot, model.store.display),
                             onTap: { model.store.tap(team: $0) },
                             onUndo: { model.store.undoLast() }
                         )
@@ -50,7 +50,7 @@ struct WinnerCourtView: View {
                     EndSessionButton(title: "Finish", symbol: "stop.circle") { showingEnd = true }
                 }
             }
-            .fullScreenCover(isPresented: $fullscreen) { FullscreenScoreView(mirrored: model.store.display.isMirrored) }
+            .fullScreenCover(isPresented: $fullscreen) { FullscreenScoreView() }
             .task {
                 #if DEBUG
                 if DemoLaunch.fullscreen { fullscreen = true }

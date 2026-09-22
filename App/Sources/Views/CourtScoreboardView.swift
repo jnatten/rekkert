@@ -21,7 +21,7 @@ struct CourtScoreboardView: View {
                     VStack(spacing: 0) {
                         ScoreboardView(
                             snapshot: snapshot,
-                            layout: ScoreboardLayout(isMirrored: model.store.display.isMirrored),
+                            layout: .phone(snapshot, model.store.display),
                             onTap: { model.store.tap(round: round, court: court, team: $0) },
                             onUndo: { model.store.undoLast() }
                         )
@@ -34,7 +34,7 @@ struct CourtScoreboardView: View {
             }
             .announcesScore(snapshot)
             .fullScreenCover(isPresented: $fullscreen) {
-                FullscreenScoreView(round: round, court: court, mirrored: model.store.display.isMirrored)
+                FullscreenScoreView(round: round, court: court)
             }
             .navigationTitle("Round \(round + 1) · Court \(court + 1)")
             .navigationBarTitleDisplayMode(.inline)

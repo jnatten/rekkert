@@ -157,11 +157,16 @@ struct WatchCourtPage: View {
         model.store.state.flatMap { ScoreboardSnapshot.make(from: $0, round: round, court: court) }
     }
 
-    /// Blue always reads first here. The watch is glanced at rather than studied, and on a
-    /// screen this size the colour you are is the thing you are looking for — so swapping
-    /// the colours swaps the sides with them.
+    /// Whichever way this wrist has asked to read the court. Blue reads first by default:
+    /// the watch is glanced at rather than studied, and on a screen this size the colour you
+    /// are is the thing you are looking for — so swapping the colours swaps the sides with
+    /// them, and a court that turns over moves nothing until somebody says it should.
     private var layout: ScoreboardLayout {
-        ScoreboardLayout(isMirrored: model.store.display.areColorsSwapped)
+        model.sides.layout(
+            court: snapshot?.endsSwapped ?? false,
+            display: model.store.display,
+            session: model.store.log.sessionID
+        )
     }
 
     private func courtControls(_ snapshot: ScoreboardSnapshot) -> some View {

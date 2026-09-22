@@ -60,6 +60,10 @@ public enum ScoreCaller {
     // MARK: - What the point finished
 
     private static func conclusion(from previous: ScoreboardSnapshot, to current: ScoreboardSnapshot) -> [String] {
+        ending(from: previous, to: current) + changingEnds(from: previous, to: current)
+    }
+
+    private static func ending(from previous: ScoreboardSnapshot, to current: ScoreboardSnapshot) -> [String] {
         if current.completedSets.count > previous.completedSets.count, let set = current.completedSets.last {
             return closingSet(set, current)
         }
@@ -70,6 +74,16 @@ public enum ScoreCaller {
             return reachingTheTarget(current)
         }
         return []
+    }
+
+    /// Its own phrase, so it earns the pause after whatever tally came before it.
+    ///
+    /// Only ever one more walk than before, for the same reason `gameWinner` insists on
+    /// exactly one more game: undo takes the count back down, and nobody walks anywhere on
+    /// a score being corrected. Nobody walks over to shake hands either.
+    private static func changingEnds(from previous: ScoreboardSnapshot, to current: ScoreboardSnapshot) -> [String] {
+        guard current.changeovers == previous.changeovers + 1, !current.isFinished else { return [] }
+        return ["Swap sides"]
     }
 
     /// Counted modes end by arriving at a number rather than by winning a game, so they
