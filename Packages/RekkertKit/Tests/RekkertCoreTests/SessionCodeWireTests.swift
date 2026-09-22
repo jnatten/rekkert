@@ -51,6 +51,45 @@ struct SessionCodeWireTests {
         #expect(SessionCode.folding("H7K3MRXYZ") == "H7K3MR")
     }
 
+    // MARK: - The hyphen, put in as you type
+
+    @Test func theHyphenArrivesWithTheFourthCharacter() {
+        #expect(SessionCode.grouped("H7K") == "H7K", "nothing to put after it yet")
+        #expect(SessionCode.grouped("H7K3") == "H7K-3")
+        #expect(SessionCode.grouped("H7K3MR") == "H7K-3MR")
+    }
+
+    /// A trailing `H7K-` would come straight back every time it was deleted, and there would be
+    /// no way past it. So each backspace has to take a real character off.
+    @Test func backspacingWalksBackOutAgain() {
+        var field = SessionCode.grouped("H7K3MR")
+        var seen = [field]
+        while !field.isEmpty {
+            field = SessionCode.grouped(String(field.dropLast()))
+            seen.append(field)
+        }
+        #expect(seen == ["H7K-3MR", "H7K-3M", "H7K-3", "H7K", "H7", "H", ""])
+    }
+
+    @Test func aGroupedFieldStillParses() {
+        #expect(SessionCode("H7K-3MR") == SessionCode("H7K3MR"))
+        #expect(SessionCode(SessionCode.grouped("h7k3mr")) == SessionCode("H7K3MR"))
+    }
+
+    @Test func regroupingWhatIsAlreadyGroupedChangesNothing() {
+        for raw in ["H7K3MR", "H7K3", "H7K", "H", ""] {
+            let once = SessionCode.grouped(raw)
+            #expect(SessionCode.grouped(once) == once)
+        }
+    }
+
+    /// What the host reads off their screen is what the joiner watches appear on theirs.
+    @Test func theCodeIsShownTheWayItIsTyped() {
+        let code = SessionCode("H7K3MR")!
+        #expect(code.description == SessionCode.grouped(code.letters))
+        #expect(code.description == "H7K-3MR")
+    }
+
     /// The two agree wherever both have an answer: anything the field lets you finish typing
     /// is a code, and folding it again changes nothing.
     @Test func foldingAndParsingAgree() {

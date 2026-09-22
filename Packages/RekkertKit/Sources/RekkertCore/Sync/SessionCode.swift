@@ -58,6 +58,24 @@ nonisolated public struct SessionCode: Hashable, Sendable, CustomStringConvertib
         return String(out.prefix(length))
     }
 
+    /// The same folding, with the hyphen the code is read out with put in as you type: `H7K-3MR`.
+    ///
+    /// For a field rather than for a value — what somebody typing sees, matching what the host's
+    /// screen shows them. The hyphen is punctuation and never part of the code: `init?` skips it
+    /// on the way back in, so a grouped field still parses.
+    ///
+    /// Nothing is added until there is a character to put after it. A trailing `H7K-` would
+    /// reappear the moment it was deleted, and there would be no way back past it.
+    public static func grouped(_ raw: String) -> String {
+        let letters = folding(raw)
+        guard letters.count > groupSize else { return letters }
+        let middle = letters.index(letters.startIndex, offsetBy: groupSize)
+        return "\(letters[..<middle])-\(letters[middle...])"
+    }
+
+    /// Where the hyphen goes, for reading aloud and for typing alike.
+    private static let groupSize = 3
+
     /// `SystemRandomNumberGenerator` is cryptographically secure on Apple platforms, so there
     /// is no reason to reach past it. The generator is a parameter only so a test can pin it.
     public static func random(using generator: inout some RandomNumberGenerator) -> SessionCode {
@@ -73,11 +91,9 @@ nonisolated public struct SessionCode: Hashable, Sendable, CustomStringConvertib
         return random(using: &system)
     }
 
-    /// Grouped for reading aloud: `H7K-3MR`.
-    public var description: String {
-        let middle = letters.index(letters.startIndex, offsetBy: 3)
-        return "\(letters[..<middle])-\(letters[middle...])"
-    }
+    /// Grouped for reading aloud: `H7K-3MR`. The same grouping a field being typed into puts
+    /// in, so what a host reads off their screen is what a joiner watches appear on theirs.
+    public var description: String { Self.grouped(letters) }
 }
 
 /// Plain six characters on the wire rather than a wrapped field, and put back through `init?`

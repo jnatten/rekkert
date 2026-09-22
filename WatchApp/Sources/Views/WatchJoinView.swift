@@ -46,10 +46,13 @@ struct WatchJoinView: View {
     private var entry: some View {
         // Tapping it hands over to watchOS, which offers dictation, scribble and the keyboard
         // together. Dictated letters arrive as words and spaces, which is exactly what the
-        // folding takes out.
-        TextField("Code", text: Binding(get: { typed }, set: { typed = SessionCode.folding($0) }))
+        // folding takes out — and the hyphen it puts back is the one the host is reading off
+        // their own screen.
+        TextField("Code", text: Binding(get: { typed }, set: { typed = SessionCode.grouped($0) }))
             .font(.system(.title3, design: .monospaced))
             .multilineTextAlignment(.center)
+            .textInputAutocapitalization(.characters)
+            .autocorrectionDisabled()
             .onSubmit(submit)
 
         Button("Join", action: submit)
@@ -118,7 +121,7 @@ struct WatchJoinView: View {
     private func openDemo() {
         #if DEBUG
         guard let code = WatchDemoLaunch.joinCode else { return }
-        typed = SessionCode.folding(code)
+        typed = SessionCode.grouped(code)
         // WatchConnectivity is not up the instant the app is, and a join is live or nothing —
         // so wait for the phone the way the Join button does by being disabled.
         Task {

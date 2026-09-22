@@ -36,7 +36,7 @@ struct JoinMatchSheet: View {
                 }
             }
             .task {
-                typed = prefilled
+                typed = SessionCode.grouped(prefilled)
                 typing = true
                 if submitsImmediately { submit() }
             }
@@ -61,7 +61,7 @@ struct JoinMatchSheet: View {
     private var entry: some View {
         Form {
             Section {
-                TextField("", text: Binding(get: { typed }, set: { typed = SessionCode.folding($0) }))
+                TextField("", text: Binding(get: { typed }, set: { typed = SessionCode.grouped($0) }))
                     .font(.system(.largeTitle, design: .monospaced))
                     .multilineTextAlignment(.center)
                     .textInputAutocapitalization(.characters)
