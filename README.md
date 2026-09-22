@@ -149,6 +149,29 @@ Presets are edited on the phone and read on both, so the whole library travels t
 and the newer copy wins. That is what keeps a deletion from being resurrected by a stale
 copy on the other device.
 
+## Joining from the wrist
+
+Most people at a shared match only ever join one. They host nothing, set nothing up, and
+never touch the phone again once they are on it — so the six characters were the whole of
+their phone, and the one moment the app made them dig it out. **Join a match** on the watch's
+start screen takes them instead. Tap the field and watchOS offers dictation, scribble and the
+keyboard together; a code read out across a court is six letters spoken, and `O`, `I` and `L`
+fold to `0` and `1` on the way in, so saying it works about as well as typing it.
+
+The watch does not do the joining. It cannot: the local network and Bluetooth are both built
+on iOS alone, and the only thing a watch can talk to is the iPhone it is paired with. So it
+hands the code over and that phone goes looking — which is why the phone can stay in a bag,
+but cannot stay at home. The wrist is told how it is going, and the match arrives on it the
+way any match on that phone already does.
+
+A join is live or it is nothing. Queued, it would be handed over twenty minutes later and go
+looking for a match that finished, so nothing is kept: a code that did not reach the phone
+says so on the wrist rather than leaving it watching a search nobody is running.
+
+Hosting stays on the phone. A host advertises over Bluetooth, and a watch has no way to
+advertise anything — `CBPeripheralManager` does not exist on watchOS — so there is no version
+of this where the code is read out from a wrist.
+
 ## Workouts
 
 The watch can record a workout while you play. It is a button — on the watch's menu page,
@@ -309,7 +332,8 @@ Debug builds accept `-rekkert-demo traditional|winnercourt|friendly|americano|me
 `-rekkert-demo-rounds-sheet`,
 `-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N`,
 `-rekkert-demo-open-court R,C`, `-rekkert-demo-roster`, `-rekkert-demo-presets`,
-`-rekkert-demo-watch-page menu|standings|controls`, `-rekkert-demo-fullscreen`,
+`-rekkert-demo-watch-page menu|standings|controls`, `-rekkert-demo-watch-join CODE`,
+`-rekkert-demo-fullscreen`,
 `-rekkert-demo-blackout`, `-rekkert-demo-settings`, `-rekkert-demo-swap-player`,
 `-rekkert-demo-workouts`, `-rekkert-demo-workout`, `-rekkert-demo-workout-paused`,
 `-rekkert-demo-voices` or
@@ -333,6 +357,17 @@ Two booted iPhone simulators share the Mac's network stack, so Bonjour between t
 opens the join sheet with it filled in and submits, and `-rekkert-demo-late-tap N` scores a
 point after N seconds — which is how a *live* update gets verified between two simulators
 that nothing can tap.
+
+`-rekkert-demo-watch-join CODE` is the wrist's half of the same thing: it opens the watch's
+join sheet with the code in it and submits once the phone is reachable. Pointed at a guest
+phone launched with no code of its own, it is how the whole path gets exercised — the watch
+types, its phone goes looking, and all three end up on the host's log:
+
+    # the watch here belongs to the GUEST, which is the whole point of it
+    xcrun simctl launch $HOST  dev.natten.rekkert \
+      -rekkert-demo traditional -rekkert-demo-points 5 -rekkert-share-host K9M4PT
+    xcrun simctl launch $GUEST dev.natten.rekkert
+    xcrun simctl launch $WATCH dev.natten.rekkert.watchkitapp -rekkert-demo-watch-join K9M4PT
 
 `./scripts/share.sh` does all of that and asserts it: two phones and the paired watch on one
 match, everybody's `active.json` holding the same events, then the guest killed while the host

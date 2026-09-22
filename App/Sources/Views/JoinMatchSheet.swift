@@ -61,7 +61,7 @@ struct JoinMatchSheet: View {
     private var entry: some View {
         Form {
             Section {
-                TextField("", text: Binding(get: { typed }, set: { typed = tidied($0) }))
+                TextField("", text: Binding(get: { typed }, set: { typed = SessionCode.folding($0) }))
                     .font(.system(.largeTitle, design: .monospaced))
                     .multilineTextAlignment(.center)
                     .textInputAutocapitalization(.characters)
@@ -110,21 +110,6 @@ struct JoinMatchSheet: View {
                 }
             }
         }
-    }
-
-    /// Folds as it is typed, so O becomes 0 in front of you rather than being refused later.
-    private func tidied(_ raw: String) -> String {
-        var out = ""
-        for character in raw.uppercased() {
-            switch character {
-            case "O": out.append("0")
-            case "I", "L": out.append("1")
-            case "-", " ": continue
-            default:
-                if SessionCode.alphabet.contains(character) { out.append(character) }
-            }
-        }
-        return String(out.prefix(SessionCode.length))
     }
 
     private func submit() {

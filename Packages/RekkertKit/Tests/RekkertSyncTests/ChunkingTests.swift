@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import RekkertCore
 import Testing
 @testable import RekkertSync
 

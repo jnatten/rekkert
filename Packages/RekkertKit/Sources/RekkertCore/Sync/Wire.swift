@@ -41,6 +41,44 @@ public enum WorkoutSignal: Codable, Sendable, Hashable {
     case finished(WorkoutRecord)
 }
 
+/// What a phone and its own watch say to each other about joining somebody else's match.
+///
+/// Lopsided for the same reason `WorkoutSignal` is: only one of the two can do the thing. A
+/// watch has no transport that reaches a stranger — the local network and Bluetooth are both
+/// built on iOS alone — so the wrist asks and the phone goes and does it.
+///
+/// The code goes to the phone in the same pocket and nowhere else. `FanOutTransport.Scope
+/// .sharedSession` drops this case, which matters more here than for anything else on the
+/// wire: handing the code to a peer would hand over the key to the match.
+public enum SharingSignal: Codable, Sendable, Hashable {
+    /// Watch to phone: join this one.
+    case join(SessionCode)
+    /// Watch to phone: stop looking.
+    case cancel
+    /// Phone to watch: here is how it is going.
+    case state(SharingState)
+}
+
+/// How a join is going, as much of it as is worth saying on a wrist.
+///
+/// A cut-down `SharedSession.Phase`: no `hosting`, which a watch cannot do, and the failure
+/// flattened to its three reasons rather than carrying `LocalNetworkTransport.Failure` — that
+/// belongs to a transport the watch does not build.
+public enum SharingState: Codable, Sendable, Hashable {
+    case off
+    case searching
+    case joined
+    case failed(SharingFailure)
+}
+
+public enum SharingFailure: String, Codable, Sendable, Hashable {
+    case notFound, rejected, blocked
+    /// The phone never heard the code. Not one of the transport's own answers — a join is
+    /// live or it is nothing, so a watch whose message did not land has to be told, rather
+    /// than left watching a search that was never started.
+    case unreachable
+}
+
 public enum Wire: Codable, Sendable, Hashable {
     /// "Here is what I have" — the reply carries whatever the sender is missing.
     ///
@@ -83,6 +121,9 @@ public enum Wire: Codable, Sendable, Hashable {
     /// When the watch buzzes, so it can be set from whichever device is in your hand. Only
     /// the watch acts on it — the phone has no wrist to tap.
     case haptics(HapticPreferences)
+    /// Joining somebody's match from the wrist: the code one way, how it is going the other.
+    /// Only the phone acts on it — it is the only one of the pair that can reach a stranger.
+    case sharing(SharingSignal)
 
     public func encoded() throws -> Data {
         try JSONCoding.encoder.encode(self)

@@ -93,6 +93,17 @@ final class AppModel {
         // opinions and cannot reach a transport.
         workout.publish = { [store] signal in store.send(signal) }
         store.onWorkout = { [workout] signal in workout.heard(signal) }
+        // Joining, which only the phone can actually do. The wrist asks and is told how it
+        // went; the same two ends as the workout, the other way round.
+        #if os(watchOS)
+        store.onSharing = { [weak self] signal in
+            guard case .state(let state) = signal else { return }
+            self?.joining = state
+        }
+        #else
+        sharing.publish = { [store] state in Task { await store.send(.state(state)) } }
+        store.onSharing = { [weak self] signal in self?.joinFromWatch(signal) }
+        #endif
         #if os(watchOS)
         // The store carries the points and holds no opinion about them; the wrist has the
         // opinions and cannot reach a transport. Exactly the shape the workout uses.
@@ -111,6 +122,41 @@ final class AppModel {
         seedDemoIfRequested()
         #endif
     }
+
+    #if os(watchOS)
+    /// How the join this watch asked its phone for is getting on. The watch has no transport
+    /// that reaches a stranger, so this is hearsay from the phone rather than anything it can
+    /// see for itself — which is exactly why it is worth showing.
+    var joining: SharingState = .off
+
+    /// Hands a code to the phone and starts watching for what it makes of it.
+    ///
+    /// A join is never queued — one handed over twenty minutes late would go looking for a
+    /// match that finished — so if it did not land there is nothing to wait for, and saying so
+    /// beats a spinner that never resolves.
+    func join(_ code: SessionCode) {
+        joining = .searching
+        Task { [store] in
+            let landed = await store.send(.join(code))
+            if !landed, case .searching = joining { joining = .failed(.unreachable) }
+        }
+    }
+
+    func stopJoining() {
+        joining = .off
+        Task { [store] in await store.send(.cancel) }
+    }
+    #else
+    /// The wrist has typed a code, or given up on one. Doing the thing is this end's job.
+    private func joinFromWatch(_ signal: SharingSignal) {
+        switch signal {
+        case .join(let code): sharing.join(code)
+        case .cancel: sharing.cancelJoining()
+        // Said by this end, not heard by it.
+        case .state: break
+        }
+    }
+    #endif
 
     #if DEBUG
     /// `-rekkert-demo traditional|americano|mexicano` seeds a session at launch. simctl

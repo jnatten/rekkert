@@ -46,7 +46,10 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
             // the phone in the same pocket, and goes no further. Nor does stepping off: a
             // guest leaving is telling its own watch, not the host. Nor how hard somebody
             // likes their own wrist tapped.
-            case .presets, .display, .role, .workout, .left, .haptics: false
+            // And least of all the code to a match: a peer that was handed it could let
+            // anybody else in. It goes to the phone in the same pocket as the wrist that
+            // typed it, and stops there.
+            case .presets, .display, .role, .workout, .left, .haptics, .sharing: false
             }
         }
     }

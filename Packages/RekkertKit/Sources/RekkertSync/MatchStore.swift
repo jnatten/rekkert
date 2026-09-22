@@ -36,6 +36,10 @@ public final class MatchStore {
     /// carries these — the workout is none of its business — but this is the channel that
     /// already exists between exactly those two devices, and no other.
     @ObservationIgnored public var onWorkout: ((WorkoutSignal) -> Void)?
+    /// Joining somebody's match, asked for from the wrist. Same two devices as the workout,
+    /// and the same shape: the watch cannot reach a stranger, so it hands the code to the
+    /// phone and is told how it went.
+    @ObservationIgnored public var onSharing: ((SharingSignal) -> Void)?
     /// This device is off a match that belongs to somebody else — its watch stepped off and
     /// took it along, or something of its own was started on top. The store has dropped the
     /// session by the time this fires; whatever is holding a link to the host open has to let
@@ -904,6 +908,13 @@ public final class MatchStore {
             onWorkout?(signal)
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
+        case .sharing(let signal):
+            // Only ever from the device in the same pocket — the scope drops this case before
+            // it can reach anybody else — but said out loud here too, because acting on a
+            // stranger's `.join` would be joining a match on their say-so.
+            if packet.isFromPairedDevice { onSharing?(signal) }
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+
         case .snapshot(let incoming):
             if retired.contains(incoming.sessionID) {
                 return announceRetirement(of: incoming.sessionID, to: packet)
@@ -1060,6 +1071,22 @@ public final class MatchStore {
         // on with nothing behind it. Only a finished workout is a fact worth keeping.
         if case .finished = signal { transport.queue(payload) }
         Task { _ = await sendLive(payload) }
+    }
+
+    /// Passes a join between this device and the one in the same pocket: the code from the
+    /// wrist, and how it is going back the other way.
+    ///
+    /// Live only, and never repeated on reconnect. Every case here is either a request or a
+    /// statement about right now, and both go stale: a `.join` queued and handed over twenty
+    /// minutes later would go looking for a match that finished, and a `.searching` delivered
+    /// after the fact would leave a watch spinning at a search nobody is running. If it did
+    /// not arrive, there is nothing worth saying late.
+    /// Answers whether it actually landed, which the other signals have no need of and this
+    /// one does: a watch that asked and was not heard would otherwise sit watching a search
+    /// nobody is running.
+    @discardableResult
+    public func send(_ signal: SharingSignal) async -> Bool {
+        await sendLive(encode(.sharing(signal))) != nil
     }
 
     /// Offered alongside the presets on reconnect. A workout signal is never queued, so a

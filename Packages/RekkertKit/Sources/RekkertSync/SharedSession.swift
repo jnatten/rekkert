@@ -19,7 +19,21 @@ public final class SharedSession {
         case failed(LocalNetworkTransport.Failure)
     }
 
-    public private(set) var phase: Phase = .off
+    public private(set) var phase: Phase = .off {
+        didSet {
+            guard phase != oldValue else { return }
+            publish?(phase.asShared)
+        }
+    }
+
+    /// Told to this device's own watch, when there is one waiting to hear how the code it
+    /// handed over is getting on. Set from `AppModel`; nil on the watch, which has no join of
+    /// its own to report.
+    ///
+    /// Hung on `phase` rather than on the transport's status, because half the transitions a
+    /// watch cares about never go through it — `join`, `stop`, `cancelJoining` and
+    /// `dismissFailure` all set the phase themselves.
+    @ObservationIgnored public var publish: ((SharingState) -> Void)?
     /// How many other phones are on the match right now.
     public private(set) var peers = 0
     /// Set when a match this device had joined has been out of reach long enough that it is
@@ -315,6 +329,29 @@ public final class SharedSession {
             peers = 0
             store.cancelJoining()
             phase = .failed(failure)
+        }
+    }
+}
+
+extension SharedSession.Phase {
+    /// As much of it as means anything on a wrist. Hosting is not one of them: a watch cannot
+    /// advertise, so it can never be the phase a watch is being told about.
+    var asShared: SharingState {
+        switch self {
+        case .off, .hosting: .off
+        case .searching: .searching
+        case .joined: .joined
+        case .failed(let failure): .failed(failure.asShared)
+        }
+    }
+}
+
+extension LocalNetworkTransport.Failure {
+    var asShared: SharingFailure {
+        switch self {
+        case .notFound: .notFound
+        case .rejected: .rejected
+        case .blocked: .blocked
         }
     }
 }

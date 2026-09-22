@@ -107,6 +107,7 @@ struct WatchRootView: View {
 
 struct WatchIdleView: View {
     @Environment(AppModel.self) private var model
+    @State private var joining = false
 
     var body: some View {
         ScrollView {
@@ -148,12 +149,24 @@ struct WatchIdleView: View {
                 .font(.footnote)
                 .padding(.top, 2)
 
+                // Most people at a shared match only ever join one, and this is the whole of
+                // what they have to do. Worth not making them find the phone for it.
+                Button("Join a match") { joining = true }
+                    .buttonStyle(.bordered)
+                    .font(.footnote)
+
                 // A workout is not tied to a match, so it has to be reachable with none on.
                 WatchWorkoutButton(isMenuRow: false)
 
                 connection
             }
             .padding(.horizontal, 2)
+        }
+        .sheet(isPresented: $joining) { WatchJoinView() }
+        .task {
+            #if DEBUG
+            if WatchDemoLaunch.joinCode != nil { joining = true }
+            #endif
         }
     }
 

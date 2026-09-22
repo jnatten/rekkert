@@ -20,6 +20,11 @@ enum WatchDemoLaunch {
         }
     }
 
+    /// `-rekkert-demo-watch-join CODE` opens the join sheet with the code already in it and
+    /// submits, which is the watch counterpart of the phone's `-rekkert-share-join`. `simctl`
+    /// cannot tap, so it is the only way the wrist's half of a join gets exercised.
+    static var joinCode: String? { value(after: "-rekkert-demo-watch-join") }
+
     private static func value(after flag: String) -> String? {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }

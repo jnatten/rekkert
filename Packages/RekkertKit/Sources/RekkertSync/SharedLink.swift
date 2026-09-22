@@ -1,4 +1,5 @@
 import Foundation
+import RekkertCore
 
 /// The part of a shared-match link that `SharedSession` drives.
 ///
