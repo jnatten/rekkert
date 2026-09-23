@@ -13,6 +13,9 @@ struct WatchRootView: View {
             .onChange(of: model.workout.isTracking) { _, isTracking in
                 if !isTracking, selection == workoutTag { selection = 0 }
             }
+            // The presets page is only in the idle deck, so starting one from it would leave
+            // the match opening on a page it does not have.
+            .onChange(of: model.store.state == nil) { selection = 0 }
     }
 
     @ViewBuilder
@@ -21,19 +24,20 @@ struct WatchRootView: View {
         case .none:
             if let result = model.store.lastResult {
                 WatchResultView(state: result)
-            } else if model.workout.isTracking {
+            } else {
                 // A workout does not need a match around it, and somebody who started one
                 // with nothing on still wants somewhere to watch it.
                 TabView(selection: $selection) {
                     WatchIdleView().tag(0)
+                    WatchPresetsView().tag(presetsTag)
                     workoutPage
                 }
                 .tabViewStyle(.page)
-                // This deck is two pages where the one before it was four, so a selection
-                // left on the menu would land on a page that is not here.
-                .task { if selection != workoutTag { selection = 0 } }
-            } else {
-                WatchIdleView()
+                // A selection left on the menu would land on a page that is not here.
+                .task {
+                    if ![0, presetsTag, workoutTag].contains(selection) { selection = 0 }
+                    openDemoPage()
+                }
             }
 
         case .traditional, .winnerCourt, .pointCount:
@@ -95,9 +99,11 @@ struct WatchRootView: View {
     private var standingsTag: Int { 1_000 }
     private var menuTag: Int { 1_001 }
     private var workoutTag: Int { 1_002 }
+    private var presetsTag: Int { 1_003 }
 
     private func openDemoPage() {
         #if DEBUG
+        if WatchDemoLaunch.page == "presets" { selection = presetsTag }
         if WatchDemoLaunch.page == "menu" { selection = menuTag }
         if WatchDemoLaunch.page == "standings" { selection = standingsTag }
         if WatchDemoLaunch.page == "workout" { selection = workoutTag }
@@ -112,10 +118,58 @@ struct WatchIdleView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 8) {
+                connection
+
+                Button("Quick match", systemImage: "bolt") {
+                    model.store.configure(.traditional(
+                        rules: TraditionalRules(),
+                        teams: BySide(a: .home, b: .away)
+                    ))
+                }
+                .buttonStyle(.bordered)
+                .font(.footnote)
+
+                // Most people at a shared match only ever join one, and this is the whole of
+                // what they have to do. Worth not making them find the phone for it.
+                Button("Join a match", systemImage: "person.2") { joining = true }
+                    .buttonStyle(.bordered)
+                    .font(.footnote)
+
+                // A workout is not tied to a match, so it has to be reachable with none on.
+                WatchWorkoutButton(isMenuRow: false)
+            }
+            .padding(.horizontal, 2)
+        }
+        .sheet(isPresented: $joining) { WatchJoinView() }
+        .task {
+            #if DEBUG
+            if WatchDemoLaunch.joinCode != nil { joining = true }
+            #endif
+        }
+    }
+
+    private var connection: some View {
+        Label(
+            model.store.isReachable ? "iPhone connected" : "iPhone not reachable",
+            systemImage: model.store.isReachable ? "iphone.radiowaves.left.and.right" : "iphone.slash"
+        )
+        .font(.system(size: 10))
+        .foregroundStyle(model.store.isReachable ? .green : .secondary)
+    }
+}
+
+/// One swipe from the idle screen, so a long list of presets never pushes the three
+/// things everybody reaches for out of sight.
+struct WatchPresetsView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 8) {
                 if model.store.presets.isEmpty {
                     empty
                 } else {
-                    Text("Start")
+                    Text("Presets")
                         .font(.headline)
                     ForEach(model.store.presets.ordered) { preset in
                         Button {
@@ -138,60 +192,23 @@ struct WatchIdleView: View {
                         .buttonStyle(.bordered)
                     }
                 }
-
-                Button("Quick match") {
-                    model.store.configure(.traditional(
-                        rules: TraditionalRules(),
-                        teams: BySide(a: .home, b: .away)
-                    ))
-                }
-                .buttonStyle(.bordered)
-                .font(.footnote)
-                .padding(.top, 2)
-
-                // Most people at a shared match only ever join one, and this is the whole of
-                // what they have to do. Worth not making them find the phone for it.
-                Button("Join a match") { joining = true }
-                    .buttonStyle(.bordered)
-                    .font(.footnote)
-
-                // A workout is not tied to a match, so it has to be reachable with none on.
-                WatchWorkoutButton(isMenuRow: false)
-
-                connection
             }
             .padding(.horizontal, 2)
-        }
-        .sheet(isPresented: $joining) { WatchJoinView() }
-        .task {
-            #if DEBUG
-            if WatchDemoLaunch.joinCode != nil { joining = true }
-            #endif
         }
     }
 
     private var empty: some View {
         VStack(spacing: 6) {
-            Image(systemName: "figure.tennis")
+            Image(systemName: "list.bullet")
                 .font(.title3)
                 .foregroundStyle(.secondary)
-            Text("No match running")
+            Text("No presets yet")
                 .font(.headline)
             Text("Save a preset on your iPhone and it shows up here, ready to start.")
                 .font(.system(size: 10))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
         }
-    }
-
-    private var connection: some View {
-        Label(
-            model.store.isReachable ? "iPhone connected" : "iPhone not reachable",
-            systemImage: model.store.isReachable ? "iphone.radiowaves.left.and.right" : "iphone.slash"
-        )
-        .font(.system(size: 10))
-        .foregroundStyle(model.store.isReachable ? .green : .secondary)
-        .padding(.top, 2)
     }
 }
 
