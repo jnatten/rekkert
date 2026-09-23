@@ -684,7 +684,9 @@ public final class MatchStore {
         // Coverage rather than the raw vector: this is the "what am I missing" question, and
         // the highest number seen is the wrong answer to it when something below is absent.
         guard let payload = try? Wire.hello(sessionID: log.sessionID, vector: log.coverage, from: device).encoded() else { return }
-        if let reply = await transport.sendLive(payload) {
+        // Through the timeout, like every other send: `consumeReachability` awaits this, so a
+        // hello that was never answered would stop every later reconnect from being noticed.
+        if let reply = await sendLive(payload) {
             handle(InboundPacket(payload: reply))
         }
         await flush()
@@ -785,18 +787,20 @@ public final class MatchStore {
     /// WatchConnectivity does not promise to call back. A reply that never arrives would
     /// otherwise leave `isFlushing` set for the life of the app and wedge the outbox
     /// permanently — which looks exactly like one-way sync.
+    ///
+    /// Not a task group: a group waits for every child before it returns, and a send parked
+    /// on a continuation the framework never resumes cannot see that it was cancelled. The
+    /// send is left to finish on its own instead, and whatever it comes back with is dropped.
     private func sendLive(_ payload: Data) async -> Data? {
         let transport = transport
         let timeout = sendTimeout
-        return await withTaskGroup(of: Data?.self) { group in
-            group.addTask { await transport.sendLive(payload) }
-            group.addTask {
+        return await withCheckedContinuation { continuation in
+            let once = ResumeOnce(continuation)
+            Task { once.resume(await transport.sendLive(payload)) }
+            Task {
                 try? await Task.sleep(for: timeout)
-                return nil
+                once.resume(nil)
             }
-            let first = await group.next() ?? nil
-            group.cancelAll()
-            return first
         }
     }
 
@@ -1035,6 +1039,11 @@ public final class MatchStore {
         let after = SessionReducer.state(of: log)
         refresh()
         announce(fresh, before: before, after: after, session: session)
+        // The snapshot channel too, exactly as a tap made here would. It is the one channel a
+        // watch that was not reachable reads the moment it wakes; without it a point scored
+        // on somebody else's phone reached this device's own watch only when the durable
+        // queue got round to it, while this device's own points were there straight away.
+        publishSnapshot(force: false)
         // Something new arrived over the top of something missing: a push this device never
         // got, acknowledged on the sender's behalf by a peer that did. Nothing is coming to
         // fill it unprompted, so ask now rather than wait for the next reconnect.
@@ -1199,8 +1208,12 @@ public final class MatchStore {
         snapshotPending = true
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(max(0, delay)))
-            guard let self, self.snapshotPending, !self.log.isEmpty else { return }
+            guard let self, self.snapshotPending else { return }
+            // Cleared before the log is looked at. Waking to find the match over left the
+            // flag set, and every throttled publish after that was dropped on it until
+            // something forced one.
             self.snapshotPending = false
+            guard !self.log.isEmpty else { return }
             self.lastSnapshotPublished = Date()
             self.transport.publishSnapshot(self.encode(.snapshot(self.log)))
         }
