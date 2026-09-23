@@ -7,7 +7,7 @@ import RekkertCore
 nonisolated public enum SessionKey {
     /// Bump the version when the framing or the key schedule changes, so an old build and a
     /// new one cannot half-connect.
-    private static let salt = Data("dev.natten.rekkert.share.v1".utf8)
+    private static let salt = Data("dev.natten.rekkert.share.v2".utf8)
 
     private static func bytes(of share: UUID) -> Data {
         withUnsafeBytes(of: share.uuid) { Data($0) }
@@ -15,7 +15,7 @@ nonisolated public enum SessionKey {
 
     /// The TLS pre-shared key. Never leaves the device.
     ///
-    /// Salted by the session's own id so two courts that happen to draw the same six symbols
+    /// Salted by the session's own id so two courts that happen to draw the same six digits
     /// do not end up with the same key, and a code overheard once is worth nothing against a
     /// later match.
     public static func presharedKey(for code: SessionCode, share: UUID) -> SymmetricKey {
@@ -27,21 +27,21 @@ nonisolated public enum SessionKey {
         )
     }
 
-    /// Two bytes, published in the clear so a joiner can tell which advertised session is the
+    /// One byte, published in the clear so a joiner can tell which advertised session is the
     /// one it was given the code for.
     ///
-    /// Two and not four. The code carries thirty bits, so publishing thirty-two bits of a hash
-    /// of it would let anyone within earshot of the network narrow it to exactly one candidate
-    /// offline — which is the same as publishing the code. Sixteen bits leaves some sixteen
-    /// thousand, each of which has to be tried against a live host one failed handshake at a
-    /// time. The cost is a wasted handshake once in every 65,536 sessions picked, which is why
-    /// the joiner tries every advertisement that matches rather than only the first.
+    /// One and not more. The code carries twenty bits, so every bit of a hash of it published
+    /// in the clear is a bit anyone within earshot of the network can take off it offline.
+    /// Eight bits leaves some four thousand candidates, each of which has to be tried against a
+    /// live host one failed handshake at a time. The cost is a wasted handshake once in every
+    /// 256 sessions picked, which is why the joiner tries every advertisement that matches
+    /// rather than only the first.
     public static func fingerprint(for code: SessionCode, share: UUID) -> String {
         let digest = HKDF<SHA256>.deriveKey(
             inputKeyMaterial: SymmetricKey(data: Data(code.letters.utf8)),
             salt: salt,
             info: Data("fingerprint|".utf8) + bytes(of: share),
-            outputByteCount: 2
+            outputByteCount: 1
         )
         return digest.withUnsafeBytes { $0.map { String(format: "%02x", $0) }.joined() }
     }

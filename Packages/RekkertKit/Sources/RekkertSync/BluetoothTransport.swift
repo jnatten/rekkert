@@ -22,16 +22,16 @@ import CryptoKit
 /// local name and service data and moves its service UUIDs into an overflow area that is only
 /// found by a central scanning for that exact UUID, so the service UUID is fixed and app-wide —
 /// the direct counterpart of `_rekkert-score._tcp`. Deriving it from the code instead would be
-/// worse than saying nothing: the code carries thirty bits, and a hash of it broadcast in the
+/// worse than saying nothing: the code carries twenty bits, and a hash of it broadcast in the
 /// clear is worked back to the code offline in seconds, which is the whole reason
-/// `SessionKey.fingerprint` publishes sixteen bits and not more. So the code is checked after
+/// `SessionKey.fingerprint` publishes eight bits and not more. So the code is checked after
 /// connecting instead, against a greeting the host publishes, and every frame is sealed.
 nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sendable {
     /// Built on demand rather than stored: `CBUUID` is not `Sendable`, and a shared one would
     /// be a global with a lock's worth of doubt over it for no gain — these are four bytes of
     /// parsing each.
     public static var serviceUUID: CBUUID { CBUUID(string: "7B63F774-3D1F-4011-807E-85119A4CBAC8") }
-    /// Read in the clear: which share this is, and two bytes to tell it from the court next
+    /// Read in the clear: which share this is, and one byte to tell it from the court next
     /// door. Neither is a secret — both already travel in the open in the Bonjour TXT record.
     private static var greetingUUID: CBUUID { CBUUID(string: "B5BA2B7E-A912-48FC-A3CB-92B18234753E") }
     /// Guest to host.
@@ -499,7 +499,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
 
     /// Where a wrong code is found out, and the only place it can be: the advertisement could
     /// not carry enough to tell, so the question is asked of the host itself. The fingerprint
-    /// settles it cheaply, and the seal settles it for good — a peer that agreed on two bytes
+    /// settles it cheaply, and the seal settles it for good — a peer that agreed on one byte
     /// by accident still cannot produce a frame this end will open.
     private func greeted(_ value: Data?, on peripheral: CBPeripheral) {
         guard case .joining(let code) = lock.withLock({ intent }),

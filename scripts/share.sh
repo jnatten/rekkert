@@ -34,7 +34,7 @@ done
 
 HOST_NAME=${REKKERT_SHARE_HOST:-"iPhone 17 Pro"}
 GUEST_NAME=${REKKERT_SHARE_GUEST:-"iPhone Air"}
-CODE=${REKKERT_SHARE_CODE:-H7K3MR}
+CODE=${REKKERT_SHARE_CODE:-482915}
 
 DD=.build/dd
 IOS_APP="$DD/Build/Products/Debug-iphonesimulator/Rekkert.app"

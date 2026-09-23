@@ -59,7 +59,7 @@ struct BluetoothCoexistenceTests {
     @Test func hostingOpensBothLinksOnTheOneCode() throws {
         let (sharing, store, radio) = make()
         store.configure(setup)
-        let code = try #require(SessionCode("H7K3MR"))
+        let code = try #require(SessionCode("482915"))
 
         sharing.host(code: code)
 
@@ -69,7 +69,7 @@ struct BluetoothCoexistenceTests {
 
     @Test func joiningLooksOnBothLinks() throws {
         let (sharing, _, radio) = make()
-        let code = try #require(SessionCode("K9M4PT"))
+        let code = try #require(SessionCode("730264"))
         sharing.join(code)
         #expect(radio.joined == code)
     }
@@ -87,7 +87,7 @@ struct BluetoothCoexistenceTests {
     /// about nothing.
     @Test func aMatchStillCarriedOverBluetoothIsNotReconnecting() async {
         let (sharing, _, radio) = make()
-        sharing.join(SessionCode("H7K3MR")!)
+        sharing.join(SessionCode("482915")!)
         sharing.apply(.joined(peers: 1))
 
         // The network link goes first, which is what a host locking their phone looks like
@@ -102,7 +102,7 @@ struct BluetoothCoexistenceTests {
 
     @Test func aMatchOnNeitherLinkIsReconnecting() async {
         let (sharing, _, radio) = make()
-        sharing.join(SessionCode("H7K3MR")!)
+        sharing.join(SessionCode("482915")!)
         sharing.apply(.joined(peers: 1))
         sharing.apply(.searching)
         radio.present(1)
@@ -116,7 +116,7 @@ struct BluetoothCoexistenceTests {
 
     @Test func nobodyIsToldTheMatchIsLostWhileBluetoothHasIt() async throws {
         let (sharing, _, radio) = make()
-        sharing.join(SessionCode("H7K3MR")!)
+        sharing.join(SessionCode("482915")!)
         sharing.apply(.joined(peers: 1))
         radio.present(1)
         await eventually { radio.reachableCount == 1 }
@@ -133,7 +133,7 @@ struct BluetoothCoexistenceTests {
     /// them together would tell four people there are eight of them.
     @Test func thePeerCountIsPeopleRatherThanLinks() async {
         let (sharing, _, radio) = make()
-        sharing.join(SessionCode("H7K3MR")!)
+        sharing.join(SessionCode("482915")!)
         radio.present(1)
         await eventually { sharing.reachablePeers == 1 }
         sharing.apply(.joined(peers: 1))

@@ -44,7 +44,7 @@ struct SharedSessionTests {
         let (sharing, store) = make()
         store.configure(setup)
 
-        let chosen = try #require(SessionCode("K9M4PT"))
+        let chosen = try #require(SessionCode("730264"))
         sharing.host(code: chosen)
         #expect(sharing.code == chosen)
     }
@@ -64,7 +64,7 @@ struct SharedSessionTests {
 
     @Test func joiningLooksForItAndTellsTheStoreToExpectOne() throws {
         let (sharing, store) = make()
-        sharing.join(try #require(SessionCode("K9M4PT")))
+        sharing.join(try #require(SessionCode("730264")))
 
         #expect(sharing.phase == .searching)
         #expect(sharing.isSharing, "it counts as sharing while it is looking")
@@ -77,7 +77,7 @@ struct SharedSessionTests {
         store.tap(team: .a)
         // Stand in for having joined somebody else's.
         store.beginJoining()
-        sharing.join(try #require(SessionCode("K9M4PT")))
+        sharing.join(try #require(SessionCode("730264")))
         store.startSharing()
 
         #expect(store.role == .host, "startSharing is refused for a guest, allowed here")
@@ -99,7 +99,7 @@ struct SharedSessionTests {
         let sharing = SharedSession(store: store, link: LocalNetworkTransport())
         let running = Task { await store.run() }
         defer { running.cancel() }
-        sharing.join(try #require(SessionCode("K9M4PT")))
+        sharing.join(try #require(SessionCode("730264")))
         sharing.apply(.joined(peers: 1))
         #expect(sharing.phase == .joined)
 
@@ -127,7 +127,7 @@ struct SharedSessionTests {
     /// read just after it. It used to put the phase back to something with nothing behind it.
     @Test func aStatusFromBeforeStoppingIsIgnored() throws {
         let (sharing, store) = make()
-        sharing.join(try #require(SessionCode("K9M4PT")))
+        sharing.join(try #require(SessionCode("730264")))
         sharing.stop()
 
         sharing.apply(.joined(peers: 1))
@@ -163,7 +163,7 @@ struct LostHostTests {
     private func joined(grace: Duration = .milliseconds(80)) -> SharedSession {
         let store = MatchStore(device: DeviceID(), transport: LoopbackTransport(), snapshotInterval: 0)
         let sharing = SharedSession(store: store, link: LocalNetworkTransport(), graceBeforeNotice: grace)
-        sharing.join(SessionCode("K9M4PT")!)
+        sharing.join(SessionCode("730264")!)
         sharing.apply(.joined(peers: 1))
         return sharing
     }

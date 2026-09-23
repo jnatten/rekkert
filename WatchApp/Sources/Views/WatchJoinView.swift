@@ -44,16 +44,31 @@ struct WatchJoinView: View {
 
     @ViewBuilder
     private var entry: some View {
-        // Tapping it hands over to watchOS, which offers dictation, scribble and the keyboard
-        // together. Dictated letters arrive as words and spaces, which is exactly what the
-        // folding takes out — and the hyphen it puts back is the one the host is reading off
-        // their own screen.
-        TextField("Code", text: Binding(get: { typed }, set: { typed = SessionCode.grouped($0) }))
+        // A pad of its own rather than a field: watchOS has no number keyboard, and the sheet a
+        // field opens puts the letters in front of the digits.
+        Text(typed.isEmpty ? "···-···" : typed)
             .font(.system(.title3, design: .monospaced))
-            .multilineTextAlignment(.center)
-            .textInputAutocapitalization(.characters)
-            .autocorrectionDisabled()
-            .onSubmit(submit)
+            .foregroundStyle(typed.isEmpty ? .tertiary : .primary)
+
+        Grid(horizontalSpacing: 4, verticalSpacing: 4) {
+            ForEach([["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"]], id: \.self) { row in
+                GridRow {
+                    ForEach(row, id: \.self, content: key)
+                }
+            }
+            GridRow {
+                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                key("0")
+                Button {
+                    typed = SessionCode.grouped(String(SessionCode.folding(typed).dropLast()))
+                } label: {
+                    Image(systemName: "delete.left").padKey()
+                }
+                .disabled(typed.isEmpty)
+            }
+        }
+        .buttonStyle(.plain)
+        .font(.system(.body, design: .monospaced))
 
         Button("Join", action: submit)
             .buttonStyle(.borderedProminent)
@@ -61,7 +76,7 @@ struct WatchJoinView: View {
             .disabled(SessionCode(typed) == nil || !model.store.isReachable)
 
         if model.store.isReachable {
-            Text("Six characters, as the host reads them out.")
+            Text("Six digits, as the host reads them out.")
                 .font(.system(size: 10))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
@@ -72,6 +87,16 @@ struct WatchJoinView: View {
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private func key(_ digit: String) -> some View {
+        Button {
+            typed = SessionCode.grouped(typed + digit)
+            if SessionCode(typed) != nil, model.store.isReachable { submit() }
+        } label: {
+            Text(digit).padKey()
+        }
+        .disabled(SessionCode.folding(typed).count == SessionCode.length)
     }
 
     private func waiting(_ title: String) -> some View {
@@ -131,6 +156,15 @@ struct WatchJoinView: View {
             submit()
         }
         #endif
+    }
+}
+
+private extension View {
+    /// Bordered buttons are too tall to fit four rows and the code on one screen.
+    func padKey() -> some View {
+        frame(maxWidth: .infinity, minHeight: 32)
+            .background(.quaternary, in: .rect(cornerRadius: 8))
+            .contentShape(.rect)
     }
 }
 

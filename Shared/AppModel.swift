@@ -334,7 +334,7 @@ final class AppModel {
             store.swapServingPlayer()
         }
         #if os(iOS)
-        // `-rekkert-share-host H7K3MR` starts sharing on a pinned code, so two simulators can
+        // `-rekkert-share-host 482915` starts sharing on a pinned code, so two simulators can
         // be pointed at each other from a script.
         if let index = arguments.firstIndex(of: "-rekkert-share-host"),
            index + 1 < arguments.count,

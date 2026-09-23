@@ -23,7 +23,7 @@ struct ChunkingTests {
     }
 
     @Test func aMessageThatFitsTravelsWhole() throws {
-        let payload = Data("H7K3MR".utf8)
+        let payload = Data("482915".utf8)
         #expect(Chunking.split(payload, mtu: 180).count == 1)
         #expect(try roundTrip(payload, mtu: 180) == payload)
     }
@@ -85,7 +85,7 @@ struct ChunkingTests {
 
 @Suite("Sealed frames")
 struct SealedFrameTests {
-    private let code = SessionCode("H7K3MR")!
+    private let code = SessionCode("482915")!
 
     @Test func aFrameComesBackAsItself() throws {
         let key = SessionKey.sealingKey(for: code, share: share)
@@ -101,7 +101,7 @@ struct SealedFrameTests {
             SealedFrame.seal(frame, with: SessionKey.sealingKey(for: code, share: share))
         )
 
-        let wrongCode = SessionKey.sealingKey(for: SessionCode("K9M4PT")!, share: share)
+        let wrongCode = SessionKey.sealingKey(for: SessionCode("730264")!, share: share)
         #expect(SealedFrame.open(sealed, with: wrongCode) == nil)
 
         // And a code overheard at one match is worth nothing at the next.

@@ -220,7 +220,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     }
 
     /// Looks for the match that code belongs to. Every advertisement whose fingerprint matches
-    /// is dialled, not just the first: two bytes will agree by accident now and again, and a
+    /// is dialled, not just the first: one byte will agree by accident now and again, and a
     /// refused handshake costs nothing.
     public func startJoining(code: SessionCode) {
         stop()

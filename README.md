@@ -152,11 +152,11 @@ copy on the other device.
 ## Joining from the wrist
 
 Most people at a shared match only ever join one. They host nothing, set nothing up, and
-never touch the phone again once they are on it — so the six characters were the whole of
+never touch the phone again once they are on it — so the six digits were the whole of
 their phone, and the one moment the app made them dig it out. **Join a match** on the watch's
-start screen takes them instead. Tap the field and watchOS offers dictation, scribble and the
-keyboard together; a code read out across a court is six letters spoken, and `O`, `I` and `L`
-fold to `0` and `1` on the way in, so saying it works about as well as typing it.
+start screen takes them instead. The code is six digits, so the watch puts a number pad of its
+own on the screen rather than the system's letter keyboard, and the sixth digit joins without
+another tap. The phone's join sheet opens on the number pad for the same reason.
 
 The watch does not do the joining. It cannot: the local network and Bluetooth are both built
 on iOS alone, and the only thing a watch can talk to is the iPhone it is paired with. So it
@@ -289,7 +289,7 @@ If a phone and a watch each end up with a session of their own, the more recentl
 one wins and the other is archived to History rather than dropped.
 
 Between phones the same conversation runs over two links at once. The local network —
-Bonjour over Network.framework, with the six-character code as a TLS pre-shared key — is the
+Bonjour over Network.framework, with the six-digit code as a TLS pre-shared key — is the
 quick one, and iOS takes it away the moment the app stops being in front of somebody. So
 Bluetooth runs alongside it: it is the only link the system will let an app hold open with the
 screen off, which is what keeps two watches agreeing while both phones are in bags. A peer on
@@ -298,8 +298,8 @@ both hears everything twice, which costs bytes and nothing else, because merging
 Bluetooth cannot carry the code in its advertisement — a backgrounded peripheral drops its
 name and service data and moves its service UUID into an overflow area — so the UUID is fixed
 and app-wide, and the code is checked after connecting instead: the host publishes a share id
-and a two-byte fingerprint, and every frame is then sealed with a key derived from the code.
-Deriving the service UUID from the code would be worse than saying nothing, since thirty bits
+and a one-byte fingerprint, and every frame is then sealed with a key derived from the code.
+Deriving the service UUID from the code would be worse than saying nothing, since twenty bits
 of code under a hash broadcast in the clear comes straight back out.
 
 A drop is not a refusal. `ReconnectPolicy` decides what losing a connection means, and the
@@ -349,9 +349,9 @@ Two booted iPhone simulators share the Mac's network stack, so Bonjour between t
     xcrun simctl install $HOST $APP; xcrun simctl install $GUEST $APP
 
     xcrun simctl launch $HOST  dev.natten.rekkert \
-      -rekkert-demo traditional -rekkert-demo-points 5 -rekkert-share-host K9M4PT
+      -rekkert-demo traditional -rekkert-demo-points 5 -rekkert-share-host 730264
     xcrun simctl launch $GUEST dev.natten.rekkert \
-      -rekkert-share-join K9M4PT -rekkert-demo-late-tap 14
+      -rekkert-share-join 730264 -rekkert-demo-late-tap 14
 
 `-rekkert-share-host CODE` pins the code instead of drawing one, `-rekkert-share-join CODE`
 opens the join sheet with it filled in and submits, and `-rekkert-demo-late-tap N` scores a
@@ -365,9 +365,9 @@ types, its phone goes looking, and all three end up on the host's log:
 
     # the watch here belongs to the GUEST, which is the whole point of it
     xcrun simctl launch $HOST  dev.natten.rekkert \
-      -rekkert-demo traditional -rekkert-demo-points 5 -rekkert-share-host K9M4PT
+      -rekkert-demo traditional -rekkert-demo-points 5 -rekkert-share-host 730264
     xcrun simctl launch $GUEST dev.natten.rekkert
-    xcrun simctl launch $WATCH dev.natten.rekkert.watchkitapp -rekkert-demo-watch-join K9M4PT
+    xcrun simctl launch $WATCH dev.natten.rekkert.watchkitapp -rekkert-demo-watch-join 730264
 
 `./scripts/share.sh` does all of that and asserts it: two phones and the paired watch on one
 match, everybody's `active.json` holding the same events, then the guest killed while the host

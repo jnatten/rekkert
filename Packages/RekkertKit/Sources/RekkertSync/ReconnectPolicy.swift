@@ -58,7 +58,7 @@ nonisolated enum ReconnectPolicy {
         if circumstances.everGotThere { return .keepLooking }
         if !circumstances.refusable { return .carryOn }
         // The match was found once on this code, so a dial that missed is a host that has gone
-        // quiet for a moment rather than a code somebody mistyped six characters of.
+        // quiet for a moment rather than a code somebody mistyped six digits of.
         if circumstances.hasEverJoined { return .keepLooking }
         if circumstances.linksRemain { return .carryOn }
         return .refused

@@ -64,16 +64,15 @@ struct JoinMatchSheet: View {
                 TextField("", text: Binding(get: { typed }, set: { typed = SessionCode.grouped($0) }))
                     .font(.system(.largeTitle, design: .monospaced))
                     .multilineTextAlignment(.center)
-                    .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
-                    .keyboardType(.asciiCapable)
+                    .keyboardType(.numberPad)
                     .textContentType(.oneTimeCode)
                     .focused($typing)
                     .onSubmit(submit)
             } header: {
                 Text("Code")
             } footer: {
-                Text("Six characters, as the host reads them out. It does not matter whether you type capitals.")
+                Text("Six digits, as the host reads them out.")
             }
 
             Section {

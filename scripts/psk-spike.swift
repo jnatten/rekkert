@@ -85,6 +85,6 @@ func attempt(hostCode: String, guestCode: String, pinTo13: Bool, label: String) 
     print("\(label): \(outcome)")
 }
 
-await attempt(hostCode: "H7K3MR", guestCode: "H7K3MR", pinTo13: true, label: "pinned to 1.3, same code ")
-await attempt(hostCode: "H7K3MR", guestCode: "H7K3MR", pinTo13: false, label: "PSK suites,   same code ")
-await attempt(hostCode: "H7K3MR", guestCode: "WRONG1", pinTo13: false, label: "PSK suites,   wrong code")
+await attempt(hostCode: "482915", guestCode: "482915", pinTo13: true, label: "pinned to 1.3, same code ")
+await attempt(hostCode: "482915", guestCode: "482915", pinTo13: false, label: "PSK suites,   same code ")
+await attempt(hostCode: "482915", guestCode: "000000", pinTo13: false, label: "PSK suites,   wrong code")

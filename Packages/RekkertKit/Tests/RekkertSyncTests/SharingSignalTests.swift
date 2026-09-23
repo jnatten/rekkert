@@ -3,7 +3,7 @@ import RekkertCore
 import Testing
 @testable import RekkertSync
 
-private let code = SessionCode("H7K3MR")!
+private let code = SessionCode("482915")!
 
 @Suite("Joining from the wrist", .serialized)
 @MainActor

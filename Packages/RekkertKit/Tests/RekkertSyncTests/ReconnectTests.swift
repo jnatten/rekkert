@@ -18,7 +18,7 @@ struct ReconnectTests {
         let store = MatchStore(device: DeviceID(), transport: LoopbackTransport(), snapshotInterval: 0)
         let sharing = SharedSession(store: store, link: LocalNetworkTransport())
         store.configure(setup)
-        sharing.join(SessionCode("H7K3MR")!)
+        sharing.join(SessionCode("482915")!)
         sharing.apply(.joined(peers: 1))
         return (sharing, store)
     }
@@ -51,7 +51,7 @@ struct ReconnectTests {
     @Test func aFirstJoinThatIsRefusedStillSaysSo() {
         let store = MatchStore(device: DeviceID(), transport: LoopbackTransport(), snapshotInterval: 0)
         let sharing = SharedSession(store: store, link: LocalNetworkTransport())
-        sharing.join(SessionCode("H7K3MR")!)
+        sharing.join(SessionCode("482915")!)
 
         sharing.apply(.failed(.rejected))
 
@@ -62,7 +62,7 @@ struct ReconnectTests {
     @Test func aFirstJoinThatFindsNothingStillSaysSo() {
         let store = MatchStore(device: DeviceID(), transport: LoopbackTransport(), snapshotInterval: 0)
         let sharing = SharedSession(store: store, link: LocalNetworkTransport())
-        sharing.join(SessionCode("H7K3MR")!)
+        sharing.join(SessionCode("482915")!)
 
         sharing.apply(.failed(.notFound))
 
@@ -75,14 +75,14 @@ struct ReconnectTests {
         let (sharing, _) = joined()
         sharing.stop()
 
-        sharing.join(SessionCode("K9M4PT")!)
+        sharing.join(SessionCode("730264")!)
         sharing.apply(.failed(.rejected))
 
         #expect(sharing.phase == .failed(.rejected))
     }
 
     @Test func aGuestComingBackToTheFrontLooksForTheSameMatchAgain() throws {
-        let code = try #require(SessionCode("H7K3MR"))
+        let code = try #require(SessionCode("482915"))
         let store = MatchStore(device: DeviceID(), transport: LoopbackTransport(), snapshotInterval: 0)
         let sharing = SharedSession(store: store, link: LocalNetworkTransport())
         sharing.join(code)
@@ -99,7 +99,7 @@ struct ReconnectTests {
         let store = MatchStore(device: DeviceID(), transport: LoopbackTransport(), snapshotInterval: 0)
         let sharing = SharedSession(store: store, link: LocalNetworkTransport())
         store.configure(setup)
-        let code = try #require(SessionCode("K9M4PT"))
+        let code = try #require(SessionCode("730264"))
         sharing.host(code: code)
 
         guard case .hosting(let revived, let share) = sharing.revival else {
@@ -122,7 +122,7 @@ struct ReconnectTests {
     @Test func aFailureThatWasNotDismissedIsNotPutBack() {
         let store = MatchStore(device: DeviceID(), transport: LoopbackTransport(), snapshotInterval: 0)
         let sharing = SharedSession(store: store, link: LocalNetworkTransport())
-        sharing.join(SessionCode("H7K3MR")!)
+        sharing.join(SessionCode("482915")!)
         sharing.apply(.failed(.notFound))
 
         #expect(sharing.revival == .nothing, "it was told the code found nothing")
@@ -140,13 +140,13 @@ struct ReconnectingBadgeTests {
 
     @Test func lookingForTheFirstTimeIsNotReconnecting() {
         let sharing = make()
-        sharing.join(SessionCode("H7K3MR")!)
+        sharing.join(SessionCode("482915")!)
         #expect(sharing.isReconnecting == false, "it has never been on this match")
     }
 
     @Test func lookingAgainAfterBeingOnItIs() {
         let sharing = make()
-        sharing.join(SessionCode("H7K3MR")!)
+        sharing.join(SessionCode("482915")!)
         sharing.apply(.joined(peers: 1))
         sharing.apply(.searching)
         #expect(sharing.isReconnecting)
@@ -154,7 +154,7 @@ struct ReconnectingBadgeTests {
 
     @Test func beingBackOnItIsNot() {
         let sharing = make()
-        sharing.join(SessionCode("H7K3MR")!)
+        sharing.join(SessionCode("482915")!)
         sharing.apply(.joined(peers: 1))
         sharing.apply(.searching)
         sharing.apply(.joined(peers: 1))

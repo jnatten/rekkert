@@ -118,7 +118,7 @@ struct RejoinTests {
         )
         let sharing = SharedSession(store: store, link: LocalNetworkTransport())
 
-        sharing.join(try #require(SessionCode("K9M4PT")))
+        sharing.join(try #require(SessionCode("730264")))
         sharing.apply(.failed(.notFound))
         #expect(sharing.phase == .failed(.notFound), "a search that never found anything still says so")
 
@@ -134,7 +134,7 @@ struct RejoinTests {
             session: ActiveSession(log: seeded(DeviceID(), points: 1), role: .guest), snapshotInterval: 0
         )
         let sharing = SharedSession(store: store, link: LocalNetworkTransport())
-        sharing.join(try #require(SessionCode("K9M4PT")))
+        sharing.join(try #require(SessionCode("730264")))
 
         sharing.cancelJoining()
         #expect(sharing.phase == .off)
@@ -143,7 +143,7 @@ struct RejoinTests {
         #expect(store.role == .guest)
 
         // Whereas stopping is stepping off, as it always was.
-        sharing.join(try #require(SessionCode("K9M4PT")))
+        sharing.join(try #require(SessionCode("730264")))
         sharing.stop()
         #expect(store.state == nil)
         #expect(store.role == .solo)
@@ -163,7 +163,7 @@ struct RejoinTests {
         let running = Task { await store.run() }
         defer { running.cancel() }
 
-        sharing.join(try #require(SessionCode("H7K3MR")))
+        sharing.join(try #require(SessionCode("482915")))
         // The host's match, arriving over the radio.
         radio.present(1)
         one.queue(try Wire.snapshot(seeded(DeviceID(), points: 2)).encoded())
@@ -178,7 +178,7 @@ struct RejoinTests {
         #expect(sharing.reachablePeers == 1)
         #expect(store.state != nil)
         #expect(store.role == .guest)
-        #expect(sharing.revival == .joining(SessionCode("H7K3MR")!), "and coming to the front looks again")
+        #expect(sharing.revival == .joining(SessionCode("482915")!), "and coming to the front looks again")
 
         sharing.dismissFailure()
         #expect(store.state != nil, "there was no failure to dismiss")
@@ -191,7 +191,7 @@ struct RejoinTests {
         let radio = RadioStandIn()
         let sharing = SharedSession(store: store, link: LocalNetworkTransport(), bluetooth: radio)
 
-        sharing.join(try #require(SessionCode("H7K3MR")))
+        sharing.join(try #require(SessionCode("482915")))
         radio.present(1)
         await eventually { sharing.reachablePeers == 1 }
 
@@ -206,7 +206,7 @@ struct RejoinTests {
         let radio = RadioStandIn()
         let sharing = SharedSession(store: store, link: LocalNetworkTransport(), bluetooth: radio)
 
-        sharing.join(try #require(SessionCode("H7K3MR")))
+        sharing.join(try #require(SessionCode("482915")))
         sharing.apply(.failed(.notFound))
 
         #expect(sharing.phase == .failed(.notFound))
@@ -223,7 +223,7 @@ struct RejoinTests {
             store: store, link: LocalNetworkTransport(), bluetooth: radio,
             graceBeforeNotice: .milliseconds(60)
         )
-        sharing.join(try #require(SessionCode("H7K3MR")))
+        sharing.join(try #require(SessionCode("482915")))
         sharing.apply(.joined(peers: 1))
         radio.present(1)
         await eventually { sharing.reachablePeers == 1 }
@@ -274,7 +274,7 @@ struct AbandonedJoinTests {
         store.configure(setup)
         let sharing = SharedSession(store: store, link: LocalNetworkTransport())
 
-        sharing.join(try #require(SessionCode("K9M4PT")))
+        sharing.join(try #require(SessionCode("730264")))
         #expect(store.isJoining)
 
         sharing.host()
@@ -282,7 +282,7 @@ struct AbandonedJoinTests {
         #expect(store.isJoining == false)
         #expect(store.role == .host)
         if case .hosting = sharing.phase {} else { Issue.record("hosting, not searching") }
-        #expect(sharing.revival != .joining(SessionCode("K9M4PT")!), "and nothing puts the search back")
+        #expect(sharing.revival != .joining(SessionCode("730264")!), "and nothing puts the search back")
     }
 
     /// Joining somebody else's match from a phone that is hosting one is the end of hosting.
@@ -293,12 +293,12 @@ struct AbandonedJoinTests {
         sharing.host()
         #expect(store.role == .host)
 
-        sharing.join(try #require(SessionCode("K9M4PT")))
+        sharing.join(try #require(SessionCode("730264")))
 
         #expect(store.role == .solo, "no longer the host of anything")
         #expect(store.isJoining)
         #expect(sharing.phase == .searching)
-        #expect(sharing.revival == .joining(SessionCode("K9M4PT")!))
+        #expect(sharing.revival == .joining(SessionCode("730264")!))
     }
 
     /// Starting a match of your own while a search is running is giving up on the search, and
