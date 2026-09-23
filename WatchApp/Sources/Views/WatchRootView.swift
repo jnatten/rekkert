@@ -76,7 +76,12 @@ struct WatchRootView: View {
                     WatchMenuView().tag(menuTag)
                 }
                 .tabViewStyle(.page)
-                .task { openDemoPage() }
+                .task {
+                    showMyCourt(tournament, round: round.index)
+                    openDemoPage()
+                }
+                .onChange(of: round.index) { showMyCourt(tournament, round: round.index) }
+                .onChange(of: model.store.me) { showMyCourt(tournament, round: round.index) }
             } else {
                 WatchNoRoundView(tournament: tournament)
             }
@@ -93,6 +98,12 @@ struct WatchRootView: View {
     }
 
     private func showWorkout() { selection = workoutTag }
+
+    /// A new draw moves you to another court, and the wrist goes with you.
+    private func showMyCourt(_ tournament: Tournament, round: Int) {
+        guard let me = model.store.me, let court = tournament.court(of: me, round: round) else { return }
+        selection = court
+    }
 
     /// Fixed tags so the menu, the standings and the workout keep their place whatever the
     /// court count.

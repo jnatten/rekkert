@@ -18,6 +18,8 @@ final class WatchHaptics {
     @ObservationIgnored var sides: WatchSidePreferences?
     @ObservationIgnored var preferences: () -> HapticPreferences = { HapticPreferences() }
     @ObservationIgnored var display: () -> DisplayPreferences = { DisplayPreferences() }
+    @ObservationIgnored var state: () -> SessionState? = { nil }
+    @ObservationIgnored var me: () -> PlayerID? = { nil }
     /// Whether that point was entered on one of this person's own two devices.
     @ObservationIgnored var isOurs: (DeviceID) -> Bool = { _ in false }
 
@@ -35,7 +37,12 @@ final class WatchHaptics {
         let board = WatchSidePreferences.Board(
             session: point.session, round: point.round, court: point.court
         )
-        let mine = sides?.nearTeam(display: display(), board: board) ?? .a
+        var mine = sides?.nearTeam(display: display(), board: board) ?? .a
+        // Somebody who has said who they are in a tournament is only told about their own court.
+        if let me = me(), case .tournament(let tournament)? = state() {
+            guard let side = tournament.side(of: me, round: point.round, court: point.court) else { return }
+            mine = side
+        }
 
         guard let buzz = preferences().buzz(
             forTeam: point.team,

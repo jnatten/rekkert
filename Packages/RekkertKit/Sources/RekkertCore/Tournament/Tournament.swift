@@ -91,6 +91,15 @@ public struct Tournament: Codable, Sendable, Hashable {
         players.first { $0.id == id }
     }
 
+    /// Which team that player is on for this court and round, or nil when they are elsewhere.
+    public func side(of player: PlayerID, round: Int, court: Int) -> TeamSide? {
+        self.round(at: round)?.matches.first { $0.courtIndex == court }?.side(of: player)
+    }
+
+    public func court(of player: PlayerID, round: Int) -> Int? {
+        self.round(at: round)?.matches.first { $0.side(of: player) != nil }?.courtIndex
+    }
+
     /// Courts that can be filled this round, limited both by physical courts and by
     /// having four players per court.
     public var playableCourts: Int {

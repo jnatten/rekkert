@@ -403,6 +403,17 @@ public final class MatchStore {
         apply(next, publish: true)
     }
 
+    /// Who this pair of devices is playing as in the current tournament, if they have said.
+    public var me: PlayerID? {
+        guard let me = haptics.me, me.session == log.sessionID else { return nil }
+        return me.player
+    }
+
+    public func setMe(_ player: PlayerID?) {
+        guard player != me else { return }
+        apply(haptics.choosing(me: player.map { Me(session: log.sessionID, player: $0) }), publish: true)
+    }
+
     /// A match starts the way everyone reads it — us blue on the left, them orange on the
     /// right — whatever the last one was flipped to. A flip answers where you are standing
     /// and which side of the draw you are on today, and neither survives the match it was

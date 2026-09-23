@@ -115,4 +115,31 @@ struct HapticTests {
         #expect(decoded.onlyWhenSomeoneElseScores)
         #expect(decoded.revision == 3)
     }
+
+    @Test func aTournamentPlayerIsFoundOnTheirOwnCourtOnly() {
+        let players = (0 ..< 9).map { Player(name: "\($0)") }
+        let id = players.map(\.id)
+        let round = Round(index: 0, matches: [
+            CourtMatch(courtIndex: 0, teams: BySide(a: [id[0], id[1]], b: [id[2], id[3]])),
+            CourtMatch(courtIndex: 1, teams: BySide(a: [id[4], id[5]], b: [id[6], id[7]])),
+        ], sitOuts: [id[8]])
+        let tournament = Tournament(format: .americano, players: players, rounds: [round])
+
+        #expect(tournament.side(of: id[6], round: 0, court: 1) == .b)
+        #expect(tournament.side(of: id[6], round: 0, court: 0) == nil, "not their court")
+        #expect(tournament.court(of: id[6], round: 0) == 1)
+        #expect(tournament.court(of: id[8], round: 0) == nil, "sitting out")
+    }
+
+    @Test func whoYouArePassesThroughTheOtherSettings() throws {
+        let me = Me(session: UUID(), player: PlayerID())
+        let chosen = HapticPreferences().setting(mode: .byTeam).choosing(me: me)
+        #expect(chosen.setting(strength: .strong).me == me)
+        #expect(chosen.revision == 2)
+
+        let decoded = try JSONCoding.decoder.decode(
+            HapticPreferences.self, from: JSONCoding.encoder.encode(chosen)
+        )
+        #expect(decoded == chosen)
+    }
 }

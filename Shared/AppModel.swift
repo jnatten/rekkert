@@ -110,6 +110,8 @@ final class AppModel {
         haptics.sides = sides
         haptics.preferences = { [store] in store.haptics }
         haptics.display = { [store] in store.display }
+        haptics.state = { [store] in store.state }
+        haptics.me = { [store] in store.me }
         haptics.isOurs = { [store] author in store.isOurs(author) }
         store.onPoint = { [haptics] point in haptics.heard(point) }
         #endif

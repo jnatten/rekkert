@@ -56,6 +56,22 @@ struct CourtListView: View {
                     Button("Undo", systemImage: "arrow.uturn.backward") { model.store.undoLast() }
                         .disabled(!model.store.canUndo)
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu("Tournament options", systemImage: "ellipsis.circle") {
+                        SharingMenuItems()
+                        if let tournament = TournamentView.tournament(model) {
+                            // Only the watch acts on it: your court buzzes, and your team
+                            // follows you through the draw.
+                            Picker("I'm playing as", systemImage: "person.crop.circle", selection: me) {
+                                Text("Nobody").tag(PlayerID?.none)
+                                ForEach(tournament.players) { player in
+                                    Text(player.name).tag(Optional(player.id))
+                                }
+                            }
+                            .pickerStyle(.menu)
+                        }
+                    }
+                }
             }
             .sheet(item: $editing) { ref in
                 CourtScoreboardView(round: ref.round, court: ref.court)
@@ -167,12 +183,19 @@ struct CourtListView: View {
                     .disabled(tournament.playableCourts < 1)
             }
 
-            Button(
-                hasResults ? "Finish tournament" : "Discard tournament",
-                systemImage: hasResults ? "flag.checkered" : "trash",
-                role: .destructive
-            ) {
-                showingEnd = true
+            if model.store.canEndSession {
+                Button(
+                    hasResults ? "Finish tournament" : "Discard tournament",
+                    systemImage: hasResults ? "flag.checkered" : "trash",
+                    role: .destructive
+                ) {
+                    showingEnd = true
+                }
+            } else {
+                // Somebody else's tournament: step off it rather than end it for them.
+                Button("Leave", systemImage: "rectangle.portrait.and.arrow.right") {
+                    model.sharing.stop()
+                }
             }
         } footer: {
             if tournament.playableCourts < 1 {
@@ -181,6 +204,10 @@ struct CourtListView: View {
                 Text("You are looking at an earlier round. Later rounds were drawn from the standings as they were, so changing a score here will not re-pair them.")
             }
         }
+    }
+
+    private var me: Binding<PlayerID?> {
+        Binding(get: { model.store.me }, set: { model.store.setMe($0) })
     }
 
     private var title: String {

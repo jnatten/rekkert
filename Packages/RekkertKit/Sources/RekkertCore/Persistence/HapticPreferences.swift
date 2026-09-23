@@ -15,6 +15,10 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
     /// is tapped, so the point you have just pressed is the one you least need telling about.
     public var onlyWhenSomeoneElseScores: Bool
     public var strength: HapticStrength
+    /// Who the wearer is in a tournament, so only their own court buzzes and their team
+    /// follows them through the draw. Kept with the session it was chosen in, so it never
+    /// carries into the next one.
+    public var me: Me?
     /// Ordered by a counter rather than the clock, for the reason the scoreboard's own
     /// preferences are: two devices' clocks agree closely but not exactly, and a press made a
     /// moment after one on the other device could otherwise carry an earlier timestamp and be
@@ -26,12 +30,14 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
         mode: HapticMode = .off,
         onlyWhenSomeoneElseScores: Bool = true,
         strength: HapticStrength = .medium,
+        me: Me? = nil,
         revision: UInt64 = 0,
         updatedAt: Date = .distantPast
     ) {
         self.mode = mode
         self.onlyWhenSomeoneElseScores = onlyWhenSomeoneElseScores
         self.strength = strength
+        self.me = me
         self.revision = revision
         self.updatedAt = updatedAt
     }
@@ -53,9 +59,16 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
             mode: mode ?? self.mode,
             onlyWhenSomeoneElseScores: onlyWhenSomeoneElseScores ?? self.onlyWhenSomeoneElseScores,
             strength: strength ?? self.strength,
+            me: me,
             revision: revision + 1,
             updatedAt: date
         )
+    }
+
+    public func choosing(me: Me?, at date: Date = Date()) -> HapticPreferences {
+        var next = setting(at: date)
+        next.me = me
+        return next
     }
 
     public func adopting(_ other: HapticPreferences) -> HapticPreferences {
@@ -77,7 +90,7 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case mode, onlyWhenSomeoneElseScores, strength, revision, updatedAt
+        case mode, onlyWhenSomeoneElseScores, strength, me, revision, updatedAt
     }
 
     /// Hand-rolled so a file written before any one of these existed still reads. A decoder
@@ -89,8 +102,19 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
         onlyWhenSomeoneElseScores = try container
             .decodeIfPresent(Bool.self, forKey: .onlyWhenSomeoneElseScores) ?? true
         strength = try container.decodeIfPresent(HapticStrength.self, forKey: .strength) ?? .medium
+        me = try container.decodeIfPresent(Me.self, forKey: .me)
         revision = try container.decodeIfPresent(UInt64.self, forKey: .revision) ?? 0
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? .distantPast
+    }
+}
+
+public struct Me: Codable, Sendable, Hashable {
+    public var session: UUID
+    public var player: PlayerID
+
+    public init(session: UUID, player: PlayerID) {
+        self.session = session
+        self.player = player
     }
 }
 

@@ -7,6 +7,7 @@ import WatchKit
 struct WatchMenuView: View {
     @Environment(AppModel.self) private var model
     @State private var confirming: Confirmation?
+    @State private var choosingMe = false
 
     private enum Confirmation: String, Identifiable {
         case endRound, nextRound, finish, discard
@@ -48,9 +49,24 @@ struct WatchMenuView: View {
                         confirming = .endRound
                     }
                 }
-                if isTournament {
+                if case .tournament(let tournament)? = model.store.state {
                     action("Next round", systemImage: "arrow.right.circle.fill", tint: .blue) {
                         confirming = .nextRound
+                    }
+                    action(
+                        "Me: \(model.store.me.flatMap(tournament.player)?.name ?? "Not set")",
+                        systemImage: "person.crop.circle"
+                    ) {
+                        choosingMe = true
+                    }
+                    .accessibilityHint("Only your court buzzes, and your team follows you each round")
+                    .sheet(isPresented: $choosingMe) {
+                        List {
+                            Button("Nobody") { choose(nil) }
+                            ForEach(tournament.players) { player in
+                                Button(player.name) { choose(player.id) }
+                            }
+                        }
                     }
                 }
                 if let round = friendlyRound {
@@ -187,6 +203,12 @@ struct WatchMenuView: View {
         .font(.footnote)
     }
 
+    private func choose(_ player: PlayerID?) {
+        WKInterfaceDevice.current().play(.click)
+        model.store.setMe(player)
+        choosingMe = false
+    }
+
     private func perform(_ action: Confirmation) {
         switch action {
         case .endRound:
@@ -239,11 +261,6 @@ struct WatchMenuView: View {
 
     private var isWinnerCourt: Bool {
         if case .winnerCourt? = model.store.state { return true }
-        return false
-    }
-
-    private var isTournament: Bool {
-        if case .tournament? = model.store.state { return true }
         return false
     }
 

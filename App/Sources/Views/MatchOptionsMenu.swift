@@ -24,40 +24,12 @@ struct MatchOptionsMenu: View {
             if let onShowRounds {
                 Button("Rounds and standings", systemImage: "list.bullet.rectangle", action: onShowRounds)
             }
-            if model.store.role == .host {
-                if model.sharing.code != nil {
-                    Button("Show the code", systemImage: "person.2.wave.2") {
-                        model.showingShareCode = true
-                    }
-                } else {
-                    // The role outlives the app, the code does not. Back from a relaunch, the
-                    // match is still this phone's to share, on a code that has to be read out again.
-                    Button("Share this match again", systemImage: "person.2.wave.2") {
-                        model.sharing.host()
-                        model.showingShareCode = true
-                    }
-                }
-                // Only while somebody is there to hear it, which is also the only moment the
-                // two logs have caught up enough for it to be the last word.
-                if model.store.canSettleScore, model.sharing.reachablePeers > 0 {
-                    Button("Use my score everywhere", systemImage: "checkmark.circle") {
-                        settling = true
-                    }
-                }
-            } else if model.store.role == .guest, case .off = model.sharing.phase {
-                // A guest back from a relaunch still holds the match, but no longer the link.
-                Button("Rejoin the match", systemImage: "arrow.right.circle") {
-                    model.showingJoin = true
-                }
-            } else if model.store.canEndSession {
-                Button("Share this match", systemImage: "person.2.wave.2") {
-                    model.sharing.host()
-                    model.showingShareCode = true
-                }
-                // Whoever is inviting you did not wait for you to have nothing on. Joining
-                // files this match away rather than losing it, the way it always has.
-                Button("Join someone else's", systemImage: "arrow.right.circle") {
-                    model.showingJoin = true
+            SharingMenuItems()
+            // Only while somebody is there to hear it, which is also the only moment the
+            // two logs have caught up enough for it to be the last word.
+            if model.store.role == .host, model.store.canSettleScore, model.sharing.reachablePeers > 0 {
+                Button("Use my score everywhere", systemImage: "checkmark.circle") {
+                    settling = true
                 }
             }
             if model.workout.isAvailable {
@@ -111,6 +83,43 @@ struct MatchOptionsMenu: View {
             // The score itself is on the screen behind this, which is a better place for it
             // than a line of text that would have to guess at which court is meant.
             Text("Every phone on this match will be set to the score shown here. Anything scored elsewhere that has not reached this phone yet will be replaced.")
+        }
+    }
+}
+
+/// Sharing, joining and coming back to either — the same few rows in every menu that has them.
+struct SharingMenuItems: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if model.store.role == .host {
+            if model.sharing.code != nil {
+                Button("Show the code", systemImage: "person.2.wave.2") {
+                    model.showingShareCode = true
+                }
+            } else {
+                // The role outlives the app, the code does not. Back from a relaunch, the
+                // match is still this phone's to share, on a code that has to be read out again.
+                Button("Share this match again", systemImage: "person.2.wave.2") {
+                    model.sharing.host()
+                    model.showingShareCode = true
+                }
+            }
+        } else if model.store.role == .guest, case .off = model.sharing.phase {
+            // A guest back from a relaunch still holds the match, but no longer the link.
+            Button("Rejoin the match", systemImage: "arrow.right.circle") {
+                model.showingJoin = true
+            }
+        } else if model.store.canEndSession {
+            Button("Share this match", systemImage: "person.2.wave.2") {
+                model.sharing.host()
+                model.showingShareCode = true
+            }
+            // Whoever is inviting you did not wait for you to have nothing on. Joining
+            // files this match away rather than losing it, the way it always has.
+            Button("Join someone else's", systemImage: "arrow.right.circle") {
+                model.showingJoin = true
+            }
         }
     }
 }

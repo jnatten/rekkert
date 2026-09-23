@@ -17,7 +17,7 @@ struct WatchCourtPage: View {
             .containerBackground(palette.color(layout.order[0]).gradient.opacity(0.25), for: .tabView)
             // Set here rather than at the root: which of the two you are is an answer about
             // this board, and the root has no round or court to ask about.
-            .environment(\.nearTeam, model.sides.nearTeam(display: model.store.display, board: board))
+            .environment(\.nearTeam, nearTeam)
     }
 
     /// The board this page is showing, which is what an answer about sides belongs to.
@@ -25,10 +25,21 @@ struct WatchCourtPage: View {
         WatchSidePreferences.Board(session: model.store.log.sessionID, round: round, court: court)
     }
 
+    /// The team of whoever the wearer said they are in a tournament, when they are on this
+    /// court; otherwise the answer given for this board.
+    private var nearTeam: TeamSide {
+        playingAs ?? model.sides.nearTeam(display: model.store.display, board: board)
+    }
+
+    private var playingAs: TeamSide? {
+        guard let me = model.store.me, case .tournament(let tournament)? = model.store.state else { return nil }
+        return tournament.side(of: me, round: round, court: court)
+    }
+
     /// Whether the wearer is currently the blue one — which they are until they say
     /// otherwise, so the button offers the other colour.
     private var amIBlue: Bool {
-        model.sides.nearTeam(display: model.store.display, board: board) == model.store.display.blueSide
+        nearTeam == model.store.display.blueSide
     }
 
     @ViewBuilder
@@ -203,11 +214,14 @@ struct WatchCourtPage: View {
             }
             // Which of the two you are, which decides the end the serve is drawn from. Blue
             // unless you say otherwise, so this is only for somebody who would rather not be.
-            Button(amIBlue ? "I'm the orange team" : "I'm the blue team", systemImage: "person.fill") {
-                WKInterfaceDevice.current().play(.click)
-                model.sides.chooseOtherSide(display: model.store.display, board: board)
+            // Already answered by who you are, when you have said and this is your court.
+            if playingAs == nil {
+                Button(amIBlue ? "I'm the orange team" : "I'm the blue team", systemImage: "person.fill") {
+                    WKInterfaceDevice.current().play(.click)
+                    model.sides.chooseOtherSide(display: model.store.display, board: board)
+                }
+                .accessibilityHint(amIBlue ? "You are the blue team" : "You are the orange team")
             }
-            .accessibilityHint(amIBlue ? "You are the blue team" : "You are the orange team")
         }
         .font(.footnote)
     }
