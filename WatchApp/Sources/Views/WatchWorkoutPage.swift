@@ -146,7 +146,7 @@ struct WatchWorkoutPage: View {
     private var figures: some View {
         VStack(spacing: 3) {
             if let energy = model.workout.activeEnergyKilocalories {
-                figure("Active", WorkoutFormat.energy(energy), systemImage: "flame.fill", tint: .orange)
+                energyFigure(active: energy, total: model.workout.totalEnergyKilocalories)
             }
             if let average = model.workout.heartRateAverage {
                 figure("Average", WorkoutFormat.beats(average), systemImage: "waveform.path.ecg", tint: .pink)
@@ -154,6 +154,26 @@ struct WatchWorkoutPage: View {
             if let maximum = model.workout.heartRateMaximum {
                 figure("Highest", WorkoutFormat.beats(maximum), systemImage: "arrow.up.heart.fill", tint: .pink)
             }
+        }
+    }
+
+    /// One row for both, because the page does not scroll and a 40 mm face has no room for
+    /// another. Active alone until the resting burn arrives — which is also how to tell, on
+    /// the wrist, whether it is arriving at all.
+    @ViewBuilder
+    private func energyFigure(active: Double, total: Double?) -> some View {
+        if let total {
+            figure(
+                "Active / Total",
+                WorkoutFormat.energy(active: active, total: total),
+                systemImage: "flame.fill",
+                tint: .orange
+            )
+            .accessibilityLabel(
+                "\(Int(active.rounded())) active, \(Int(total.rounded())) total kilocalories"
+            )
+        } else {
+            figure("Active", WorkoutFormat.energy(active), systemImage: "flame.fill", tint: .orange)
         }
     }
 
@@ -171,6 +191,7 @@ struct WatchWorkoutPage: View {
             Text(title)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
             Spacer(minLength: 4)
             Text(value)
                 .font(.system(size: 12, weight: .semibold).monospacedDigit())

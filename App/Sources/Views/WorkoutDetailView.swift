@@ -17,6 +17,9 @@ struct WorkoutDetailView: View {
                 if let energy = workout.activeEnergyKilocalories {
                     LabeledContent("Active energy", value: WorkoutFormat.energy(energy))
                 }
+                if let energy = workout.totalEnergyKilocalories {
+                    LabeledContent("Total energy", value: WorkoutFormat.energy(energy))
+                }
                 if let average = workout.heartRateAverage {
                     LabeledContent("Average heart rate", value: WorkoutFormat.beats(average))
                 }

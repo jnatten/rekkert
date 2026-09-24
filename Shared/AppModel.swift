@@ -189,7 +189,7 @@ final class AppModel {
             let start = Date().addingTimeInterval(-7_200)
             try? sessionStore?.archive(WorkoutRecord(
                 id: UUID(), startedAt: start, endedAt: start.addingTimeInterval(5_400),
-                duration: 5_400, activeEnergyKilocalories: 612,
+                duration: 5_400, activeEnergyKilocalories: 612, basalEnergyKilocalories: 118,
                 heartRateAverage: 131, heartRateMaximum: 174,
                 heartRateZoneTimes: [
                     HeartRateZoneTime(zone: 1, lowerBound: nil, upperBound: 133, duration: 1_284),
@@ -202,7 +202,7 @@ final class AppModel {
             let earlier = start.addingTimeInterval(-259_200)
             try? sessionStore?.archive(WorkoutRecord(
                 id: UUID(), startedAt: earlier, endedAt: earlier.addingTimeInterval(3_900),
-                duration: 3_900, activeEnergyKilocalories: 428,
+                duration: 3_900, activeEnergyKilocalories: 428, basalEnergyKilocalories: 85,
                 heartRateAverage: 126, heartRateMaximum: 166
             ))
         }

@@ -75,6 +75,43 @@ struct WorkoutRecordTests {
 
         #expect(record.duration == 3_600)
         #expect(record.activeEnergyKilocalories == nil)
+        #expect(record.basalEnergyKilocalories == nil)
+        #expect(record.totalEnergyKilocalories == nil)
+    }
+
+    /// Every workout filed before the resting burn was kept has active energy and nothing
+    /// under it. It has to come back with no total, rather than with active dressed up as one.
+    @Test func aWorkoutWrittenBeforeBasalEnergyExistedHasNoTotal() throws {
+        let start = Date(timeIntervalSince1970: 768_000_000)
+        let current = WorkoutRecord(
+            id: UUID(), startedAt: start, endedAt: start.addingTimeInterval(3_600),
+            duration: 3_600, activeEnergyKilocalories: 420, basalEnergyKilocalories: 82
+        )
+        var fields = try #require(
+            JSONSerialization.jsonObject(with: JSONCoding.encoder.encode(current)) as? [String: Any]
+        )
+        #expect(fields.removeValue(forKey: "basalEnergyKilocalories") != nil)
+        let legacy = try JSONSerialization.data(withJSONObject: fields)
+
+        let record = try JSONCoding.decoder.decode(WorkoutRecord.self, from: legacy)
+
+        #expect(record.activeEnergyKilocalories == 420)
+        #expect(record.basalEnergyKilocalories == nil)
+        #expect(record.totalEnergyKilocalories == nil)
+    }
+
+    @Test func theTotalIsActivePlusBasalAndNeedsBoth() {
+        let start = Date(timeIntervalSince1970: 768_000_000)
+        func record(active: Double?, basal: Double?) -> WorkoutRecord {
+            WorkoutRecord(
+                id: UUID(), startedAt: start, endedAt: start.addingTimeInterval(3_600),
+                duration: 3_600, activeEnergyKilocalories: active, basalEnergyKilocalories: basal
+            )
+        }
+
+        #expect(record(active: 420, basal: 82).totalEnergyKilocalories == 502)
+        #expect(record(active: 420, basal: nil).totalEnergyKilocalories == nil)
+        #expect(record(active: nil, basal: 82).totalEnergyKilocalories == nil)
     }
 
     /// The same trap `startedAt` set: every workout already on somebody's phone was written
@@ -198,6 +235,7 @@ struct WorkoutRecordTests {
             endedAt: start.addingTimeInterval(3_600),
             duration: 3_540,
             activeEnergyKilocalories: 420,
+            basalEnergyKilocalories: 82,
             heartRateAverage: 128,
             heartRateMaximum: 171
         )

@@ -14,6 +14,13 @@ enum WorkoutFormat {
         "\(kilocalories.formatted(.number.precision(.fractionLength(0)))) kcal"
     }
 
+    /// No unit: the pair only fits a 40 mm face without it, and the flame beside it and the
+    /// heading over it already say what it is.
+    static func energy(active: Double, total: Double) -> String {
+        let number = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0))
+        return "\(active.formatted(number)) / \(total.formatted(number))"
+    }
+
     static func beats(_ beatsPerMinute: Double) -> String {
         "\(beatsPerMinute.formatted(.number.precision(.fractionLength(0)))) bpm"
     }

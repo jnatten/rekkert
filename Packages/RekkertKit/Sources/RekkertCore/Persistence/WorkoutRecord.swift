@@ -42,6 +42,9 @@ public struct WorkoutRecord: Codable, Sendable, Hashable, Identifiable {
     public var duration: TimeInterval
     /// Kilocalories, named for the unit so nothing here has to know about `HKUnit`.
     public var activeEnergyKilocalories: Double?
+    /// The resting burn over the same stretch. Nil on every record written before it was
+    /// kept, and on any workout whose resting samples Health never attached.
+    public var basalEnergyKilocalories: Double?
     public var heartRateAverage: Double?
     public var heartRateMaximum: Double?
     /// Time in each heart rate zone, lowest first, as Health worked it out. Empty on a watch
@@ -54,6 +57,7 @@ public struct WorkoutRecord: Codable, Sendable, Hashable, Identifiable {
         endedAt: Date,
         duration: TimeInterval,
         activeEnergyKilocalories: Double? = nil,
+        basalEnergyKilocalories: Double? = nil,
         heartRateAverage: Double? = nil,
         heartRateMaximum: Double? = nil,
         heartRateZoneTimes: [HeartRateZoneTime] = []
@@ -63,6 +67,7 @@ public struct WorkoutRecord: Codable, Sendable, Hashable, Identifiable {
         self.endedAt = endedAt
         self.duration = duration
         self.activeEnergyKilocalories = activeEnergyKilocalories
+        self.basalEnergyKilocalories = basalEnergyKilocalories
         self.heartRateAverage = heartRateAverage
         self.heartRateMaximum = heartRateMaximum
         self.heartRateZoneTimes = heartRateZoneTimes
@@ -70,7 +75,7 @@ public struct WorkoutRecord: Codable, Sendable, Hashable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id, startedAt, endedAt, duration
-        case activeEnergyKilocalories, heartRateAverage, heartRateMaximum
+        case activeEnergyKilocalories, basalEnergyKilocalories, heartRateAverage, heartRateMaximum
         case heartRateZoneTimes
     }
 
@@ -85,11 +90,19 @@ public struct WorkoutRecord: Codable, Sendable, Hashable, Identifiable {
         duration = try container.decodeIfPresent(TimeInterval.self, forKey: .duration)
             ?? endedAt.timeIntervalSince(startedAt)
         activeEnergyKilocalories = try container.decodeIfPresent(Double.self, forKey: .activeEnergyKilocalories)
+        basalEnergyKilocalories = try container.decodeIfPresent(Double.self, forKey: .basalEnergyKilocalories)
         heartRateAverage = try container.decodeIfPresent(Double.self, forKey: .heartRateAverage)
         heartRateMaximum = try container.decodeIfPresent(Double.self, forKey: .heartRateMaximum)
         heartRateZoneTimes = try container.decodeIfPresent(
             [HeartRateZoneTime].self, forKey: .heartRateZoneTimes
         ) ?? []
+    }
+
+    /// What Health calls total calories. Only when both halves are there: active alone is
+    /// already shown as active, and passing it off as a total is the bug this replaced.
+    public var totalEnergyKilocalories: Double? {
+        guard let activeEnergyKilocalories, let basalEnergyKilocalories else { return nil }
+        return activeEnergyKilocalories + basalEnergyKilocalories
     }
 
     /// Whether a finished session was played while this workout was running.

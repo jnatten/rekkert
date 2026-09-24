@@ -34,6 +34,8 @@ final class WorkoutController {
     private(set) var heartRateAverage: Double?
     private(set) var heartRateMaximum: Double?
     private(set) var activeEnergyKilocalories: Double?
+    /// The resting burn underneath the active one, which is what total calories adds on.
+    private(set) var basalEnergyKilocalories: Double?
     /// Where to place the reading, once Health has said whose heart it is. Nil until then,
     /// and nil for good where the birthday was never entered — a zone off a guessed age
     /// would be a made-up number wearing a real one's clothes.
@@ -58,6 +60,12 @@ final class WorkoutController {
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
+    /// Nil until both halves have arrived, the same rule `WorkoutRecord` keeps.
+    var totalEnergyKilocalories: Double? {
+        guard let activeEnergyKilocalories, let basalEnergyKilocalories else { return nil }
+        return activeEnergyKilocalories + basalEnergyKilocalories
+    }
+
     private static var configuration: HKWorkoutConfiguration {
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .tennis
@@ -65,9 +73,8 @@ final class WorkoutController {
         return configuration
     }
 
-    /// Basal alongside active, because total calories is the two of them added up. Without
-    /// the resting burn saved beside the workout, Health has nothing to add and shows the
-    /// same number under both headings.
+    /// Basal alongside active, because total calories is the two of them added up. Sharing
+    /// it is not what gets it into the workout, though — see `read`.
     private static var shared: Set<HKSampleType> {
         [
             HKQuantityType.workoutType(),
@@ -76,6 +83,11 @@ final class WorkoutController {
         ]
     }
 
+    /// The samples a workout is made of are the watch's own, written by the system, and the
+    /// data source can only attach the ones this app is allowed to read. Basal was shared and
+    /// never read, so the resting burn never reached the workout and Health showed the active
+    /// figure under both headings.
+    ///
     /// The last two are for the zones rather than the workout: an age to estimate the
     /// maximum from, and a resting rate to measure the reserve up from. Health never says
     /// whether a read was granted, so both are asked for and neither is relied on.
@@ -83,6 +95,7 @@ final class WorkoutController {
         [
             HKQuantityType(.heartRate),
             HKQuantityType(.activeEnergyBurned),
+            HKQuantityType(.basalEnergyBurned),
             HKQuantityType(.restingHeartRate),
             HKCharacteristicType(.dateOfBirth),
         ]
@@ -182,9 +195,8 @@ final class WorkoutController {
         let dataSource = HKLiveWorkoutDataSource(
             healthStore: health, workoutConfiguration: Self.configuration
         )
-        // The one addition to those defaults: tennis collects active energy and not the
-        // resting burn underneath it, which is the half of total calories that makes the
-        // two figures differ.
+        // Tennis collects the resting burn by default, but the defaults move with the
+        // person's settings and total calories is nothing without it.
         dataSource.enableCollection(for: HKQuantityType(.basalEnergyBurned), predicate: nil)
         builder.dataSource = dataSource
 
@@ -272,6 +284,7 @@ final class WorkoutController {
         heartRateAverage = reading.heartRateAverage ?? heartRateAverage
         heartRateMaximum = reading.heartRateMaximum ?? heartRateMaximum
         activeEnergyKilocalories = reading.activeEnergyKilocalories ?? activeEnergyKilocalories
+        basalEnergyKilocalories = reading.basalEnergyKilocalories ?? basalEnergyKilocalories
         // The bands come with the tally once it starts arriving, and they are the ones this
         // workout is actually being scored against — so they replace whatever was asked for
         // before it began, and the bar cannot disagree with the times drawn under it.
@@ -382,6 +395,7 @@ final class WorkoutController {
         heartRateAverage = nil
         heartRateMaximum = nil
         activeEnergyKilocalories = nil
+        basalEnergyKilocalories = nil
         zones = nil
         zoneTimes = []
     }
@@ -403,6 +417,7 @@ final class WorkoutController {
         heartRateAverage = 134
         heartRateMaximum = 171
         activeEnergyKilocalories = 386
+        basalEnergyKilocalories = 38
         zones = .estimated(maximum: 182, resting: 62)
         zoneTimes = [
             HeartRateZoneTime(zone: 1, lowerBound: nil, upperBound: 133, duration: 384),
@@ -430,6 +445,9 @@ final class WorkoutController {
             endedAt: workout.endDate,
             duration: workout.duration,
             activeEnergyKilocalories: workout.statistics(for: HKQuantityType(.activeEnergyBurned))?
+                .sumQuantity()?
+                .doubleValue(for: .kilocalorie()),
+            basalEnergyKilocalories: workout.statistics(for: HKQuantityType(.basalEnergyBurned))?
                 .sumQuantity()?
                 .doubleValue(for: .kilocalorie()),
             heartRateAverage: heart?.averageQuantity()?.doubleValue(for: beatsPerMinute),
@@ -461,6 +479,7 @@ struct Reading: Sendable {
     var heartRateAverage: Double?
     var heartRateMaximum: Double?
     var activeEnergyKilocalories: Double?
+    var basalEnergyKilocalories: Double?
     /// The bands this workout is being scored against, and the tally so far. Both come off
     /// the same group, and both are empty below watchOS 27.
     var zones: HeartRateZones?
@@ -567,6 +586,10 @@ nonisolated private final class Relay: NSObject,
             heartRateMaximum: heart?.maximumQuantity()?.doubleValue(for: beatsPerMinute),
             activeEnergyKilocalories: workoutBuilder
                 .statistics(for: HKQuantityType(.activeEnergyBurned))?
+                .sumQuantity()?
+                .doubleValue(for: .kilocalorie()),
+            basalEnergyKilocalories: workoutBuilder
+                .statistics(for: HKQuantityType(.basalEnergyBurned))?
                 .sumQuantity()?
                 .doubleValue(for: .kilocalorie()),
             zones: zones,

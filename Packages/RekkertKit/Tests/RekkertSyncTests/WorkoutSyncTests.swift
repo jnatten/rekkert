@@ -58,6 +58,7 @@ struct WorkoutSyncTests {
         endedAt: Date(timeIntervalSince1970: 768_003_600),
         duration: 3_600,
         activeEnergyKilocalories: 420,
+        basalEnergyKilocalories: 82,
         heartRateAverage: 128,
         heartRateMaximum: 171,
         // In the fixture so every assertion about this record covers the breakdown too — it
