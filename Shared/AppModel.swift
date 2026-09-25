@@ -93,7 +93,14 @@ final class AppModel {
         // carries the messages and holds no opinion about them; the controller has the
         // opinions and cannot reach a transport.
         workout.publish = { [store] signal in store.send(signal) }
-        store.onWorkout = { [workout] signal in workout.heard(signal) }
+        store.onWorkout = { [weak self] signal in
+            self?.workout.heard(signal)
+            // What the phone has filed changed, and the lists showing it read through this.
+            switch signal {
+            case .finished, .series: self?.revision += 1
+            case .stop, .pause, .resume, .running, .paused, .idle: break
+            }
+        }
         // Joining, which only the phone can actually do. The wrist asks and is told how it
         // went; the same two ends as the workout, the other way round.
         #if os(watchOS)
@@ -126,6 +133,58 @@ final class AppModel {
         seedDemoIfRequested()
         #endif
     }
+
+    #if DEBUG
+    /// A heart that warms up, works through the rallies and is held for a coffee near the end.
+    private static func demoSeries(of workoutID: UUID, from start: Date, lasting span: TimeInterval) -> WorkoutSeries {
+        let interval = WorkoutSeries.interval(forSpan: span)
+        let steps = Int(span / interval)
+        let held = DateInterval(start: start.addingTimeInterval(4_200), duration: 300)
+        var rates: [Int?] = []
+        var energy: [Double] = []
+        for step in 0 ..< steps {
+            let at = start.addingTimeInterval(Double(step) * interval)
+            if held.contains(at) {
+                rates.append(nil)
+                energy.append(0)
+                continue
+            }
+            let minutes = Double(step) * interval / 60
+            let warmth = min(1, minutes / 8)
+            let rally = sin(minutes * 1.7) * 9 + sin(minutes * 0.31) * 6
+            rates.append(Int(98 + warmth * 42 + rally))
+            energy.append(0.6 + warmth * 1.0 + max(0, rally) / 15)
+        }
+        return WorkoutSeries(
+            workoutID: workoutID, start: start, interval: interval,
+            heartRate: rates, heartRateMax: rates.map { $0.map { $0 + 6 } }, activeEnergy: energy,
+            pauses: [held]
+        )
+    }
+
+    /// Two sets on golden point, the Blues just the stronger, a point every twenty-odd seconds.
+    private static func demoMatch(from start: Date) -> (HistoryRecord, MatchTimeline)? {
+        let device = DeviceID()
+        var log = MatchLog(createdAt: start)
+        var clock = start
+        log.append(.configure(.traditional(
+            rules: TraditionalRules(deuceRule: .goldenPoint),
+            teams: BySide(a: TeamInfo(name: "Blues", players: ["Jonas", "Ada"]), b: TeamInfo(name: "Oranges", players: ["Kim", "Sam"]))
+        ), at: start), from: device, at: start)
+        var generator = SeededGenerator(seed: 7)
+        while !(SessionReducer.state(of: log)?.isFinished ?? true) {
+            clock = clock.addingTimeInterval(Double.random(in: 14 ... 34, using: &generator))
+            let side: TeamSide = Double.random(in: 0 ..< 1, using: &generator) < 0.56 ? .a : .b
+            log.append(.point(round: 0, court: 0, team: side), from: device, at: clock)
+        }
+        guard let state = SessionReducer.state(of: log) else { return nil }
+        let record = HistoryRecord(
+            id: log.sessionID, finishedAt: clock, title: state.title, state: state,
+            startedAt: start, playedUntil: clock
+        )
+        return (record, MatchTimeline.make(from: log))
+    }
+    #endif
 
     #if os(watchOS)
     /// How the join this watch asked its phone for is getting on. The watch has no transport
@@ -189,8 +248,14 @@ final class AppModel {
         }
         if arguments.contains("-rekkert-demo-workouts") {
             let start = Date().addingTimeInterval(-7_200)
+            let workoutID = UUID()
+            try? sessionStore?.archive(Self.demoSeries(of: workoutID, from: start, lasting: 5_400))
+            if let (record, timeline) = Self.demoMatch(from: start.addingTimeInterval(600)) {
+                try? sessionStore?.archive(record)
+                try? sessionStore?.archive(timeline, for: record.id)
+            }
             try? sessionStore?.archive(WorkoutRecord(
-                id: UUID(), startedAt: start, endedAt: start.addingTimeInterval(5_400),
+                id: workoutID, startedAt: start, endedAt: start.addingTimeInterval(5_400),
                 duration: 5_400, activeEnergyKilocalories: 612, basalEnergyKilocalories: 118,
                 heartRateAverage: 131, heartRateMaximum: 174,
                 heartRateZoneTimes: [

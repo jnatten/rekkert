@@ -241,10 +241,15 @@ after the match it covers has already been filed — so starting the workout hal
 the first game still gathers that game up, and a match spanning two workouts shows under
 both.
 
-Heart rate never goes on the wire. The live reading stays on the wrist that read it, and the
-summary reaches that one phone and no other: `FanOutTransport.Scope.sharedSession` drops it,
-in the same exhaustive switch that drops your saved setups, so adding a `Wire` case carrying
-anything personal is a compile error rather than a leak.
+The live heart rate never goes on the wire: it stays on the wrist that read it. What does go,
+once a workout has ended, is the summary, and after it — read back out of Health rather than
+kept as it came in, so a relaunch mid-workout loses none of it — how the heart rate and the
+energy went over the workout, in fifteen-second steps. It is its own message, so ending a
+workout never waits on the query, and the phone files it under `workoutSeries/`, beside the
+workout rather than inside it. Both reach that one phone and no other:
+`FanOutTransport.Scope.sharedSession` drops them, in the same exhaustive switch that drops
+your saved setups, so adding a `Wire` case carrying anything personal is a compile error
+rather than a leak.
 
 None of it is required. Never press the button and the app is what it was: no prompt, no
 Workouts row, no Health access of any kind.

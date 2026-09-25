@@ -2,6 +2,7 @@ import Foundation
 import HealthKit
 import Observation
 import RekkertCore
+import Synchronization
 
 /// The workout, which only the watch can hold: it is the device with the sensors, and the
 /// system allows exactly one session across every app on the wrist.
@@ -362,10 +363,97 @@ final class WorkoutController {
             .doubleValue(for: .count().unitDivided(by: .minute()))
     }
 
+    /// The summary goes the moment the workout ends; how it went over time follows once
+    /// Health has been asked. Waiting for that first would hold the button on Stop, and a
+    /// watch that loses its background time on ending could lose both.
     private func finished(_ workout: HKWorkout?) {
-        if let workout { publish?(.finished(Self.record(from: workout))) }
+        if let workout {
+            publish?(.finished(Self.record(from: workout)))
+            let health = health
+            Task { [weak self] in
+                guard let series = await Self.series(of: workout, from: health) else { return }
+                self?.publish?(.series(series))
+            }
+        }
         clear()
         publish?(.idle)
+    }
+
+    /// Read back out of Health rather than kept as it came in: a relaunch mid-workout
+    /// reattaches to the session but starts with nothing in memory, and Health has the lot.
+    /// Bounded, because nothing is waiting on it and a query that never answers must not
+    /// hold on for ever.
+    private nonisolated static func series(of workout: HKWorkout, from health: HKHealthStore) async -> WorkoutSeries? {
+        await first(of: { await readSeries(of: workout, from: health) }, orNilAfter: .seconds(30))
+    }
+
+    private nonisolated static func readSeries(of workout: HKWorkout, from health: HKHealthStore) async -> WorkoutSeries? {
+        let start = workout.startDate
+        let end = workout.endDate
+        let interval = WorkoutSeries.interval(forSpan: end.timeIntervalSince(start))
+        let steps = max(1, Int((end.timeIntervalSince(start) / interval).rounded(.up)))
+        let ofThisWorkout = HKQuery.predicateForObjects(from: workout)
+        let every = DateComponents(second: Int(interval))
+
+        let heart = HKStatisticsCollectionQueryDescriptor(
+            predicate: .quantitySample(type: HKQuantityType(.heartRate), predicate: ofThisWorkout),
+            options: [.discreteAverage, .discreteMax], anchorDate: start, intervalComponents: every
+        )
+        let energy = HKStatisticsCollectionQueryDescriptor(
+            predicate: .quantitySample(type: HKQuantityType(.activeEnergyBurned), predicate: ofThisWorkout),
+            options: .cumulativeSum, anchorDate: start, intervalComponents: every
+        )
+        guard let hearts = try? await heart.result(for: health),
+              let burned = try? await energy.result(for: health) else { return nil }
+
+        let beatsPerMinute = HKUnit.count().unitDivided(by: .minute())
+        var averages = [Int?](repeating: nil, count: steps)
+        var peaks = [Int?](repeating: nil, count: steps)
+        var kilocalories = [Double](repeating: 0, count: steps)
+        func step(_ statistics: HKStatistics) -> Int? {
+            let index = Int((statistics.startDate.timeIntervalSince(start) / interval).rounded(.down))
+            return (0 ..< steps).contains(index) ? index : nil
+        }
+        hearts.enumerateStatistics(from: start, to: end) { statistics, _ in
+            guard let index = step(statistics) else { return }
+            averages[index] = statistics.averageQuantity().map { Int($0.doubleValue(for: beatsPerMinute).rounded()) }
+            peaks[index] = statistics.maximumQuantity().map { Int($0.doubleValue(for: beatsPerMinute).rounded()) }
+        }
+        burned.enumerateStatistics(from: start, to: end) { statistics, _ in
+            guard let index = step(statistics) else { return }
+            kilocalories[index] = statistics.sumQuantity()?.doubleValue(for: .kilocalorie()) ?? 0
+        }
+        // A refused read answers with nothing rather than an error, and nothing is not worth
+        // a message.
+        guard averages.contains(where: { $0 != nil }) || kilocalories.contains(where: { $0 > 0 }) else { return nil }
+
+        return WorkoutSeries(
+            workoutID: workout.uuid, start: start, interval: interval,
+            heartRate: averages, heartRateMax: peaks, activeEnergy: kilocalories,
+            pauses: pauses(of: workout)
+        )
+    }
+
+    private nonisolated static func pauses(of workout: HKWorkout) -> [DateInterval] {
+        var held: [DateInterval] = []
+        var since: Date?
+        for event in workout.workoutEvents ?? [] {
+            switch event.type {
+            case .pause, .motionPaused:
+                since = since ?? event.dateInterval.start
+            case .resume, .motionResumed:
+                if let from = since, event.dateInterval.start > from {
+                    held.append(DateInterval(start: from, end: event.dateInterval.start))
+                }
+                since = nil
+            default:
+                continue
+            }
+        }
+        if let from = since, workout.endDate > from {
+            held.append(DateInterval(start: from, end: workout.endDate))
+        }
+        return held
     }
 
     /// Everything that can go wrong lands here and leaves no trace on screen beyond the
@@ -601,5 +689,26 @@ nonisolated private final class Relay: NSObject,
     /// settled — it warns that until then the number can move either way.
     func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {
         onElapsed(workoutBuilder.elapsedTime)
+    }
+}
+
+/// Whichever comes first: the work's answer, or `nil` once the time is up. HealthKit's async
+/// calls are not reliably cancellable, so the work is raced rather than cancelled.
+private func first<Value: Sendable>(
+    of work: @escaping @Sendable () async -> Value?, orNilAfter limit: Duration
+) async -> Value? {
+    await withCheckedContinuation { continuation in
+        let pending = Mutex<CheckedContinuation<Value?, Never>?>(continuation)
+        let answer: @Sendable (Value?) -> Void = { value in
+            pending.withLock { waiting in
+                waiting?.resume(returning: value)
+                waiting = nil
+            }
+        }
+        Task { answer(await work()) }
+        Task {
+            try? await Task.sleep(for: limit)
+            answer(nil)
+        }
     }
 }
