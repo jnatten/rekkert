@@ -250,6 +250,98 @@ struct SessionReducerTests {
         #expect(!value.rounds[1].isCancelled)
     }
 
+    // MARK: - Choosing who sits out
+
+    @Test func pickingTheBenchRedrawsARoundNothingHasHappenedIn() throws {
+        var log = tournamentLog(players: 9)
+        let drawn = try #require(tournament(log)?.currentRound)
+        let late = try #require(tournament(log)?.players.map(\.id).first { !drawn.sitOuts.contains($0) })
+
+        log.redrawRound(sittingOut: [late], from: device)
+
+        let value = try #require(tournament(log))
+        #expect(value.rounds.count == 1, "redrawn in place rather than added")
+        #expect(value.rounds[0].sitOuts == [late])
+        #expect(!value.rounds[0].matches.flatMap(\.allPlayers).contains(late))
+    }
+
+    @Test(arguments: [
+        EventKind.point(round: 0, court: 1, team: .a),
+        .setRoundConfirmed(round: 0, isConfirmed: true),
+        .setRoundCancelled(round: 0, isCancelled: true),
+        .finish(archive: true),
+    ])
+    func aRoundThatHasStartedIsNotRedrawn(first: EventKind) throws {
+        var log = tournamentLog(players: 9)
+        log.append(first, from: device)
+        let before = try #require(tournament(log))
+        let late = try #require(before.players.map(\.id).first { !before.rounds[0].sitOuts.contains($0) })
+
+        log.redrawRound(sittingOut: [late], from: device)
+
+        #expect(tournament(log) == before)
+    }
+
+    @Test func undoingARedrawBringsBackTheRoundAsDrawn() throws {
+        var log = tournamentLog(players: 9)
+        let drawn = try #require(tournament(log))
+        let late = try #require(drawn.players.map(\.id).first { !drawn.rounds[0].sitOuts.contains($0) })
+
+        let redraw = log.redrawRound(sittingOut: [late], from: device)
+        #expect(log.lastUndoableEvent() == redraw)
+        log.append(.undo(redraw.id), from: device)
+
+        #expect(tournament(log) == drawn)
+    }
+
+    @Test func aRedrawThatArrivesAfterTheNextRoundDoesNothing() throws {
+        var log = tournamentLog(players: 9)
+        let late = try #require(tournament(log)?.players.map(\.id).first {
+            tournament(log)?.rounds[0].sitOuts.contains($0) == false
+        })
+        log.append(.setRoundConfirmed(round: 0, isConfirmed: true), from: device)
+        log.drawRound(from: device)
+        let before = try #require(tournament(log))
+
+        // Meant for round 1, which has been moved past; round 2 is untouched, but not what it named.
+        log.append(.nextRound(after: -1, sitOuts: [late]), from: device)
+
+        #expect(tournament(log) == before)
+    }
+
+    @Test func twoDevicesRedrawingAtOnceAgree() throws {
+        let base = tournamentLog(players: 10)
+        var phone = base
+        var watch = base
+        let players = try #require(tournament(base)).players.map(\.id)
+
+        let one = phone.redrawRound(sittingOut: [players[0]], from: device)
+        let two = watch.redrawRound(sittingOut: [players[1]], from: DeviceID())
+        phone.merge([two])
+        watch.merge([one])
+
+        #expect(SessionReducer.state(of: phone) == SessionReducer.state(of: watch))
+        #expect(tournament(phone)?.rounds.count == 1)
+    }
+
+    @Test func aDrawCanNameItsBench() throws {
+        var log = tournamentLog(players: 9)
+        log.append(.setRoundConfirmed(round: 0, isConfirmed: true), from: device)
+        let late = try #require(tournament(log)?.players.first { $0.name == "P4" }).id
+        log.append(.nextRound(after: 0, sitOuts: [late]), from: device)
+
+        #expect(tournament(log)?.rounds.count == 2)
+        #expect(tournament(log)?.rounds[1].sitOuts == [late])
+    }
+
+    @Test func aDrawThatPicksNobodyEncodesAsItAlwaysHas() throws {
+        let plain = try JSONCoding.encoder.encode(EventKind.nextRound(after: 0))
+        #expect(!String(decoding: plain, as: UTF8.self).contains("sitOuts"))
+
+        let picked = EventKind.nextRound(after: 0, sitOuts: [Player(name: "P1").id])
+        #expect(try JSONCoding.decoder.decode(EventKind.self, from: JSONCoding.encoder.encode(picked)) == picked)
+    }
+
     @Test func concurrentPointsOnDifferentCourtsBothLand() {
         let base = tournamentLog()
         var phone = base

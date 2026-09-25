@@ -13,12 +13,14 @@ public enum BenchOrder: String, Codable, Sendable, Hashable {
 enum RoundScheduler {
     /// Everyone who can't be given a seat this round. Benches whoever has sat out least
     /// so far, so sit-outs spread evenly; ties break on a seeded order rather than on
-    /// dictionary iteration, which would differ between devices.
+    /// dictionary iteration, which would differ between devices. `chosen` go to the bench
+    /// ahead of all of that, and must not outnumber it.
     static func split(
         players: [Player],
         seats: Int,
         history: PairingHistory,
         order benchOrder: BenchOrder = .fewestSitOuts,
+        chosen: [PlayerID] = [],
         generator: inout SeededGenerator
     ) -> (playing: [PlayerID], sitting: [PlayerID]) {
         let shuffled = players.map(\.id).shuffled(using: &generator)
@@ -26,7 +28,10 @@ enum RoundScheduler {
         guard shuffled.count > seatCount else { return (shuffled, []) }
 
         let order = Dictionary(uniqueKeysWithValues: shuffled.enumerated().map { ($1, $0) })
+        let chosenSet = Set(chosen)
         let benchFirst = shuffled.sorted { one, two in
+            let isChosen = chosenSet.contains(one)
+            if isChosen != chosenSet.contains(two) { return isChosen }
             let a = history.sitOutCount(one)
             let b = history.sitOutCount(two)
             if a != b { return a < b }
@@ -42,6 +47,14 @@ enum RoundScheduler {
         let sittingSet = Set(sitting)
         let playing = shuffled.filter { !sittingSet.contains($0) }
         return (playing, sitting)
+    }
+
+    static func chosen(_ sitOuts: [PlayerID]?, in tournament: Tournament) throws -> [PlayerID] {
+        guard let sitOuts else { return [] }
+        let known = Set(tournament.players.map(\.id))
+        guard Set(sitOuts).count == sitOuts.count, sitOuts.allSatisfy(known.contains),
+              sitOuts.count <= tournament.benchSize else { throw TournamentError.invalidSitOuts }
+        return sitOuts
     }
 
     static func pair(_ four: [PlayerID], as pairing: MexicanoPairing) -> BySide<[PlayerID]> {
@@ -159,18 +172,19 @@ enum PairingSearch {
 }
 
 public enum AmericanoScheduler {
-    public static func nextRound(for tournament: Tournament) throws -> Round {
+    public static func nextRound(for tournament: Tournament, sitOuts: [PlayerID]? = nil) throws -> Round {
         let courts = tournament.playableCourts
         guard courts >= 1 else {
             throw TournamentError.notEnoughPlayers(needed: 4, have: tournament.players.count)
         }
+        let chosen = try RoundScheduler.chosen(sitOuts, in: tournament)
 
         let index = tournament.rounds.count
         let history = PairingHistory(tournament)
         var generator = SeededGenerator(tournament.id.raw, salt: UInt64(index))
         let (playing, sitting) = RoundScheduler.split(
             players: tournament.players, seats: courts * 4, history: history,
-            order: tournament.benchOrder, generator: &generator
+            order: tournament.benchOrder, chosen: chosen, generator: &generator
         )
 
         let teams = PairingSearch.teams(from: playing, courts: courts, history: history)
@@ -181,18 +195,19 @@ public enum AmericanoScheduler {
 }
 
 public enum MexicanoScheduler {
-    public static func nextRound(for tournament: Tournament) throws -> Round {
+    public static func nextRound(for tournament: Tournament, sitOuts: [PlayerID]? = nil) throws -> Round {
         let courts = tournament.playableCourts
         guard courts >= 1 else {
             throw TournamentError.notEnoughPlayers(needed: 4, have: tournament.players.count)
         }
+        let chosen = try RoundScheduler.chosen(sitOuts, in: tournament)
 
         let index = tournament.rounds.count
         let history = PairingHistory(tournament)
         var generator = SeededGenerator(tournament.id.raw, salt: UInt64(index))
         let (playing, sitting) = RoundScheduler.split(
             players: tournament.players, seats: courts * 4, history: history,
-            order: tournament.benchOrder, generator: &generator
+            order: tournament.benchOrder, chosen: chosen, generator: &generator
         )
 
         let ranked: [PlayerID]
@@ -219,13 +234,23 @@ public enum MexicanoScheduler {
 }
 
 public enum TournamentEngine {
-    public static func appendingRound(to tournament: Tournament) throws -> Tournament {
+    /// `sitOuts` are players picked to sit this round out; whatever of the bench they leave
+    /// open is filled as it always is.
+    public static func appendingRound(to tournament: Tournament, sitOuts: [PlayerID]? = nil) throws -> Tournament {
         var next = tournament
         let round = switch tournament.format {
-        case .americano: try AmericanoScheduler.nextRound(for: tournament)
-        case .mexicano: try MexicanoScheduler.nextRound(for: tournament)
+        case .americano: try AmericanoScheduler.nextRound(for: tournament, sitOuts: sitOuts)
+        case .mexicano: try MexicanoScheduler.nextRound(for: tournament, sitOuts: sitOuts)
         }
         next.rounds.append(round)
         return next
+    }
+
+    /// The last round drawn again from what came before it, around who is sitting it out.
+    /// Same index, same seed: picking the bench it already has gives back the same round.
+    public static func redrawingLastRound(of tournament: Tournament, sitOuts: [PlayerID]) throws -> Tournament {
+        var base = tournament
+        _ = base.rounds.popLast()
+        return try appendingRound(to: base, sitOuts: sitOuts)
     }
 }

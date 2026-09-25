@@ -140,9 +140,24 @@ public struct Tournament: Codable, Sendable, Hashable {
     public var playableCourts: Int {
         min(config.courtCount, players.count / 4)
     }
+
+    /// How many sit out each round.
+    public var benchSize: Int {
+        max(0, players.count - playableCourts * 4)
+    }
+
+    /// Whether the round in play can still be drawn again around a different bench: nothing
+    /// has been scored or settled in it, so nobody loses anything by it.
+    public var canRedrawCurrentRound: Bool {
+        guard !isFinished, let round = currentRound, !round.isCancelled else { return false }
+        return round.matches.allSatisfy { $0.state.points.total == 0 && !$0.isConfirmed }
+    }
 }
 
 public enum TournamentError: Error, Sendable, Hashable {
     case notEnoughPlayers(needed: Int, have: Int)
     case roundIncomplete
+    /// Players picked to sit out who are not all this tournament's, not all different, or
+    /// more than the bench holds.
+    case invalidSitOuts
 }

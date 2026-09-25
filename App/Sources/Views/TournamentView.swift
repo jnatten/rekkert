@@ -23,6 +23,7 @@ struct CourtListView: View {
     @State private var editing: CourtRef?
     @State private var showingEnd = false
     @State private var showingCancel = false
+    @State private var choosingSitOuts = false
     /// Which round is on screen. `nil` follows the newest one, so drawing a round moves
     /// the view along with it; browsing back pins it until you return to the end.
     @State private var browsing: Int?
@@ -77,10 +78,14 @@ struct CourtListView: View {
             .sheet(item: $editing) { ref in
                 CourtScoreboardView(round: ref.round, court: ref.court)
             }
+            .sheet(isPresented: $choosingSitOuts) {
+                SitOutPickerView()
+            }
             .task {
                 #if DEBUG
                 if let round = DemoLaunch.browseRound { browsing = round }
                 if let ref = DemoLaunch.openCourt { editing = ref }
+                if DemoLaunch.sitOutPick != nil { choosingSitOuts = true }
                 #endif
             }
             .confirmationDialog(endPrompt, isPresented: $showingEnd, titleVisibility: .visible) {
@@ -152,9 +157,20 @@ struct CourtListView: View {
         }
 
         if !round.sitOuts.isEmpty {
-            Section("Sitting out") {
+            Section {
                 Text(round.sitOuts.compactMap { tournament.player($0)?.name }.joined(separator: ", "))
                     .foregroundStyle(.secondary)
+                if round.index == tournament.latestRoundIndex, tournament.canRedrawCurrentRound {
+                    Button("Change who sits out", systemImage: "arrow.triangle.2.circlepath") {
+                        choosingSitOuts = true
+                    }
+                }
+            } header: {
+                Text("Sitting out")
+            } footer: {
+                if round.index == tournament.latestRoundIndex, tournament.canRedrawCurrentRound {
+                    Text("Somebody late? Pick who sits out before the first point and the round is drawn again around them.")
+                }
             }
         }
     }

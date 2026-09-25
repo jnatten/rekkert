@@ -65,7 +65,9 @@ repeat opponents. Mexicano re-ranks after every round and puts the top four on c
 paired 1+4 vs 2+3. Player counts that are not a multiple of four rotate sit-outs by
 whoever has sat out least and, of those, whoever sat out longest ago, so nobody is benched
 again sooner than the numbers force. Benched players score a configurable number of points
-(half the target by default).
+(half the target by default). Until the first point of a round, who sits it out can be
+changed on the phone — for whoever is late — and the round is drawn again around the pick.
+A picked sit-out counts like any other, so whoever it spared is next in line.
 
 On the phone, the court list is the main tournament screen: every court with its score,
 plus standings and round history. Scores can be tapped in point by point, typed, nudged
@@ -400,7 +402,7 @@ Debug builds accept `-rekkert-demo traditional|winnercourt|friendly|americano|me
 `-rekkert-demo-points N`, `-rekkert-demo-deuce`, `-rekkert-demo-rounds`,
 `-rekkert-demo-friendly-rounds N`, `-rekkert-demo-friendly-players N`,
 `-rekkert-demo-rounds-sheet`,
-`-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N`,
+`-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N`, `-rekkert-demo-sit-outs [name]`,
 `-rekkert-demo-open-court R,C`, `-rekkert-demo-roster`, `-rekkert-demo-presets`,
 `-rekkert-demo-watch-page menu|standings|controls`, `-rekkert-demo-watch-join CODE`,
 `-rekkert-demo-fullscreen`,

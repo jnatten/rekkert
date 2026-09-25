@@ -32,7 +32,13 @@ public enum EventKind: Codable, Sendable, Hashable {
     /// Draws the round after `after`, and only if that is still the last one — so two
     /// devices advancing at once produce one new round, not two. `at` is where the drawn
     /// round's clock starts.
-    case nextRound(after: Int, at: Date? = nil)
+    ///
+    /// `sitOuts` are players picked to sit the round out, the rest of the bench drawn as
+    /// usual. With them it also draws the round after `after` again when that has already
+    /// been drawn but nothing has been played in it, which is how the bench is picked by
+    /// hand: the round is drawn as always, then drawn again around who is actually there.
+    /// Absent from older builds, which drop it and keep the round they drew.
+    case nextRound(after: Int, at: Date? = nil, sitOuts: [PlayerID]? = nil)
     /// Ends the session. `archive` is false when it is being thrown away rather than kept,
     /// and travels with the event so the other device does not file it either.
     case finish(archive: Bool)
@@ -86,7 +92,7 @@ extension EventKind {
     /// predate `MatchEvent.at`.
     public var payloadDate: Date? {
         switch self {
-        case .configure(_, let at), .endRound(_, let at), .nextRound(_, let at): at
+        case .configure(_, let at), .endRound(_, let at), .nextRound(_, let at, _): at
         case .point, .setScore, .setFirstServer, .setServeOrder, .chooseServeSide,
              .setRoundConfirmed, .setRoundCancelled, .finish, .restore, .undo: nil
         }

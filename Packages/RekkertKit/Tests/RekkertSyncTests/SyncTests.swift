@@ -251,6 +251,38 @@ struct SyncTests {
         #expect(pair.phone.state == pair.watch.state)
     }
 
+    @Test func aBenchPickedOnThePhoneRedrawsTheWatchsRoundToo() async throws {
+        let tournament = Tournament(
+            name: "Thursday",
+            format: .americano,
+            players: (0 ..< 9).map { Player(name: "P\($0)") },
+            config: TournamentConfig(courtCount: 2)
+        )
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+
+        pair.phone.configure(.tournament(tournament))
+        pair.phone.nextRound()
+        try await settle()
+
+        guard case .tournament(let drawn) = pair.watch.state else {
+            Issue.record("watch has no tournament")
+            return
+        }
+        let late = try #require(drawn.players.map(\.id).first { !drawn.rounds[0].sitOuts.contains($0) })
+        pair.phone.redrawRound(sittingOut: [late])
+        try await settle()
+
+        guard case .tournament(let synced) = pair.watch.state else {
+            Issue.record("watch has no tournament")
+            return
+        }
+        #expect(synced.rounds.count == 1)
+        #expect(synced.rounds[0].sitOuts == [late])
+        #expect(pair.phone.state == pair.watch.state)
+    }
+
     @Test func aSessionFromAnOlderBuildIsSetAsideRatherThanCrashing() throws {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appending(path: "rekkert-tests-\(UUID().uuidString)")

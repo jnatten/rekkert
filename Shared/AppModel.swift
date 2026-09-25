@@ -376,7 +376,10 @@ final class AppModel {
             store.configure(.tournament(Tournament(
                 name: "Thursday",
                 format: format == "mexicano" ? .mexicano : .americano,
-                players: ["Jonas", "Ada", "Kim", "Sam", "No", "Ola", "Siri", "Tor"].map { Player(name: $0) },
+                // `-rekkert-demo-sit-outs` brings a ninth, so somebody has to sit out.
+                players: (["Jonas", "Ada", "Kim", "Sam", "No", "Ola", "Siri", "Tor"]
+                    + (arguments.contains("-rekkert-demo-sit-outs") ? ["Per"] : []))
+                    .map { Player(name: $0) },
                 config: TournamentConfig(pointRules: PointCountRules(target: 16), courtCount: 2)
             )))
             store.nextRound()

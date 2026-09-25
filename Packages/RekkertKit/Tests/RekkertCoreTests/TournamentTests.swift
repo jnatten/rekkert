@@ -293,6 +293,113 @@ struct LeaderboardTests {
         #expect(back.benchOrder == .longestRested)
     }
 
+    // MARK: - Choosing who sits out
+
+    @Test(arguments: [TournamentFormat.americano, .mexicano])
+    func aChosenBenchIsTheBench(format: TournamentFormat) throws {
+        let fresh = makeTournament(format, players: 9, courts: 2)
+        let late = try #require(fresh.players.first { $0.name == "P3" }).id
+        let t = try TournamentEngine.appendingRound(to: fresh, sitOuts: [late])
+
+        #expect(t.rounds[0].sitOuts == [late])
+        let onCourt = t.rounds[0].matches.flatMap(\.allPlayers)
+        #expect(!onCourt.contains(late))
+        #expect(Set(onCourt).count == 8)
+    }
+
+    @Test func aBenchPickedInPartIsFilledFairly() throws {
+        let played = try playRounds(makeTournament(.americano, players: 10, courts: 2), count: 1)
+        let sat = try #require(played.rounds[0].sitOuts.first)
+        let t = try TournamentEngine.appendingRound(to: played, sitOuts: [sat])
+
+        let bench = t.rounds[1].sitOuts
+        #expect(bench.count == 2)
+        #expect(bench.first == sat)
+        #expect(!played.rounds[0].sitOuts.contains(bench[1]), "the seat left open goes to someone yet to sit out")
+    }
+
+    @Test func sitOutsTheBenchCannotHoldAreRefused() throws {
+        let nine = makeTournament(.americano, players: 9, courts: 2)
+        let ten = makeTournament(.americano, players: 10, courts: 2)
+        let eight = makeTournament(.americano, players: 8, courts: 2)
+        let stranger = Player(name: "Stranger").id
+
+        for (tournament, sitOuts) in [
+            (nine, Array(nine.players.prefix(2).map(\.id))),
+            (ten, [ten.players[1].id, ten.players[1].id]),
+            (ten, [stranger]),
+            (eight, [eight.players[0].id]),
+        ] {
+            #expect(throws: TournamentError.invalidSitOuts) {
+                try TournamentEngine.appendingRound(to: tournament, sitOuts: sitOuts)
+            }
+        }
+    }
+
+    @Test func aLatecomerSitsOutAgainOnlyOnceEveryoneElseHas() throws {
+        let fresh = makeTournament(.americano, players: 5)
+        let late = try #require(fresh.players.first { $0.name == "P2" }).id
+        var t = try TournamentEngine.appendingRound(to: fresh, sitOuts: [late])
+        for _ in 0 ..< 5 { t = try TournamentEngine.appendingRound(to: t) }
+
+        let bench = t.rounds.map(\.sitOuts)
+        #expect(Set(bench[1 ..< 5].flatMap { $0 }) == Set(t.players.map(\.id)).subtracting([late]))
+        #expect(bench[5] == [late])
+    }
+
+    @Test func mexicanoRanksWhoeverIsLeftAfterAPick() throws {
+        let played = try playRounds(makeTournament(.mexicano, players: 9, courts: 2), count: 1) { _ in BySide(a: 11, b: 5) }
+        let standings = Leaderboard.standings(for: played, onlyConfirmed: true).map(\.player.id)
+        let leader = standings[0]
+        let t = try TournamentEngine.appendingRound(to: played, sitOuts: [leader])
+
+        #expect(t.rounds[1].sitOuts == [leader])
+        let rest = standings.filter { $0 != leader }
+        #expect(Set(t.rounds[1].matches[0].allPlayers) == Set(rest.prefix(4)), "court 1 is the top four still playing")
+    }
+
+    @Test func redrawingAroundTheSameBenchGivesTheSameRound() throws {
+        let played = try playRounds(makeTournament(.mexicano, players: 9, courts: 2), count: 2)
+        let drawn = try TournamentEngine.appendingRound(to: played)
+        let bench = try #require(drawn.currentRound).sitOuts
+
+        #expect(try TournamentEngine.redrawingLastRound(of: drawn, sitOuts: bench) == drawn)
+
+        let other = try #require(drawn.players.map(\.id).first { !bench.contains($0) })
+        let redrawn = try TournamentEngine.redrawingLastRound(of: drawn, sitOuts: [other])
+        #expect(redrawn.rounds.count == 3)
+        #expect(Array(redrawn.rounds.prefix(2)) == Array(drawn.rounds.prefix(2)), "the rounds before it stay as they were")
+        #expect(redrawn.rounds[2].index == 2)
+        #expect(redrawn.rounds[2].sitOuts == [other])
+    }
+
+    @Test func aChosenSitOutIsCompensatedLikeAnyOther() throws {
+        let fresh = makeTournament(.americano, players: 5, compensation: .half, target: 16)
+        let late = try #require(fresh.players.first { $0.name == "P2" }).id
+        let t = try TournamentEngine.appendingRound(to: fresh, sitOuts: [late])
+
+        let row = try #require(Leaderboard.standings(for: t).first { $0.player.id == late })
+        #expect(row.sitOuts == 1)
+        #expect(row.compensation == 8)
+    }
+
+    @Test func onlyAnUntouchedRoundCanBeRedrawn() throws {
+        var t = try TournamentEngine.appendingRound(to: makeTournament(.americano, players: 9, courts: 2))
+        #expect(t.canRedrawCurrentRound)
+
+        var scored = t
+        scored.rounds[0].matches[1].state.points = BySide(a: 1, b: 0)
+        #expect(!scored.canRedrawCurrentRound)
+
+        var cancelled = t
+        cancelled.rounds[0].isCancelled = true
+        #expect(!cancelled.canRedrawCurrentRound)
+
+        t.isFinished = true
+        #expect(!t.canRedrawCurrentRound)
+        #expect(!makeTournament(.americano, players: 9, courts: 2).canRedrawCurrentRound, "nothing drawn yet")
+    }
+
     // MARK: - Golden draws
 
     /// A fingerprint of the rounds the schedulers draw today. The pairing machinery is shared

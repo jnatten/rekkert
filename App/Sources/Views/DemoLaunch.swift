@@ -67,6 +67,10 @@ enum DemoLaunch {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-rematch")
     }
 
+    /// `-rekkert-demo-sit-outs` puts a ninth player in the demo tournament so somebody sits
+    /// out, and with a name opens the sheet for changing who, that player already picked.
+    static var sitOutPick: String? { value(for: "-rekkert-demo-sit-outs") }
+
     /// `-rekkert-share-host 482915` starts sharing on a pinned code, and
     /// `-rekkert-share-join 482915` opens the join sheet with it already filled in. Between
     /// them two simulators can be driven through the whole flow without a tap.

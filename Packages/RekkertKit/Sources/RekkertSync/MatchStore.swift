@@ -191,6 +191,13 @@ public final class MatchStore {
         }
     }
 
+    /// Draws the tournament round in play again with these players sitting it out. Lands
+    /// only while nothing has been played in it.
+    public func redrawRound(sittingOut sitOuts: [PlayerID]) {
+        guard case .tournament(let tournament) = state, let last = tournament.rounds.indices.last else { return }
+        record(.nextRound(after: last - 1, at: Date(), sitOuts: sitOuts))
+    }
+
     /// The whistle in winner court, and calling a friendly round off where it stands.
     public func endRound() {
         switch state {

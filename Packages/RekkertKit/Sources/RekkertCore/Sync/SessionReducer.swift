@@ -101,12 +101,17 @@ public enum SessionReducer {
             tournament.rounds[round].isCancelled = isCancelled
             state = .tournament(tournament)
 
-        case .nextRound(let after, let at):
+        case .nextRound(let after, let at, let sitOuts):
             switch state {
             case .tournament(let tournament):
-                guard tournament.rounds.count == after + 1,
-                      var next = try? TournamentEngine.appendingRound(to: tournament),
-                      let drawn = next.rounds.indices.last else { return }
+                let drawing: Tournament? = if tournament.rounds.count == after + 1 {
+                    try? TournamentEngine.appendingRound(to: tournament, sitOuts: sitOuts)
+                } else if let sitOuts, tournament.rounds.count == after + 2, tournament.canRedrawCurrentRound {
+                    try? TournamentEngine.redrawingLastRound(of: tournament, sitOuts: sitOuts)
+                } else {
+                    nil
+                }
+                guard var next = drawing, let drawn = next.rounds.indices.last else { return }
                 // Stamped here rather than read back off the log: a second device drawing at
                 // the same moment is turned away by the guard above, and only this knows it.
                 next.rounds[drawn].startedAt = at
