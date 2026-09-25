@@ -72,6 +72,10 @@ public struct Tournament: Codable, Sendable, Hashable {
     public var config: TournamentConfig
     public var rounds: [Round]
     public var isFinished: Bool
+    /// Kept with the tournament rather than its settings because every round is drawn again
+    /// each time the log is replayed: a tournament begun before the tie-break existed has to
+    /// go on being drawn without it, or the rounds already played would be re-partnered.
+    public var benchOrder: BenchOrder
 
     public init(
         id: TournamentID = TournamentID(),
@@ -80,7 +84,8 @@ public struct Tournament: Codable, Sendable, Hashable {
         players: [Player] = [],
         config: TournamentConfig = TournamentConfig(),
         rounds: [Round] = [],
-        isFinished: Bool = false
+        isFinished: Bool = false,
+        benchOrder: BenchOrder = .longestRested
     ) {
         self.id = id
         self.name = name
@@ -89,6 +94,23 @@ public struct Tournament: Codable, Sendable, Hashable {
         self.config = config
         self.rounds = rounds
         self.isFinished = isFinished
+        self.benchOrder = benchOrder
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, format, players, config, rounds, isFinished, benchOrder
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(TournamentID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        format = try container.decode(TournamentFormat.self, forKey: .format)
+        players = try container.decode([Player].self, forKey: .players)
+        config = try container.decode(TournamentConfig.self, forKey: .config)
+        rounds = try container.decode([Round].self, forKey: .rounds)
+        isFinished = try container.decode(Bool.self, forKey: .isFinished)
+        benchOrder = try container.decodeIfPresent(BenchOrder.self, forKey: .benchOrder) ?? .fewestSitOuts
     }
 
     public var currentRound: Round? { rounds.last }

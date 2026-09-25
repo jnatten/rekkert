@@ -1,5 +1,15 @@
 import Foundation
 
+/// Who goes to the bench when several players have sat out equally often.
+public enum BenchOrder: String, Codable, Sendable, Hashable {
+    /// The seeded shuffle decides, so a rotation that has come round can land straight back
+    /// on whoever sat out last. How every draw was made before the other existed.
+    case fewestSitOuts
+    /// Whoever sat out longest ago, so the gap between anyone's sit-outs is as long as the
+    /// numbers allow.
+    case longestRested
+}
+
 enum RoundScheduler {
     /// Everyone who can't be given a seat this round. Benches whoever has sat out least
     /// so far, so sit-outs spread evenly; ties break on a seeded order rather than on
@@ -8,6 +18,7 @@ enum RoundScheduler {
         players: [Player],
         seats: Int,
         history: PairingHistory,
+        order benchOrder: BenchOrder = .fewestSitOuts,
         generator: inout SeededGenerator
     ) -> (playing: [PlayerID], sitting: [PlayerID]) {
         let shuffled = players.map(\.id).shuffled(using: &generator)
@@ -19,6 +30,11 @@ enum RoundScheduler {
             let a = history.sitOutCount(one)
             let b = history.sitOutCount(two)
             if a != b { return a < b }
+            if benchOrder == .longestRested {
+                let rested = history.lastSitOut(one) ?? -1
+                let other = history.lastSitOut(two) ?? -1
+                if rested != other { return rested < other }
+            }
             return order[one, default: 0] < order[two, default: 0]
         }
 
@@ -153,7 +169,8 @@ public enum AmericanoScheduler {
         let history = PairingHistory(tournament)
         var generator = SeededGenerator(tournament.id.raw, salt: UInt64(index))
         let (playing, sitting) = RoundScheduler.split(
-            players: tournament.players, seats: courts * 4, history: history, generator: &generator
+            players: tournament.players, seats: courts * 4, history: history,
+            order: tournament.benchOrder, generator: &generator
         )
 
         let teams = PairingSearch.teams(from: playing, courts: courts, history: history)
@@ -174,7 +191,8 @@ public enum MexicanoScheduler {
         let history = PairingHistory(tournament)
         var generator = SeededGenerator(tournament.id.raw, salt: UInt64(index))
         let (playing, sitting) = RoundScheduler.split(
-            players: tournament.players, seats: courts * 4, history: history, generator: &generator
+            players: tournament.players, seats: courts * 4, history: history,
+            order: tournament.benchOrder, generator: &generator
         )
 
         let ranked: [PlayerID]

@@ -242,6 +242,57 @@ struct LeaderboardTests {
         #expect(back == round)
     }
 
+    // MARK: - Time between sit-outs
+
+    @Test func theBenchComesRoundInTheOrderItFirstWent() throws {
+        let played = try playRounds(makeTournament(.americano, players: 5), count: 15)
+        let bench = benched(played)
+        #expect(Set(bench.prefix(5)).count == 5, "everyone sits out once before anyone twice")
+        for (index, sitting) in bench.enumerated() {
+            #expect(sitting == bench[index % 5], "round \(index + 1) should repeat round \(index % 5 + 1)")
+        }
+    }
+
+    @Test func nobodySitsOutAgainSoonerThanTheNumbersForce() throws {
+        let played = try playRounds(makeTournament(.americano, players: 7), count: 14)
+        for player in played.players {
+            let rounds = played.rounds.indices.filter { played.rounds[$0].sitOuts.contains(player.id) }
+            let gaps = zip(rounds.dropFirst(), rounds).map { $0 - $1 }
+            #expect(gaps.allSatisfy { $0 >= 2 }, "\(player.name) sat out in rounds \(rounds)")
+        }
+        for count in 1 ... played.rounds.count {
+            let tallies = played.players.map { player in
+                played.rounds.prefix(count).count { $0.sitOuts.contains(player.id) }
+            }
+            #expect(tallies.max()! - tallies.min()! <= 1, "after \(count) rounds: \(tallies)")
+        }
+    }
+
+    /// Drawn the way it always was: the tie-break would otherwise re-bench rounds already
+    /// played in a tournament that was under way when the app was updated.
+    @Test func aTournamentBegunBeforeTheTieBreakKeepsItsDraws() throws {
+        let data = try JSONCoding.encoder.encode(makeTournament(.americano, players: 5))
+        var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(object.removeValue(forKey: "benchOrder") != nil, "the key is there to remove")
+
+        let trimmed = try JSONSerialization.data(withJSONObject: object)
+        let legacy = try JSONCoding.decoder.decode(Tournament.self, from: trimmed)
+        #expect(legacy.benchOrder == .fewestSitOuts)
+
+        let played = try playRounds(legacy, count: 12)
+        #expect(benched(played) == [
+            ["P3"], ["P0"], ["P1"], ["P2"], ["P4"], ["P4"],
+            ["P0"], ["P1"], ["P3"], ["P2"], ["P0"], ["P1"],
+        ])
+    }
+
+    @Test func aTournamentKeepsItsBenchOrderThroughAnEncode() throws {
+        let tournament = makeTournament(.americano, players: 5)
+        let back = try JSONCoding.decoder.decode(Tournament.self, from: JSONCoding.encoder.encode(tournament))
+        #expect(back == tournament)
+        #expect(back.benchOrder == .longestRested)
+    }
+
     // MARK: - Golden draws
 
     /// A fingerprint of the rounds the schedulers draw today. The pairing machinery is shared

@@ -63,7 +63,8 @@ same time — or when one team reaches it on its own; that is a setting.
 Americano builds each round so everyone partners everyone, avoiding repeat partners and
 repeat opponents. Mexicano re-ranks after every round and puts the top four on court 1,
 paired 1+4 vs 2+3. Player counts that are not a multiple of four rotate sit-outs by
-whoever has sat out least, and benched players score a configurable number of points
+whoever has sat out least and, of those, whoever sat out longest ago, so nobody is benched
+again sooner than the numbers force. Benched players score a configurable number of points
 (half the target by default).
 
 On the phone, the court list is the main tournament screen: every court with its score,
