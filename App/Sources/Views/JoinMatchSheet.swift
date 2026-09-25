@@ -61,7 +61,7 @@ struct JoinMatchSheet: View {
     private var entry: some View {
         Form {
             Section {
-                TextField("", text: Binding(get: { typed }, set: { typed = SessionCode.grouped($0) }))
+                TextField("···-···", text: $typed)
                     .font(.system(.largeTitle, design: .monospaced))
                     .multilineTextAlignment(.center)
                     .autocorrectionDisabled()
@@ -69,6 +69,12 @@ struct JoinMatchSheet: View {
                     .textContentType(.oneTimeCode)
                     .focused($typing)
                     .onSubmit(submit)
+                    // Not in the binding's setter: a field being typed into does not show
+                    // what the setter changes, so the hyphen never appeared.
+                    .onChange(of: typed) { _, new in
+                        let grouped = SessionCode.grouped(new)
+                        if grouped != new { typed = grouped }
+                    }
             } header: {
                 Text("Code")
             } footer: {
