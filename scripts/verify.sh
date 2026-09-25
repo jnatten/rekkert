@@ -76,6 +76,24 @@ for key in CFBundleShortVersionString CFBundleVersion; do
   echo "  ok: $key matches ($ios)"
 done
 
+echo "==> Assert the Live Activity extension is embedded and configured"
+# Without the plist key the request is refused at runtime, and without the extension there is
+# nothing to draw it: either way the Lock Screen stays empty and nothing says why.
+WIDGETS="$APP/PlugIns/RekkertWidgets.appex"
+test -d "$WIDGETS" || { echo "FAIL: widget extension not embedded at $WIDGETS"; exit 1; }
+check_ios '"NSSupportsLiveActivities" => true'
+widgetsplist="$WIDGETS/Info.plist"
+for expected in '"CFBundleIdentifier" => "dev.natten.rekkert.widgets"' '"NSExtensionPointIdentifier" => "com.apple.widgetkit-extension"'; do
+  plutil -p "$widgetsplist" | grep -q "$expected" || { echo "FAIL: expected $expected in extension Info.plist"; exit 1; }
+  echo "  ok: $expected"
+done
+for key in CFBundleShortVersionString CFBundleVersion; do
+  ios=$(plutil -extract "$key" raw -o - "$iosplist")
+  widgets=$(plutil -extract "$key" raw -o - "$widgetsplist")
+  test "$ios" = "$widgets" || { echo "FAIL: $key is $widgets in the extension, $ios on the phone"; exit 1; }
+  echo "  ok: extension $key matches ($ios)"
+done
+
 echo "==> Assert both apps may talk to Health"
 # Checked where Tuist writes them rather than on the signed bundle: a simulator build with no
 # team signs ad-hoc, and the entitlements it applies live in a -Simulated.xcent that codesign

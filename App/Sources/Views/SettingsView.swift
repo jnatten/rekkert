@@ -9,6 +9,7 @@ struct SettingsView: View {
     var body: some View {
         @Bindable var announcer = model.announcer
         @Bindable var fullscreen = model.fullscreen
+        @Bindable var liveScore = model.liveScore
         List {
             Section {
                 Toggle(isOn: $fullscreen.isBlackout) {
@@ -18,6 +19,14 @@ struct SettingsView: View {
                 Text("Full screen")
             } footer: {
                 Text("Draws both halves of the full-screen board black, with the names in the team colours, so the score stands out on a phone propped up in the sun. The moon button on the board switches it too.")
+            }
+
+            Section {
+                Toggle(isOn: $liveScore.isEnabled) {
+                    Label("Score on the Lock Screen", systemImage: "lock.iphone")
+                }
+            } footer: {
+                Text(liveScoreFooter)
             }
 
             Section {
@@ -80,6 +89,13 @@ struct SettingsView: View {
             get: { model.store.haptics.strength },
             set: { model.store.setHaptics(strength: $0) }
         )
+    }
+
+    private var liveScoreFooter: String {
+        guard model.liveScore.isAllowed else {
+            return "Live Activities are turned off for Rekkert in the iPhone's Settings, so nothing shows on the Lock Screen until they are turned back on there."
+        }
+        return "Keeps the score on the Lock Screen and in the Dynamic Island while a match is on, so a phone in a pocket can be checked without opening the app. The phone updates it itself as the points arrive; nothing goes through a server."
     }
 
     private var hapticFooter: String {

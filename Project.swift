@@ -68,14 +68,18 @@ let project = Project(
                     "Rekkert shows the heart rate your Apple Watch reads while you play.",
                 "NSHealthUpdateUsageDescription":
                     "Rekkert saves the session your Apple Watch records as a workout in Health.",
+                // Updated from the phone itself as points arrive, never pushed: there is no
+                // server to push from.
+                "NSSupportsLiveActivities": true,
             ]),
-            sources: ["App/Sources/**", "Shared/**"],
+            sources: ["App/Sources/**", "Shared/**", "Widgets/Shared/**"],
             resources: ["App/Resources/**"],
             entitlements: .dictionary(["com.apple.developer.healthkit": true]),
             dependencies: [
                 .package(product: "RekkertCore"),
                 .package(product: "RekkertSync"),
                 .target(name: "RekkertWatch"),
+                .target(name: "RekkertWidgets"),
             ],
             settings: .settings(base: [
                 "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
@@ -124,6 +128,28 @@ let project = Project(
                 "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
                 "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "AccentColor",
             ])
+        ),
+        // The Live Activity. Only RekkertCore goes in: the extension draws what it is handed
+        // and never talks to anything.
+        .target(
+            name: "RekkertWidgets",
+            destinations: [.iPhone, .iPad],
+            product: .appExtension,
+            bundleId: "\(iosBundleID).widgets",
+            deploymentTargets: .iOS("26.0"),
+            infoPlist: .extendingDefault(with: [
+                "CFBundleDisplayName": "Rekkert",
+                "CFBundleShortVersionString": "$(MARKETING_VERSION)",
+                "CFBundleVersion": "$(CURRENT_PROJECT_VERSION)",
+                "NSExtension": [
+                    "NSExtensionPointIdentifier": "com.apple.widgetkit-extension",
+                ],
+            ]),
+            sources: ["Widgets/Sources/**", "Widgets/Shared/**", "Shared/TeamColors.swift"],
+            resources: ["Widgets/Resources/**"],
+            dependencies: [
+                .package(product: "RekkertCore"),
+            ]
         ),
     ]
 )

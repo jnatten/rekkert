@@ -15,6 +15,7 @@ final class AppModel {
     let announcer = ScoreAnnouncer()
     /// The full-screen board is the phone's too.
     let fullscreen = FullscreenPreferences()
+    let liveScore = LiveScoreActivity()
     #endif
     #if os(watchOS)
     /// Which way this wrist reads the court. Device-local, like the phone's full-screen
@@ -103,6 +104,7 @@ final class AppModel {
         #else
         sharing.publish = { [store] state in Task { await store.send(.state(state)) } }
         store.onSharing = { [weak self] signal in self?.joinFromWatch(signal) }
+        liveScore.follow(store)
         #endif
         #if os(watchOS)
         // The store carries the points and holds no opinion about them; the wrist has the
@@ -391,6 +393,7 @@ final class AppModel {
         #if !os(watchOS)
         // Coming back to the front is when somebody has just been off downloading a voice.
         announcer.refreshVoices()
+        liveScore.reconcile()
         #endif
     }
 

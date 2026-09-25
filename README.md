@@ -141,6 +141,32 @@ background. In bright sun the colours are the first thing to go, so the moon but
 both halves out — white digits on black, the names in the team colours — and the setting
 stays on until you turn it off, from the board or from Settings.
 
+## The Lock Screen
+
+While a session is live the phone puts the score on the Lock Screen and in the Dynamic
+Island, so a phone in a pocket can be looked at without being opened. A match is drawn as
+two rows, the side on the left of the phone's own board on top: sets, games, the point and
+the serve. The Dynamic Island has the two points either side of the camera, each in its
+team's colour. A tournament gets the round, its clock, every court's score and the top
+three of the table. It is there to be read and nothing else: there are no buttons on it, so
+a phone in a pocket cannot score a point. Tapping it opens the app.
+
+Nothing pushes it. The phone updates it itself, from the same place every other change to
+the score passes through, and it is awake for every point that matters — over Bluetooth
+from the other phones at the court, or from its own watch. Starting one is different:
+iOS only lets an app start a Live Activity from the front. So a match started on the watch,
+with the phone in a bag, shows up there the next time the phone is opened, and keeps itself
+up to date from then on.
+
+A match that finishes leaves its result up for a quarter of an hour. One that was thrown
+away goes at once. A phone that was killed mid-match picks its activity back up when it
+relaunches, rather than putting up a second one. It is on by default and can be turned off
+in Settings, and iOS's own switch for the app overrules it.
+
+The extension that draws it links `RekkertCore` and nothing else. What it is handed is a
+`LiveScore`, built from the same `ScoreboardSnapshot` the boards use, and a test holds an
+eight-court americano under ActivityKit's 4 KB limit.
+
 ## Presets
 
 Name a setup when you start it and it is saved as a preset. Presets sync to the Apple
@@ -261,7 +287,7 @@ the destination.
 ## Layout
 
 ```
-Project.swift              Tuist project: iOS app + embedded watchOS app
+Project.swift              Tuist project: iOS app + embedded watchOS app and widget extension
 Packages/RekkertKit/       the brain, as a local Swift package
   RekkertCore              scoring, tournaments, event log, persistence (pure Foundation)
                            — HealthKit must never reach here, or the tests need a simulator
@@ -269,6 +295,7 @@ Packages/RekkertKit/       the brain, as a local Swift package
 App/                       iPhone SwiftUI
 WatchApp/                  Apple Watch SwiftUI
 Shared/                    the scoreboard and app model, used by both apps
+Widgets/                   the Live Activity: its extension, and the attributes the app shares
 ```
 
 Everything with interesting logic lives in `RekkertCore`, which depends on nothing but
@@ -323,7 +350,15 @@ swift test --package-path Packages/RekkertKit   # the fast loop, no simulator
 
 `scripts/verify.sh` also asserts that the watch app really is embedded at
 `Rekkert.app/Watch/` with the right `WKApplication` and companion bundle identifier — a
-three-line regression test for the whole watch-embedding story.
+three-line regression test for the whole watch-embedding story. It does the same for the
+Live Activity extension at `Rekkert.app/PlugIns/`, and for the plist key without which iOS
+refuses to start one.
+
+The Live Activity shows on an iPhone simulator with a Dynamic Island once the app is sent
+to the background — `xcrun simctl launch <udid> com.apple.Preferences` does it. A screenshot
+hides the island, so record a second of video instead. A late tap timed to land after the
+app had gone to the background never landed, so score the point before sending it away:
+`-rekkert-demo traditional -rekkert-demo-points 5 -rekkert-demo-late-tap 3`.
 
 To exercise sync on paired simulators:
 

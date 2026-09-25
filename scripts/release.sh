@@ -211,6 +211,8 @@ xcodebuild -workspace Rekkert.xcworkspace -scheme Rekkert \
 # The watch app is only in TestFlight if it is inside the thing we upload.
 test -d "$ARCHIVE/Products/Applications/Rekkert.app/Watch/RekkertWatch.app" || {
   echo "FAIL: the archive has no embedded watch app"; exit 1; }
+test -d "$ARCHIVE/Products/Applications/Rekkert.app/PlugIns/RekkertWidgets.appex" || {
+  echo "FAIL: the archive has no Live Activity extension"; exit 1; }
 
 echo "==> Export"
 options="$OUT/ExportOptions.plist"

@@ -3,7 +3,7 @@ import Foundation
 /// Everything a scoreboard needs to draw itself, derived from session state. Keeping this
 /// in the core means the phone and the watch render the same truth from the same code.
 public struct ScoreboardSnapshot: Sendable, Hashable {
-    public enum Kind: String, Sendable, Hashable {
+    public enum Kind: String, Codable, Sendable, Hashable {
         case traditional
         case winnerCourt
         case tournament
