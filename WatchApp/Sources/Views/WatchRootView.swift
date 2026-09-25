@@ -182,7 +182,7 @@ struct WatchPresetsView: View {
                 } else {
                     Text("Presets")
                         .font(.headline)
-                    ForEach(model.store.presets.ordered) { preset in
+                    ForEach(model.store.presets.presets) { preset in
                         Button {
                             model.store.start(preset)
                         } label: {

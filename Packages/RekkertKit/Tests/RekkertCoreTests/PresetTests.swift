@@ -75,24 +75,102 @@ struct PresetTests {
         #expect(library.presets[0].name == "Renamed")
     }
 
-    @Test func theOneYouUsedLastComesFirst() {
+    @Test func aNewPresetGoesToTheTop() {
         var library = PresetLibrary()
-        let old = tournamentPreset("Old")
-        let recent = tournamentPreset("Recent")
-        library.save(old)
-        library.save(recent)
-
-        library.markUsed(old.id, at: Date(timeIntervalSince1970: 100))
-        library.markUsed(recent.id, at: Date(timeIntervalSince1970: 200))
-
-        #expect(library.ordered.map(\.name) == ["Recent", "Old"])
+        library.save(tournamentPreset("Old"))
+        library.save(tournamentPreset("New"))
+        #expect(library.presets.map(\.name) == ["New", "Old"])
     }
 
-    @Test func unusedPresetsFallBackToAlphabeticalOrder() {
+    @Test func startingAPresetDoesNotMoveIt() {
         var library = PresetLibrary()
+        let bottom = tournamentPreset("Bottom")
+        library.save(bottom)
+        library.save(tournamentPreset("Top"))
+
+        library.markUsed(bottom.id)
+
+        #expect(library.presets.map(\.name) == ["Top", "Bottom"])
+    }
+
+    @Test func movingFollowsTheDrag() {
+        func library(_ names: String...) -> PresetLibrary {
+            var library = PresetLibrary()
+            names.reversed().forEach { library.save(tournamentPreset($0), at: Date(timeIntervalSince1970: 0)) }
+            return library
+        }
+
+        var down = library("A", "B", "C")
+        down.move(fromOffsets: [0], toOffset: 3, at: Date(timeIntervalSince1970: 100))
+        #expect(down.presets.map(\.name) == ["B", "C", "A"])
+        #expect(down.updatedAt == Date(timeIntervalSince1970: 100))
+
+        var up = library("A", "B", "C")
+        up.move(fromOffsets: [2], toOffset: 0)
+        #expect(up.presets.map(\.name) == ["C", "A", "B"])
+
+        var several = library("A", "B", "C", "D", "E")
+        several.move(fromOffsets: [0, 3], toOffset: 2)
+        #expect(several.presets.map(\.name) == ["B", "A", "D", "C", "E"])
+
+        var inPlace = library("A", "B", "C")
+        inPlace.move(fromOffsets: [1], toOffset: 1)
+        #expect(inPlace.presets.map(\.name) == ["A", "B", "C"])
+    }
+
+    @Test func anEditKeepsHowOftenItWasUsed() throws {
+        var library = PresetLibrary()
+        let preset = tournamentPreset()
+        library.save(preset)
+        library.markUsed(preset.id, at: Date(timeIntervalSince1970: 100))
+        let friendly = friendlyPreset().configuration
+
+        library.update(preset.id, at: Date(timeIntervalSince1970: 200)) {
+            $0.name = "Renamed"
+            $0.configuration = friendly
+        }
+
+        let edited = try #require(library.presets.first)
+        #expect(edited.name == "Renamed")
+        #expect(edited.configuration == friendly)
+        #expect(edited.useCount == 1)
+        #expect(edited.lastUsed == Date(timeIntervalSince1970: 100))
+        #expect(library.updatedAt == Date(timeIntervalSince1970: 200))
+    }
+
+    @Test func aLibraryFromBeforeReorderingKeepsTheOrderItShowed() throws {
+        var library = PresetLibrary()
+        let recent = tournamentPreset("Recent")
+        let often = tournamentPreset("Often")
+        library.save(recent)
         library.save(tournamentPreset("Zebra"))
         library.save(tournamentPreset("Alpha"))
-        #expect(library.ordered.map(\.name) == ["Alpha", "Zebra"])
+        library.save(often)
+        library.markUsed(often.id, at: Date(timeIntervalSince1970: 100))
+        library.markUsed(recent.id, at: Date(timeIntervalSince1970: 200))
+
+        let encoded = try JSONCoding.encoder.encode(library)
+        var fields = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        #expect(fields.removeValue(forKey: "arranged") != nil, "the key is there to remove")
+        let legacy = try JSONCoding.decoder.decode(
+            PresetLibrary.self, from: try JSONSerialization.data(withJSONObject: fields)
+        )
+
+        #expect(legacy.presets.map(\.name) == ["Recent", "Often", "Alpha", "Zebra"])
+        #expect(legacy.updatedAt == library.updatedAt)
+    }
+
+    @Test func anArrangedLibraryKeepsItsOrderThroughTheCoder() throws {
+        var library = PresetLibrary()
+        let used = tournamentPreset("Used")
+        library.save(used, at: Date(timeIntervalSince1970: 100))
+        library.save(tournamentPreset("Zebra"), at: Date(timeIntervalSince1970: 200))
+        library.markUsed(used.id, at: Date(timeIntervalSince1970: 300))
+
+        let decoded = try JSONCoding.decoder.decode(PresetLibrary.self, from: try JSONCoding.encoder.encode(library))
+
+        #expect(decoded.presets.map(\.name) == ["Zebra", "Used"])
+        #expect(decoded == library)
     }
 
     @Test func theNewerLibraryWinsWholesale() {

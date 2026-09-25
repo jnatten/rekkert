@@ -149,6 +149,9 @@ Presets are edited on the phone and read on both, so the whole library travels t
 and the newer copy wins. That is what keeps a deletion from being resurrected by a stale
 copy on the other device.
 
+On Home, press and hold a preset to change its setup or rename it, or tap Edit to drag
+them into order. The watch lists them in the same order, and a new one goes on top.
+
 ## Joining from the wrist
 
 Most people at a shared match only ever join one. They host nothing, set nothing up, and

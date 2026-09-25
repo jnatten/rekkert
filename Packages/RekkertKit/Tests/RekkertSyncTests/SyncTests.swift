@@ -303,6 +303,31 @@ struct SyncTests {
         #expect(pair.watch.presets.isEmpty, "and a deletion travels too")
     }
 
+    @Test func editsAndReordersOnThePhoneReachTheWatch() async throws {
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        let teams = BySide(a: TeamInfo(name: "Us"), b: TeamInfo(name: "Them"))
+        let thursday = Preset(name: "Thursday", configuration: .winnerCourt(rules: WinnerCourtRules(), teams: teams))
+        pair.phone.savePreset(thursday)
+        pair.phone.savePreset(Preset(name: "Friday", configuration: .traditional(rules: TraditionalRules(), teams: teams)))
+        try await settle()
+        #expect(pair.watch.presets.presets.map(\.name) == ["Friday", "Thursday"])
+
+        pair.phone.updatePreset(thursday.id) {
+            $0.name = "Torsdag"
+            $0.configuration = .pointCount(rules: PointCountRules(target: 21), teams: teams)
+        }
+        pair.phone.movePresets(fromOffsets: [1], toOffset: 0)
+        try await settle()
+
+        #expect(pair.watch.presets.presets.map(\.name) == ["Torsdag", "Friday"], "renamed and moved up")
+        #expect(pair.watch.presets.presets.first?.configuration == .pointCount(rules: PointCountRules(target: 21), teams: teams))
+        #expect(pair.watch.presets == pair.phone.presets)
+    }
+
     @Test func aSessionStartedFromAPresetOnTheWatchShowsOnThePhone() async throws {
         let pair = Pair()
         let tasks = pair.run()

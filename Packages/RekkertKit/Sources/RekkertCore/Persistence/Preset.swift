@@ -97,7 +97,8 @@ public struct Preset: Codable, Sendable, Hashable, Identifiable {
 
 /// Presets are edited on the phone and read on both, so the whole library travels together
 /// and the newer one wins. That keeps deletions from being resurrected by a stale copy,
-/// which per-preset merging would have to carry tombstones to avoid.
+/// which per-preset merging would have to carry tombstones to avoid — and it carries the
+/// order they were dragged into along with them, so the wrist lists them the same way.
 public struct PresetLibrary: Codable, Sendable, Hashable {
     public private(set) var presets: [Preset]
     public private(set) var updatedAt: Date
@@ -113,13 +114,29 @@ public struct PresetLibrary: Codable, Sendable, Hashable {
         if let index = presets.firstIndex(where: { $0.id == preset.id }) {
             presets[index] = preset
         } else {
-            presets.append(preset)
+            presets.insert(preset, at: 0)
         }
+        updatedAt = date
+    }
+
+    /// Changes the copy held here rather than taking a whole preset back, so an edit made
+    /// in a sheet opened a while ago does not undo a start the watch has recorded since.
+    public mutating func update(_ id: UUID, at date: Date = Date(), _ change: (inout Preset) -> Void) {
+        guard let index = presets.firstIndex(where: { $0.id == id }) else { return }
+        change(&presets[index])
         updatedAt = date
     }
 
     public mutating func remove(_ id: UUID, at date: Date = Date()) {
         presets.removeAll { $0.id == id }
+        updatedAt = date
+    }
+
+    public mutating func move(fromOffsets source: IndexSet, toOffset destination: Int, at date: Date = Date()) {
+        let moving = source.map { presets[$0] }
+        var remaining = presets.indices.filter { !source.contains($0) }.map { presets[$0] }
+        remaining.insert(contentsOf: moving, at: destination - source.count(in: 0 ..< destination))
+        presets = remaining
         updatedAt = date
     }
 
@@ -130,22 +147,39 @@ public struct PresetLibrary: Codable, Sendable, Hashable {
         updatedAt = date
     }
 
-    /// Most recently used first, then the most used, then alphabetical — so the preset you
-    /// reach for every Thursday sits at the top.
-    public var ordered: [Preset] {
-        presets.sorted { one, two in
-            switch (one.lastUsed, two.lastUsed) {
-            case (let a?, let b?) where a != b: return a > b
-            case (.some, .none): return true
-            case (.none, .some): return false
-            default: break
-            }
-            if one.useCount != two.useCount { return one.useCount > two.useCount }
-            return one.name.localizedCaseInsensitiveCompare(two.name) == .orderedAscending
-        }
-    }
-
     public func adopting(_ other: PresetLibrary) -> PresetLibrary {
         other.updatedAt > updatedAt ? other : self
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case presets, updatedAt, arranged
+    }
+
+    /// A library written before presets could be dragged into order has none of its own: the
+    /// list sorted it, most recently used first, then the most used, then alphabetical. It is
+    /// put in that order as it is read, so upgrading leaves the list looking as it did.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let presets = try container.decode([Preset].self, forKey: .presets)
+        self.presets = container.contains(.arranged) ? presets : presets.sorted(by: Self.mostRecentlyUsedFirst)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(presets, forKey: .presets)
+        try container.encode(updatedAt, forKey: .updatedAt)
+        try container.encode(true, forKey: .arranged)
+    }
+
+    private static func mostRecentlyUsedFirst(_ one: Preset, _ two: Preset) -> Bool {
+        switch (one.lastUsed, two.lastUsed) {
+        case (let a?, let b?) where a != b: return a > b
+        case (.some, .none): return true
+        case (.none, .some): return false
+        default: break
+        }
+        if one.useCount != two.useCount { return one.useCount > two.useCount }
+        return one.name.localizedCaseInsensitiveCompare(two.name) == .orderedAscending
     }
 }

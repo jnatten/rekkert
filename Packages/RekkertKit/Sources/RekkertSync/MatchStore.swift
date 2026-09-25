@@ -334,6 +334,18 @@ public final class MatchStore {
         apply(updated, publish: true)
     }
 
+    public func updatePreset(_ id: UUID, _ change: (inout Preset) -> Void) {
+        var updated = presets
+        updated.update(id, change)
+        apply(updated, publish: true)
+    }
+
+    public func movePresets(fromOffsets source: IndexSet, toOffset destination: Int) {
+        var updated = presets
+        updated.move(fromOffsets: source, toOffset: destination)
+        apply(updated, publish: true)
+    }
+
     public func removePreset(_ id: UUID) {
         var updated = presets
         updated.remove(id)

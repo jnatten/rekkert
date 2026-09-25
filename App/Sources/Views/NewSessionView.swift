@@ -6,12 +6,14 @@ struct NewSessionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.teamPalette) private var palette
     let mode: GameMode
+    private let editing: Preset?
 
     /// Starts the form filled in from a tournament that has already been played, for
     /// running the same group again. The players are copied by name only, so this is a new
     /// tournament rather than a second handle on the old one.
     init(mode: GameMode, from played: Tournament? = nil) {
         self.mode = mode
+        editing = nil
         // A friendly plays a whole match every round and then redraws, so one set is the
         // sane default where a Match wants best of three.
         if mode == .friendly {
@@ -21,6 +23,41 @@ struct NewSessionView: View {
         _players = State(initialValue: played.players.map { Player(name: $0.name) })
         _sessionName = State(initialValue: played.name)
         _config = State(initialValue: played.config)
+    }
+
+    init(editing preset: Preset) {
+        mode = GameMode(preset.configuration)
+        editing = preset
+        _presetName = State(initialValue: preset.name)
+        switch preset.configuration {
+        case .traditional(let rules, let teams):
+            _rules = State(initialValue: rules)
+            seed(teams)
+        case .pointCount(let rules, let teams):
+            _pointRules = State(initialValue: rules)
+            seed(teams)
+        case .winnerCourt(let rules, let teams):
+            _winnerCourtRules = State(initialValue: rules)
+            seed(teams)
+        case .friendly(let name, let players, let rules):
+            _sessionName = State(initialValue: name)
+            _players = State(initialValue: players)
+            _rules = State(initialValue: rules)
+        case .tournament(_, let name, let players, let config):
+            _sessionName = State(initialValue: name)
+            _players = State(initialValue: players)
+            _config = State(initialValue: config)
+        }
+    }
+
+    private mutating func seed(_ teams: BySide<TeamInfo>) {
+        func slots(_ players: [String]) -> [String] {
+            players + Array(repeating: "", count: max(0, 2 - players.count))
+        }
+        _teamA = State(initialValue: teams.a.name)
+        _teamB = State(initialValue: teams.b.name)
+        _playersA = State(initialValue: slots(teams.a.players))
+        _playersB = State(initialValue: slots(teams.b.players))
     }
 
     @State private var rules = TraditionalRules()
@@ -48,6 +85,7 @@ struct NewSessionView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if editing != nil { presetSection }
                 switch mode {
                 case .traditional: traditionalSections
                 case .pointCount: pointCountSections
@@ -55,7 +93,7 @@ struct NewSessionView: View {
                 case .friendly: friendlySections
                 case .americano, .mexicano: tournamentSections
                 }
-                presetSection
+                if editing == nil { presetSection }
             }
             .navigationTitle(mode.title)
             .navigationBarTitleDisplayMode(.inline)
@@ -64,7 +102,11 @@ struct NewSessionView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Start", action: start).disabled(!canStart)
+                    if editing == nil {
+                        Button("Start", action: start).disabled(!canStart)
+                    } else {
+                        Button("Save", action: save).disabled(!canStart || trimmedPresetName.isEmpty)
+                    }
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     suggestionBar
@@ -260,12 +302,20 @@ struct NewSessionView: View {
                 .submitLabel(.done)
                 .onSubmit { focused = nil }
         } header: {
-            Text("Save as preset")
+            Text(editing == nil ? "Save as preset" : "Name")
         } footer: {
-            Text(presetName.trimmingCharacters(in: .whitespaces).isEmpty
-                 ? "Name this setup to save it. Saved presets can be started from your Apple Watch without reaching for the phone."
-                 : "“\(presetName)” will be saved and can be started from either device.")
+            if editing != nil {
+                Text("Changes reach your Apple Watch too.")
+            } else {
+                Text(trimmedPresetName.isEmpty
+                     ? "Name this setup to save it. Saved presets can be started from your Apple Watch without reaching for the phone."
+                     : "“\(presetName)” will be saved and can be started from either device.")
+            }
         }
+    }
+
+    private var trimmedPresetName: String {
+        presetName.trimmingCharacters(in: .whitespaces)
     }
 
     private var configuration: PresetConfiguration {
@@ -289,9 +339,20 @@ struct NewSessionView: View {
     }
 
     private func savePresetIfNamed() {
-        let name = presetName.trimmingCharacters(in: .whitespaces)
+        let name = trimmedPresetName
         guard !name.isEmpty else { return }
         model.store.savePreset(Preset(name: name, configuration: configuration))
+    }
+
+    private func save() {
+        guard let editing else { return }
+        let name = trimmedPresetName
+        let configuration = configuration
+        model.store.updatePreset(editing.id) {
+            $0.name = name
+            $0.configuration = configuration
+        }
+        dismiss()
     }
 
     // MARK: - Winner court

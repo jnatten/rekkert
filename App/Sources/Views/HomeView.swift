@@ -5,15 +5,23 @@ struct HomeView: View {
     @Environment(AppModel.self) private var model
     @State private var newMatch: GameMode?
     @State private var path: [HomeRoute] = []
+    @State private var editMode: EditMode = .inactive
+    @State private var editingPreset: Preset?
+    @State private var renaming: Preset?
+    @State private var renameText = ""
 
     var body: some View {
         NavigationStack(path: $path) {
             List {
                 if !model.store.presets.isEmpty {
                     Section {
-                        ForEach(model.store.presets.ordered) { preset in
+                        ForEach(model.store.presets.presets) { preset in
                             Button {
-                                model.store.start(preset)
+                                if editMode.isEditing {
+                                    editingPreset = preset
+                                } else {
+                                    model.store.start(preset)
+                                }
                             } label: {
                                 Label {
                                     VStack(alignment: .leading, spacing: 2) {
@@ -26,16 +34,28 @@ struct HomeView: View {
                                     Image(systemName: preset.configuration.symbol)
                                 }
                             }
-                        }
-                        .onDelete { offsets in
-                            for index in offsets {
-                                model.store.removePreset(model.store.presets.ordered[index].id)
+                            .contextMenu {
+                                Button("Edit…", systemImage: "slider.horizontal.3") { editingPreset = preset }
+                                Button("Rename…", systemImage: "pencil") {
+                                    renameText = preset.name
+                                    renaming = preset
+                                }
+                                Button("Delete", systemImage: "trash", role: .destructive) {
+                                    model.store.removePreset(preset.id)
+                                }
                             }
                         }
+                        .onDelete { offsets in
+                            let ids = offsets.map { model.store.presets.presets[$0].id }
+                            ids.forEach(model.store.removePreset)
+                        }
+                        .onMove { model.store.movePresets(fromOffsets: $0, toOffset: $1) }
                     } header: {
                         Text("Presets")
                     } footer: {
-                        Text("Saved setups, ready on your Apple Watch too. Swipe to delete.")
+                        Text(editMode.isEditing
+                             ? "Drag to reorder. Tap one to change it."
+                             : "Saved setups, ready on your Apple Watch in the same order. Press and hold one to edit or rename it.")
                     }
                 }
 
@@ -132,6 +152,10 @@ struct HomeView: View {
                     }
                 }
             }
+            .environment(\.editMode, $editMode)
+            .onChange(of: model.store.presets.isEmpty) { _, isEmpty in
+                if isEmpty { editMode = .inactive }
+            }
             .navigationDestination(for: HomeRoute.self) { route in
                 switch route {
                 case .list: HistoryView()
@@ -144,12 +168,34 @@ struct HomeView: View {
             }
             .navigationTitle("Rekkert")
             .toolbar {
+                if !model.store.presets.isEmpty {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button(editMode.isEditing ? "Done" : "Edit") {
+                            withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                        }
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Settings", systemImage: "gearshape") { path.append(.settings) }
                 }
             }
             .sheet(item: $newMatch) { mode in
                 NewSessionView(mode: mode)
+            }
+            .sheet(item: $editingPreset) { preset in
+                NewSessionView(editing: preset)
+            }
+            .alert(
+                "Rename preset",
+                isPresented: Binding(
+                    get: { renaming != nil },
+                    set: { if !$0 { renaming = nil } }
+                )
+            ) {
+                TextField("Name", text: $renameText)
+                    .textInputAutocapitalization(.words)
+                Button("Cancel", role: .cancel) {}
+                Button("Save") { rename() }
             }
             .task {
                 #if DEBUG
@@ -180,6 +226,12 @@ struct HomeView: View {
         }
     }
 
+    private func rename() {
+        let name = renameText.trimmingCharacters(in: .whitespaces)
+        guard let renaming, !name.isEmpty else { return }
+        model.store.updatePreset(renaming.id) { $0.name = name }
+    }
+
     private var subtitle: String {
         switch (model.workout.isTracking, model.workout.isPaused) {
         case (false, _): "On your Apple Watch"
@@ -198,6 +250,20 @@ enum GameMode: String, CaseIterable, Identifiable {
     case mexicano
 
     var id: String { rawValue }
+
+    init(_ configuration: PresetConfiguration) {
+        switch configuration {
+        case .traditional: self = .traditional
+        case .pointCount: self = .pointCount
+        case .winnerCourt: self = .winnerCourt
+        case .friendly: self = .friendly
+        case .tournament(let format, _, _, _):
+            switch format {
+            case .americano: self = .americano
+            case .mexicano: self = .mexicano
+            }
+        }
+    }
 
     var title: String {
         switch self {
