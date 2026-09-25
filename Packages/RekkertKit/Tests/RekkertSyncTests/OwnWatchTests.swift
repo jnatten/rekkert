@@ -29,6 +29,9 @@ private final class PhoneWithWatch {
     let host: MatchStore
     /// The phone's end of the link to the other phone.
     let phoneToHost: LoopbackTransport
+    /// Each end of the link between the phone and its watch, for handing either one a packet.
+    let phoneToWatch: LoopbackTransport
+    let watchToPhone: LoopbackTransport
     /// Everything the phone talks to, so a test can attach a latecomer.
     let phoneFan: FanOutTransport
     private var tasks: [Task<Void, Never>] = []
@@ -37,6 +40,8 @@ private final class PhoneWithWatch {
         let (phoneToWatch, watchToPhone) = LoopbackTransport.pair()
         let (hostToPhone, phoneToHost) = LoopbackTransport.pair()
         self.phoneToHost = phoneToHost
+        self.phoneToWatch = phoneToWatch
+        self.watchToPhone = watchToPhone
 
         let phoneFan = FanOutTransport()
         self.phoneFan = phoneFan
@@ -168,6 +173,28 @@ struct OwnWatchTests {
         await eventually { pair.watch.log.sessionID == pair.host.log.sessionID && points(pair.watch) == BySide(a: 2, b: 0) }
         #expect(pair.phone.role == .guest, "having left is no bar to walking back in")
         #expect(points(pair.watch) == BySide(a: 2, b: 0), "and the watch follows")
+    }
+
+    /// A snapshot the pair sent before it heard of the Leave, arriving after it: a live send
+    /// that ran late, or a reply the fan-out passed on after the notice. It is the match that
+    /// was left, and neither half has walked back in.
+    @Test func aSnapshotFromBeforeTheLeaveDoesNotPutTheMatchBack() async throws {
+        let pair = PhoneWithWatch(phoneLog: nil, hostLog: seeded(DeviceID(), points: 1))
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        pair.phone.beginJoining()
+        await eventually { pair.phone.role == .guest && pair.watch.log.sessionID == pair.host.log.sessionID }
+        let stale = try Wire.snapshot(pair.phone.log).encoded()
+
+        pair.phone.leaveSharedSession()
+        await eventually { pair.watch.state == nil }
+        try await Task.sleep(for: .milliseconds(250))
+
+        pair.phoneToWatch.queue(stale)
+        pair.watchToPhone.queue(stale)
+        try await Task.sleep(for: .milliseconds(250))
+        #expect(pair.watch.state == nil, "the watch does not take it back from its own phone")
+        #expect(pair.phone.state == nil, "nor the phone from its own watch")
     }
 
     /// The watch has a Leave of its own. The phone goes with it — and stays off, though its

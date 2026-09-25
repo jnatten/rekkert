@@ -93,9 +93,10 @@ public final class MatchStore {
     /// wrist, or a host whose link has not been cut yet — cannot hand it straight back.
     private var leftSessionID: UUID?
     /// A session the pair is off together: one half stepped off and the other has said it
-    /// followed. Refused from a stranger — a host packet still in flight would otherwise put
-    /// the match straight back — but not from the pair, since only a phone can walk back in,
-    /// and its watch has to be free to follow it.
+    /// followed. Refused from everybody, the pair included — a host packet still in flight, or
+    /// a snapshot the pair sent before it heard, would otherwise put the match straight back —
+    /// until the pair says it is a guest again. Only a phone can walk back in, and that is its
+    /// watch's cue to follow.
     private var counterpartLeftSessionID: UUID?
     /// Which session the result on screen came from, so taking it back can drop the record
     /// filed for it.
@@ -320,10 +321,11 @@ public final class MatchStore {
         shareRole()
     }
 
+    /// The live copy is encoded as it goes out, so one that runs late says the role as it is
+    /// then rather than as it was — a guest's landing after the Leave would say otherwise.
     private func shareRole() {
-        let payload = encode(.role(role))
-        transport.queue(payload)
-        Task { _ = await sendLive(payload) }
+        transport.queue(encode(.role(role)))
+        Task { _ = await sendLive(encode(.role(role))) }
     }
 
     // MARK: - Presets
@@ -894,6 +896,14 @@ public final class MatchStore {
                 leftSessionID = nil
                 counterpartLeftSessionID = nil
             }
+            // The phone walked back in — but only as the durable queue says it, which is the one
+            // channel in step with the Leave: it carried the notice too. A live guest can be one
+            // sent before the Leave that overtook it, and neither counts while this end's own
+            // Leave is unconfirmed. Whatever came on the way back was refused, so ask for it.
+            if incoming == .guest, packet.reply == nil, counterpartLeftSessionID != nil {
+                counterpartLeftSessionID = nil
+                Task { await synchronise() }
+            }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
         case .left(let sessionID):
@@ -975,9 +985,9 @@ public final class MatchStore {
             } else if incoming.sessionID == leftSessionID {
                 // Stepped off this one on purpose. Whoever is still on it is not being
                 // refused — nothing is retired — only not taken up again.
-            } else if incoming.sessionID == counterpartLeftSessionID, !packet.isFromPairedDevice {
-                // Off this one as a pair, and the host's link may not be down yet. Only the
-                // pair itself can bring it back.
+            } else if incoming.sessionID == counterpartLeftSessionID {
+                // Off this one as a pair, and neither the host's link nor the pair's own
+                // packets in flight can be trusted to have caught up.
             } else if log.isEmpty {
                 log = incoming
                 // An empty guest is handed the host's next match; that is the code lasting
@@ -1141,8 +1151,10 @@ public final class MatchStore {
     /// whether the phone it is paired to is holding the whistle. Never solo: the counterpart
     /// reads solo as this end having dropped a session, and a reconnect is not that.
     private func shareRoleOnReconnect() {
-        guard role != .solo else { return }
-        Task { _ = await sendLive(encode(.role(role))) }
+        Task {
+            guard role != .solo else { return }
+            _ = await sendLive(encode(.role(role)))
+        }
     }
 
     private func shareDisplay() {
