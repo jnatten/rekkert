@@ -713,7 +713,7 @@ public final class MatchStore {
     private func record(_ kind: EventKind) {
         let before = state
         let session = log.sessionID
-        let event = log.append(kind, from: device)
+        let event = log.append(kind, from: device, at: MatchEvent.stamp())
         outbox.enqueue(event)
         // Reduced before `refresh()` rather than read after it: the point that wins a match
         // takes the log and the state with it, and this is the only moment the board it

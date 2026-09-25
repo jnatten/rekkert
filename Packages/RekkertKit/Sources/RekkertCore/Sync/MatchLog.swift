@@ -68,11 +68,12 @@ public struct MatchLog: Codable, Sendable, Hashable {
     }
 
     @discardableResult
-    public mutating func append(_ kind: EventKind, from device: DeviceID) -> MatchEvent {
+    public mutating func append(_ kind: EventKind, from device: DeviceID, at: Date? = nil) -> MatchEvent {
         let event = MatchEvent(
             id: EventID(device: device, seq: vector[device] + 1),
             lamport: nextLamport,
-            kind: kind
+            kind: kind,
+            at: at
         )
         events[event.id] = event
         return event
@@ -112,6 +113,14 @@ public struct MatchLog: Codable, Sendable, Hashable {
             if case .undo(let target) = event.kind { cancelled.insert(target) }
         }
         return sorted.filter { !cancelled.contains($0.id) }
+    }
+
+    /// From the first thing that still counts to the last, by the clocks that recorded them.
+    /// `nil` for a log with no times in it at all.
+    public var playedSpan: ClosedRange<Date>? {
+        let times = effectiveEvents.compactMap { $0.at ?? $0.kind.payloadDate }
+        guard let first = times.min(), let last = times.max() else { return nil }
+        return first ... last
     }
 
     /// The most recent still-effective event that an undo should target.

@@ -56,6 +56,23 @@ struct SyncTests {
         #expect(pair.watch.state == pair.phone.state)
     }
 
+    @Test func aPointArrivesWithTheTimeItWasScored() async throws {
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        let before = Date()
+        pair.phone.configure(setup)
+        pair.phone.tap(team: .a)
+        try await settle()
+
+        let scored = try #require(pair.phone.log.effectiveEvents.last)
+        let at = try #require(scored.at)
+        #expect(abs(at.timeIntervalSince(before)) < 5)
+        #expect(pair.watch.log.effectiveEvents.last?.at == at)
+    }
+
     @Test func aTapOnTheWatchReachesThePhone() async throws {
         let pair = Pair()
         let tasks = pair.run()

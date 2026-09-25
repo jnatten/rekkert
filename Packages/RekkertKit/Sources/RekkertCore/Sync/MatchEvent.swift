@@ -47,11 +47,23 @@ public struct MatchEvent: Codable, Sendable, Hashable, Identifiable {
     public let id: EventID
     public let lamport: UInt64
     public let kind: EventKind
+    /// When the device that recorded it did, by its own clock. For the timeline only: the
+    /// log is ordered by Lamport stamp, and nothing that decides the score reads this.
+    /// Absent from events written before it existed, and dropped by an older build that
+    /// passes one on, which is harmless because an event is known by its id.
+    public let at: Date?
 
-    public init(id: EventID, lamport: UInt64, kind: EventKind) {
+    public init(id: EventID, lamport: UInt64, kind: EventKind, at: Date? = nil) {
         self.id = id
         self.lamport = lamport
         self.kind = kind
+        self.at = at
+    }
+
+    /// A moment to a tenth of a second: finer than any timeline is drawn at, and a dozen
+    /// bytes shorter on every event than the full-precision number.
+    public static func stamp(_ date: Date = Date()) -> Date {
+        Date(timeIntervalSinceReferenceDate: (date.timeIntervalSinceReferenceDate * 10).rounded() / 10)
     }
 
     /// Events an undo can target. Configuration and undo itself are excluded so that
@@ -62,6 +74,18 @@ public struct MatchEvent: Codable, Sendable, Hashable, Identifiable {
         // A serve correction is its own undo — swapping again puts it back — and undo
         // should keep meaning "take back the last thing that changed the score".
         case .configure, .restore, .undo, .chooseServeSide, .setFirstServer, .setServeOrder: false
+        }
+    }
+}
+
+extension EventKind {
+    /// The moment the few kinds that carry one were stamped with, for logs whose events
+    /// predate `MatchEvent.at`.
+    public var payloadDate: Date? {
+        switch self {
+        case .configure(_, let at), .endRound(_, let at), .nextRound(_, let at): at
+        case .point, .setScore, .setFirstServer, .setServeOrder, .chooseServeSide,
+             .setRoundConfirmed, .setRoundCancelled, .finish, .restore, .undo: nil
         }
     }
 }
