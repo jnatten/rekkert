@@ -39,7 +39,10 @@ public enum EventKind: Codable, Sendable, Hashable {
     /// Picks an archived session back up. It carries the whole state rather than the events
     /// that built it, because the log a session was played from is not kept once it is
     /// filed away — only what it came to.
-    case restore(SessionState)
+    ///
+    /// `takingBack` names the session a result was taken back from, when that is what this
+    /// is: the same match going on, so whatever filed that session's record should drop it.
+    case restore(SessionState, takingBack: UUID? = nil)
     case undo(EventID)
 }
 

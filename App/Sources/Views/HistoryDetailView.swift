@@ -280,7 +280,7 @@ private struct RecordDetail: View {
     }
 
     private func resume() {
-        model.store.resume(record.state)
+        model.store.resume(record.state, from: record.id)
         dismiss()
     }
 }

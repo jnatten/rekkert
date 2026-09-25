@@ -49,4 +49,10 @@ extension MatchLog {
         }
         return rewound
     }
+
+    /// The session this log's opening restore says a result was taken back from.
+    public var takesBack: UUID? {
+        guard case .restore(_, let takingBack)? = effectiveEvents.first?.kind else { return nil }
+        return takingBack
+    }
 }

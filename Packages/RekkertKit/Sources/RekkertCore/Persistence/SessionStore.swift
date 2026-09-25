@@ -48,27 +48,34 @@ public struct HistoryRecord: Codable, Sendable, Hashable, Identifiable {
     /// workout that was running at the time. Absent on anything filed before workouts
     /// existed, which `playedFrom` stands in for.
     public var startedAt: Date?
+    /// When the last of it was played. A session can be filed long after — displaced by
+    /// another one, or found on a phone that was off — and it is this, not the filing, that
+    /// says which workout it belongs to. Absent on anything filed before event times existed.
+    public var playedUntil: Date?
 
     public init(
         id: UUID = UUID(),
         finishedAt: Date = Date(),
         title: String,
         state: SessionState,
-        startedAt: Date? = nil
+        startedAt: Date? = nil,
+        playedUntil: Date? = nil
     ) {
         self.id = id
         self.finishedAt = finishedAt
         self.title = title
         self.state = state
         self.startedAt = startedAt
+        self.playedUntil = playedUntil
     }
 
     /// The stretch of time this was played over. A record from before start times were kept
     /// collapses to the instant it finished, which still lands inside a workout that was
     /// running then.
     public var playedFrom: Date { startedAt ?? finishedAt }
+    public var playedTo: Date { playedUntil ?? finishedAt }
 
-    private enum CodingKeys: String, CodingKey { case id, finishedAt, title, state, startedAt }
+    private enum CodingKeys: String, CodingKey { case id, finishedAt, title, state, startedAt, playedUntil }
 
     /// Hand-rolled so that a record written before `startedAt` existed still decodes.
     /// `history()` drops what it cannot read without a word, so a synthesised decoder
@@ -80,6 +87,7 @@ public struct HistoryRecord: Codable, Sendable, Hashable, Identifiable {
         title = try container.decode(String.self, forKey: .title)
         state = try container.decode(SessionState.self, forKey: .state)
         startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
+        playedUntil = try container.decodeIfPresent(Date.self, forKey: .playedUntil)
     }
 }
 
@@ -192,6 +200,49 @@ public struct SessionStore: Sendable {
 
     public func deleteHistory(_ id: UUID) throws {
         try? FileManager.default.removeItem(at: historyDirectory.appending(path: "\(id.uuidString).json"))
+        try? FileManager.default.removeItem(at: timelinesDirectory.appending(path: "\(id.uuidString).json"))
+    }
+
+    // MARK: - Timelines
+
+    /// Beside the history rather than inside its records: the list decodes every record on
+    /// every redraw, and a timeline is only ever wanted one match at a time.
+    private var timelinesDirectory: URL { directory.appending(path: "timelines", directoryHint: .isDirectory) }
+    private var carriesDirectory: URL { timelinesDirectory.appending(path: "carry", directoryHint: .isDirectory) }
+
+    public static let carriesKept = 3
+
+    public func archive(_ timeline: MatchTimeline, for id: UUID) throws {
+        try write(try encoder.encode(timeline), to: timelinesDirectory.appending(path: "\(id.uuidString).json"))
+    }
+
+    public func timeline(_ id: UUID) -> MatchTimeline? {
+        guard let data = try? Data(contentsOf: timelinesDirectory.appending(path: "\(id.uuidString).json"))
+        else { return nil }
+        return try? decoder.decode(MatchTimeline.self, from: data)
+    }
+
+    /// Kept like farewells, the last few and no more: a carry is read whenever the session it
+    /// carries into is filed, however many times that is, and never deleted by it.
+    public func save(carry: TimelineCarry) throws {
+        try write(try encoder.encode(carry), to: carriesDirectory.appending(path: "\(carry.sessionID.uuidString).json"))
+        let urls = (try? FileManager.default.contentsOfDirectory(
+            at: carriesDirectory, includingPropertiesForKeys: [.contentModificationDateKey]
+        )) ?? []
+        let newestFirst = urls.sorted { modified($0) > modified($1) }
+        for stale in newestFirst.dropFirst(Self.carriesKept) {
+            try? FileManager.default.removeItem(at: stale)
+        }
+    }
+
+    public func carry(for sessionID: UUID) -> TimelineCarry? {
+        guard let data = try? Data(contentsOf: carriesDirectory.appending(path: "\(sessionID.uuidString).json"))
+        else { return nil }
+        return try? decoder.decode(TimelineCarry.self, from: data)
+    }
+
+    private func modified(_ url: URL) -> Date {
+        (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
     }
 
     // MARK: - Workouts

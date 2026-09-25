@@ -14,7 +14,7 @@ public enum SessionReducer {
         case .configure(let setup, let at):
             configure(setup, at: at, into: &state)
 
-        case .restore(let archived):
+        case .restore(let archived, _):
             state = archived
 
         case .point(let round, let court, let team):

@@ -163,6 +163,34 @@ struct WorkoutRecordTests {
 
     // MARK: - Which matches a workout covers
 
+    /// Filed hours after it was played — displaced by another match, or found on a phone
+    /// that was off — a match belongs to the workout it was played in, not the one running
+    /// when it happened to be filed.
+    @Test func aMatchFiledLateIsCoveredByWhenItWasPlayed() {
+        let start = Date(timeIntervalSince1970: 768_000_000)
+        let earlier = workout(from: start, to: start.addingTimeInterval(3_600))
+        let later = workout(from: start.addingTimeInterval(10_000), to: start.addingTimeInterval(12_000))
+        var late = match(from: start.addingTimeInterval(600), to: start.addingTimeInterval(11_000))
+        late.playedUntil = start.addingTimeInterval(1_800)
+
+        #expect(earlier.covers(late))
+        #expect(!later.covers(late))
+    }
+
+    @Test func aRecordWrittenBeforePlayedUntilExistedStillDecodes() throws {
+        let start = Date(timeIntervalSince1970: 768_000_000)
+        var current = match(from: start, to: start.addingTimeInterval(3_600))
+        current.playedUntil = start.addingTimeInterval(3_000)
+        var fields = try #require(
+            JSONSerialization.jsonObject(with: JSONCoding.encoder.encode(current)) as? [String: Any]
+        )
+        #expect(fields.removeValue(forKey: "playedUntil") != nil)
+
+        let record = try JSONCoding.decoder.decode(HistoryRecord.self, from: JSONSerialization.data(withJSONObject: fields))
+        #expect(record.playedUntil == nil)
+        #expect(record.playedTo == record.finishedAt)
+    }
+
     @Test func aMatchPlayedInsideTheWorkoutIsCovered() {
         let start = Date(timeIntervalSince1970: 768_000_000)
         let session = workout(from: start, to: start.addingTimeInterval(3_600))

@@ -35,6 +35,18 @@ struct EventTimeTests {
         #expect(Set(fields.keys) == ["id", "lamport", "kind"])
     }
 
+    @Test func aRestoreWrittenBeforeTakeBacksWereNamedStillDecodes() throws {
+        let state = SessionState.traditional(TraditionalSession(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+        let kind = EventKind.restore(state, takingBack: UUID())
+        var fields = try #require(JSONSerialization.jsonObject(with: JSONCoding.encoder.encode(kind)) as? [String: Any])
+        var restore = try #require(fields["restore"] as? [String: Any])
+        #expect(restore.removeValue(forKey: "takingBack") != nil)
+        fields["restore"] = restore
+
+        let legacy = try JSONCoding.decoder.decode(EventKind.self, from: JSONSerialization.data(withJSONObject: fields))
+        #expect(legacy == .restore(state))
+    }
+
     @Test func aTimeSurvivesTheTripExactly() throws {
         var value = log()
         value.append(.configure(setup, at: noon), from: phone, at: MatchEvent.stamp(noon))

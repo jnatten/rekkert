@@ -113,6 +113,6 @@ public struct WorkoutRecord: Codable, Sendable, Hashable, Identifiable {
     /// written. Bounds are inclusive, so a record from before start times were kept — which
     /// is an instant rather than a stretch — still lands inside one.
     public func covers(_ record: HistoryRecord) -> Bool {
-        record.playedFrom <= endedAt && record.finishedAt >= startedAt
+        record.playedFrom <= endedAt && record.playedTo >= startedAt
     }
 }

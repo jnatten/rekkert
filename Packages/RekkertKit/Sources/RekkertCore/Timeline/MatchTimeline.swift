@@ -123,7 +123,7 @@ extension MatchTimeline {
         // A winner-court session is one board however many whistles it has heard, where its
         // entries count the rounds; the opening restore says which kind this is.
         var isWinnerCourt = false
-        if case .restore(.winnerCourt)? = log.effectiveEvents.first?.kind { isWinnerCourt = true }
+        if case .restore(.winnerCourt, _)? = log.effectiveEvents.first?.kind { isWinnerCourt = true }
         var last: [Slot: Board] = [:]
         for entry in timeline.entries {
             last[isWinnerCourt ? Slot(round: 0, court: 0) : Slot(round: entry.round, court: entry.court)] = entry.board

@@ -101,6 +101,8 @@ public final class MatchStore {
     /// Which session the result on screen came from, so taking it back can drop the record
     /// filed for it.
     private var concludedSessionID: UUID?
+    /// The session last looked at for a result taken back, so the look is taken once.
+    private var checkedTakeBack: UUID?
     private let keepsHistory: Bool
     private let sendTimeout: Duration
     private let retryInterval: Duration
@@ -305,9 +307,7 @@ public final class MatchStore {
     /// follow the same phone back in.
     private func dropSession() {
         if keepsHistory, log.hasProgress, let state = SessionReducer.state(of: log) {
-            try? store?.archive(HistoryRecord(
-                id: log.sessionID, title: state.title, state: state, startedAt: log.createdAt
-            ))
+            file(state, from: log)
         }
         log = MatchLog()
         outbox = Outbox()
@@ -372,10 +372,13 @@ public final class MatchStore {
 
     /// Picks an archived session back up as a fresh one, carrying its score across. The
     /// copy in history stays where it is; this is a continuation, not a move.
-    public func resume(_ archived: SessionState) {
+    public func resume(_ archived: SessionState, from recordID: UUID? = nil) {
         guard let resumable = archived.resumed() else { return }
         startNewSession()
         resetDisplayForNewMatch()
+        if keepsHistory, let recordID, let timeline = store?.timeline(recordID) {
+            try? store?.save(carry: TimelineCarry(sessionID: log.sessionID, reason: .resumed, timeline: timeline))
+        }
         record(.restore(resumable.restarted(at: Date())))
     }
 
@@ -544,9 +547,7 @@ public final class MatchStore {
         if keepsHistory, keeping {
             // Filed under the session's own id, so archiving twice replaces rather than
             // duplicates — and so taking the result back knows which record to remove.
-            try? store?.archive(HistoryRecord(
-                id: log.sessionID, title: finished.title, state: finished, startedAt: log.createdAt
-            ))
+            file(finished, from: log)
         }
         // Nothing to celebrate about a session that was called off or never played.
         lastResult = keeping ? finished : nil
@@ -609,8 +610,62 @@ public final class MatchStore {
         // a result back is not stepping off — the host takes the reopened match up.
         leftSessionID = nil
         clearSession()
-        record(.restore(rewind.state))
+        if keepsHistory, let filed, let ended = farewells[filed] {
+            try? store?.save(carry: .takingBack(
+                ended, into: log.sessionID, carried: store?.carry(for: filed), me: me(in: filed)
+            ))
+        }
+        record(.restore(rewind.state, takingBack: filed))
         if keepsHistory, let filed { try? store?.deleteHistory(filed) }
+    }
+
+    /// Files a session under its own id, with the timeline its log leaves behind. The one way
+    /// in, so finishing, stepping off and being displaced all keep the same things.
+    private func file(_ state: SessionState, from log: MatchLog) {
+        let carry = store?.carry(for: log.sessionID)
+        let span = log.playedSpan
+        // A result taken back is the same match going on, so it started when that one did.
+        let continued = carry?.reason == .takenBack ? carry?.startedAt : nil
+        try? store?.archive(HistoryRecord(
+            id: log.sessionID, title: state.title, state: state,
+            startedAt: continued ?? span?.lowerBound ?? log.createdAt,
+            playedUntil: span?.upperBound
+        ))
+        let timeline = MatchTimeline.make(from: log, continuing: carry, me: me(in: log.sessionID))
+        if !timeline.isEmpty { try? store?.archive(timeline, for: log.sessionID) }
+    }
+
+    /// A result taken back elsewhere — on the watch, or by the host — arrives as a new session
+    /// restored from it. The record this device filed for the old one goes, since this is the
+    /// same match going on, and what it had been through is carried into this one.
+    private func absorbTakeBack() {
+        guard keepsHistory, !log.isEmpty, checkedTakeBack != log.sessionID else { return }
+        checkedTakeBack = log.sessionID
+        guard let takenBack = log.takesBack else { return }
+
+        if store?.carry(for: log.sessionID) == nil {
+            let carry: TimelineCarry?
+            if let ended = farewells[takenBack] {
+                carry = .takingBack(ended, into: log.sessionID, carried: store?.carry(for: takenBack), me: me(in: takenBack))
+            } else if var timeline = store?.timeline(takenBack) {
+                // Without the log to take the last event back from, the point that won it is
+                // the one taken back.
+                if case .match? = timeline.entries.last?.ended { timeline.entries.removeLast() }
+                carry = TimelineCarry(
+                    sessionID: log.sessionID, reason: .takenBack,
+                    startedAt: store?.historyRecord(takenBack)?.startedAt, timeline: timeline
+                )
+            } else {
+                carry = nil
+            }
+            if let carry { try? store?.save(carry: carry) }
+        }
+        try? store?.deleteHistory(takenBack)
+    }
+
+    private func me(in session: UUID) -> PlayerID? {
+        guard let me = haptics.me, me.session == session else { return nil }
+        return me.player
     }
 
     /// The state one undo short of the end, or `nil` when there is nothing to take back or
@@ -1080,9 +1135,7 @@ public final class MatchStore {
     /// archived first, so a session is never silently destroyed.
     private func adopt(_ incoming: MatchLog) {
         if keepsHistory, log.hasProgress, let state = SessionReducer.state(of: log) {
-            try? store?.archive(HistoryRecord(
-                id: log.sessionID, title: state.title, state: state, startedAt: log.createdAt
-            ))
+            file(state, from: log)
             replacedSessionTitle = state.title
         }
         log = incoming
@@ -1253,6 +1306,7 @@ public final class MatchStore {
 
     private func refresh() {
         state = SessionReducer.state(of: log)
+        absorbTakeBack()
         // A session in play supersedes whatever result was on screen — including one the
         // counterpart took back, which arrives here as a new session.
         if state != nil {
