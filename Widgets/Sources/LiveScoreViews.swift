@@ -20,9 +20,22 @@ struct LiveClock: View {
     let start: Date
 
     var body: some View {
-        let from = min(start, Date())
-        Text(timerInterval: from ... from.addingTimeInterval(24 * 60 * 60), countsDown: false)
+        Text(timerInterval: min(start, Date()) ... .distantFuture, countsDown: false)
             .monospacedDigit()
+    }
+}
+
+/// The clock where nothing gives it a width. `fixedSize()` would, but a Live Activity lays a
+/// fixed-size timer out so wide that nothing after it is drawn; a stand-in as wide as the
+/// clock gets is measured instead.
+struct SizedLiveClock: View {
+    let start: Date
+
+    var body: some View {
+        Text(verbatim: "0:00:00")
+            .monospacedDigit()
+            .hidden()
+            .overlay(alignment: .trailing) { LiveClock(start: start) }
     }
 }
 
@@ -51,7 +64,7 @@ struct LiveHeader: View {
                 .lineLimit(1)
             if let start = score.clockStart {
                 Text(verbatim: "·").foregroundStyle(.secondary)
-                LiveClock(start: start).foregroundStyle(.secondary).fixedSize()
+                SizedLiveClock(start: start).foregroundStyle(.secondary)
             }
         }
         .font(.subheadline)
@@ -210,7 +223,7 @@ struct LiveScoreSmall: View {
                 Text(score.isTournament ? score.title : score.detail).lineLimit(1)
                 Spacer(minLength: 2)
                 if let start = score.clockStart {
-                    LiveClock(start: start).fixedSize()
+                    SizedLiveClock(start: start)
                 }
             }
             .font(.caption2)
