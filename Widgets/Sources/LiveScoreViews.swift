@@ -20,7 +20,8 @@ struct LiveClock: View {
     let start: Date
 
     var body: some View {
-        Text(timerInterval: min(start, Date()) ... .distantFuture, countsDown: false)
+        let from = min(start, Date())
+        Text(timerInterval: from ... from.addingTimeInterval(24 * 60 * 60), countsDown: false)
             .monospacedDigit()
     }
 }
