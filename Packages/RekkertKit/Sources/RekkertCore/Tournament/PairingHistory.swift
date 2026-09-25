@@ -24,7 +24,7 @@ struct PairingHistory: Sendable {
     init() {}
 
     init(_ tournament: Tournament) {
-        for round in tournament.rounds {
+        for round in tournament.rounds where !round.isCancelled {
             record(round.matches.map(\.teams), sitOuts: round.sitOuts)
         }
     }

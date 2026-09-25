@@ -178,7 +178,7 @@ public enum MexicanoScheduler {
         )
 
         let ranked: [PlayerID]
-        if tournament.rounds.isEmpty {
+        if tournament.rounds.allSatisfy(\.isCancelled) {
             ranked = playing
         } else {
             let playingSet = Set(playing)

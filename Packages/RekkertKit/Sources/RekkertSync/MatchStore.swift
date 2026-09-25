@@ -171,6 +171,10 @@ public final class MatchStore {
     public func setRoundConfirmed(_ round: Int, _ isConfirmed: Bool = true) {
         record(.setRoundConfirmed(round: round, isConfirmed: isConfirmed))
     }
+
+    public func setRoundCancelled(_ round: Int, _ isCancelled: Bool = true) {
+        record(.setRoundCancelled(round: round, isCancelled: isCancelled))
+    }
     /// Draws the next round. Addressed to the round on screen now, so two devices tapping
     /// at once still produce one round.
     public func nextRound() {

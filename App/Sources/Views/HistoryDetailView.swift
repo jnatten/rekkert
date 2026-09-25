@@ -155,7 +155,7 @@ private struct RecordDetail: View {
     @ViewBuilder
     private func rounds(_ tournament: Tournament) -> some View {
         ForEach(tournament.rounds, id: \.index) { round in
-            Section("Round \(round.index + 1)") {
+            Section(round.isCancelled ? "Round \(round.index + 1) · Cancelled" : "Round \(round.index + 1)") {
                 ForEach(round.matches) { match in
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Court \(match.courtIndex + 1)")
@@ -173,6 +173,7 @@ private struct RecordDetail: View {
                         }
                     }
                     .padding(.vertical, 2)
+                    .opacity(round.isCancelled ? 0.5 : 1)
                 }
                 if !round.sitOuts.isEmpty {
                     Text("Sitting out: \(round.sitOuts.compactMap { tournament.player($0)?.name }.joined(separator: ", "))")

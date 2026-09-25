@@ -205,6 +205,51 @@ struct SessionReducerTests {
         #expect(state.currentRound == nil, "and no round is silently invented")
     }
 
+    @Test func aCancelledRoundTakesNoMorePoints() {
+        var log = tournamentLog()
+        log.append(.setScore(round: 0, court: 0, points: BySide(a: 5, b: 3)), from: device)
+        log.append(.setRoundCancelled(round: 0, isCancelled: true), from: device)
+        log.append(.point(round: 0, court: 0, team: .a), from: device)
+
+        let value = try! #require(tournament(log))
+        #expect(value.rounds[0].isCancelled)
+        #expect(value.rounds[0].matches[0].state.points == BySide(a: 5, b: 3))
+        #expect(Leaderboard.standings(for: value).allSatisfy { $0.total == 0 })
+    }
+
+    @Test func onlyTheLastRoundCanBeCancelled() {
+        var log = tournamentLog()
+        log.append(.setRoundConfirmed(round: 0, isConfirmed: true), from: device)
+        log.drawRound(from: device)
+        log.append(.setRoundCancelled(round: 0, isCancelled: true), from: device)
+
+        #expect(tournament(log)?.rounds[0].isCancelled == false,
+                "a cancel that arrives after the next draw must not void what it was drawn from")
+    }
+
+    @Test func undoingACancelCountsTheRoundAgain() {
+        var log = tournamentLog()
+        log.append(.setScore(round: 0, court: 0, points: BySide(a: 10, b: 6)), from: device)
+        let cancel = log.append(.setRoundCancelled(round: 0, isCancelled: true), from: device)
+        #expect(tournament(log).flatMap { Leaderboard.standings(for: $0).first?.total } == 0)
+
+        #expect(log.lastUndoableEvent() == cancel)
+        log.append(.undo(cancel.id), from: device)
+        #expect(tournament(log)?.rounds[0].isCancelled == false)
+        #expect(tournament(log).flatMap { Leaderboard.standings(for: $0).first?.total } == 10)
+    }
+
+    @Test func aRoundCanBeDrawnAfterACancelledOne() {
+        var log = tournamentLog()
+        log.append(.setRoundCancelled(round: 0, isCancelled: true), from: device)
+        log.drawRound(from: device)
+
+        let value = try! #require(tournament(log))
+        #expect(value.rounds.count == 2)
+        #expect(value.rounds[0].isCancelled)
+        #expect(!value.rounds[1].isCancelled)
+    }
+
     @Test func concurrentPointsOnDifferentCourtsBothLand() {
         let base = tournamentLog()
         var phone = base

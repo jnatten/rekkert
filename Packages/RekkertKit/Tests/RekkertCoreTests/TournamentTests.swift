@@ -194,6 +194,54 @@ struct LeaderboardTests {
         #expect(Leaderboard.standings(for: t, onlyConfirmed: true).allSatisfy { $0.total == 0 })
     }
 
+    // MARK: - Cancelled rounds
+
+    @Test func aCancelledRoundCountsForNobody() throws {
+        let played = try playRounds(makeTournament(.americano, players: 5), count: 2)
+        let before = Leaderboard.standings(for: played)
+
+        var t = try TournamentEngine.appendingRound(to: played)
+        t.rounds[2].matches[0].state.points = BySide(a: 5, b: 3)
+        #expect(!t.rounds[2].sitOuts.isEmpty)
+        #expect(Leaderboard.standings(for: t) != before)
+
+        t.rounds[2].isCancelled = true
+        #expect(Leaderboard.standings(for: t) == before, "neither the court points nor the bench count")
+    }
+
+    @Test func aCancelledRoundLeavesItsBenchStillOwed() throws {
+        var t = try playRounds(makeTournament(.americano, players: 5), count: 1)
+        t = try TournamentEngine.appendingRound(to: t)
+        let benched = t.rounds[1].sitOuts[0]
+        #expect(PairingHistory(t).sitOutCount(benched) == 1)
+
+        t.rounds[1].isCancelled = true
+        #expect(PairingHistory(t).sitOutCount(benched) == 0)
+    }
+
+    @Test func mexicanoRanksPastACancelledRound() throws {
+        let played = try playRounds(makeTournament(.mexicano, players: 4), count: 1)
+        var t = try TournamentEngine.appendingRound(to: played)
+        t.rounds[1].matches[0].state.points = BySide(a: 16, b: 0)
+        t.rounds[1].matches[0].isConfirmed = true
+        t.rounds[1].isCancelled = true
+
+        t = try TournamentEngine.appendingRound(to: t)
+        #expect(t.rounds[2].matches[0].teams == t.rounds[1].matches[0].teams,
+                "the standings are where round 1 left them, so the draw is the same")
+    }
+
+    @Test func aRoundSavedBeforeCancellingExistedStillDecodes() throws {
+        let round = try playRounds(makeTournament(.americano, players: 5), count: 1).rounds[0]
+        let data = try JSONCoding.encoder.encode(round)
+        var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(object.removeValue(forKey: "isCancelled") != nil, "the key is there to remove")
+
+        let trimmed = try JSONSerialization.data(withJSONObject: object)
+        let back = try JSONCoding.decoder.decode(Round.self, from: trimmed)
+        #expect(back == round)
+    }
+
     // MARK: - Golden draws
 
     /// A fingerprint of the rounds the schedulers draw today. The pairing machinery is shared

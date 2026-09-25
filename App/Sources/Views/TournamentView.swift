@@ -22,6 +22,7 @@ struct CourtListView: View {
     @Environment(AppModel.self) private var model
     @State private var editing: CourtRef?
     @State private var showingEnd = false
+    @State private var showingCancel = false
     /// Which round is on screen. `nil` follows the newest one, so drawing a round moves
     /// the view along with it; browsing back pins it until you return to the end.
     @State private var browsing: Int?
@@ -84,7 +85,17 @@ struct CourtListView: View {
             }
             .confirmationDialog(endPrompt, isPresented: $showingEnd, titleVisibility: .visible) {
                 if hasResults {
-                    Button("Save to history", role: .destructive) {
+                    if let round = unfinishedRound {
+                        Button("Leave out round \(round.index + 1) and save", role: .destructive) {
+                            model.store.setRoundCancelled(round.index)
+                            model.store.finish()
+                            model.finishSession()
+                        }
+                    }
+                    Button(
+                        unfinishedRound.map { "Save with round \($0.index + 1) as it stands" } ?? "Save to history",
+                        role: .destructive
+                    ) {
                         model.store.finish()
                         model.finishSession()
                     }
@@ -92,6 +103,20 @@ struct CourtListView: View {
                     Button("Discard", role: .destructive) { model.discard() }
                 }
                 Button("Keep playing", role: .cancel) {}
+            } message: {
+                if hasResults, let round = unfinishedRound {
+                    Text("Round \(round.index + 1) isn't finished. Leaving it out means nobody gets points for it, including the players sitting out.")
+                }
+            }
+            .confirmationDialog(cancelPrompt, isPresented: $showingCancel, titleVisibility: .visible) {
+                Button("Cancel round", role: .destructive) {
+                    if let round = TournamentView.tournament(model)?.currentRound {
+                        model.store.setRoundCancelled(round.index)
+                    }
+                }
+                Button("Keep round", role: .cancel) {}
+            } message: {
+                Text("Its scores won't count, and nobody gets sit-out points for it.")
             }
         }
     }
@@ -107,13 +132,19 @@ struct CourtListView: View {
         Section {
             ForEach(round.matches) { match in
                 CourtRow(tournament: tournament, match: match)
+                    .opacity(round.isCancelled ? 0.5 : 1)
                     .contentShape(.rect)
-                    .onTapGesture { editing = CourtRef(round: round.index, court: match.courtIndex) }
+                    .onTapGesture {
+                        guard !round.isCancelled else { return }
+                        editing = CourtRef(round: round.index, court: match.courtIndex)
+                    }
             }
         } header: {
             roundSwitcher(tournament, round)
         } footer: {
-            if round.matches.contains(where: \.isConfirmed) {
+            if round.isCancelled {
+                Text("This round was cancelled. Nothing in it counts.")
+            } else if round.matches.contains(where: \.isConfirmed) {
                 Text("This round is finished. Reopen it to change a score.")
             } else {
                 Text("Tap a court to set its score, or open the scoreboard to count point by point.")
@@ -162,7 +193,15 @@ struct CourtListView: View {
 
         Section {
             if let round {
-                if round.matches.contains(where: \.isConfirmed) {
+                if round.isCancelled, round.index == tournament.latestRoundIndex {
+                    Button("Draw the next round", systemImage: "arrow.right.circle.fill") {
+                        model.store.nextRound()
+                        browsing = nil
+                    }
+                    Button("Restore this round", systemImage: "arrow.uturn.backward.circle") {
+                        model.store.setRoundCancelled(round.index, false)
+                    }
+                } else if round.matches.contains(where: \.isConfirmed), !round.isCancelled {
                     Button("Reopen this round", systemImage: "lock.open") {
                         model.store.setRoundConfirmed(round.index, false)
                     }
@@ -177,6 +216,10 @@ struct CourtListView: View {
                         browsing = nil
                     }
                     .disabled(!allCourtsDone(round, tournament: tournament))
+
+                    Button("Cancel this round", systemImage: "xmark.circle", role: .destructive) {
+                        showingCancel = true
+                    }
                 }
             } else {
                 Button("Draw the first round", systemImage: "dice") { model.store.nextRound() }
@@ -217,14 +260,24 @@ struct CourtListView: View {
 
     /// Nothing has been played, so there is nothing worth keeping in history.
     private var hasResults: Bool {
-        guard let tournament = TournamentView.tournament(model) else { return false }
-        return tournament.rounds.contains { round in
-            round.matches.contains { $0.state.points.total > 0 } || !round.sitOuts.isEmpty
-        }
+        model.store.state?.hasResults ?? false
     }
 
     private var endPrompt: String {
         hasResults ? "Finish the tournament?" : "Discard this tournament?"
+    }
+
+    private var cancelPrompt: String {
+        "Cancel round \(TournamentView.tournament(model)?.rounds.count ?? 0)?"
+    }
+
+    /// The round in play when it has not been played out, and there are rounds before it to keep.
+    private var unfinishedRound: Round? {
+        guard let tournament = TournamentView.tournament(model),
+              let round = tournament.currentRound, round.index > 0, !round.isCancelled,
+              !round.matches.contains(where: \.isConfirmed),
+              !allCourtsDone(round, tournament: tournament) else { return nil }
+        return round
     }
 
     private func allCourtsDone(_ round: Round, tournament: Tournament) -> Bool {

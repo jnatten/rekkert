@@ -226,7 +226,8 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
         let remaining = engine.pointsRemaining(match.state)
         let servingSide = match.teams[serve.slot.team]
         let servingID = servingSide[safe: serve.slot.playerIndex]
-        let isLive = !match.isConfirmed && !engine.isFinished(match.state)
+        let isLocked = match.isConfirmed || round.isCancelled
+        let isLive = !isLocked && !engine.isFinished(match.state)
 
         return ScoreboardSnapshot(
             kind: .tournament,
@@ -244,7 +245,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
                 && servingSide.allSatisfy { tournament.player($0) != nil },
             isSuddenDeath: false,
             suddenDeathCourt: nil,
-            isLocked: match.isConfirmed,
+            isLocked: isLocked,
             isFinished: engine.isFinished(match.state),
             winner: engine.winner(match.state),
             // The clock belongs to the round, so every court in it reads the same one.

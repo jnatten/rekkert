@@ -95,6 +95,12 @@ public enum SessionReducer {
             }
             state = .tournament(tournament)
 
+        case .setRoundCancelled(let round, let isCancelled):
+            guard case .tournament(var tournament) = state, !tournament.isFinished,
+                  tournament.rounds.count == round + 1 else { return }
+            tournament.rounds[round].isCancelled = isCancelled
+            state = .tournament(tournament)
+
         case .nextRound(let after, let at):
             switch state {
             case .tournament(let tournament):
@@ -236,7 +242,7 @@ public enum SessionReducer {
             state = .friendly(session)
 
         case .tournament(var current):
-            guard current.rounds.indices.contains(round),
+            guard current.rounds.indices.contains(round), !current.rounds[round].isCancelled,
                   let index = current.rounds[round].matches.firstIndex(where: { $0.courtIndex == court }),
                   !current.rounds[round].matches[index].isConfirmed
             else { return }

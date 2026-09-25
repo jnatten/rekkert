@@ -178,6 +178,37 @@ struct SessionResultTests {
         #expect(result.headline.hasSuffix("tie"), "four players all on eight")
     }
 
+    @Test func aCancelledRoundIsLeftOutOfTheSummary() throws {
+        var tournament = Tournament(
+            name: "Thursday", format: .americano,
+            players: (0 ..< 5).map { Player(name: "P\($0)") },
+            config: TournamentConfig(pointRules: PointCountRules(target: 16), courtCount: 1)
+        )
+        for round in 0 ..< 2 {
+            tournament = try TournamentEngine.appendingRound(to: tournament)
+            tournament.rounds[round].matches[0].state.points = BySide(a: 10, b: 6)
+        }
+        tournament.rounds[1].isCancelled = true
+        tournament.isFinished = true
+
+        let result = SessionResult.make(from: .tournament(tournament))
+        #expect(result.detail == "1 round · 5 players")
+        #expect(result.score == "10")
+    }
+
+    @Test func aTournamentWhoseOnlyRoundWasCancelledHasNothingToKeep() throws {
+        var tournament = try TournamentEngine.appendingRound(to: Tournament(
+            name: "Thursday", format: .americano,
+            players: (0 ..< 5).map { Player(name: "P\($0)") },
+            config: TournamentConfig(pointRules: PointCountRules(target: 16), courtCount: 1)
+        ))
+        tournament.rounds[0].matches[0].state.points = BySide(a: 3, b: 2)
+        #expect(SessionState.tournament(tournament).hasResults)
+
+        tournament.rounds[0].isCancelled = true
+        #expect(!SessionState.tournament(tournament).hasResults)
+    }
+
     // MARK: - Friendly
 
     @Test func aFriendlySummaryListsEveryRound() throws {

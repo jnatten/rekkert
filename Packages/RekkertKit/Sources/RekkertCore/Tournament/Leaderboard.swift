@@ -24,7 +24,7 @@ public enum Leaderboard {
         let compensation = tournament.config.sitOutCompensation
             .points(target: tournament.config.pointRules.target)
 
-        for round in tournament.rounds {
+        for round in tournament.rounds where !round.isCancelled {
             for match in round.matches where !onlyConfirmed || match.isConfirmed {
                 for side in TeamSide.allCases {
                     for id in match.teams[side] {

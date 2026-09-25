@@ -22,6 +22,9 @@ public enum EventKind: Codable, Sendable, Hashable {
     /// served to.
     case chooseServeSide(ServeCourt)
     case setRoundConfirmed(round: Int, isConfirmed: Bool)
+    /// Calls a tournament round off so it counts for nobody. Only the last round can be,
+    /// so a cancel that arrives after the next draw cannot void what that draw was built on.
+    case setRoundCancelled(round: Int, isCancelled: Bool)
     /// The whistle in winner court: closes round `round` wherever it stands. Naming the
     /// round makes it idempotent — if both devices whistle, the second is a no-op instead
     /// of closing a second round. `at` is where the next round's clock starts.
@@ -55,7 +58,7 @@ public struct MatchEvent: Codable, Sendable, Hashable, Identifiable {
     /// "undo" always means "take back the last thing that changed the score".
     public var isUndoable: Bool {
         switch kind {
-        case .point, .setScore, .setRoundConfirmed, .nextRound, .finish, .endRound: true
+        case .point, .setScore, .setRoundConfirmed, .setRoundCancelled, .nextRound, .finish, .endRound: true
         // A serve correction is its own undo — swapping again puts it back — and undo
         // should keep meaning "take back the last thing that changed the score".
         case .configure, .restore, .undo, .chooseServeSide, .setFirstServer, .setServeOrder: false

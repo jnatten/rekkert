@@ -270,7 +270,7 @@ public struct SessionResult: Sendable, Hashable {
 
     private static func tournament(_ tournament: Tournament) -> SessionResult {
         let standings = Leaderboard.standings(for: tournament)
-        let rounds = tournament.rounds.count
+        let rounds = tournament.rounds.filter { !$0.isCancelled }.count
         let placings = standings.enumerated().map { index, standing in
             Placing(
                 id: standing.player.id.raw.uuidString,

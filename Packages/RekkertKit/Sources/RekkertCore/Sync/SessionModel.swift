@@ -187,7 +187,8 @@ public enum SessionState: Codable, Sendable, Hashable {
             !session.completedRounds.isEmpty || session.score.games.total > 0 || session.score.points.total > 0
         case .tournament(let tournament):
             tournament.rounds.contains { round in
-                round.matches.contains { $0.state.points.total > 0 } || !round.sitOuts.isEmpty
+                !round.isCancelled
+                    && (round.matches.contains { $0.state.points.total > 0 } || !round.sitOuts.isEmpty)
             }
         case .pointCount(let session):
             session.score.points.total > 0

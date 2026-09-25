@@ -42,12 +42,25 @@ public struct Round: Codable, Sendable, Hashable, Identifiable {
     /// by the reducer from the event that drew it, so every device reads the same one. Nil
     /// on a round drawn before the clock existed, and on a draw that is only being previewed.
     public var startedAt: Date?
+    public var isCancelled: Bool
 
-    public init(index: Int, matches: [CourtMatch], sitOuts: [PlayerID], startedAt: Date? = nil) {
+    public init(index: Int, matches: [CourtMatch], sitOuts: [PlayerID], startedAt: Date? = nil, isCancelled: Bool = false) {
         self.index = index
         self.matches = matches
         self.sitOuts = sitOuts
         self.startedAt = startedAt
+        self.isCancelled = isCancelled
+    }
+
+    private enum CodingKeys: String, CodingKey { case index, matches, sitOuts, startedAt, isCancelled }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        index = try container.decode(Int.self, forKey: .index)
+        matches = try container.decode([CourtMatch].self, forKey: .matches)
+        sitOuts = try container.decode([PlayerID].self, forKey: .sitOuts)
+        startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
+        isCancelled = try container.decodeIfPresent(Bool.self, forKey: .isCancelled) ?? false
     }
 }
 
