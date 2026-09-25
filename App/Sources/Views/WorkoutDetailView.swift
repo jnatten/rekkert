@@ -9,6 +9,8 @@ struct WorkoutDetailView: View {
 
     private var matches: [HistoryRecord] { model.matches(during: workout) }
 
+    @State private var efforts: [UUID: WorkoutSeries.Effort] = [:]
+
     var body: some View {
         List {
             Section { headline }
@@ -48,6 +50,11 @@ struct WorkoutDetailView: View {
                                 }
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+                                if let effort = efforts[record.id], let line = Self.summary(of: effort) {
+                                    Text(line)
+                                        .font(.caption.monospacedDigit())
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }
@@ -60,6 +67,31 @@ struct WorkoutDetailView: View {
         }
         .navigationTitle(workout.startedAt.formatted(.dateTime.weekday(.abbreviated).day().month()))
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: workout.id) { efforts = measure() }
+    }
+
+    /// What each match cost, from the stretch of the workout it was played in: its first
+    /// point to its last where it kept them, or its record's start and end where it did not.
+    private func measure() -> [UUID: WorkoutSeries.Effort] {
+        guard let series = model.series(workout.id) else { return [:] }
+        var efforts: [UUID: WorkoutSeries.Effort] = [:]
+        for record in matches {
+            let played = model.timeline(record.id)?.span
+                ?? (record.playedFrom <= record.playedTo ? record.playedFrom ... record.playedTo : nil)
+            guard let played else { continue }
+            let from = max(played.lowerBound, workout.startedAt)
+            let to = min(played.upperBound, workout.endedAt)
+            guard from < to else { continue }
+            efforts[record.id] = series.effort(over: from ... to)
+        }
+        return efforts
+    }
+
+    private static func summary(of effort: WorkoutSeries.Effort) -> String? {
+        var parts: [String] = []
+        if let average = effort.heartRateAverage { parts.append("avg \(WorkoutFormat.beats(average))") }
+        if effort.activeEnergyKilocalories > 0 { parts.append(WorkoutFormat.energy(effort.activeEnergyKilocalories)) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     /// Where the hour went, as Health scored it against the zones that were in force while

@@ -261,6 +261,13 @@ extension MatchTimeline {
         public var suddenDeathPlayed: Int { suddenDeathWon.a + suddenDeathWon.b }
     }
 
+    /// From the first thing that moved the score to the last, by the clocks that recorded them.
+    public var span: ClosedRange<Date>? {
+        let times = entries.compactMap(\.at)
+        guard let first = times.min(), let last = times.max() else { return nil }
+        return first ... last
+    }
+
     /// The entries of one round, or one court of it, or all of them.
     public func entries(round: Int? = nil, court: Int? = nil) -> [Entry] {
         entries.filter { entry in

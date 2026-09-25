@@ -280,6 +280,13 @@ struct MatchTimelineTests {
         #expect(stats.longestRun == BySide(a: 3, b: 5))
     }
 
+    @Test func theSpanRunsFromTheFirstEntryToTheLast() {
+        var play = match()
+        play.points([.a, .b, .a])
+        #expect(play.timeline.span == seconds(30) ... seconds(90))
+        #expect(MatchTimeline().span == nil)
+    }
+
     @Test func momentumIsTheRunningDifference() {
         var play = match()
         play.points([.a, .a, .b, .b, .b])
