@@ -998,8 +998,12 @@ public final class MatchStore {
             // A finished workout is filed here because the watch that recorded it keeps no
             // history. Under its own id, so at-least-once delivery lands as exactly-once on
             // disk. Everything else is somebody's live state, and belongs to whoever asked.
-            if case .finished(let record) = signal, keepsHistory {
-                try? store?.archive(record)
+            if keepsHistory {
+                switch signal {
+                case .finished(let record): try? store?.archive(record)
+                case .series(let series): try? store?.archive(series)
+                case .stop, .pause, .resume, .running, .paused, .idle: break
+                }
             }
             onWorkout?(signal)
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
@@ -1161,14 +1165,17 @@ public final class MatchStore {
             announcedWorkout = signal
         // A request is not a state. Saying one again on reconnect would ask a second time
         // for something already done.
-        case .stop, .pause, .resume, .finished:
+        case .stop, .pause, .resume, .finished, .series:
             break
         }
         let payload = encode(.workout(signal))
         // A statement about right now goes live only. Queued, `.stop` would land twenty
         // minutes late and end a workout started since; `.running` would switch a glyph back
         // on with nothing behind it. Only a finished workout is a fact worth keeping.
-        if case .finished = signal { transport.queue(payload) }
+        switch signal {
+        case .finished, .series: transport.queue(payload)
+        case .stop, .pause, .resume, .running, .paused, .idle: break
+        }
         Task { _ = await sendLive(payload) }
     }
 

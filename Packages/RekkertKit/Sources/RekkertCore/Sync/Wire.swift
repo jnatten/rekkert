@@ -39,6 +39,10 @@ public enum WorkoutSignal: Codable, Sendable, Hashable {
     /// Watch to phone: this one ended and Health kept it. The phone files it, because the
     /// watch keeps no history of its own.
     case finished(WorkoutRecord)
+    /// Watch to phone: how a finished one's heart rate and energy went, read out of Health
+    /// after it ended. Its own message rather than part of `finished`, which goes the moment
+    /// the workout ends and must not wait on a query.
+    case series(WorkoutSeries)
 }
 
 /// What a phone and its own watch say to each other about joining somebody else's match.
@@ -115,8 +119,8 @@ public enum Wire: Codable, Sendable, Hashable {
     /// anybody else's phone. The pair mirrors one match, so a leave on one side has to be a
     /// leave on the other, and nothing is retired: the match goes on for whoever is still on it.
     case left(sessionID: UUID)
-    /// Whether this phone's own watch is on a workout, and the summary once it ends. The
-    /// heart rate itself is never in here: it stays on the wrist it was read from.
+    /// Whether this phone's own watch is on a workout, and the summary once it ends. The live
+    /// reading never goes: what does is the ended workout's, and only ever to this phone.
     case workout(WorkoutSignal)
     /// When the watch buzzes, so it can be set from whichever device is in your hand. Only
     /// the watch acts on it — the phone has no wrist to tap.

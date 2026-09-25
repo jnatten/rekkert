@@ -175,7 +175,7 @@ final class WorkoutController {
         case .stop: stop()
         case .pause: pause()
         case .resume: resume()
-        case .running, .paused, .idle, .finished: break
+        case .running, .paused, .idle, .finished, .series: break
         }
     }
 

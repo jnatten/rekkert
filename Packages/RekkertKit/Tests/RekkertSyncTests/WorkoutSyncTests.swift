@@ -98,6 +98,12 @@ struct WorkoutSyncTests {
                 duration: 3_600
             )
         ),
+        .series(
+            WorkoutSeries(
+                workoutID: UUID(), start: Date(timeIntervalSince1970: 768_000_000), interval: 15,
+                heartRate: [120, nil], heartRateMax: [131, nil], activeEnergy: [1.4, 0]
+            )
+        ),
     ]
 
     /// What a version skew rests on: a signal the counterpart has never heard of throws on
@@ -150,6 +156,30 @@ struct WorkoutSyncTests {
             .send(.finished(record))
 
         await eventually { (try? store.workouts())?.isEmpty == false }
+        #expect(try store.workouts() == [record])
+    }
+
+    /// Read out of Health after the workout ended, and sent on its own: the phone keeps it
+    /// beside the workout it belongs to, whichever of the two arrives first.
+    @Test func aSeriesIsFiledBesideItsWorkout() async throws {
+        let (watch, phone) = LoopbackTransport.pair()
+        let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        let store = SessionStore(directory: directory)
+        let receiving = MatchStore(device: DeviceID(), transport: phone, store: store, snapshotInterval: 0)
+        let task = Task { await receiving.run() }
+        defer { task.cancel() }
+        let series = WorkoutSeries(
+            workoutID: record.id, start: record.startedAt, interval: 15,
+            heartRate: [120, 131], heartRateMax: [125, 140], activeEnergy: [1.2, 1.6]
+        )
+
+        watch.setReachable(false)
+        let sending = MatchStore(device: DeviceID(), transport: watch, snapshotInterval: 0)
+        sending.send(.series(series))
+        sending.send(.finished(record))
+
+        await eventually { store.series(record.id) != nil && (try? store.workouts())?.isEmpty == false }
+        #expect(store.series(record.id) == series)
         #expect(try store.workouts() == [record])
     }
 

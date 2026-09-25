@@ -276,6 +276,21 @@ public struct SessionStore: Sendable {
 
     public func deleteWorkout(_ id: UUID) throws {
         try? FileManager.default.removeItem(at: workoutsDirectory.appending(path: "\(id.uuidString).json"))
+        try? FileManager.default.removeItem(at: seriesDirectory.appending(path: "\(id.uuidString).json"))
+    }
+
+    /// Beside the workouts rather than inside them, for the same reason timelines are beside
+    /// the history: the list reads every workout, and only one screen reads a series.
+    private var seriesDirectory: URL { directory.appending(path: "workoutSeries", directoryHint: .isDirectory) }
+
+    public func archive(_ series: WorkoutSeries) throws {
+        try write(try encoder.encode(series), to: seriesDirectory.appending(path: "\(series.workoutID.uuidString).json"))
+    }
+
+    public func series(_ workoutID: UUID) -> WorkoutSeries? {
+        guard let data = try? Data(contentsOf: seriesDirectory.appending(path: "\(workoutID.uuidString).json"))
+        else { return nil }
+        return try? decoder.decode(WorkoutSeries.self, from: data)
     }
 
     // MARK: - Player roster

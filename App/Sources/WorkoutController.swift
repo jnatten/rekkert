@@ -95,7 +95,9 @@ final class WorkoutController {
             isTracking = false
             isPaused = false
             startedAt = nil
-        case .stop, .pause, .resume:
+        // Arrives after `finished`, and may land after the next workout has started: it
+        // says nothing about whether one is running now.
+        case .stop, .pause, .resume, .series:
             break
         }
     }
