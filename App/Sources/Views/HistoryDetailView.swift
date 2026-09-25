@@ -30,6 +30,8 @@ private struct RecordDetail: View {
     @Environment(\.teamPalette) private var palette
     let record: HistoryRecord
 
+    @State private var timeline: MatchTimeline?
+    @State private var series: WorkoutSeries?
     @State private var confirmingResume = false
     @State private var startingAnother = false
     @State private var editingNames = false
@@ -71,6 +73,10 @@ private struct RecordDetail: View {
                 }
             }
 
+            if let timeline {
+                MatchTimelineSection(record: record, timeline: timeline, series: series)
+            }
+
             if case .tournament(let tournament) = record.state {
                 rounds(tournament)
             }
@@ -88,6 +94,12 @@ private struct RecordDetail: View {
         }
         .navigationTitle(record.title)
         .navigationBarTitleDisplayMode(.inline)
+        // Once per record rather than per redraw: a drag across the charts redraws them
+        // every frame, and these are files.
+        .task(id: record.id) {
+            timeline = model.timeline(record.id)
+            series = model.series(covering: record)
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("Edit") { editingNames = true }

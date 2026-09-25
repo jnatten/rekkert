@@ -501,6 +501,21 @@ final class AppModel {
         return sessionStore?.historyRecord(id)
     }
 
+    func timeline(_ id: UUID) -> MatchTimeline? {
+        _ = revision
+        return sessionStore?.timeline(id)
+    }
+
+    func series(_ workoutID: UUID) -> WorkoutSeries? {
+        _ = revision
+        return sessionStore?.series(workoutID)
+    }
+
+    /// How the heart went while a match was played, from whichever workout was running then.
+    func series(covering record: HistoryRecord) -> WorkoutSeries? {
+        workouts.lazy.filter { $0.covers(record) }.compactMap { self.series($0.id) }.first
+    }
+
     /// Asked on every redraw of the start screen purely to decide whether a row is there, so
     /// it lists the directory rather than decoding everything in it.
     var hasWorkouts: Bool {

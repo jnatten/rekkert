@@ -254,6 +254,29 @@ rather than a leak.
 None of it is required. Never press the button and the app is what it was: no prompt, no
 Workouts row, no Health access of any kind.
 
+## The timeline
+
+Every event carries the moment the device that recorded it did, and a match is filed with a
+timeline of itself: what each event did to the score, and when. It is read off the board
+rather than off the events — every event is folded, and an entry is written wherever a
+court's score moved — so a whistle or a typed score leaves its mark as a point does, a point
+the reducer turned away leaves none, and the last entry on every court is always the score
+that was filed. Each point knows who served it and whether it was a golden or star point or a
+tiebreak point, and what it won. It lives in `timelines/`, beside the history rather than
+inside its records, because the list decodes every record on every redraw.
+
+Taking a result back, or picking a filed session up again, starts a fresh log from a restored
+score, so the phone keeps a carry of what came before and the continuation is filed as one
+match. The restore names the session a result was taken back from, which is also how a
+take-back on the watch, or by the host, drops the "won" record the phone had already filed.
+
+Opening a filed match shows two charts on one clock: who was ahead — the running difference
+in points, in the colour of whoever led it, with the games ticked and each set's score where
+it ended — and, from the workout that was running, the heart rate. Dragging across either
+reads both. Under them are points won, the longest run, the golden or star points won and
+breaks of serve. A tournament gets the heart rate with its rounds marked on it instead, and a
+workout lists what each match played during it cost.
+
 ## Getting started
 
 Requires Xcode 26 and [mise](https://mise.jdx.dev) (which pins Tuist via `mise.toml`).
