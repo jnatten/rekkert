@@ -64,6 +64,16 @@ struct SettingsView: View {
             } footer: {
                 Text(hapticFooter)
             }
+
+            Section {
+                Toggle(isOn: tapAnywhere) {
+                    Label("Tap anywhere to score", systemImage: "applewatch")
+                }
+            } header: {
+                Text("Watch")
+            } footer: {
+                Text("Takes the undo button off the watch and makes its whole score screen the target: tap once for your point, twice for theirs, and hold to take the last one back. The phone's board stays as it is.")
+            }
         }
         .navigationTitle("Settings")
     }
@@ -88,6 +98,13 @@ struct SettingsView: View {
         Binding(
             get: { model.store.haptics.strength },
             set: { model.store.setHaptics(strength: $0) }
+        )
+    }
+
+    private var tapAnywhere: Binding<Bool> {
+        Binding(
+            get: { model.store.haptics.tapAnywhere },
+            set: { model.store.setHaptics(tapAnywhere: $0) }
         )
     }
 

@@ -504,6 +504,23 @@ struct SyncTests {
         #expect(pair.watch.haptics.mode == .byTeam, "and the watch still agrees")
     }
 
+    @Test func tappingAnywhereIsSetOnThePhoneAndReachesTheWatch() async throws {
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        try await settle()
+
+        pair.phone.setHaptics(mode: .byTeam)
+        pair.phone.setHaptics(tapAnywhere: true)
+        try await settle()
+        #expect(pair.watch.haptics.tapAnywhere, "the watch scores from the whole page")
+        #expect(pair.watch.haptics.mode == .byTeam, "and keeps the buzz it was given")
+
+        pair.phone.setHaptics(tapAnywhere: false)
+        try await settle()
+        #expect(pair.watch.haptics.tapAnywhere == false, "and goes back to the buttons")
+    }
+
     @Test func aRepeatedBuzzInstructionDoesNotUndoItself() async throws {
         let pair = Pair()
         let tasks = pair.run()

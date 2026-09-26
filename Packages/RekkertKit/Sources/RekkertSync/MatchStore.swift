@@ -417,16 +417,19 @@ public final class MatchStore {
     public func setHaptics(
         mode: HapticMode? = nil,
         onlyWhenSomeoneElseScores: Bool? = nil,
-        strength: HapticStrength? = nil
+        strength: HapticStrength? = nil,
+        tapAnywhere: Bool? = nil
     ) {
         let next = haptics.setting(
             mode: mode,
             onlyWhenSomeoneElseScores: onlyWhenSomeoneElseScores,
-            strength: strength
+            strength: strength,
+            tapAnywhere: tapAnywhere
         )
         guard next.mode != haptics.mode
             || next.onlyWhenSomeoneElseScores != haptics.onlyWhenSomeoneElseScores
             || next.strength != haptics.strength
+            || next.tapAnywhere != haptics.tapAnywhere
         else { return }
         apply(next, publish: true)
     }

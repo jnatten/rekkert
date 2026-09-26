@@ -15,6 +15,9 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
     /// is tapped, so the point you have just pressed is the one you least need telling about.
     public var onlyWhenSomeoneElseScores: Bool
     public var strength: HapticStrength
+    /// Drops the watch's undo button and makes its whole score page the target: one tap for
+    /// your point, two for theirs, and a long press to take the last one back.
+    public var tapAnywhere: Bool
     /// Who the wearer is in a tournament, so only their own court buzzes and their team
     /// follows them through the draw. Kept with the session it was chosen in, so it never
     /// carries into the next one.
@@ -30,6 +33,7 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
         mode: HapticMode = .off,
         onlyWhenSomeoneElseScores: Bool = true,
         strength: HapticStrength = .medium,
+        tapAnywhere: Bool = false,
         me: Me? = nil,
         revision: UInt64 = 0,
         updatedAt: Date = .distantPast
@@ -37,6 +41,7 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
         self.mode = mode
         self.onlyWhenSomeoneElseScores = onlyWhenSomeoneElseScores
         self.strength = strength
+        self.tapAnywhere = tapAnywhere
         self.me = me
         self.revision = revision
         self.updatedAt = updatedAt
@@ -53,12 +58,14 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
         mode: HapticMode? = nil,
         onlyWhenSomeoneElseScores: Bool? = nil,
         strength: HapticStrength? = nil,
+        tapAnywhere: Bool? = nil,
         at date: Date = Date()
     ) -> HapticPreferences {
         HapticPreferences(
             mode: mode ?? self.mode,
             onlyWhenSomeoneElseScores: onlyWhenSomeoneElseScores ?? self.onlyWhenSomeoneElseScores,
             strength: strength ?? self.strength,
+            tapAnywhere: tapAnywhere ?? self.tapAnywhere,
             me: me,
             revision: revision + 1,
             updatedAt: date
@@ -90,7 +97,7 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case mode, onlyWhenSomeoneElseScores, strength, me, revision, updatedAt
+        case mode, onlyWhenSomeoneElseScores, strength, tapAnywhere, me, revision, updatedAt
     }
 
     /// Hand-rolled so a file written before any one of these existed still reads. A decoder
@@ -102,6 +109,7 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
         onlyWhenSomeoneElseScores = try container
             .decodeIfPresent(Bool.self, forKey: .onlyWhenSomeoneElseScores) ?? true
         strength = try container.decodeIfPresent(HapticStrength.self, forKey: .strength) ?? .medium
+        tapAnywhere = try container.decodeIfPresent(Bool.self, forKey: .tapAnywhere) ?? false
         me = try container.decodeIfPresent(Me.self, forKey: .me)
         revision = try container.decodeIfPresent(UInt64.self, forKey: .revision) ?? 0
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? .distantPast

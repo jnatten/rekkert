@@ -113,6 +113,7 @@ struct HapticTests {
         #expect(decoded.mode == .off, "staying quiet until somebody asks")
         #expect(decoded.strength == .medium)
         #expect(decoded.onlyWhenSomeoneElseScores)
+        #expect(decoded.tapAnywhere == false, "and the watch still scores with its buttons")
         #expect(decoded.revision == 3)
     }
 
@@ -141,5 +142,23 @@ struct HapticTests {
             HapticPreferences.self, from: JSONCoding.encoder.encode(chosen)
         )
         #expect(decoded == chosen)
+    }
+
+    @Test func tappingAnywhereLeavesTheOtherSettingsAlone() throws {
+        let me = Me(session: UUID(), player: PlayerID())
+        let before = HapticPreferences().setting(mode: .byTeam, strength: .strong).choosing(me: me)
+        let after = before.setting(tapAnywhere: true)
+
+        #expect(after.tapAnywhere)
+        #expect(after.mode == .byTeam)
+        #expect(after.strength == .strong)
+        #expect(after.me == me)
+        #expect(after.revision == before.revision + 1)
+        #expect(after.setting(mode: .off).tapAnywhere, "and later changes keep it")
+
+        let decoded = try JSONCoding.decoder.decode(
+            HapticPreferences.self, from: JSONCoding.encoder.encode(after)
+        )
+        #expect(decoded == after)
     }
 }

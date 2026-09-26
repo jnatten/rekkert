@@ -5,6 +5,7 @@ struct ScoreboardView<Badge: View>: View {
     let snapshot: ScoreboardSnapshot
     var compact = false
     var layout = ScoreboardLayout(isMirrored: false)
+    var takesTaps = true
     let onTap: (TeamSide) -> Void
     let onUndo: () -> Void
     /// Rides along at the leading end of the compact header — the watch puts a running
@@ -27,6 +28,7 @@ struct ScoreboardView<Badge: View>: View {
                         servingPlayer: snapshot.serving == side ? snapshot.servingPlayer : nil,
                         isEnabled: !snapshot.isLocked,
                         compact: compact,
+                        takesTaps: takesTaps,
                         onTap: { onTap(side) },
                         onUndo: onUndo
                     )

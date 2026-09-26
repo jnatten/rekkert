@@ -14,6 +14,8 @@ struct ScoreButton: View {
     var servingPlayer: String? = nil
     let isEnabled: Bool
     var compact = false
+    /// Off on a watch that scores from the whole page instead, which takes the taps itself.
+    var takesTaps = true
     let onTap: () -> Void
     let onUndo: () -> Void
 
@@ -49,40 +51,51 @@ struct ScoreButton: View {
         return servingPlayer
     }
 
-    var body: some View {
-        Button(action: onTap) {
-            ZStack {
-                palette.color(side)
-                VStack(spacing: compact ? 0 : 6) {
-                    teamLabel
+    private var face: some View {
+        ZStack {
+            palette.color(side)
+            VStack(spacing: compact ? 0 : 6) {
+                teamLabel
 
-                    // Above the number for them, below it for us — the same way round as
-                    // the court in front of you, where their end is the far one.
-                    serveSlot(showing: side != nearTeam)
+                // Above the number for them, below it for us — the same way round as
+                // the court in front of you, where their end is the far one.
+                serveSlot(showing: side != nearTeam)
 
-                    Text(value)
-                        .font(.system(size: compact ? 54 : 120, weight: .bold, design: .rounded))
-                        .minimumScaleFactor(0.4)
-                        .lineLimit(1)
-                        .foregroundStyle(.white)
-                        .contentTransition(.numericText())
+                Text(value)
+                    .font(.system(size: compact ? 54 : 120, weight: .bold, design: .rounded))
+                    .minimumScaleFactor(0.4)
+                    .lineLimit(1)
+                    .foregroundStyle(.white)
+                    .contentTransition(.numericText())
 
-                    serveSlot(showing: side == nearTeam)
-                }
-                .padding(compact ? 4 : 12)
+                serveSlot(showing: side == nearTeam)
             }
+            .padding(compact ? 4 : 12)
         }
-        .buttonStyle(.plain)
-        .disabled(!isEnabled)
-        .opacity(isEnabled ? 1 : 0.55)
-        .contentShape(.rect)
-        .onLongPressGesture(perform: onUndo)
-        .accessibilityLabel(
-            isServing
-                ? "\(teamName), \(value), \(servingPlayer.map { "\($0) serving" } ?? "serving")"
-                : "\(teamName), \(value)"
-        )
-        .accessibilityHint(isEnabled ? "Double tap to add a point" : "Scoring is closed")
-        .animation(.snappy, value: value)
+    }
+
+    @ViewBuilder
+    private var control: some View {
+        if takesTaps {
+            Button(action: onTap) { face }
+                .buttonStyle(.plain)
+                .disabled(!isEnabled)
+                .opacity(isEnabled ? 1 : 0.55)
+                .contentShape(.rect)
+                .onLongPressGesture(perform: onUndo)
+                .accessibilityHint(isEnabled ? "Double tap to add a point" : "Scoring is closed")
+        } else {
+            face.opacity(isEnabled ? 1 : 0.55)
+        }
+    }
+
+    var body: some View {
+        control
+            .accessibilityLabel(
+                isServing
+                    ? "\(teamName), \(value), \(servingPlayer.map { "\($0) serving" } ?? "serving")"
+                    : "\(teamName), \(value)"
+            )
+            .animation(.snappy, value: value)
     }
 }

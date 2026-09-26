@@ -58,24 +58,37 @@ struct WatchCourtPage: View {
         }
     }
 
+    private var tapsAnywhere: Bool { model.store.haptics.tapAnywhere }
+
+    @ViewBuilder
     private func scoreboard(_ snapshot: ScoreboardSnapshot) -> some View {
+        if tapsAnywhere {
+            scoreboardPage(snapshot)
+                .contentShape(.rect)
+                .onTapGesture(count: 2) { if !snapshot.isLocked { score(nearTeam.other) } }
+                .onTapGesture { if !snapshot.isLocked { score(nearTeam) } }
+                .onLongPressGesture(perform: undo)
+        } else {
+            scoreboardPage(snapshot)
+        }
+    }
+
+    private func scoreboardPage(_ snapshot: ScoreboardSnapshot) -> some View {
         VStack(spacing: 4) {
             ScoreboardView(
                 snapshot: snapshot,
                 compact: true,
                 layout: layout,
-                onTap: { side in
-                    // Silent when the buzz is on: it lands a moment later and says more, and
-                    // a click in front of it is the same news twice.
-                    if model.haptics.clicksOnTap { WKInterfaceDevice.current().play(.click) }
-                    model.store.tap(round: round, court: court, team: side)
-                },
+                takesTaps: !tapsAnywhere,
+                onTap: score,
                 onUndo: undo,
                 badge: { heartRate }
             )
             // Nothing scrolls on this page any more, so the numbers take the whole of it.
             .frame(maxHeight: .infinity)
-            .overlay(alignment: .bottomLeading) { undoButton }
+            .overlay(alignment: .bottomLeading) {
+                if !tapsAnywhere { undoButton }
+            }
 
             // The line above the score already says it is sudden death, so this row only has
             // to say whose call it is and take the answer.
@@ -236,6 +249,13 @@ struct WatchCourtPage: View {
             // Untinted where the orange has nothing to say: a grey tint paints the word grey
             // too, and this row is asking to be tapped.
             .tint(snapshot.suddenDeathCourt == court ? .orange : nil)
+    }
+
+    private func score(_ side: TeamSide) {
+        // Silent when the buzz is on: it lands a moment later and says more, and a click in
+        // front of it is the same news twice.
+        if model.haptics.clicksOnTap { WKInterfaceDevice.current().play(.click) }
+        model.store.tap(round: round, court: court, team: side)
     }
 
     private func undo() {
