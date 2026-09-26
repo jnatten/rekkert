@@ -15,6 +15,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
     public var courtIndex: Int
     public var courtLabel: String?
     public var teamNames: BySide<String>
+    public var players: BySide<[String]>
     /// The two big numbers.
     public var points: BySide<PointDisplay>
     /// Games in the current set. Traditional matches only.
@@ -75,6 +76,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             courtIndex: 0,
             courtLabel: nil,
             teamNames: names,
+            players: session.teams.map { named($0.players) },
             points: engine.pointDisplay(score),
             games: score.games,
             completedSets: score.completedSets,
@@ -159,6 +161,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             courtIndex: 0,
             courtLabel: nil,
             teamNames: BySide(a: session.teams.a.name, b: session.teams.b.name),
+            players: session.teams.map { named($0.players) },
             points: engine.pointDisplay(score),
             games: score.games,
             completedSets: score.completedSets,
@@ -188,6 +191,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             courtIndex: 0,
             courtLabel: nil,
             teamNames: names,
+            players: session.teams.map { named($0.players) },
             points: session.score.points.map { PointDisplay.count($0) },
             games: nil,
             completedSets: [],
@@ -220,9 +224,8 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
 
         let engine = PointCountEngine(rules: tournament.config.pointRules)
         let serve = engine.serve(match.state)
-        let names = match.teams.map { team in
-            team.compactMap { tournament.player($0)?.name }.joined(separator: " & ")
-        }
+        let players = match.teams.map { team in team.compactMap { tournament.player($0)?.name } }
+        let names = players.map { $0.joined(separator: " & ") }
         let remaining = engine.pointsRemaining(match.state)
         let servingSide = match.teams[serve.slot.team]
         let servingID = servingSide[safe: serve.slot.playerIndex]
@@ -234,6 +237,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             courtIndex: court,
             courtLabel: "Court \(court + 1)",
             teamNames: names,
+            players: players,
             points: match.state.points.map { PointDisplay.count($0) },
             games: nil,
             completedSets: [],
@@ -275,6 +279,10 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
     private static func name(_ players: [String], at index: Int) -> String? {
         guard let name = players[safe: index], !name.isEmpty else { return nil }
         return name
+    }
+
+    private static func named(_ players: [String]) -> [String] {
+        players.filter { !$0.isEmpty }
     }
 
     private static func hasTwoNamed(_ players: [String]) -> Bool {
