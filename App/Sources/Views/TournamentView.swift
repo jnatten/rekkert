@@ -20,6 +20,7 @@ struct TournamentView: View {
 
 struct CourtListView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var editing: CourtRef?
     @State private var showingEnd = false
     @State private var showingCancel = false
@@ -53,6 +54,9 @@ struct CourtListView: View {
                     ConnectionBadge()
                     SharingBadge()
                     WorkoutBadge()
+                }
+                if sizeClass == .regular {
+                    ToolbarItem(placement: .topBarTrailing) { BoardButton() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Undo", systemImage: "arrow.uturn.backward") { model.store.undoLast() }

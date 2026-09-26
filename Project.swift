@@ -71,6 +71,19 @@ let project = Project(
                 // Updated from the phone itself as points arrive, never pushed: there is no
                 // server to push from.
                 "NSSupportsLiveActivities": true,
+                // The board on a TV. Before iOS 27 UIKit builds that scene from this entry
+                // without asking the app delegate; from 27 `externalBoard` asks for it instead.
+                "UIApplicationSceneManifest": [
+                    "UIApplicationSupportsMultipleScenes": false,
+                    "UISceneConfigurations": [
+                        "UIWindowSceneSessionRoleExternalDisplayNonInteractive": [
+                            [
+                                "UISceneConfigurationName": "Board",
+                                "UISceneDelegateClassName": "$(PRODUCT_MODULE_NAME).BoardSceneDelegate",
+                            ],
+                        ],
+                    ],
+                ],
             ]),
             sources: ["App/Sources/**", "Shared/**", "Widgets/Shared/**"],
             resources: ["App/Resources/**"],

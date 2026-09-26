@@ -21,6 +21,15 @@ enum DemoLaunch {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-fullscreen")
     }
 
+    /// Opens the board a TV would show, on this screen.
+    static var board: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-board")
+    }
+
+    static var tvShot: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-tv-shot")
+    }
+
     /// Opens History, and with a value the detail for that row: -rekkert-demo-history 0
     static var openHistory: Bool {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-history")

@@ -16,6 +16,8 @@ final class AppModel {
     /// The full-screen board is the phone's too.
     let fullscreen = FullscreenPreferences()
     let liveScore = LiveScoreActivity()
+    var isBoardOnTV = false
+    var showingBoard = false
     #endif
     #if os(watchOS)
     /// Which way this wrist reads the court. Device-local, like the phone's full-screen
@@ -373,14 +375,17 @@ final class AppModel {
             }
 
         case let format:
+            // `-rekkert-demo-courts 8` fills eight courts, which is how the TV's grid gets
+            // photographed at its fullest.
+            let courts = demoCourtCount(arguments)
             store.configure(.tournament(Tournament(
                 name: "Thursday",
                 format: format == "mexicano" ? .mexicano : .americano,
-                // `-rekkert-demo-sit-outs` brings a ninth, so somebody has to sit out.
-                players: (["Jonas", "Ada", "Kim", "Sam", "No", "Ola", "Siri", "Tor"]
+                // `-rekkert-demo-sit-outs` brings one more, so somebody has to sit out.
+                players: (Array(Self.demoNames.prefix(courts * 4))
                     + (arguments.contains("-rekkert-demo-sit-outs") ? ["Per"] : []))
                     .map { Player(name: $0) },
-                config: TournamentConfig(pointRules: PointCountRules(target: 16), courtCount: 2)
+                config: TournamentConfig(pointRules: PointCountRules(target: 16), courtCount: courts)
             )))
             store.nextRound()
         }
@@ -440,6 +445,20 @@ final class AppModel {
         guard let index = arguments.firstIndex(of: "-rekkert-demo-swap-sides") else { return .off }
         guard index + 1 < arguments.count else { return .oddGames }
         return ChangeEndsRule(rawValue: arguments[index + 1]) ?? .oddGames
+    }
+
+    private static let demoNames = [
+        "Jonas", "Ada", "Kim", "Sam", "No", "Ola", "Siri", "Tor",
+        "Kari", "Trond", "Bjørn", "Håkon", "Ingrid", "Marius", "Silje", "Eirik",
+        "Nora", "Emil", "Thea", "Henrik", "Maja", "Sander", "Ida", "Magnus",
+        "Emma", "Jakob", "Sofie", "Lars", "Hedda", "Aksel", "Tuva", "Filip",
+    ]
+
+    private func demoCourtCount(_ arguments: [String]) -> Int {
+        guard let index = arguments.firstIndex(of: "-rekkert-demo-courts"),
+              index + 1 < arguments.count,
+              let count = Int(arguments[index + 1]) else { return 2 }
+        return min(max(count, 1), 8)
     }
 
     private func friendlyPlayerCount(_ arguments: [String]) -> Int {

@@ -65,6 +65,11 @@ check_ios 'NSBluetoothAlwaysUsageDescription'
 check_ios 'NSHealthShareUsageDescription'
 check_ios 'NSHealthUpdateUsageDescription'
 
+echo "==> Assert a TV gets the board rather than a copy of the phone"
+# Before iOS 27 UIKit builds the TV's scene from this entry alone; without it the TV is black.
+check_ios '"UIWindowSceneSessionRoleExternalDisplayNonInteractive"'
+check_ios '"UISceneDelegateClassName" => "Rekkert.BoardSceneDelegate"'
+
 echo "==> Assert the watch app carries the same version as the iPhone app"
 # The watch app used to generate its own plist and so could not drift. Now that it is
 # written out, a forgotten $(MARKETING_VERSION) pins it at 1.0 (1) — which App Store Connect

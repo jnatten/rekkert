@@ -3,6 +3,7 @@ import SwiftUI
 
 struct WinnerCourtView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.teamPalette) private var palette
     @State private var showingEnd = false
     @State private var fullscreen = false
@@ -38,6 +39,9 @@ struct WinnerCourtView: View {
                     Button("Full screen", systemImage: "arrow.up.left.and.arrow.down.right") {
                         fullscreen = true
                     }
+                }
+                if sizeClass == .regular {
+                    ToolbarItem(placement: .topBarTrailing) { BoardButton() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Undo", systemImage: "arrow.uturn.backward") { model.store.undoLast() }

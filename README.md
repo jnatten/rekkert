@@ -144,6 +144,27 @@ background. In bright sun the colours are the first thing to go, so the moon but
 both halves out — white digits on black, the names in the team colours — and the setting
 stays on until you turn it off, from the board or from Settings.
 
+## On a TV
+
+Connect the phone to a TV — Screen Mirroring to an Apple TV from Control Center, or an HDMI
+adapter — and the TV gets a board of its own instead of a copy of the phone. The phone carries
+on as normal, scoring included, and every point shows on the TV wherever it was scored: on
+this phone, its watch or anybody else's phone on the match. There is nothing to turn on; iOS
+does not let an app start mirroring, but whatever is connected gets the board.
+
+A match, a points round, a winner court and a friendly are two halves in the team colours:
+the team's name, everyone on it by name with the one to serve picked out, the score as large
+as the half allows, and the games of each set underneath. A friendly adds its table down the
+side and who is sitting out, and between rounds who plays next. An americano or mexicano
+puts every court of the round up at once — both pairs, the score and who serves — with the
+table beside them and the bench along the bottom. The table shows as many rows as fit. Above
+it all is the round and its clock. With nothing on the TV says so, and a session that has
+just finished leaves its result up.
+
+The phone stays awake while a TV is connected, because locking it ends mirroring. On an
+iPad, or any screen wide enough, a Board button puts the same board up on the device
+itself. While mirroring, the score being called out comes from the TV's speakers.
+
 ## The Lock Screen
 
 While a session is live the phone puts the score on the Lock Screen and in the Dynamic
@@ -391,6 +412,18 @@ hides the island, so record a second of video instead. A late tap timed to land 
 app had gone to the background never landed, so score the point before sending it away:
 `-rekkert-demo traditional -rekkert-demo-points 5 -rekkert-demo-late-tap 3`.
 
+The TV's board needs an external display. `simctl` can plug one in, but a screenshot of it
+comes back black, so `-rekkert-demo-tv-shot` has the app draw what the TV shows into its own
+container every couple of seconds. Size the display before launching: changing the mode of a
+connected display plugs it in again, and iOS 27 does not always hand it back.
+
+```sh
+xcrun simctl io <udid> screenConfig --display=external power on
+xcrun simctl io <udid> screenConfig --display=external geometry 1920x1080
+xcrun simctl launch <udid> dev.natten.rekkert -rekkert-demo americano -rekkert-demo-tv-shot
+cp "$(xcrun simctl get_app_container <udid> dev.natten.rekkert data)/tmp/tv.png" .
+```
+
 To exercise sync on paired simulators:
 
 ```sh
@@ -405,7 +438,7 @@ Debug builds accept `-rekkert-demo traditional|winnercourt|friendly|americano|me
 `-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N`, `-rekkert-demo-sit-outs [name]`,
 `-rekkert-demo-open-court R,C`, `-rekkert-demo-roster`, `-rekkert-demo-presets`,
 `-rekkert-demo-watch-page menu|standings|controls`, `-rekkert-demo-watch-join CODE`,
-`-rekkert-demo-fullscreen`,
+`-rekkert-demo-fullscreen`, `-rekkert-demo-board`, `-rekkert-demo-courts N`, `-rekkert-demo-tv-shot`,
 `-rekkert-demo-blackout`, `-rekkert-demo-settings`, `-rekkert-demo-swap-player`,
 `-rekkert-demo-workouts`, `-rekkert-demo-workout`, `-rekkert-demo-workout-paused`,
 `-rekkert-demo-voices` or

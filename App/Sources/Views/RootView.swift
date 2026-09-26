@@ -27,11 +27,18 @@ struct RootView: View {
             }
         }
         .environment(\.teamPalette, TeamPalette(isSwapped: model.store.display.areColorsSwapped))
+        .externalBoard(model)
         .sheet(isPresented: Binding(
             get: { model.showingShareCode },
             set: { model.showingShareCode = $0 }
         )) {
             ShareCodeSheet()
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { model.showingBoard },
+            set: { model.showingBoard = $0 }
+        )) {
+            BoardCover()
         }
         .sheet(isPresented: Binding(
             get: { model.showingJoin },
@@ -52,13 +59,18 @@ struct RootView: View {
             // advice standing in for this.
             sharing ? ScreenSleep.hold("sharing") : ScreenSleep.release("sharing")
         }
+        .onChange(of: model.isBoardOnTV, initial: true) { _, onTV in
+            // Mirroring ends when the phone locks, taking the board off the TV with it.
+            onTV ? ScreenSleep.hold("tv") : ScreenSleep.release("tv")
+        }
         .task {
             #if DEBUG
             // Here rather than on the start screen: a device that already has a match never
             // shows that screen, and joining from one is exactly the case worth exercising.
             if DemoLaunch.joinCode != nil { model.showingJoin = true }
-            if DemoLaunch.isLandscape,
-               let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+            if DemoLaunch.board { model.showingBoard = true }
+            if DemoLaunch.tvShot { BoardCapture.start() }
+            if DemoLaunch.isLandscape, let scene = UIApplication.shared.phoneScene {
                 scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
             }
             #endif
