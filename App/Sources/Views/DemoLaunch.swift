@@ -30,6 +30,10 @@ enum DemoLaunch {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-tv-shot")
     }
 
+    static var tvGuide: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-tv-guide")
+    }
+
     /// Opens History, and with a value the detail for that row: -rekkert-demo-history 0
     static var openHistory: Bool {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-history")

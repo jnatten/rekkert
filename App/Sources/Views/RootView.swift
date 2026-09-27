@@ -41,6 +41,12 @@ struct RootView: View {
             BoardCover()
         }
         .sheet(isPresented: Binding(
+            get: { model.showingTVGuide },
+            set: { model.showingTVGuide = $0 }
+        )) {
+            TVGuideSheet()
+        }
+        .sheet(isPresented: Binding(
             get: { model.showingJoin },
             set: { model.showingJoin = $0 }
         )) {
@@ -69,6 +75,7 @@ struct RootView: View {
             // shows that screen, and joining from one is exactly the case worth exercising.
             if DemoLaunch.joinCode != nil { model.showingJoin = true }
             if DemoLaunch.board { model.showingBoard = true }
+            if DemoLaunch.tvGuide { model.showingTVGuide = true }
             if DemoLaunch.tvShot { BoardCapture.start() }
             if DemoLaunch.isLandscape, let scene = UIApplication.shared.phoneScene {
                 scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))

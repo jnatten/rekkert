@@ -6,7 +6,9 @@ import SwiftUI
 /// scoreboard reads, which side is blue, and whether the score is read out loud.
 struct MatchOptionsMenu: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var settling = false
+    @State private var showingTV = false
     var round = 0
     var court = 0
     /// For the modes that play several rounds and have something to look back at. Here
@@ -23,6 +25,12 @@ struct MatchOptionsMenu: View {
         Menu {
             if let onShowRounds {
                 Button("Rounds and standings", systemImage: "list.bullet.rectangle", action: onShowRounds)
+            }
+            // On a phone the bar has no room for the TV button, so it lives here instead.
+            if sizeClass != .regular {
+                Button(model.isBoardOnTV ? "The board is on a TV" : "Show on a TV", systemImage: "airplay.video") {
+                    showingTV = true
+                }
             }
             SharingMenuItems()
             // Only while somebody is there to hear it, which is also the only moment the
@@ -72,6 +80,7 @@ struct MatchOptionsMenu: View {
             Image(systemName: "ellipsis.circle")
         }
         .accessibilityLabel("Match options")
+        .sheet(isPresented: $showingTV) { TVGuideSheet() }
         .confirmationDialog(
             "Use this phone's score?",
             isPresented: $settling,

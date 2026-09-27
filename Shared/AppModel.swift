@@ -18,6 +18,7 @@ final class AppModel {
     let liveScore = LiveScoreActivity()
     var isBoardOnTV = false
     var showingBoard = false
+    var showingTVGuide = false
     #endif
     #if os(watchOS)
     /// Which way this wrist reads the court. Device-local, like the phone's full-screen

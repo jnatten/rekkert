@@ -48,6 +48,7 @@ struct FriendlyMatchView: View {
                     ConnectionBadge()
                     SharingBadge()
                     WorkoutBadge()
+                    if sizeClass == .regular { TVButton() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Full screen", systemImage: "arrow.up.left.and.arrow.down.right") {

@@ -54,6 +54,7 @@ struct CourtListView: View {
                     ConnectionBadge()
                     SharingBadge()
                     WorkoutBadge()
+                    TVButton()
                 }
                 if sizeClass == .regular {
                     ToolbarItem(placement: .topBarTrailing) { BoardButton() }

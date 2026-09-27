@@ -149,8 +149,11 @@ stays on until you turn it off, from the board or from Settings.
 Connect the phone to a TV — Screen Mirroring to an Apple TV from Control Center, or an HDMI
 adapter — and the TV gets a board of its own instead of a copy of the phone. The phone carries
 on as normal, scoring included, and every point shows on the TV wherever it was scored: on
-this phone, its watch or anybody else's phone on the match. There is nothing to turn on; iOS
-does not let an app start mirroring, but whatever is connected gets the board.
+this phone, its watch or anybody else's phone on the match. There is nothing to turn on:
+whatever is connected gets the board. iOS lets only Control Center start Screen Mirroring,
+so the AirPlay button explains how rather than doing it, and lights up while a TV has the
+board. It sits beside the watch glyph, or in the options menu of a phone's match screen,
+where the bar has no room for it.
 
 A match, a points round, a winner court and a friendly are two halves in the team colours:
 the team's name, everyone on it by name with the one to serve picked out, the score as large
@@ -438,7 +441,7 @@ Debug builds accept `-rekkert-demo traditional|winnercourt|friendly|americano|me
 `-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N`, `-rekkert-demo-sit-outs [name]`,
 `-rekkert-demo-open-court R,C`, `-rekkert-demo-roster`, `-rekkert-demo-presets`,
 `-rekkert-demo-watch-page menu|standings|controls`, `-rekkert-demo-watch-join CODE`,
-`-rekkert-demo-fullscreen`, `-rekkert-demo-board`, `-rekkert-demo-courts N`, `-rekkert-demo-tv-shot`,
+`-rekkert-demo-fullscreen`, `-rekkert-demo-board`, `-rekkert-demo-courts N`, `-rekkert-demo-tv-shot`, `-rekkert-demo-tv-guide`,
 `-rekkert-demo-blackout`, `-rekkert-demo-settings`, `-rekkert-demo-swap-player`,
 `-rekkert-demo-workouts`, `-rekkert-demo-workout`, `-rekkert-demo-workout-paused`,
 `-rekkert-demo-voices` or
