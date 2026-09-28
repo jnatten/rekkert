@@ -558,6 +558,55 @@ declares, and the script fails if the two ever disagree — a wrong size is a cr
 that nothing else would catch. App Store images land in `fastlane/screenshots/en-US/`, at
 the simulator's own resolution.
 
+## Releasing
+
+Every push to `main` that changes the app goes to TestFlight by itself, through
+`.github/workflows/testflight.yml`. Pushes that only touch `docs/`, a Markdown file, the
+listing in `fastlane/` or the licence do not; **Run workflow** on the Actions tab sends one
+whenever you like. The job runs on GitHub's Xcode 27 image and does what
+`scripts/release.sh` does here — the package tests, an archive, the checks that the watch
+app and the Live Activity are inside it, export, validation, upload — and then waits until
+App Store Connect lists the build.
+
+The build number is App Store Connect's highest plus one, or `CURRENT_PROJECT_VERSION` in
+`Project.swift` if that is higher, and nothing is committed back: the number in the project
+is a floor, not a record of what was sent. Uploads run one at a time, so two pushes close
+together never ask for the same number.
+
+It needs six repository secrets, set once:
+
+| Secret | What goes in it |
+|---|---|
+| `TUIST_DEVELOPMENT_TEAM` | The paid team id, as in `mise.local.toml` |
+| `APP_STORE_CONNECT_KEY_ID` | The API key's id |
+| `APP_STORE_CONNECT_ISSUER_ID` | The issuer id above the list of keys |
+| `APP_STORE_CONNECT_KEY` | The whole `.p8` file. The key must be **Admin**, for the reason in `release.sh` |
+| `DEVELOPMENT_CERTIFICATE_P12` | An Apple Development certificate and its private key, as base64 |
+| `DEVELOPMENT_CERTIFICATE_PASSWORD` | The password the `.p12` was exported with |
+
+The certificate is there because the archive is signed for development before export
+signs it for distribution, and a fresh runner has no development identity of its own —
+without one, Xcode would make a new certificate every run until the team ran out. Export it
+from Keychain Access (My Certificates, the "Apple Development" one, Export…, with a
+password), then:
+
+```sh
+base64 -i Certificates.p12 | gh secret set DEVELOPMENT_CERTIFICATE_P12
+gh secret set DEVELOPMENT_CERTIFICATE_PASSWORD
+gh secret set APP_STORE_CONNECT_KEY < ~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8
+```
+
+Uploading from this Mac still works, as long as it asks App Store Connect for the number
+too rather than trusting the project's:
+
+```sh
+./scripts/release.sh --build-number=$(swift scripts/build-number.swift next)
+```
+
+`swift scripts/build-number.swift next` prints the number the next upload should carry, with
+the same key `release.sh` uses. The listing below is not part of any of this and is still
+sent by hand.
+
 ## The App Store listing
 
 The description, promotional text, keywords, copyright and privacy URL live in

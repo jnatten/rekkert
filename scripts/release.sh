@@ -3,6 +3,7 @@
 #
 #   scripts/release.sh             # test, archive, export, validate, upload
 #   scripts/release.sh --bump      # raise the build number first
+#   scripts/release.sh --build-number=57   # upload as 57, whatever Project.swift says
 #   scripts/release.sh --archive   # stop after the .ipa, upload nothing
 #   scripts/release.sh --validate  # archive and validate, upload nothing
 #   scripts/release.sh --skip-tests
@@ -23,7 +24,11 @@
 # A key's role cannot be changed afterwards, so a wrong one has to be replaced.
 #
 # The watch app rides along inside the iPhone app, so this uploads both.
-# Every upload needs a build number no earlier upload used: --bump, or edit Project.swift.
+# Every upload needs a build number no earlier upload used. Every push to main is uploaded
+# by .github/workflows/testflight.yml with App Store Connect's latest plus one, so an upload
+# from here should ask for the same thing:
+#
+#   scripts/release.sh --build-number=$(swift scripts/build-number.swift next)
 #
 # --screenshots uploads whatever `scripts/shots.sh` last put in fastlane/screenshots/, and
 # --metadata uploads the text in fastlane/metadata/. Both belong to a version rather than
@@ -48,11 +53,13 @@ export PATH="/usr/bin:$PATH"
 DO_TESTS=1
 STOP_AFTER=upload
 BUMP=0
+BUILD_NUMBER=
 UP_SHOTS=0
 UP_META=0
 for arg in "$@"; do
   case "$arg" in
     --bump) BUMP=1 ;;
+    --build-number=*) BUILD_NUMBER="${arg#*=}" ;;
     --archive) STOP_AFTER=archive ;;
     --validate) STOP_AFTER=validate ;;
     --skip-tests) DO_TESTS=0 ;;
@@ -61,6 +68,17 @@ for arg in "$@"; do
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
 done
+
+if [ -n "$BUILD_NUMBER" ]; then
+  if [ "$BUMP" = 1 ]; then
+    echo "--bump and --build-number are two answers to the same question; pick one." >&2
+    exit 2
+  fi
+  if ! [[ "$BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+    echo "--build-number takes a whole number, not '$BUILD_NUMBER'." >&2
+    exit 2
+  fi
+fi
 
 IOS_ID=dev.natten.rekkert
 OUT=.build/release
@@ -190,7 +208,7 @@ PY
 fi
 
 version=$(grep -o '"MARKETING_VERSION": "[^"]*"' Project.swift | head -1 | cut -d'"' -f4)
-build=$(grep -o '"CURRENT_PROJECT_VERSION": "[^"]*"' Project.swift | head -1 | cut -d'"' -f4)
+build=${BUILD_NUMBER:-$(grep -o '"CURRENT_PROJECT_VERSION": "[^"]*"' Project.swift | head -1 | cut -d'"' -f4)}
 echo "==> Rekkert $version ($build), team $team"
 
 if [ "$DO_TESTS" = 1 ]; then
@@ -206,7 +224,8 @@ rm -rf "$ARCHIVE" "$EXPORTED"
 xcodebuild -workspace Rekkert.xcworkspace -scheme Rekkert \
   -configuration Release -destination 'generic/platform=iOS' \
   -archivePath "$ARCHIVE" -quiet \
-  -allowProvisioningUpdates ${auth[@]+"${auth[@]}"} archive
+  -allowProvisioningUpdates ${auth[@]+"${auth[@]}"} \
+  CURRENT_PROJECT_VERSION="$build" archive
 
 # The watch app is only in TestFlight if it is inside the thing we upload.
 test -d "$ARCHIVE/Products/Applications/Rekkert.app/Watch/RekkertWatch.app" || {

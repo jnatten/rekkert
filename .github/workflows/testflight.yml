@@ -1,0 +1,101 @@
+name: TestFlight
+
+# Every push to main that changes the app goes to TestFlight, numbered one past the latest
+# build App Store Connect has. The secrets this needs are listed under "Releasing" in the
+# README.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - "fastlane/**"
+      - "LICENSE"
+  workflow_dispatch:
+
+# One upload at a time, so two runs never pick the same number. A run is never cancelled
+# once it has started; a newer push waiting behind it replaces an older one still waiting.
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: xcode-27
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+      # Ruby and fastlane are only for the App Store listing, which is uploaded by hand.
+      MISE_DISABLE_TOOLS: ruby,gem:fastlane
+      TUIST_DEVELOPMENT_TEAM: ${{ secrets.TUIST_DEVELOPMENT_TEAM }}
+      APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+
+      - name: Show the toolchain
+        run: |
+          xcodebuild -version
+          mise exec -- tuist version
+
+      - name: Install the App Store Connect key
+        env:
+          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          key=~/.appstoreconnect/private_keys/AuthKey_$APP_STORE_CONNECT_KEY_ID.p8
+          printf '%s\n' "$APP_STORE_CONNECT_KEY" > "$key"
+          chmod 600 "$key"
+
+      # Export signs with the cloud-managed distribution certificate, but the archive before
+      # it is signed for development, and a runner has no development identity of its own.
+      # Without this Xcode would mint a new development certificate on every run.
+      - name: Install the development certificate
+        env:
+          DEVELOPMENT_CERTIFICATE_P12: ${{ secrets.DEVELOPMENT_CERTIFICATE_P12 }}
+          DEVELOPMENT_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPMENT_CERTIFICATE_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          certificate="$RUNNER_TEMP/development.p12"
+          password=$(openssl rand -base64 32)
+          echo "::add-mask::$password"
+
+          printf '%s' "$DEVELOPMENT_CERTIFICATE_P12" | base64 --decode > "$certificate"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$certificate" -P "$DEVELOPMENT_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain" > /dev/null
+          # shellcheck disable=SC2046
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm "$certificate"
+          security find-identity -v -p codesigning "$keychain"
+
+      - name: Pick the build number
+        id: number
+        run: |
+          number=$(swift scripts/build-number.swift next)
+          echo "value=$number" >> "$GITHUB_OUTPUT"
+          echo "Uploading as build **$number**." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Test, archive and upload
+        env:
+          NUMBER: ${{ steps.number.outputs.value }}
+        run: scripts/release.sh --build-number="$NUMBER"
+
+      - name: Wait for App Store Connect to list it
+        env:
+          NUMBER: ${{ steps.number.outputs.value }}
+        run: swift scripts/build-number.swift wait "$NUMBER"
+
+      - name: Clean up
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2> /dev/null || true
+          rm -f ~/.appstoreconnect/private_keys/AuthKey_*.p8
