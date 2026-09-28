@@ -124,6 +124,16 @@ and so is what they were worth. Winner court counts for the record and the partn
 head-to-head, since the other side of the net changed at every whistle. A session picked up
 again from History is counted once, not once per copy.
 
+The calendar button at the top picks which stretch of the history is added up, and the
+choice is remembered. It offers all time; the last 7, 30 or 90 days, 12 months or 5 years;
+this week, this month or the year to date; last week, last month or last year, meaning the
+whole calendar week, month or year before this one; and any year that has something in it.
+**Custom…** covers everything else: the last however many days, weeks, months or years;
+everything since a given day; or everything between two days, both included. A match counts
+in the period it finished in, and rolling periods count today as their last day, so "last 7
+days" is today and the six before it. Merging and separating always work on the whole
+history, whichever period is showing.
+
 People are known by their name and nothing else, so the same name is the same person — case
 and accents aside, though ø, æ and å are letters of their own. A name corrected in one match
 and not the others therefore comes out as two people. **Merge with…** on a player's page puts

@@ -53,6 +53,10 @@ enum DemoLaunch {
         value(for: "-rekkert-demo-players").flatMap { $0.hasPrefix("-") ? nil : $0 }
     }
 
+    static var customPeriod: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-custom-period")
+    }
+
     /// Opens a sheet on that player's page: -rekkert-demo-player-sheet merge|separate
     static var playerSheet: String? { value(for: "-rekkert-demo-player-sheet") }
 

@@ -11,8 +11,20 @@ struct PlayerStatsView: View {
 
     var body: some View {
         Group {
-            if let stats = model.playerStats, let person = stats.person(current) {
-                PlayerDetail(person: person, stats: stats, current: $current)
+            if let stats = model.playerStats, let all = model.allPlayerStats, let everything = all.person(current) {
+                if let person = stats.person(current) {
+                    PlayerDetail(person: person, everything: everything, all: all, current: $current)
+                } else {
+                    ContentUnavailableView {
+                        Label("Nothing in this period", systemImage: "calendar")
+                    } description: {
+                        Text("\(everything.name) has no finished matches in \(model.statsPeriod.span ?? model.statsPeriod.title).")
+                    } actions: {
+                        Button("Show all time") { model.statsPeriod = .allTime }
+                    }
+                    .navigationTitle(everything.name)
+                    .navigationBarTitleDisplayMode(.inline)
+                }
             } else if model.playerStats == nil {
                 ProgressView()
             } else {
@@ -23,6 +35,10 @@ struct PlayerStatsView: View {
                 )
             }
         }
+        .navigationSubtitle(model.statsPeriod.title)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) { StatsPeriodMenu() }
+        }
         .task(id: model.revision) { await model.refreshPlayerStats(onlyIfStale: true) }
     }
 }
@@ -30,7 +46,8 @@ struct PlayerStatsView: View {
 private struct PlayerDetail: View {
     @Environment(AppModel.self) private var model
     let person: PersonStats
-    let stats: PlayerStats
+    let everything: PersonStats
+    let all: PlayerStats
     @Binding var current: PersonID
 
     @State private var merging = false
@@ -136,7 +153,7 @@ private struct PlayerDetail: View {
             #endif
         }
         .sheet(isPresented: $merging) {
-            MergePlayerView(person: person, stats: stats) { other in
+            MergePlayerView(person: everything, stats: all) { other in
                 current = model.merge(other, into: person.id)
             }
         }
@@ -144,7 +161,7 @@ private struct PlayerDetail: View {
             get: { separating.map(Preselection.init) },
             set: { separating = $0?.seats }
         )) { preselection in
-            SeparatePlayerView(person: person, stats: stats, chosen: preselection.seats)
+            SeparatePlayerView(person: everything, stats: all, chosen: preselection.seats)
         }
         .alert("Note", isPresented: $editingNote) {
             TextField("e.g. from work", text: $noteText)

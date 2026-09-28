@@ -123,10 +123,13 @@ public struct PlayerStats: Sendable, Hashable {
         return people.first { $0.id == id }
     }
 
-    public static func make(from records: [HistoryRecord], links: PlayerLinks) -> PlayerStats {
+    /// Copies left behind by a resume are taken out before the period is applied, so a game
+    /// is counted in the period of the one copy that holds it and in no other.
+    public static func make(from records: [HistoryRecord], links: PlayerLinks, during period: DateInterval? = nil) -> PlayerStats {
         var builders: [PersonID: Builder] = [:]
+        let counted = FiledSession.counted(records, links: links)
 
-        for record in FiledSession.counted(records, links: links) {
+        for record in counted where period?.holds(record.finishedAt) ?? true {
             let filed = FiledSession(record)
             var names: [Seat: String] = [:]
             var people: [Seat: PersonID] = [:]

@@ -307,6 +307,18 @@ final class AppModel {
         if arguments.contains("-rekkert-demo-players") {
             for record in Self.demoPlayerHistory() { try? sessionStore?.archive(record) }
         }
+        // `-rekkert-demo-period last:30:day`, `previous:year`, `current:month`, `year:2025` or `all`.
+        if let index = arguments.firstIndex(of: "-rekkert-demo-period"), index + 1 < arguments.count {
+            let parts = arguments[index + 1].split(separator: ":").map(String.init)
+            let unit = parts.last.flatMap(PeriodUnit.init(rawValue:)) ?? .day
+            switch parts.first {
+            case "last": statsPeriod = .last(parts.count > 1 ? Int(parts[1]) ?? 30 : 30, unit)
+            case "current": statsPeriod = .current(unit)
+            case "previous": statsPeriod = .previous(unit)
+            case "year": statsPeriod = .year(parts.count > 1 ? Int(parts[1]) ?? 2026 : 2026)
+            default: statsPeriod = .allTime
+            }
+        }
         if arguments.contains("-rekkert-demo-workouts") {
             let start = Date().addingTimeInterval(-7_200)
             let workoutID = UUID()
@@ -651,21 +663,56 @@ final class AppModel {
 
     private(set) var playerLinks = PlayerLinks()
     private(set) var playerStats: PlayerStats?
-    @ObservationIgnored private var playerStatsRevision: Int?
+    /// Whatever the period: merging and separating are about who somebody is, not about when.
+    private(set) var allPlayerStats: PlayerStats?
+    @ObservationIgnored private var playerStatsKey: StatsKey?
+
+    var statsPeriod: StatsPeriod = AppModel.savedStatsPeriod {
+        didSet {
+            guard statsPeriod != oldValue else { return }
+            UserDefaults.standard.set(try? JSONCoding.encoder.encode(statsPeriod), forKey: Self.statsPeriodKey)
+            Task { await refreshPlayerStats() }
+        }
+    }
+
+    private static let statsPeriodKey = "playerStatsPeriod"
+
+    private static var savedStatsPeriod: StatsPeriod {
+        guard let data = UserDefaults.standard.data(forKey: statsPeriodKey),
+              let period = try? JSONCoding.decoder.decode(StatsPeriod.self, from: data)
+        else { return .allTime }
+        return period
+    }
+
+    /// The day is in it so that "Last 7 days" moves on overnight.
+    private struct StatsKey: Equatable {
+        var revision: Int
+        var period: StatsPeriod
+        var day: Date
+    }
+
+    private var statsKey: StatsKey {
+        StatsKey(revision: revision, period: statsPeriod, day: Calendar.current.startOfDay(for: Date()))
+    }
 
     func refreshPlayerStats(onlyIfStale: Bool = false) async {
         guard let sessionStore else { return }
-        let revision = revision
-        if onlyIfStale, playerStats != nil, playerStatsRevision == revision { return }
-        let stats = await Self.playerStats(from: sessionStore, links: playerLinks)
-        guard revision == self.revision else { return }
-        playerStats = stats
-        playerStatsRevision = revision
+        let key = statsKey
+        if onlyIfStale, playerStats != nil, playerStatsKey == key { return }
+        let stats = await Self.playerStats(from: sessionStore, links: playerLinks, during: key.period.interval())
+        guard key == statsKey else { return }
+        allPlayerStats = stats.all
+        playerStats = stats.within
+        playerStatsKey = key
     }
 
     @concurrent
-    private nonisolated static func playerStats(from store: SessionStore, links: PlayerLinks) async -> PlayerStats {
-        PlayerStats.make(from: (try? store.history()) ?? [], links: links)
+    private nonisolated static func playerStats(
+        from store: SessionStore, links: PlayerLinks, during period: DateInterval?
+    ) async -> (all: PlayerStats, within: PlayerStats) {
+        let history = (try? store.history()) ?? []
+        let all = PlayerStats.make(from: history, links: links)
+        return (all, period == nil ? all : PlayerStats.make(from: history, links: links, during: period))
     }
 
     @discardableResult

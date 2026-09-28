@@ -18,16 +18,28 @@ struct PlayersView: View {
             }
         }
         .navigationTitle("Players")
+        .navigationSubtitle(model.statsPeriod.title)
         .searchable(text: $query)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) { StatsPeriodMenu() }
+        }
         .overlay {
             if model.playerStats == nil {
                 ProgressView()
-            } else if model.playerStats?.people.isEmpty == true {
+            } else if model.allPlayerStats?.people.isEmpty == true {
                 ContentUnavailableView(
                     "No players yet",
                     systemImage: "person.2",
                     description: Text("Anybody named in a match you keep shows up here.")
                 )
+            } else if model.playerStats?.people.isEmpty == true {
+                ContentUnavailableView {
+                    Label("Nobody played", systemImage: "calendar")
+                } description: {
+                    Text("No match in History finished in \(model.statsPeriod.span ?? model.statsPeriod.title).")
+                } actions: {
+                    Button("Show all time") { model.statsPeriod = .allTime }
+                }
             } else if people.isEmpty {
                 ContentUnavailableView.search(text: query)
             }
