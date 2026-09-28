@@ -573,6 +573,13 @@ The build number is App Store Connect's highest plus one, or `CURRENT_PROJECT_VE
 is a floor, not a record of what was sent. Uploads run one at a time, so two pushes close
 together never ask for the same number.
 
+Each build's **What to Test**, the text under it in TestFlight, lists the commits since the
+last successful run: `feat:` under New, `fix:` under Fixed, the rest under Other, with the
+prefix taken off, and the commit it was built from at the end. The run's summary shows the
+same text. `scripts/test-notes.sh <commit>` prints what a build of HEAD would say over one
+of `<commit>`, and `swift scripts/build-number.swift notes <number> <file>` puts a file on a
+build that is already listed, which is how to give a build from this Mac its notes.
+
 It needs six repository secrets, set once:
 
 | Secret | What goes in it |
