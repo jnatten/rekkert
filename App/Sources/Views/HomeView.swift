@@ -143,6 +143,9 @@ struct HomeView: View {
                             NavigationLink(value: HomeRoute.list) {
                                 Label("Past matches", systemImage: "clock.arrow.circlepath")
                             }
+                            NavigationLink(value: HomeRoute.players) {
+                                Label("Players", systemImage: "person.2")
+                            }
                         }
                         if model.hasWorkouts {
                             NavigationLink(value: HomeRoute.workouts) {
@@ -164,6 +167,8 @@ struct HomeView: View {
                 case .settings: SettingsView()
                 case .workouts: WorkoutsView()
                 case .workout(let workout): WorkoutDetailView(workout: workout)
+                case .players: PlayersView()
+                case .player(let person): PlayerStatsView(person: person)
                 }
             }
             .navigationTitle("Rekkert")
@@ -214,6 +219,10 @@ struct HomeView: View {
                     if let index = DemoLaunch.openWorkoutRecord, model.workouts.indices.contains(index) {
                         path.append(.workout(model.workouts[index]))
                     }
+                }
+                if DemoLaunch.openPlayers {
+                    path = [.players]
+                    if let name = DemoLaunch.openPlayer { path.append(.player(.named(name))) }
                 }
                 if DemoLaunch.openHistory {
                     path = [.list]

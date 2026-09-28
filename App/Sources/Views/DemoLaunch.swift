@@ -43,6 +43,19 @@ enum DemoLaunch {
         value(for: "-rekkert-demo-history").flatMap(Int.init)
     }
 
+    /// Seeds a few weeks of history and opens Players, and with a name that player's page:
+    /// -rekkert-demo-players Jonas
+    static var openPlayers: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-players")
+    }
+
+    static var openPlayer: String? {
+        value(for: "-rekkert-demo-players").flatMap { $0.hasPrefix("-") ? nil : $0 }
+    }
+
+    /// Opens a sheet on that player's page: -rekkert-demo-player-sheet merge|separate
+    static var playerSheet: String? { value(for: "-rekkert-demo-player-sheet") }
+
     /// Seeds a couple of workouts and opens the list. Nothing can start a real one on a
     /// simulator — there is no wrist — so the only way to photograph the screen is to put
     /// the records there directly.

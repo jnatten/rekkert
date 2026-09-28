@@ -308,6 +308,21 @@ public struct SessionStore: Sendable {
         try write(try encoder.encode(roster), to: rosterURL)
     }
 
+    // MARK: - People
+
+    private var linksURL: URL { directory.appending(path: "people.json") }
+
+    public func loadLinks() -> PlayerLinks {
+        guard let data = try? Data(contentsOf: linksURL),
+              let links = try? decoder.decode(PlayerLinks.self, from: data)
+        else { return PlayerLinks() }
+        return links
+    }
+
+    public func save(_ links: PlayerLinks) throws {
+        try write(try encoder.encode(links), to: linksURL)
+    }
+
     // MARK: - Presets
 
     private var presetsURL: URL { directory.appending(path: "presets.json") }

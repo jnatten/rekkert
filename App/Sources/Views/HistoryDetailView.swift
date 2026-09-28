@@ -292,7 +292,7 @@ private struct RecordDetail: View {
     }
 
     private func resume() {
-        model.store.resume(record.state, from: record.id)
+        model.resume(record)
         dismiss()
     }
 }

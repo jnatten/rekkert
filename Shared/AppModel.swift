@@ -69,6 +69,9 @@ final class AppModel {
         standIn = WatchStandIn(store: store, sharing: sharing)
         #endif
         roster = persistence?.loadRoster() ?? PlayerRoster()
+        if AppModel.keepsHistory, let persistence {
+            playerLinks = persistence.loadLinks()
+        }
     }
 
     /// Whether a finished session is filed away on this device, which is what the result
@@ -190,6 +193,67 @@ final class AppModel {
         )
         return (record, MatchTimeline.make(from: log))
     }
+
+    private static func demoPlayerHistory() -> [HistoryRecord] {
+        func id(_ number: Int) -> UUID { UUID(uuidString: String(format: "00000000-0000-0000-0000-00000000D%03X", number))! }
+        func set(_ winner: TeamSide, _ loser: Int) -> TraditionalState {
+            var score = TraditionalState()
+            score.completedSets = [SetResult(games: winner == .a ? BySide(a: 6, b: loser) : BySide(a: loser, b: 6), winner: winner)]
+            score.winner = winner
+            return score
+        }
+        var generator = SeededGenerator(seed: 11)
+        let now = Date()
+        var records: [HistoryRecord] = []
+
+        let group = ["Jonas", "Ada", "Kim", "Sam", "Ola", "Siri", "Tor", "Bjørn"]
+        for week in 0 ..< 3 {
+            var tournament = Tournament(
+                id: TournamentID(id(0x100 + week)), name: "Thursday", format: .americano,
+                players: group.enumerated().map { Player(id: PlayerID(id(0x200 + week * 16 + $0.offset)), name: $0.element) },
+                config: TournamentConfig(pointRules: PointCountRules(target: 16), courtCount: 2)
+            )
+            for round in 0 ..< 4 {
+                guard let next = try? TournamentEngine.appendingRound(to: tournament) else { break }
+                tournament = next
+                for court in tournament.rounds[round].matches.indices {
+                    let a = Int.random(in: 4 ... 12, using: &generator)
+                    tournament.rounds[round].matches[court].state.points = BySide(a: a, b: 16 - a)
+                }
+            }
+            tournament.isFinished = true
+            let finished = now.addingTimeInterval(Double(week - 3) * 7 * 86_400)
+            records.append(HistoryRecord(id: id(week), finishedAt: finished, title: tournament.name, state: .tournament(tournament)))
+        }
+
+        var friendly = FriendlySession(
+            id: FriendlyID(id(0x300)), name: "Fredagsmiks",
+            players: ["Jonas", "Ola", "Kari", "Ola", "Siri"].enumerated().map { Player(id: PlayerID(id(0x310 + $0.offset)), name: $0.element) }
+        )
+        for round in 0 ..< 4 {
+            guard let next = try? FriendlyScheduler.appendingRound(to: friendly) else { break }
+            friendly = next
+            friendly.rounds[round].score = set(round.isMultiple(of: 3) ? .b : .a, Int.random(in: 1 ... 4, using: &generator))
+        }
+        friendly.isFinished = true
+        records.append(HistoryRecord(id: id(0x10), finishedAt: now.addingTimeInterval(-4 * 86_400), title: friendly.name, state: .friendly(friendly)))
+
+        let matches: [([String], [String], TeamSide)] = [
+            (["Jonas", "Ada"], ["Kim", "Sam"], .a),
+            (["Jon", "Ada"], ["Kim", "Sam"], .a),
+            (["Jonas", "Kim"], ["Ada", "Sam"], .b),
+            (["Jonas", "Ada"], ["Ola", "Siri"], .a),
+        ]
+        for (index, match) in matches.enumerated() {
+            let state = SessionState.traditional(TraditionalSession(
+                rules: TraditionalRules(setsToWin: 1),
+                teams: BySide(a: TeamInfo(name: "Us", players: match.0), b: TeamInfo(name: "Them", players: match.1)),
+                score: set(match.2, 3)
+            ))
+            records.append(HistoryRecord(id: id(0x20 + index), finishedAt: now.addingTimeInterval(Double(-index - 1) * 86_400), title: state.title, state: state))
+        }
+        return records
+    }
     #endif
 
     #if os(watchOS)
@@ -234,6 +298,9 @@ final class AppModel {
                 rules: TraditionalRules(deuceRule: .starPoint),
                 teams: BySide(a: TeamInfo(name: "Us"), b: TeamInfo(name: "Them"))
             )))
+        }
+        if arguments.contains("-rekkert-demo-players") {
+            for record in Self.demoPlayerHistory() { try? sessionStore?.archive(record) }
         }
         if arguments.contains("-rekkert-demo-workouts") {
             let start = Date().addingTimeInterval(-7_200)
@@ -491,7 +558,7 @@ final class AppModel {
     /// The shelves live on disk, where `@Observable` has nothing to watch. Reading this in
     /// the getters and bumping it on every change is what redraws a list once a record has
     /// been edited or deleted.
-    private var revision = 0
+    private(set) var revision = 0
 
     var history: [HistoryRecord] {
         _ = revision
@@ -564,5 +631,71 @@ final class AppModel {
     func update(_ record: HistoryRecord) {
         try? sessionStore?.archive(record)
         revision += 1
+    }
+
+    /// Picks a filed session back up, and remembers which record it came from so its rounds
+    /// count once and anybody told apart in it stays told apart.
+    func resume(_ record: HistoryRecord) {
+        guard record.state.canResume else { return }
+        store.resume(record.state, from: record.id)
+        let resumed = store.log.sessionID
+        changeLinks { $0.resume(resumed, from: record.id) }
+    }
+
+    // MARK: - Players
+
+    private(set) var playerLinks = PlayerLinks()
+    private(set) var playerStats: PlayerStats?
+    @ObservationIgnored private var playerStatsRevision: Int?
+
+    func refreshPlayerStats(onlyIfStale: Bool = false) async {
+        guard let sessionStore else { return }
+        let revision = revision
+        if onlyIfStale, playerStats != nil, playerStatsRevision == revision { return }
+        let stats = await Self.playerStats(from: sessionStore, links: playerLinks)
+        guard revision == self.revision else { return }
+        playerStats = stats
+        playerStatsRevision = revision
+    }
+
+    @concurrent
+    private nonisolated static func playerStats(from store: SessionStore, links: PlayerLinks) async -> PlayerStats {
+        PlayerStats.make(from: (try? store.history()) ?? [], links: links)
+    }
+
+    @discardableResult
+    func merge(_ person: PersonID, into target: PersonID) -> PersonID {
+        var kept = target
+        changeLinks { kept = $0.merge(person, into: target) }
+        return kept
+    }
+
+    func unmerge(_ person: PersonID) {
+        changeLinks { $0.unmerge(person) }
+    }
+
+    @discardableResult
+    func separate(_ appearances: [Appearance], note: String) -> PersonID {
+        var person = PersonID.separate(UUID())
+        changeLinks { person = $0.separate(appearances, note: note) }
+        return person
+    }
+
+    func move(_ appearances: [Appearance], to person: PersonID) {
+        changeLinks { $0.move(appearances, to: person) }
+    }
+
+    func setNote(_ note: String, for person: PersonID) {
+        changeLinks { $0.setNote(note, for: person) }
+    }
+
+    private func changeLinks(_ change: (inout PlayerLinks) -> Void) {
+        var updated = playerLinks
+        change(&updated)
+        guard updated != playerLinks else { return }
+        playerLinks = updated
+        try? sessionStore?.save(updated)
+        revision += 1
+        Task { await refreshPlayerStats() }
     }
 }

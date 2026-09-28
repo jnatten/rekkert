@@ -99,6 +99,41 @@ everywhere it appears: the rounds, the table and the result. Only that one match
 the names remembered for next time, and every other match, are left alone. Nobody can be
 added or taken out — the rounds were drawn around the people who played them.
 
+## Players
+
+**Players**, under History, adds up everything that has been filed. Each person gets a win
+rate and a won–lost record — draws count as played and not won — split out mode by mode as
+well; their partners, with the best of them picked out, which is the best win rate over at
+least three games together; a head-to-head record against everybody they have played; and,
+for Americano and Mexicano, the points they average a round and their share of the points
+played. Every match they were in is listed underneath, a tap away from the match itself.
+
+A game counts once, whatever mode it came from: a match somebody won, a Points round that
+reached its target (level is a draw), every round on a winner court up to the last whistle,
+every friendly round somebody won, and every americano court played out or confirmed. A match
+called off without a winner, a friendly round stopped where it stood and a court left part-way
+when a tournament was saved count for nobody. Rounds on the bench are left out of the points,
+and so is what they were worth. Winner court counts for the record and the partners but not
+head-to-head, since the other side of the net changed at every whistle. A session picked up
+again from History is counted once, not once per copy.
+
+People are known by their name and nothing else, so the same name is the same person — case
+and accents aside, though ø, æ and å are letters of their own. A name corrected in one match
+and not the others therefore comes out as two people. **Merge with…** on a player's page puts
+them back together, for the matches already played and for any still to come under either
+name, and **Unmerge** takes it apart again.
+
+Two people with the same name are the other way round. A session in which two seats came out
+as one person is marked with a warning, and the games those two played against each other
+count for neither until they are told apart. **Separate matches…** moves the matches you tick
+to somebody else: a player already on the list, or a new one of the same name with a note
+("from work") to tell them apart. Whatever is left unticked, and every match still to come
+with that name in it, stays with the first — so for two Johns who both play often, setting
+one of them up as "John B" saves separating them every time. None of it touches the matches
+themselves: who is who is kept beside the history, and throwing it away would leave every
+match as it was filed. A winner court picked up again before any of this existed can still
+count twice; deleting the older copy puts it right.
+
 ## The clock
 
 Beside the line above the score, the board says how long it has been going. In the modes

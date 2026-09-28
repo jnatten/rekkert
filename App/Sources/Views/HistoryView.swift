@@ -10,6 +10,8 @@ enum HomeRoute: Hashable {
     case settings
     case workouts
     case workout(WorkoutRecord)
+    case players
+    case player(PersonID)
 }
 
 struct HistoryView: View {
