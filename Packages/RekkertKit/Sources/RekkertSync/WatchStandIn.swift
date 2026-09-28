@@ -75,8 +75,24 @@ public final class WatchStandIn {
     @ObservationIgnored private var attempt = 0
     @ObservationIgnored private var phoneFailure: SharingFailure?
     @ObservationIgnored private var phoneHasJoined = false
-    @ObservationIgnored private var phoneStandby: SharingStandby?
+    private var phoneStandby: SharingStandby?
+    /// An older phone never says, and is trusted to be carrying the match as it always was.
+    private var hasHeardStandby = false
     @ObservationIgnored private var phoneLastThrough = ContinuousClock.now
+
+    /// Whether the score on the wrist is still reaching the host, for a match somebody else is
+    /// hosting. `down` is a watch with no way back: no phone, and no code to dial with.
+    public enum Link: Sendable, Equatable {
+        case up, reconnecting, down
+    }
+
+    public var link: Link {
+        guard store.state != nil, !store.canEndSession else { return .up }
+        let isOwnLinkUp = sharing.isSharing && sharing.reachablePeers > 0
+        let isPhoneCarrying = store.isPairReachable && (!hasHeardStandby || phoneStandby?.isThrough == true)
+        if isOwnLinkUp || isPhoneCarrying { return .up }
+        return sharing.isSharing || sharing.standbyCode != nil || store.isPairReachable ? .reconnecting : .down
+    }
 
     public convenience init(store: MatchStore, sharing: SharedSession) {
         self.init(store: store, sharing: sharing, timing: StandInPolicy.Timing(), tick: .seconds(2))
@@ -137,6 +153,7 @@ public final class WatchStandIn {
             }
         case .standby(let standby):
             phoneStandby = standby
+            hasHeardStandby = true
             // The phone going quiet about a code the wrist is using is usually the wrist
             // having told it to stop.
             if pending == nil, let standby {
@@ -161,7 +178,7 @@ public final class WatchStandIn {
         let now = ContinuousClock.now
         let isPairReachable = store.isPairReachable
         // Said before it went. It says it again on the way back.
-        if !isPairReachable { phoneStandby?.isThrough = false }
+        if !isPairReachable, phoneStandby?.isThrough == true { phoneStandby?.isThrough = false }
         let isPhoneThrough = isPairReachable && phoneStandby?.isThrough == true
         if isPhoneThrough { phoneLastThrough = now }
 

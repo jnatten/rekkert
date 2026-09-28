@@ -6,6 +6,8 @@ struct ScoreboardView<Badge: View>: View {
     var compact = false
     var layout = ScoreboardLayout(isMirrored: false)
     var takesTaps = true
+    /// Said in place of the detail while the score may not be the latest.
+    var notice: String?
     let onTap: (TeamSide) -> Void
     let onUndo: () -> Void
     /// Rides along at the leading end of the compact header — the watch puts a running
@@ -52,8 +54,8 @@ struct ScoreboardView<Badge: View>: View {
                     Text(label).font(.subheadline.weight(.semibold))
                 }
                 HStack(spacing: 6) {
-                    Text(snapshot.detail)
-                        .foregroundStyle(snapshot.isSuddenDeath ? Color.orange : .secondary)
+                    Text(notice ?? snapshot.detail)
+                        .foregroundStyle(notice != nil ? Color.yellow : snapshot.isSuddenDeath ? .orange : .secondary)
                     if let start = snapshot.clockStart {
                         Text(verbatim: "·").foregroundStyle(.secondary)
                         clock(from: start)
@@ -65,8 +67,8 @@ struct ScoreboardView<Badge: View>: View {
         } else {
             HStack(spacing: 4) {
                 badge()
-                Text(snapshot.detail)
-                    .foregroundStyle(snapshot.isSuddenDeath ? Color.orange : .secondary)
+                Text(notice ?? snapshot.detail)
+                    .foregroundStyle(notice != nil ? Color.yellow : snapshot.isSuddenDeath ? .orange : .secondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                     .frame(maxWidth: .infinity)

@@ -70,10 +70,13 @@ private final class Radio: SharedLink, @unchecked Sendable {
     }
 
     func stop() {
-        lock.withLock {
-            stopCount += 1
-            up = false
-        }
+        lock.withLock { stopCount += 1 }
+        drop()
+    }
+
+    /// The host out of range: the link goes without anybody here hanging up.
+    func drop() {
+        lock.withLock { up = false }
         watchEnd.setReachable(false)
         hostEnd.setReachable(false)
         updates.yield(false)
@@ -371,6 +374,73 @@ struct WatchStandInTests {
         try await Task.sleep(for: .milliseconds(400))
 
         #expect(court.radio.joined == nil)
+        #expect(court.standIn.link == .up, "its own match is never somebody else's to lose")
+    }
+
+    // MARK: - Saying so on the wrist
+
+    @Test func theWristSaysSoWhileNothingCarriesTheMatch() async throws {
+        var timing = quick
+        timing.grace = .seconds(1)
+        let court = Court(timing: timing)
+        let tasks = court.run()
+        defer { tasks.forEach { $0.cancel() } }
+        await court.phoneJoins()
+        #expect(court.standIn.link == .up, "the phone is carrying it")
+
+        court.phoneGoesAway()
+        await eventually { court.standIn.link == .reconnecting }
+        #expect(court.standIn.link == .reconnecting, "the phone went and the wrist has not picked it up yet")
+
+        await eventually { court.radio.joined == code && court.standIn.link == .up }
+        #expect(court.standIn.link == .up, "on its own link now")
+
+        court.radio.drop()
+        await eventually { court.standIn.link == .reconnecting }
+        #expect(court.standIn.link == .reconnecting, "and that went too")
+    }
+
+    @Test func aPhoneThatIsBackButNotThroughIsStillReconnecting() async throws {
+        var timing = quick
+        timing.grace = .seconds(10)
+        let court = Court(timing: timing)
+        let tasks = court.run()
+        defer { tasks.forEach { $0.cancel() } }
+        await court.phoneJoins()
+
+        await court.phone.send(.standby(SharingStandby(code: code, isThrough: false)))
+        await eventually { court.standIn.link == .reconnecting }
+
+        #expect(court.standIn.link == .reconnecting)
+    }
+
+    @Test func aWatchWithNoWayBackSaysItIsCutOff() async throws {
+        var timing = quick
+        timing.grace = .seconds(10)
+        let court = Court(timing: timing)
+        let tasks = court.run()
+        defer { tasks.forEach { $0.cancel() } }
+        await court.phoneJoins()
+
+        court.phoneGoesAway()
+        // What a relaunch leaves: the match on disk, the code nowhere.
+        court.sharing.keepOnStandby(nil)
+        await eventually { court.standIn.link == .down }
+
+        #expect(court.standIn.link == .down)
+    }
+
+    @Test func anOlderPhoneThatNeverSaysIsTrustedAsBefore() async throws {
+        let court = Court()
+        let tasks = court.run()
+        defer { tasks.forEach { $0.cancel() } }
+        court.phone.beginJoining()
+        await eventually { court.watch.log.sessionID == court.host.log.sessionID && !court.watch.canEndSession }
+
+        #expect(court.standIn.link == .up)
+        court.phoneGoesAway()
+        await eventually { court.standIn.link == .down }
+        #expect(court.standIn.link == .down, "and without a code there is no way back")
     }
 
     @Test func aWatchKnowsItsOwnPhoneFromTheHostsRadio() async throws {

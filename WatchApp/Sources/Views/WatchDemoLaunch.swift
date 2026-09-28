@@ -25,6 +25,10 @@ enum WatchDemoLaunch {
     /// cannot tap, so it is the only way the wrist's half of a join gets exercised.
     static var joinCode: String? { value(after: "-rekkert-demo-watch-join") }
 
+    /// `-rekkert-demo-watch-link reconnecting|down` puts the scoreboard's notice up, which
+    /// otherwise takes somebody else's match and a phone walking away with it.
+    static var link: String? { value(after: "-rekkert-demo-watch-link") }
+
     private static func value(after flag: String) -> String? {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }

@@ -60,6 +60,18 @@ struct WatchCourtPage: View {
 
     private var tapsAnywhere: Bool { model.store.haptics.tapAnywhere }
 
+    private var linkNotice: String? {
+        #if DEBUG
+        if WatchDemoLaunch.link == "reconnecting" { return "Reconnecting…" }
+        if WatchDemoLaunch.link == "down" { return "Not connected" }
+        #endif
+        return switch model.standIn.link {
+        case .up: nil
+        case .reconnecting: "Reconnecting…"
+        case .down: "Not connected"
+        }
+    }
+
     @ViewBuilder
     private func scoreboard(_ snapshot: ScoreboardSnapshot) -> some View {
         if tapsAnywhere {
@@ -80,6 +92,7 @@ struct WatchCourtPage: View {
                 compact: true,
                 layout: layout,
                 takesTaps: !tapsAnywhere,
+                notice: linkNotice,
                 onTap: score,
                 onUndo: undo,
                 badge: { heartRate }
