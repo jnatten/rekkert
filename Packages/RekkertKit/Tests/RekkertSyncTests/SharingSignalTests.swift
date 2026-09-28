@@ -75,6 +75,7 @@ struct SharingSignalTests {
         #expect(!FanOutTransport.Scope.sharedSession.carries(.sharing(.join(code))))
         #expect(!FanOutTransport.Scope.sharedSession.carries(.sharing(.cancel)))
         #expect(!FanOutTransport.Scope.sharedSession.carries(.sharing(.state(.searching))))
+        #expect(!FanOutTransport.Scope.sharedSession.carries(.sharing(.standby(SharingStandby(code: code, isThrough: true)))))
         #expect(FanOutTransport.Scope.pairedDevice.carries(.sharing(.join(code))), "but to your own phone, yes")
     }
 
@@ -102,6 +103,24 @@ struct SharingSignalTests {
         await eventually { theirs.role == .guest }
         #expect(theirs.state != nil, "the match travelled")
         #expect(heard.all.isEmpty, "the code did not")
+    }
+
+    @Test func theStandbyIsSaidAgainOnReconnect() async throws {
+        let (phone, watch) = pocket()
+        let tasks = [Task { await phone.run() }, Task { await watch.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+
+        let heard = Heard()
+        watch.onSharing = { heard.append($0) }
+        let standby = SharingSignal.standby(SharingStandby(code: code, isThrough: true))
+
+        await phone.send(standby)
+        await eventually { heard.all.contains(standby) }
+        let before = heard.all.count { $0 == standby }
+        await watch.synchronise()
+        await eventually { heard.all.count { $0 == standby } > before }
+
+        #expect(heard.all.count { $0 == standby } > before)
     }
 
     // MARK: - Not worth saying late

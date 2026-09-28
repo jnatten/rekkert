@@ -140,6 +140,78 @@ struct BluetoothCoexistenceTests {
 
         #expect(sharing.reachablePeers == 1, "one phone, reachable two ways, counted once")
     }
+
+    @Test func aGuestTellsItsWatchTheCodeAndWhetherItIsThrough() async throws {
+        let (sharing, _, radio) = make()
+        let code = try #require(SessionCode("482915"))
+        var told: [SharingStandby?] = []
+        sharing.onStandby = { told.append($0) }
+
+        sharing.join(code)
+        radio.present(1)
+        await eventually { told.count == 2 }
+        radio.present(0)
+        await eventually { told.count == 3 }
+        sharing.stop()
+
+        #expect(told == [
+            SharingStandby(code: code, isThrough: false),
+            SharingStandby(code: code, isThrough: true),
+            SharingStandby(code: code, isThrough: false),
+            nil,
+        ])
+    }
+
+    @Test func aHostTellsItsWatchNoCode() {
+        let (sharing, store, _) = make()
+        var told: [SharingStandby?] = []
+        sharing.onStandby = { told.append($0) }
+        store.configure(setup)
+
+        sharing.host()
+
+        #expect(told.allSatisfy { $0 == nil })
+    }
+
+    @Test func aSearchThatFailedIsNoMatchToStandInFor() throws {
+        let (sharing, _, _) = make()
+        var told: [SharingStandby?] = []
+        sharing.onStandby = { told.append($0) }
+
+        sharing.join(try #require(SessionCode("482915")))
+        sharing.apply(.failed(.notFound))
+
+        #expect(told.last == .some(nil))
+    }
+
+    @Test func standingDownKeepsTheMatchAndTheCode() throws {
+        let (sharing, store, radio) = make()
+        store.configure(setup)
+        let code = try #require(SessionCode("482915"))
+        sharing.keepOnStandby(code)
+
+        sharing.standIn()
+        #expect(radio.joined == code)
+        sharing.standDown()
+
+        #expect(radio.stops == 1)
+        #expect(sharing.isSharing == false)
+        #expect(sharing.standbyCode == code)
+        #expect(store.state != nil)
+    }
+
+    @Test func leavingDropsTheMatchAndTheCode() throws {
+        let (sharing, store, _) = make()
+        store.configure(setup)
+        sharing.keepOnStandby(try #require(SessionCode("482915")))
+        sharing.standIn()
+
+        sharing.leave()
+
+        #expect(sharing.standbyCode == nil)
+        #expect(sharing.isSharing == false)
+        #expect(store.state == nil)
+    }
 }
 
 private extension SharedSession.Revival {

@@ -125,6 +125,8 @@ let project = Project(
                 // The reason this target has a plist at all. Without it watchOS suspends the
                 // app the moment the wrist drops, and the workout stops collecting.
                 "WKBackgroundModes": ["workout-processing"],
+                "NSBluetoothAlwaysUsageDescription":
+                    "Rekkert keeps your watch on the match at your court when your iPhone isn't with you.",
                 "NSHealthShareUsageDescription":
                     "Rekkert reads your heart rate and energy while a workout you started is running and once more when it ends, and your age and resting rate to place that heart rate in a zone.",
                 "NSHealthUpdateUsageDescription":

@@ -1,7 +1,7 @@
 import Foundation
 import RekkertCore
 
-#if os(iOS)
+#if os(iOS) || os(watchOS)
 import CoreBluetooth
 import CryptoKit
 
@@ -26,6 +26,9 @@ import CryptoKit
 /// clear is worked back to the code offline in seconds, which is the whole reason
 /// `SessionKey.fingerprint` publishes eight bits and not more. So the code is checked after
 /// connecting instead, against a greeting the host publishes, and every frame is sealed.
+///
+/// A watch builds only the guest half. watchOS lets an app dial a peripheral but never be one,
+/// so a watch can reach a host's phone on its own and can never host.
 nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sendable {
     /// Built on demand rather than stored: `CBUUID` is not `Sendable`, and a shared one would
     /// be a global with a lock's worth of doubt over it for no gain — these are four bytes of
@@ -121,10 +124,12 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     // MARK: - Opening and closing
 
     public func startHosting(code: SessionCode, share: UUID) {
+        #if os(iOS)
         stop()
         lock.withLock { intent = .hosting(code: code, share: share) }
         let manager = CBPeripheralManager(delegate: shim, queue: queue, options: nil)
         lock.withLock { peripheralManager = manager }
+        #endif
     }
 
     public func startJoining(code: SessionCode) {
@@ -366,6 +371,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     // MARK: - Hosting
 
     fileprivate func peripheralManagerDidUpdateState(_ manager: CBPeripheralManager) {
+        #if os(iOS)
         guard manager.state == .poweredOn,
               case .hosting = lock.withLock({ intent })
         else { return }
@@ -388,6 +394,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         // Only the service uuid: everything else is dropped from the advertisement the moment
         // the app is backgrounded, which is exactly when this link has to still be findable.
         manager.startAdvertising([CBAdvertisementDataServiceUUIDsKey: [Self.serviceUUID]])
+        #endif
     }
 
     fileprivate func answerGreeting(_ request: CBATTRequest, on manager: CBPeripheralManager) {
@@ -675,9 +682,8 @@ nonisolated private final class Shim: NSObject, CBPeripheralManagerDelegate,
 
 #else
 
-/// Not built on watchOS, where a watch reaches a shared match through its own iPhone, nor on
-/// macOS, which is here so the tests run without a simulator. The type still exists so nothing
-/// above it needs an `#if`.
+/// Not built on macOS, which is here so the tests run without a simulator. The type still
+/// exists so nothing above it needs an `#if`.
 nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sendable {
     public let inbound = AsyncStream<InboundPacket> { $0.finish() }
     public let reachability = AsyncStream<Bool> { $0.finish() }

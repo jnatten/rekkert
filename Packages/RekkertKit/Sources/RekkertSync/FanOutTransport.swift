@@ -47,8 +47,8 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
             // guest leaving is telling its own watch, not the host. Nor how hard somebody
             // likes their own wrist tapped.
             // And least of all the code to a match: a peer that was handed it could let
-            // anybody else in. It goes to the phone in the same pocket as the wrist that
-            // typed it, and stops there.
+            // anybody else in. It goes between a phone and the wrist in the same pocket,
+            // and stops there.
             case .presets, .display, .role, .workout, .left, .haptics, .sharing: false
             }
         }
@@ -121,6 +121,10 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
 
     public var isReachable: Bool {
         lock.withLock { children.values.contains { $0.transport.isReachable } }
+    }
+
+    public var isPairReachable: Bool {
+        lock.withLock { children.values.contains { $0.scope.isPairedDevice && $0.transport.isReachable } }
     }
 
     public func activate() {

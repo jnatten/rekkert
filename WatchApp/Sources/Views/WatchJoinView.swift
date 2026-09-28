@@ -4,10 +4,8 @@ import WatchKit
 
 /// Type the code the host read out, without reaching for the phone.
 ///
-/// The watch cannot reach a stranger's phone — the local network and Bluetooth are both built
-/// on iOS alone — so it hands the code to the phone in your pocket and that end does the
-/// joining. Everything below the field is therefore hearsay: what the phone last said it was
-/// up to, rather than anything this device can see for itself.
+/// The phone in your pocket does the joining when it can. When it cannot, or is not there,
+/// the watch dials the host's phone itself over Bluetooth.
 struct WatchJoinView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -28,11 +26,19 @@ struct WatchJoinView: View {
                 .padding(.horizontal, 2)
             }
             .navigationTitle("Join")
-            .onAppear(perform: openDemo)
+            .onAppear {
+                // A join that landed or failed last time is not this one.
+                if model.joining != .searching { model.stopJoining() }
+                openDemo()
+            }
             // The root swaps to the scoreboard the moment a session lands, so this only has to
             // get out of the way.
             .onChange(of: model.store.state == nil) { _, isEmpty in
                 if !isEmpty { dismiss() }
+            }
+            // Joining again with a match already on screen has nothing to swap in.
+            .onChange(of: model.joining) { _, joining in
+                if joining == .joined, model.store.state != nil { dismiss() }
             }
             .onDisappear {
                 // Swiped away mid-look: a search left running on the phone would conclude with
@@ -73,26 +79,22 @@ struct WatchJoinView: View {
         Button("Join", action: submit)
             .buttonStyle(.borderedProminent)
             .font(.footnote)
-            .disabled(SessionCode(typed) == nil || !model.store.isReachable)
+            .disabled(SessionCode(typed) == nil)
 
-        if model.store.isReachable {
-            Text("Six digits, as the host reads them out.")
-                .font(.system(size: 10))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-        } else {
-            // The phone is the one that does the joining, so there is no version of this that
-            // works without it.
-            Label("iPhone not reachable", systemImage: "iphone.slash")
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
-        }
+        Text(
+            model.store.isPairReachable
+                ? "Six digits, as the host reads them out."
+                : "No iPhone here — your watch looks for the host's iPhone itself."
+        )
+        .font(.system(size: 10))
+        .multilineTextAlignment(.center)
+        .foregroundStyle(.secondary)
     }
 
     private func key(_ digit: String) -> some View {
         Button {
             typed = SessionCode.grouped(typed + digit)
-            if SessionCode(typed) != nil, model.store.isReachable { submit() }
+            if SessionCode(typed) != nil { submit() }
         } label: {
             Text(digit).padKey()
         }
@@ -129,7 +131,7 @@ struct WatchJoinView: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
             Button("Try again") {
-                model.joining = .off
+                model.stopJoining()
                 typed = ""
             }
             .buttonStyle(.bordered)
@@ -147,10 +149,11 @@ struct WatchJoinView: View {
         #if DEBUG
         guard let code = WatchDemoLaunch.joinCode else { return }
         typed = SessionCode.grouped(code)
-        // WatchConnectivity is not up the instant the app is, and a join is live or nothing —
-        // so wait for the phone the way the Join button does by being disabled.
+        // WatchConnectivity is not up the instant the app is. A paired simulator gets the phone
+        // path; a lone one, after a moment, gets the wrist's own.
         Task {
-            while !model.store.isReachable {
+            let deadline = ContinuousClock.now + .seconds(5)
+            while !model.store.isPairReachable, ContinuousClock.now < deadline {
                 try? await Task.sleep(for: .milliseconds(100))
             }
             submit()
@@ -182,7 +185,7 @@ extension SharingFailure {
     /// is where both the looking and any fixing actually happen.
     var watchAdvice: String {
         switch self {
-        case .notFound: "Check the code, and that the host is nearby with Rekkert open."
+        case .notFound: "Check the code, and that the host's iPhone is nearby with the match shared."
         case .rejected: "Ask the host to read the code out again."
         case .blocked: "Let Rekkert find devices on the local network, in Settings on your iPhone."
         case .unreachable: "Your iPhone does the looking, and it is out of touch. Bring it closer and try again."

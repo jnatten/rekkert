@@ -7,6 +7,7 @@ public final class MatchStore {
     public private(set) var log: MatchLog
     public private(set) var state: SessionState?
     public private(set) var isReachable = false
+    public private(set) var isPairReachable = false
     /// Set when a peer's session replaced ours and the discarded one had real scores in
     /// it. It was archived to history first; this just lets the UI say so.
     public private(set) var replacedSessionTitle: String?
@@ -37,8 +38,9 @@ public final class MatchStore {
     /// already exists between exactly those two devices, and no other.
     @ObservationIgnored public var onWorkout: ((WorkoutSignal) -> Void)?
     /// Joining somebody's match, asked for from the wrist. Same two devices as the workout,
-    /// and the same shape: the watch cannot reach a stranger, so it hands the code to the
-    /// phone and is told how it went.
+    /// and the same shape: the watch hands the code to the phone and is told how it went — and
+    /// is told the code of a match the phone is on, to reach the host itself when the phone
+    /// cannot.
     @ObservationIgnored public var onSharing: ((SharingSignal) -> Void)?
     /// This device is off a match that belongs to somebody else — its watch stepped off and
     /// took it along, or something of its own was started on top. The store has dropped the
@@ -51,6 +53,7 @@ public final class MatchStore {
     /// deliberately not persisted: a "running" restored from disk would be a lie the moment
     /// either app is relaunched.
     @ObservationIgnored private var announcedWorkout: WorkoutSignal?
+    @ObservationIgnored private var announcedStandby: SharingSignal?
 
     private var outbox: Outbox
     /// This install's own id. Public because an event carries its author's, and telling the
@@ -746,6 +749,7 @@ public final class MatchStore {
     private func consumeReachability() async {
         for await reachable in transport.reachability {
             isReachable = reachable
+            isPairReachable = transport.isPairReachable
             if reachable { await synchronise() }
         }
     }
@@ -764,6 +768,7 @@ public final class MatchStore {
     /// wants the question asked and not everything else said again.
     private func askWhatIsMissing() async {
         isReachable = transport.isReachable
+        isPairReachable = transport.isPairReachable
         // Coverage rather than the raw vector: this is the "what am I missing" question, and
         // the highest number seen is the wrong answer to it when something below is absent.
         guard let payload = try? Wire.hello(sessionID: log.sessionID, vector: log.coverage, from: device).encoded() else { return }
@@ -850,6 +855,7 @@ public final class MatchStore {
 
     private func sendPending() async {
         isReachable = transport.isReachable
+        isPairReachable = transport.isPairReachable
         guard !outbox.isEmpty, transport.isReachable else { return }
         guard let payload = try? Wire.events(sessionID: log.sessionID, events: outbox.pending).encoded() else { return }
 
@@ -904,6 +910,7 @@ public final class MatchStore {
             shareHaptics()
             shareRoleOnReconnect()
             shareWorkoutOnReconnect()
+            shareStandbyOnReconnect()
             guard !retired.contains(sessionID) else {
                 return announceRetirement(of: sessionID, to: packet)
             }
@@ -1192,17 +1199,23 @@ public final class MatchStore {
     /// Passes a join between this device and the one in the same pocket: the code from the
     /// wrist, and how it is going back the other way.
     ///
-    /// Live only, and never repeated on reconnect. Every case here is either a request or a
-    /// statement about right now, and both go stale: a `.join` queued and handed over twenty
-    /// minutes later would go looking for a match that finished, and a `.searching` delivered
-    /// after the fact would leave a watch spinning at a search nobody is running. If it did
-    /// not arrive, there is nothing worth saying late.
+    /// Live only. A request or a word on a join in progress goes stale: a `.join` queued and
+    /// handed over twenty minutes later would go looking for a match that finished, and a
+    /// `.searching` delivered after the fact would leave a watch spinning at a search nobody
+    /// is running. If it did not arrive, there is nothing worth saying late. A `.standby` is
+    /// the exception: it says what is true now, so it is said again on reconnect.
     /// Answers whether it actually landed, which the other signals have no need of and this
     /// one does: a watch that asked and was not heard would otherwise sit watching a search
     /// nobody is running.
     @discardableResult
     public func send(_ signal: SharingSignal) async -> Bool {
-        await sendLive(encode(.sharing(signal))) != nil
+        if case .standby = signal { announcedStandby = signal }
+        return await sendLive(encode(.sharing(signal))) != nil
+    }
+
+    private func shareStandbyOnReconnect() {
+        guard let announcedStandby else { return }
+        Task { _ = await sendLive(encode(.sharing(announcedStandby))) }
     }
 
     /// Offered alongside the presets on reconnect. A workout signal is never queued, so a

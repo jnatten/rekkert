@@ -161,11 +161,11 @@ struct WatchIdleView: View {
 
     private var connection: some View {
         Label(
-            model.store.isReachable ? "iPhone connected" : "iPhone not reachable",
-            systemImage: model.store.isReachable ? "iphone.radiowaves.left.and.right" : "iphone.slash"
+            model.store.isPairReachable ? "iPhone connected" : "iPhone not reachable",
+            systemImage: model.store.isPairReachable ? "iphone.radiowaves.left.and.right" : "iphone.slash"
         )
         .font(.system(size: 10))
-        .foregroundStyle(model.store.isReachable ? .green : .secondary)
+        .foregroundStyle(model.store.isPairReachable ? .green : .secondary)
     }
 }
 

@@ -6,8 +6,7 @@ import RekkertSync
 @Observable
 final class AppModel {
     let store: MatchStore
-    /// Hosting and joining. Inert on the watch, which reaches a shared match through its own
-    /// phone and never talks to a stranger's.
+    /// Hosting and joining. On the watch only joining, and only while its phone cannot.
     let sharing: SharedSession
     #if !os(watchOS)
     /// The phone does the talking. The watch is on a wrist, not propped at the side of
@@ -27,6 +26,7 @@ final class AppModel {
     /// The wrist itself. Only the watch has one, so only the watch buzzes — but what it does
     /// is set from either device and travels with the match.
     let haptics = WatchHaptics()
+    let standIn: WatchStandIn
     #endif
     /// The workout, which only the watch can actually hold — the phone's counterpart is a
     /// remote control with the same shape, so the scoreboards can be written once.
@@ -63,7 +63,11 @@ final class AppModel {
             keepsHistory: AppModel.keepsHistory
         )
         self.store = store
-        sharing = SharedSession(store: store, link: localNetwork, bluetooth: bluetooth)
+        let sharing = SharedSession(store: store, link: localNetwork, bluetooth: bluetooth)
+        self.sharing = sharing
+        #if os(watchOS)
+        standIn = WatchStandIn(store: store, sharing: sharing)
+        #endif
         roster = persistence?.loadRoster() ?? PlayerRoster()
     }
 
@@ -104,15 +108,14 @@ final class AppModel {
             case .stop, .pause, .resume, .running, .paused, .idle: break
             }
         }
-        // Joining, which only the phone can actually do. The wrist asks and is told how it
+        // Joining, which the phone does whenever it can. The wrist asks and is told how it
         // went; the same two ends as the workout, the other way round.
         #if os(watchOS)
-        store.onSharing = { [weak self] signal in
-            guard case .state(let state) = signal else { return }
-            self?.joining = state
-        }
+        store.onSharing = { [standIn] signal in standIn.heard(signal) }
+        Task { [standIn] in await standIn.run() }
         #else
         sharing.publish = { [store] state in Task { await store.send(.state(state)) } }
+        sharing.onStandby = { [store] standby in Task { await store.send(.standby(standby)) } }
         store.onSharing = { [weak self] signal in self?.joinFromWatch(signal) }
         liveScore.follow(store)
         #endif
@@ -190,28 +193,11 @@ final class AppModel {
     #endif
 
     #if os(watchOS)
-    /// How the join this watch asked its phone for is getting on. The watch has no transport
-    /// that reaches a stranger, so this is hearsay from the phone rather than anything it can
-    /// see for itself — which is exactly why it is worth showing.
-    var joining: SharingState = .off
+    var joining: SharingState { standIn.joining }
 
-    /// Hands a code to the phone and starts watching for what it makes of it.
-    ///
-    /// A join is never queued — one handed over twenty minutes late would go looking for a
-    /// match that finished — so if it did not land there is nothing to wait for, and saying so
-    /// beats a spinner that never resolves.
-    func join(_ code: SessionCode) {
-        joining = .searching
-        Task { [store] in
-            let landed = await store.send(.join(code))
-            if !landed, case .searching = joining { joining = .failed(.unreachable) }
-        }
-    }
+    func join(_ code: SessionCode) { standIn.join(code) }
 
-    func stopJoining() {
-        joining = .off
-        Task { [store] in await store.send(.cancel) }
-    }
+    func stopJoining() { standIn.cancel() }
     #else
     /// The wrist has typed a code, or given up on one. Doing the thing is this end's job.
     private func joinFromWatch(_ signal: SharingSignal) {
@@ -219,7 +205,7 @@ final class AppModel {
         case .join(let code): sharing.join(code)
         case .cancel: sharing.cancelJoining()
         // Said by this end, not heard by it.
-        case .state: break
+        case .state, .standby: break
         }
     }
     #endif

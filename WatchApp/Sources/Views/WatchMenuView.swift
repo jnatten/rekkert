@@ -8,6 +8,7 @@ struct WatchMenuView: View {
     @Environment(AppModel.self) private var model
     @State private var confirming: Confirmation?
     @State private var choosingMe = false
+    @State private var joiningAgain = false
 
     private enum Confirmation: String, Identifiable {
         case endRound, nextRound, finish, discard
@@ -135,15 +136,24 @@ struct WatchMenuView: View {
                         confirming = .discard
                     }
                 } else {
+                    // The code dies with the app, and without the phone to repeat it the only
+                    // way back to the host is typing it again.
+                    if model.sharing.standbyCode == nil, !model.sharing.isSharing, !model.store.isPairReachable {
+                        action("Join again", systemImage: "arrow.right.circle") {
+                            joiningAgain = true
+                        }
+                    }
+
                     // Somebody else's match: step off it rather than end it for them.
                     action("Leave", systemImage: "rectangle.portrait.and.arrow.right") {
                         WKInterfaceDevice.current().play(.click)
-                        model.store.leaveSharedSession()
+                        model.sharing.leave()
                     }
                 }
             }
             .padding(.horizontal, 2)
         }
+        .sheet(isPresented: $joiningAgain) { WatchJoinView() }
         // `presenting:` hands the pending action to the builder, so the button closure
         // captures it. Reading `confirming` inside the action instead would race the
         // dialog's own dismissal, which clears it — and the button would do nothing.
@@ -175,12 +185,22 @@ struct WatchMenuView: View {
     }
 
     private var status: some View {
-        Label(
-            model.store.isReachable ? "iPhone connected" : "iPhone not reachable",
-            systemImage: model.store.isReachable ? "iphone.radiowaves.left.and.right" : "iphone.slash"
-        )
+        VStack(spacing: 2) {
+            Label(
+                model.store.isPairReachable ? "iPhone connected" : "iPhone not reachable",
+                systemImage: model.store.isPairReachable ? "iphone.radiowaves.left.and.right" : "iphone.slash"
+            )
+            .foregroundStyle(model.store.isPairReachable ? .green : .secondary)
+
+            if model.sharing.isSharing {
+                Label(
+                    model.sharing.reachablePeers > 0 ? "On the host's iPhone" : "Looking for the host…",
+                    systemImage: "applewatch.radiowaves.left.and.right"
+                )
+                .foregroundStyle(model.sharing.reachablePeers > 0 ? .green : .secondary)
+            }
+        }
         .font(.system(size: 11))
-        .foregroundStyle(model.store.isReachable ? .green : .secondary)
         .padding(.bottom, 2)
     }
 

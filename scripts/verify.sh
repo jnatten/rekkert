@@ -34,6 +34,7 @@ check() {
 check '"WKApplication" => true'
 check '"WKCompanionAppBundleIdentifier" => "dev.natten.rekkert"'
 check '"CFBundleIdentifier" => "dev.natten.rekkert.watchkitapp"'
+check 'NSBluetoothAlwaysUsageDescription'
 
 echo "==> Assert the watch may record a workout"
 # The plist is written out by hand rather than generated, because WKBackgroundModes is an

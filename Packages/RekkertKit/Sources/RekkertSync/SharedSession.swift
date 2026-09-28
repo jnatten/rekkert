@@ -23,17 +23,22 @@ public final class SharedSession {
         didSet {
             guard phase != oldValue else { return }
             publish?(phase.asShared)
+            reportStandby()
         }
     }
 
     /// Told to this device's own watch, when there is one waiting to hear how the code it
-    /// handed over is getting on. Set from `AppModel`; nil on the watch, which has no join of
-    /// its own to report.
+    /// handed over is getting on. Set from `AppModel`; nil on the watch, which has nobody to
+    /// report its own join to.
     ///
     /// Hung on `phase` rather than on the transport's status, because half the transitions a
     /// watch cares about never go through it — `join`, `stop`, `cancelJoining` and
     /// `dismissFailure` all set the phase themselves.
     @ObservationIgnored public var publish: ((SharingState) -> Void)?
+    @ObservationIgnored public var onStandby: ((SharingStandby?) -> Void)?
+    @ObservationIgnored private var reportedStandby: SharingStandby?
+    @ObservationIgnored private var hasReportedStandby = false
+    public private(set) var standbyCode: SessionCode?
     /// How many other phones are on the match right now.
     public private(set) var peers = 0
     /// Set when a match this device had joined has been out of reach long enough that it is
@@ -96,6 +101,7 @@ public final class SharedSession {
                 for await _ in bluetooth.reachability {
                     guard let self else { return }
                     self.bluetoothPeers = bluetooth.reachableCount
+                    self.reportStandby()
                     // The network may have been gone a while with the radio carrying the
                     // match. When the radio goes too, that is the moment it is lost.
                     if self.bluetoothPeers == 0, case .searching = self.phase, self.hasJoinedBefore {
@@ -199,6 +205,7 @@ public final class SharedSession {
         link.startJoining(code: code)
         bluetooth?.startJoining(code: code)
         phase = .searching
+        reportStandby()
     }
 
     /// Stops sharing, or steps off somebody else's match, depending which end this is.
@@ -210,12 +217,35 @@ public final class SharedSession {
         case .solo: store.cancelJoining()
         }
         forgetWhatWasAskedFor()
+        standbyCode = nil
     }
 
     /// Gives up looking, and nothing more. A guest that is back from a relaunch still holds
     /// the match and typed the code to reach the host again; a search that finds nothing must
     /// not throw the match away, which is what `stop()` would do for a guest.
     public func cancelJoining() {
+        standDown()
+        standbyCode = nil
+    }
+
+    /// Not `stop()`, which goes by the role: a watch following its phone's match is solo on it.
+    public func leave() {
+        cutLinks()
+        store.leaveSharedSession()
+        forgetWhatWasAskedFor()
+        standbyCode = nil
+    }
+
+    public func keepOnStandby(_ code: SessionCode?) {
+        standbyCode = code
+    }
+
+    public func standIn() {
+        guard let standbyCode, !isSharing else { return }
+        join(standbyCode)
+    }
+
+    public func standDown() {
         cutLinks()
         store.cancelJoining()
         forgetWhatWasAskedFor()
@@ -283,6 +313,7 @@ public final class SharedSession {
 
     /// Internal rather than private so the tests can drive the states a socket would.
     func apply(_ status: LocalNetworkTransport.Status) {
+        defer { reportStandby() }
         // The transport reports on its own queue and this reads it later, so a status from
         // before `stop()` can land after it. Nothing asked for is nothing to report on.
         guard hosted != nil || wanted != nil else {
@@ -330,6 +361,18 @@ public final class SharedSession {
             store.cancelJoining()
             phase = .failed(failure)
         }
+    }
+
+    private func reportStandby() {
+        let standby: SharingStandby?
+        switch phase {
+        case .searching, .joined: standby = wanted.map { SharingStandby(code: $0, isThrough: reachablePeers > 0) }
+        case .off, .hosting, .failed: standby = nil
+        }
+        guard !hasReportedStandby || standby != reportedStandby else { return }
+        hasReportedStandby = true
+        reportedStandby = standby
+        onStandby?(standby)
     }
 }
 

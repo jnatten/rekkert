@@ -47,13 +47,12 @@ public enum WorkoutSignal: Codable, Sendable, Hashable {
 
 /// What a phone and its own watch say to each other about joining somebody else's match.
 ///
-/// Lopsided for the same reason `WorkoutSignal` is: only one of the two can do the thing. A
-/// watch has no transport that reaches a stranger — the local network and Bluetooth are both
-/// built on iOS alone — so the wrist asks and the phone goes and does it.
+/// The wrist asks and the phone goes and does it, since the phone has the better links. When
+/// the phone cannot, the watch dials the host itself over Bluetooth.
 ///
-/// The code goes to the phone in the same pocket and nowhere else. `FanOutTransport.Scope
-/// .sharedSession` drops this case, which matters more here than for anything else on the
-/// wire: handing the code to a peer would hand over the key to the match.
+/// The code goes between the phone and the watch in the same pocket and nowhere else.
+/// `FanOutTransport.Scope.sharedSession` drops this case, which matters more here than for
+/// anything else on the wire: handing the code to a peer would hand over the key to the match.
 public enum SharingSignal: Codable, Sendable, Hashable {
     /// Watch to phone: join this one.
     case join(SessionCode)
@@ -61,6 +60,19 @@ public enum SharingSignal: Codable, Sendable, Hashable {
     case cancel
     /// Phone to watch: here is how it is going.
     case state(SharingState)
+    /// Phone to watch: the match this phone is a guest on, so the wrist can reach the host
+    /// itself. Nil when it is on none.
+    case standby(SharingStandby?)
+}
+
+public struct SharingStandby: Codable, Sendable, Hashable {
+    public var code: SessionCode
+    public var isThrough: Bool
+
+    public init(code: SessionCode, isThrough: Bool) {
+        self.code = code
+        self.isThrough = isThrough
+    }
 }
 
 /// How a join is going, as much of it as is worth saying on a wrist.
@@ -126,7 +138,7 @@ public enum Wire: Codable, Sendable, Hashable {
     /// the watch acts on it — the phone has no wrist to tap.
     case haptics(HapticPreferences)
     /// Joining somebody's match from the wrist: the code one way, how it is going the other.
-    /// Only the phone acts on it — it is the only one of the pair that can reach a stranger.
+    /// Between a phone and its own watch only — it carries the code.
     case sharing(SharingSignal)
 
     public func encoded() throws -> Data {
@@ -183,9 +195,13 @@ public protocol PeerTransport: Sendable {
     /// How many counterparts are reachable. `isReachable` stays "is anyone there", because
     /// that is what decides whether a live send is worth attempting; this is what a UI counts.
     var reachableCount: Int { get }
+
+    /// This device's own watch or phone, as against anybody at all.
+    var isPairReachable: Bool { get }
 }
 
 extension PeerTransport {
     public func forgetSnapshot() {}
     public var reachableCount: Int { isReachable ? 1 : 0 }
+    public var isPairReachable: Bool { isReachable }
 }
