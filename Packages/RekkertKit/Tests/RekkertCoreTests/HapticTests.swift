@@ -161,4 +161,25 @@ struct HapticTests {
         )
         #expect(decoded == after)
     }
+
+    /// The phone was updated first and the switch flipped while the watch was still on a
+    /// build that had never heard of it. The watch took the new revision, saved it without
+    /// the field, and came back after its own update holding the same revision with the
+    /// switch off.
+    @Test func aCopySavedByABuildThatPredatesTappingAnywhereGivesWay() throws {
+        let set = HapticPreferences().setting(mode: .byTeam).setting(tapAnywhere: true)
+        let full = try JSONSerialization.jsonObject(with: JSONCoding.encoder.encode(set)) as! [String: Any]
+        let before = ["mode", "onlyWhenSomeoneElseScores", "strength", "me", "revision", "updatedAt"]
+        let phone = try decode(full.filter { before.contains($0.key) || $0.key == "tapAnywhere" })
+        let watch = try decode(full.filter { before.contains($0.key) })
+        #expect(watch.tapAnywhere == false)
+
+        #expect(watch.adopting(phone).tapAnywhere, "the watch takes the one that carries it")
+        #expect(phone.adopting(watch).tapAnywhere, "and the phone keeps it")
+        #expect(watch.adopting(phone).mode == .byTeam)
+    }
+
+    private func decode(_ json: [String: Any]) throws -> HapticPreferences {
+        try JSONCoding.decoder.decode(HapticPreferences.self, from: JSONSerialization.data(withJSONObject: json))
+    }
 }

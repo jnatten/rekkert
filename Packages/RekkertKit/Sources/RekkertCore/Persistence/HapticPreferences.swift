@@ -28,6 +28,11 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
     /// thrown away.
     public var revision: UInt64
     public var updatedAt: Date
+    /// How many of these fields the build that last saved it knew about. Raised whenever one
+    /// is added.
+    private(set) var schema: Int
+
+    private static let currentSchema = 1
 
     public init(
         mode: HapticMode = .off,
@@ -45,6 +50,7 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
         self.me = me
         self.revision = revision
         self.updatedAt = updatedAt
+        self.schema = Self.currentSchema
     }
 
     /// Whether anybody has said anything about it yet, which is what decides if there is
@@ -80,6 +86,9 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
 
     public func adopting(_ other: HapticPreferences) -> HapticPreferences {
         if other.revision != revision { return other.revision > revision ? other : self }
+        // A build that predates a field saves the revision it was handed without that field,
+        // so the copy that still carries it has to win or the two never agree again.
+        if other.schema != schema { return other.schema > schema ? other : self }
         // Same revision from both at once: settle it the same way on both devices rather
         // than letting them disagree.
         return other.updatedAt > updatedAt ? other : self
@@ -97,7 +106,7 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case mode, onlyWhenSomeoneElseScores, strength, tapAnywhere, me, revision, updatedAt
+        case mode, onlyWhenSomeoneElseScores, strength, tapAnywhere, me, revision, updatedAt, schema
     }
 
     /// Hand-rolled so a file written before any one of these existed still reads. A decoder
@@ -113,6 +122,8 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
         me = try container.decodeIfPresent(Me.self, forKey: .me)
         revision = try container.decodeIfPresent(UInt64.self, forKey: .revision) ?? 0
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? .distantPast
+        schema = try container.decodeIfPresent(Int.self, forKey: .schema)
+            ?? (container.contains(.tapAnywhere) ? 1 : 0)
     }
 }
 
