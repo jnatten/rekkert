@@ -81,6 +81,11 @@ for key in CFBundleShortVersionString CFBundleVersion; do
   test "$ios" = "$watch" || { echo "FAIL: $key is $watch on the watch, $ios on the phone"; exit 1; }
   echo "  ok: $key matches ($ios)"
 done
+ios=$(plutil -extract RekkertCommit raw -o - "$iosplist")
+watch=$(plutil -extract RekkertCommit raw -o - "$plist")
+test -n "$ios" || { echo "FAIL: the iOS app was built without its commit"; exit 1; }
+test "$ios" = "$watch" || { echo "FAIL: RekkertCommit is $watch on the watch, $ios on the phone"; exit 1; }
+echo "  ok: RekkertCommit matches ($ios)"
 
 echo "==> Assert the Live Activity extension is embedded and configured"
 # Without the plist key the request is refused at runtime, and without the extension there is

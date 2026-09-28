@@ -13,6 +13,21 @@ private var signingSettings: SettingsDictionary {
     developmentTeam.isEmpty ? [:] : ["DEVELOPMENT_TEAM": .string(developmentTeam)]
 }
 
+/// Writes the commit into the built Info.plist for the Settings page to show. Git first, which
+/// covers CI and the colocated jj checkout; jj for the jj workspaces that have no `.git`.
+private let commitStamp: TargetScript = .post(
+    script: """
+    export PATH="$PATH:/opt/homebrew/bin"
+    commit=$(git -C "$SRCROOT" rev-parse --short=7 HEAD 2>/dev/null \\
+      || jj -R "$SRCROOT" log -r @- --no-graph --ignore-working-copy -T 'commit_id.short(7)' 2>/dev/null \\
+      || true)
+    /usr/bin/plutil -replace RekkertCommit -string "$commit" "$TARGET_BUILD_DIR/$INFOPLIST_PATH"
+    """,
+    name: "Stamp the commit",
+    inputPaths: ["$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)"],
+    basedOnDependencyAnalysis: false
+)
+
 let project = Project(
     name: "Rekkert",
     organizationName: "natten.dev",
@@ -88,6 +103,7 @@ let project = Project(
             sources: ["App/Sources/**", "Shared/**", "Widgets/Shared/**"],
             resources: ["App/Resources/**"],
             entitlements: .dictionary(["com.apple.developer.healthkit": true]),
+            scripts: [commitStamp],
             dependencies: [
                 .package(product: "RekkertCore"),
                 .package(product: "RekkertSync"),
@@ -97,6 +113,8 @@ let project = Project(
             settings: .settings(base: [
                 "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
                 "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "AccentColor",
+                // The commit stamp reads .git or .jj, which a sandboxed script is refused.
+                "ENABLE_USER_SCRIPT_SANDBOXING": "NO",
             ])
         ),
         .target(
@@ -135,6 +153,7 @@ let project = Project(
             sources: ["WatchApp/Sources/**", "Shared/**"],
             resources: ["WatchApp/Resources/**"],
             entitlements: .dictionary(["com.apple.developer.healthkit": true]),
+            scripts: [commitStamp],
             dependencies: [
                 .package(product: "RekkertCore"),
                 .package(product: "RekkertSync"),
@@ -142,6 +161,7 @@ let project = Project(
             settings: .settings(base: [
                 "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
                 "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "AccentColor",
+                "ENABLE_USER_SCRIPT_SANDBOXING": "NO",
             ])
         ),
         // The Live Activity. Only RekkertCore goes in: the extension draws what it is handed

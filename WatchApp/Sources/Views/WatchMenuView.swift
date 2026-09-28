@@ -150,6 +150,9 @@ struct WatchMenuView: View {
                         model.sharing.leave()
                     }
                 }
+
+                CommitLabel()
+                    .padding(.top, 4)
             }
             .padding(.horizontal, 2)
         }
