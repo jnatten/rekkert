@@ -208,7 +208,7 @@ struct PlayerStatsTests {
 
     @Test func aRenamedPlayerFollowsTheNewName() {
         let record = Filed.record(Filed.match(["Jon", "Ada"], ["Kim"], winner: .a), day: 0)
-        let renamed = record.renamed(.sides(Filed.teams(["John", ""], [])))
+        let renamed = record.renamed(.sides(event: "", teams: Filed.teams(["John", ""], [])))
         let stats = stats(renamed)
 
         #expect(stats.named("John")?.overall == Tally(won: 1))

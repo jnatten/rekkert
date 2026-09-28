@@ -48,6 +48,12 @@ private struct RecordDetail: View {
         List {
             Section { outcome }
 
+            if let note = record.note {
+                Section("Note") {
+                    Text(note)
+                }
+            }
+
             if !result.placings.isEmpty {
                 Section("Leaderboard") {
                     ForEach(result.placings) { placing in

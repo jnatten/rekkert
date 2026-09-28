@@ -119,7 +119,7 @@ struct RenameTests {
         #expect(state.title == "Us vs Them")
         #expect(SessionResult.make(from: state).headline == "Us win")
 
-        let renamed = state.renamed(.sides(teams("Blues", "Oranges")))
+        let renamed = state.renamed(.sides(event: "", teams: teams("Blues", "Oranges")))
         #expect(renamed.title == "Blues vs Oranges")
         #expect(SessionResult.make(from: renamed).headline == "Blues win")
     }
@@ -131,7 +131,7 @@ struct RenameTests {
             rules: PointCountRules(),
             teams: BySide(a: TeamInfo(name: "Us", players: []), b: TeamInfo(name: "Them"))
         ))
-        let renamed = state.renamed(.sides(BySide(
+        let renamed = state.renamed(.sides(event: "", teams: BySide(
             a: TeamInfo(name: "Us", players: ["", "Ada"]),
             b: TeamInfo(name: "Them")
         )))
@@ -139,11 +139,66 @@ struct RenameTests {
         #expect(after.a.players == ["", "Ada"], "the empty first slot is still the first slot")
     }
 
+    // MARK: - Naming a match
+
+    @Test func aMatchCanBeCalledSomethingOtherThanItsTwoTeams() {
+        var session = TraditionalSession(rules: TraditionalRules(setsToWin: 1), teams: teams())
+        session.score = session.engine.winGames(6, for: .a, from: session.score)
+        let renamed = SessionState.traditional(session).renamed(.sides(event: "  Club final ", teams: teams()))
+
+        #expect(renamed.title == "Club final")
+        #expect(renamed.names == .sides(event: "Club final", teams: teams()))
+        #expect(SessionResult.make(from: renamed).headline == "Us win", "the name is what it is listed under, not who won it")
+    }
+
+    @Test func clearingTheNameListsItUnderTheTeamsAgain() {
+        let state = SessionState.pointCount(PointCountSession(rules: PointCountRules(), teams: teams(), name: "Warm-up"))
+        #expect(state.title == "Warm-up")
+        #expect(state.renamed(.sides(event: " ", teams: teams())).title == "Us vs Them")
+    }
+
+    @Test func aWinnerCourtCanBeNamedToo() {
+        let state = SessionState.winnerCourt(WinnerCourtSession(rules: WinnerCourtRules(), teams: teams()))
+        #expect(state.renamed(.sides(event: "Tuesday ladder", teams: teams())).title == "Tuesday ladder")
+    }
+
+    @Test func aNamedMatchKeepsItsNameWhenPickedUpAgain() throws {
+        var session = TraditionalSession(rules: TraditionalRules(), teams: teams(), name: "Club final")
+        session.isStopped = true
+        let resumed = try #require(SessionState.traditional(session).resumed())
+        #expect(resumed.title == "Club final")
+    }
+
+    @Test func aMatchFiledBeforeNamesExistedStillDecodes() throws {
+        let states: [SessionState] = [
+            .traditional(TraditionalSession(rules: TraditionalRules(), teams: teams(), name: "Gone")),
+            .pointCount(PointCountSession(rules: PointCountRules(), teams: teams(), name: "Gone")),
+            .winnerCourt(WinnerCourtSession(rules: WinnerCourtRules(), teams: teams(), name: "Gone")),
+        ]
+        for state in states {
+            let decoded = try JSONCoding.decoder.decode(SessionState.self, from: try withoutName(state))
+            #expect(decoded.title == "Us vs Them")
+        }
+    }
+
+    /// The state as a build from before names would have written it: the same JSON with the
+    /// `name` key taken out of the session inside.
+    private func withoutName(_ state: SessionState) throws -> Data {
+        var json = try #require(try JSONSerialization.jsonObject(with: JSONCoding.encoder.encode(state)) as? [String: Any])
+        let mode = try #require(json.keys.first)
+        var session = try #require(json[mode] as? [String: Any])
+        var inner = try #require(session["_0"] as? [String: Any])
+        #expect(inner.removeValue(forKey: "name") != nil)
+        session["_0"] = inner
+        json[mode] = session
+        return try JSONSerialization.data(withJSONObject: json)
+    }
+
     // MARK: - Blank names
 
     @Test func aBlankNameIsIgnored() throws {
         let state = SessionState.winnerCourt(WinnerCourtSession(rules: WinnerCourtRules(), teams: teams()))
-        let renamed = state.renamed(.sides(BySide(
+        let renamed = state.renamed(.sides(event: "", teams: BySide(
             a: TeamInfo(name: "   ", players: ["", ""]),
             b: TeamInfo(name: "", players: ["Kim", ""])
         )))
@@ -174,7 +229,7 @@ struct RenameTests {
 
     @Test func namesOfTheWrongShapeAreIgnored() throws {
         let tournament = SessionState.tournament(try tournament())
-        #expect(tournament.renamed(.sides(teams("Blues", "Oranges"))) == tournament)
+        #expect(tournament.renamed(.sides(event: "", teams: teams("Blues", "Oranges"))) == tournament)
 
         let match = SessionState.traditional(TraditionalSession(rules: TraditionalRules(), teams: teams()))
         #expect(match.renamed(.group(event: "Thursday", players: [])) == match)
@@ -201,7 +256,7 @@ struct RenameTests {
             state: .traditional(TraditionalSession(rules: TraditionalRules(), teams: teams())),
             startedAt: filed.addingTimeInterval(-3_600)
         )
-        let renamed = record.renamed(.sides(teams("Blues", "Oranges")))
+        let renamed = record.renamed(.sides(event: "", teams: teams("Blues", "Oranges")))
 
         #expect(renamed.title == "Blues vs Oranges")
         #expect(renamed.title == renamed.state.title, "title is only ever a copy of the state's")
@@ -260,7 +315,7 @@ private extension SessionState {
     }
 
     var teamNames: BySide<TeamInfo>? {
-        guard case .sides(let teams) = names else { return nil }
+        guard case .sides(_, let teams) = names else { return nil }
         return teams
     }
 

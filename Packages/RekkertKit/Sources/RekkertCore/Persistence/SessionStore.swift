@@ -52,6 +52,7 @@ public struct HistoryRecord: Codable, Sendable, Hashable, Identifiable {
     /// another one, or found on a phone that was off — and it is this, not the filing, that
     /// says which workout it belongs to. Absent on anything filed before event times existed.
     public var playedUntil: Date?
+    public var note: String?
 
     public init(
         id: UUID = UUID(),
@@ -59,7 +60,8 @@ public struct HistoryRecord: Codable, Sendable, Hashable, Identifiable {
         title: String,
         state: SessionState,
         startedAt: Date? = nil,
-        playedUntil: Date? = nil
+        playedUntil: Date? = nil,
+        note: String? = nil
     ) {
         self.id = id
         self.finishedAt = finishedAt
@@ -67,6 +69,15 @@ public struct HistoryRecord: Codable, Sendable, Hashable, Identifiable {
         self.state = state
         self.startedAt = startedAt
         self.playedUntil = playedUntil
+        self.note = note
+    }
+
+    /// Trimmed, and gone altogether when nothing is left.
+    public func noted(_ note: String) -> HistoryRecord {
+        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        var record = self
+        record.note = trimmed.isEmpty ? nil : trimmed
+        return record
     }
 
     /// The stretch of time this was played over. A record from before start times were kept
@@ -75,7 +86,7 @@ public struct HistoryRecord: Codable, Sendable, Hashable, Identifiable {
     public var playedFrom: Date { startedAt ?? finishedAt }
     public var playedTo: Date { playedUntil ?? finishedAt }
 
-    private enum CodingKeys: String, CodingKey { case id, finishedAt, title, state, startedAt, playedUntil }
+    private enum CodingKeys: String, CodingKey { case id, finishedAt, title, state, startedAt, playedUntil, note }
 
     /// Hand-rolled so that a record written before `startedAt` existed still decodes.
     /// `history()` drops what it cannot read without a word, so a synthesised decoder
@@ -88,6 +99,7 @@ public struct HistoryRecord: Codable, Sendable, Hashable, Identifiable {
         state = try container.decode(SessionState.self, forKey: .state)
         startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
         playedUntil = try container.decodeIfPresent(Date.self, forKey: .playedUntil)
+        note = try container.decodeIfPresent(String.self, forKey: .note)
     }
 }
 

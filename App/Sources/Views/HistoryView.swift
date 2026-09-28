@@ -34,6 +34,12 @@ struct HistoryView: View {
                         summary(for: record.state)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+                        if let note = record.note {
+                            Text("\(Image(systemName: "note.text")) \(note)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                     }
                     .padding(.vertical, 2)
                 }

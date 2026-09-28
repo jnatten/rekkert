@@ -248,9 +248,14 @@ final class AppModel {
             let state = SessionState.traditional(TraditionalSession(
                 rules: TraditionalRules(setsToWin: 1),
                 teams: BySide(a: TeamInfo(name: "Us", players: match.0), b: TeamInfo(name: "Them", players: match.1)),
-                score: set(match.2, 3)
+                score: set(match.2, 3),
+                name: index == 0 ? "Club final" : ""
             ))
-            records.append(HistoryRecord(id: id(0x20 + index), finishedAt: now.addingTimeInterval(Double(-index - 1) * 86_400), title: state.title, state: state))
+            records.append(HistoryRecord(
+                id: id(0x20 + index), finishedAt: now.addingTimeInterval(Double(-index - 1) * 86_400),
+                title: state.title, state: state,
+                note: index == 0 ? "Court 3, and windy. Ada served the last three games out." : nil
+            ))
         }
         return records
     }

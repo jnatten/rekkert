@@ -32,24 +32,27 @@ public struct TraditionalSession: Codable, Sendable, Hashable {
     /// When the match started, which is what the clock on the board counts from. A match has
     /// no rounds, so this one clock runs the whole way through.
     public var startedAt: Date?
+    public var name: String
 
     public init(
         rules: TraditionalRules,
         teams: BySide<TeamInfo>,
         score: TraditionalState = TraditionalState(),
         isStopped: Bool = false,
-        startedAt: Date? = nil
+        startedAt: Date? = nil,
+        name: String = ""
     ) {
         self.rules = rules
         self.teams = teams
         self.score = score
         self.isStopped = isStopped
         self.startedAt = startedAt
+        self.name = name
     }
 
     public var engine: TraditionalEngine { TraditionalEngine(rules: rules) }
 
-    private enum CodingKeys: String, CodingKey { case rules, teams, score, isStopped, startedAt }
+    private enum CodingKeys: String, CodingKey { case rules, teams, score, isStopped, startedAt, name }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -58,6 +61,7 @@ public struct TraditionalSession: Codable, Sendable, Hashable {
         score = try container.decode(TraditionalState.self, forKey: .score)
         isStopped = try container.decodeIfPresent(Bool.self, forKey: .isStopped) ?? false
         startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
     }
 }
 
@@ -74,19 +78,34 @@ public struct WinnerCourtSession: Codable, Sendable, Hashable {
     /// whistle for every one after it. Only the current round's, because a round here is a
     /// completed set rather than a struct with somewhere to keep one.
     public var roundStartedAt: Date?
+    public var name: String
 
     public init(
         rules: WinnerCourtRules,
         teams: BySide<TeamInfo>,
         score: TraditionalState = TraditionalState(),
         isFinished: Bool = false,
-        roundStartedAt: Date? = nil
+        roundStartedAt: Date? = nil,
+        name: String = ""
     ) {
         self.rules = rules
         self.teams = teams
         self.score = score
         self.isFinished = isFinished
         self.roundStartedAt = roundStartedAt
+        self.name = name
+    }
+
+    private enum CodingKeys: String, CodingKey { case rules, teams, score, isFinished, roundStartedAt, name }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rules = try container.decode(WinnerCourtRules.self, forKey: .rules)
+        teams = try container.decode(BySide<TeamInfo>.self, forKey: .teams)
+        score = try container.decode(TraditionalState.self, forKey: .score)
+        isFinished = try container.decode(Bool.self, forKey: .isFinished)
+        roundStartedAt = try container.decodeIfPresent(Date.self, forKey: .roundStartedAt)
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
     }
 
     public var engine: TraditionalEngine { TraditionalEngine(rules: rules.scoring) }
@@ -116,19 +135,34 @@ public struct PointCountSession: Codable, Sendable, Hashable {
     public var isStopped: Bool
     /// When the counting started, which is what the clock on the board counts from.
     public var startedAt: Date?
+    public var name: String
 
     public init(
         rules: PointCountRules,
         teams: BySide<TeamInfo>,
         score: PointCountState = PointCountState(),
         isStopped: Bool = false,
-        startedAt: Date? = nil
+        startedAt: Date? = nil,
+        name: String = ""
     ) {
         self.rules = rules
         self.teams = teams
         self.score = score
         self.isStopped = isStopped
         self.startedAt = startedAt
+        self.name = name
+    }
+
+    private enum CodingKeys: String, CodingKey { case rules, teams, score, isStopped, startedAt, name }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rules = try container.decode(PointCountRules.self, forKey: .rules)
+        teams = try container.decode(BySide<TeamInfo>.self, forKey: .teams)
+        score = try container.decode(PointCountState.self, forKey: .score)
+        isStopped = try container.decode(Bool.self, forKey: .isStopped)
+        startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
     }
 
     public var engine: PointCountEngine { PointCountEngine(rules: rules) }
@@ -165,16 +199,20 @@ public enum SessionState: Codable, Sendable, Hashable {
     public var title: String {
         switch self {
         case .traditional(let session):
-            "\(session.teams.a.name) vs \(session.teams.b.name)"
+            session.name.isEmpty ? Self.versus(session.teams) : session.name
         case .tournament(let tournament):
             tournament.name.isEmpty ? tournament.format.displayName : tournament.name
         case .winnerCourt(let session):
-            "\(session.teams.a.name) vs \(session.teams.b.name)"
+            session.name.isEmpty ? Self.versus(session.teams) : session.name
         case .pointCount(let session):
-            "\(session.teams.a.name) vs \(session.teams.b.name)"
+            session.name.isEmpty ? Self.versus(session.teams) : session.name
         case .friendly(let session):
             session.name.isEmpty ? "Friendly" : session.name
         }
+    }
+
+    public static func versus(_ teams: BySide<TeamInfo>) -> String {
+        "\(teams.a.name) vs \(teams.b.name)"
     }
 
     /// Whether anything was actually played, as opposed to merely set up. Decides whether

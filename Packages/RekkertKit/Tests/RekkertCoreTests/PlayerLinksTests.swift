@@ -159,7 +159,7 @@ struct PlayerLinksTests {
         let records = johns()
         var links = PlayerLinks()
         let other = links.separate([try appearance(of: "John", in: records[0], PlayerStats.make(from: records, links: links))])
-        let renamed = records[0].renamed(.sides(Filed.teams(["Johnny"], [])))
+        let renamed = records[0].renamed(.sides(event: "", teams: Filed.teams(["Johnny"], [])))
         let stats = PlayerStats.make(from: [renamed] + records.dropFirst(), links: links)
 
         #expect(stats.person(other)?.appearances.map(\.name) == ["Johnny"])

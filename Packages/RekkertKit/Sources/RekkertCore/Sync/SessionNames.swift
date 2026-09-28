@@ -9,7 +9,7 @@ public enum SessionNames: Sendable, Hashable {
     /// Tournament and friendly: an event name, and the people who played it.
     case group(event: String, players: [Player])
     /// Match, Points and Winner court: two fixed sides, each with a name and a line-up.
-    case sides(BySide<TeamInfo>)
+    case sides(event: String, teams: BySide<TeamInfo>)
 }
 
 extension SessionState {
@@ -20,9 +20,9 @@ extension SessionState {
             .group(event: tournament.name, players: tournament.players)
         case .friendly(let session):
             .group(event: session.name, players: session.players)
-        case .traditional(let session): .sides(session.teams)
-        case .winnerCourt(let session): .sides(session.teams)
-        case .pointCount(let session): .sides(session.teams)
+        case .traditional(let session): .sides(event: session.name, teams: session.teams)
+        case .winnerCourt(let session): .sides(event: session.name, teams: session.teams)
+        case .pointCount(let session): .sides(event: session.name, teams: session.teams)
         }
     }
 
@@ -35,8 +35,8 @@ extension SessionState {
     ///
     /// A blank replacement is ignored, since clearing a name is not renaming anybody. The
     /// event name is the exception — it is optional, and `title` already falls back to the
-    /// format or to "Friendly" — so it is trimmed and may be cleared. Names of the wrong
-    /// shape for this session are ignored.
+    /// format, to "Friendly" or to the two team names — so it is trimmed and may be cleared.
+    /// Names of the wrong shape for this session are ignored.
     public func renamed(_ names: SessionNames) -> SessionState {
         switch (self, names) {
         case (.tournament(var tournament), .group(let event, let players)):
@@ -49,15 +49,18 @@ extension SessionState {
             session.players = SessionNames.renaming(session.players, to: players)
             return .friendly(session)
 
-        case (.traditional(var session), .sides(let teams)):
+        case (.traditional(var session), .sides(let event, let teams)):
+            session.name = event.trimmingCharacters(in: .whitespacesAndNewlines)
             session.teams = SessionNames.renaming(session.teams, to: teams)
             return .traditional(session)
 
-        case (.winnerCourt(var session), .sides(let teams)):
+        case (.winnerCourt(var session), .sides(let event, let teams)):
+            session.name = event.trimmingCharacters(in: .whitespacesAndNewlines)
             session.teams = SessionNames.renaming(session.teams, to: teams)
             return .winnerCourt(session)
 
-        case (.pointCount(var session), .sides(let teams)):
+        case (.pointCount(var session), .sides(let event, let teams)):
+            session.name = event.trimmingCharacters(in: .whitespacesAndNewlines)
             session.teams = SessionNames.renaming(session.teams, to: teams)
             return .pointCount(session)
 

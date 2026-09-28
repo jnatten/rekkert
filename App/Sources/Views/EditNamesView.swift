@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Putting the names in a finished match right. A session is named once, when it is set up,
 /// and until now that was that — a typo, or a "Them" nobody got round to filling in, stayed
-/// on the record for good.
+/// on the record for good. The note is the record's own, kept for whoever reads it back.
 ///
 /// Renaming only. Nobody can be added or removed here: the rounds were drawn around these
 /// people, and the standings, sit-outs and result lines all read back through them.
@@ -15,11 +15,13 @@ struct EditNamesView: View {
 
     init(record: HistoryRecord) {
         self.record = record
+        _note = State(initialValue: record.note ?? "")
         switch record.state.names {
         case .group(let event, let players):
             _eventName = State(initialValue: event)
             _players = State(initialValue: players)
-        case .sides(let teams):
+        case .sides(let event, let teams):
+            _eventName = State(initialValue: event)
             // Padded to two: a side set up without its line-up filled in still gets two slots
             // to type into, and the slots stay where they are because the serve badge picks
             // the server out of this list by position.
@@ -32,10 +34,12 @@ struct EditNamesView: View {
     @State private var eventName = ""
     @State private var players: [Player] = []
     @State private var teams = BySide(both: TeamInfo(name: "", players: ["", ""]))
+    @State private var note = ""
     @FocusState private var focused: Field?
 
     private enum Field: Hashable {
         case eventName
+        case note
         case player(PlayerID)
         case teamName(TeamSide)
         case teamPlayer(TeamSide, Int)
@@ -48,8 +52,9 @@ struct EditNamesView: View {
                 case .group: groupSections
                 case .sides: sideSections
                 }
+                noteSection
             }
-            .navigationTitle("Edit names")
+            .navigationTitle("Edit")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -112,13 +117,27 @@ struct EditNamesView: View {
     @ViewBuilder
     private var sideSections: some View {
         Section {
+            TextField(teamTitle, text: $eventName)
+                .textInputAutocapitalization(.words)
+                .focused($focused, equals: .eventName)
+                .submitLabel(.next)
+                .onSubmit { focused = .teamName(.a) }
+        } header: {
+            Text("Name")
+        } footer: {
+            Text("Leave it empty and it is listed under the two team names.")
+        }
+
+        Section {
             teamRows(.a)
             teamRows(.b)
         } header: {
             Text("Teams")
-        } footer: {
-            Text("The two team names are what this match is listed under.")
         }
+    }
+
+    private var teamTitle: String {
+        record.state.renamed(.sides(event: "", teams: teams)).title
     }
 
     private func teamRows(_ side: TeamSide) -> some View {
@@ -159,14 +178,26 @@ struct EditNamesView: View {
         }
     }
 
+    // MARK: - Note
+
+    private var noteSection: some View {
+        Section {
+            TextField("Where, who, how it went", text: $note, axis: .vertical)
+                .lineLimit(3 ... 8)
+                .focused($focused, equals: .note)
+        } header: {
+            Text("Note")
+        }
+    }
+
     // MARK: - Saving
 
     private func save() {
         let names: SessionNames = switch record.state.names {
         case .group: .group(event: eventName, players: players)
-        case .sides: .sides(teams)
+        case .sides: .sides(event: eventName, teams: teams)
         }
-        model.update(record.renamed(names))
+        model.update(record.renamed(names).noted(note))
         dismiss()
     }
 }
