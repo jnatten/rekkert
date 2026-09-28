@@ -52,7 +52,7 @@ struct ResilienceTests {
 
         store.configure(setup)
         store.tap(team: .a)
-        try await Task.sleep(for: .milliseconds(500))
+        await eventually { transport.attempts > 1 && !transport.queued.isEmpty }
 
         #expect(transport.attempts > 1, "it keeps trying instead of hanging on the first send")
         #expect(!transport.queued.isEmpty, "and falls back to the durable queue when a send times out")

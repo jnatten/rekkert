@@ -39,7 +39,7 @@ struct FinishTests {
         #expect(phone.state?.isFinished == false, "nobody has won it")
 
         phone.finish()
-        try await settle()
+        await eventually { phone.state == nil && watch.state == nil }
 
         #expect(phone.state == nil, "stopping it ends it all the same")
         #expect(watch.state == nil)

@@ -423,6 +423,10 @@ struct WatchStandInTests {
         await court.phoneJoins()
 
         court.phoneGoesAway()
+        // The phone says its standby again whenever it sees the watch reconnect, and one said
+        // just before it went can still be on its way in. Only once the watch has seen it go
+        // is the code gone for good.
+        await eventually { !court.watch.isPairReachable }
         // What a relaunch leaves: the match on disk, the code nowhere.
         court.sharing.keepOnStandby(nil)
         await eventually { court.standIn.link == .down }
