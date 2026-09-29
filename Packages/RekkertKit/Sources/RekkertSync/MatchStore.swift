@@ -150,6 +150,9 @@ public final class MatchStore {
     // MARK: - Local mutations
 
     public func configure(_ setup: SessionSetup) {
+        // Something of this device's own, started on nothing. A guest between two of the host's
+        // matches, or one still waiting on a join, is stepping off — as starting a preset is.
+        if log.isEmpty, role == .guest || isJoining { startNewSession() }
         resetDisplayForNewMatch()
         record(.configure(setup, at: Date()))
     }

@@ -215,3 +215,88 @@ struct LostHostTests {
         #expect(sharing.isSharing, "still hosting, still waiting")
     }
 }
+
+/// A guest's only link to the host, standing in for the radio: up from a join until a stop.
+private final class Line: SharedLink, @unchecked Sendable {
+    let guestEnd: LoopbackTransport
+    let hostEnd: LoopbackTransport
+    let reachability: AsyncStream<Bool>
+    private let updates: AsyncStream<Bool>.Continuation
+    private let lock = NSLock()
+    private var up = false
+
+    init() {
+        (guestEnd, hostEnd) = LoopbackTransport.pair()
+        guestEnd.setReachable(false)
+        hostEnd.setReachable(false)
+        var continuation: AsyncStream<Bool>.Continuation!
+        reachability = AsyncStream { continuation = $0 }
+        updates = continuation
+    }
+
+    var reachableCount: Int { lock.withLock { up ? 1 : 0 } }
+
+    func startHosting(code: SessionCode, share: UUID) {}
+    func resumeHosting(code: SessionCode, share: UUID) {}
+    func resumeJoining(code: SessionCode) {}
+
+    func startJoining(code: SessionCode) {
+        lock.withLock { up = true }
+        guestEnd.setReachable(true)
+        hostEnd.setReachable(true)
+        updates.yield(true)
+    }
+
+    func stop() {
+        lock.withLock { up = false }
+        guestEnd.setReachable(false)
+        hostEnd.setReachable(false)
+        updates.yield(false)
+    }
+}
+
+@Suite("Between two of the host's matches")
+@MainActor
+struct BetweenMatchesTests {
+    /// A guest is still the host's guest once a match ends, and still on the link, which is how
+    /// the host's next match reaches it. Starting one of its own there is stepping off, as a
+    /// preset always did — but the New screen went straight to `configure`, which left the guest
+    /// holding a match it could not end, and a host with nothing on took it up as its own. A
+    /// preset stepped off, but only after its first snapshot had gone out to that host.
+    @Test(arguments: [false, true])
+    func aGuestStartingItsOwnMatchStepsOff(fromPreset: Bool) async throws {
+        let line = Line()
+        let hostFan = FanOutTransport()
+        hostFan.attach(line.hostEnd, as: .sharedSession)
+        let guestFan = FanOutTransport()
+        guestFan.attach(line.guestEnd, as: .sharedSession)
+        let host = MatchStore(device: DeviceID(), transport: hostFan, snapshotInterval: 0)
+        let guest = MatchStore(device: DeviceID(), transport: guestFan, snapshotInterval: 0)
+        let sharing = SharedSession(store: guest, link: LocalNetworkTransport(), bluetooth: line)
+        defer { sharing.close() }
+        let tasks = [Task { await host.run() }, Task { await guest.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+
+        host.configure(setup)
+        host.startSharing()
+        sharing.join(try #require(SessionCode("730264")))
+        await eventually { guest.role == .guest && guest.state != nil }
+        host.tap(team: .a)
+        host.finish()
+        await eventually { host.state == nil && guest.state == nil }
+        guest.acknowledgeResult()
+
+        let own = PresetConfiguration.pointCount(rules: PointCountRules(target: 21), teams: BySide(a: .home, b: .away))
+        if fromPreset {
+            guest.start(Preset(name: "Our court", configuration: own))
+        } else {
+            guest.configure(own.makeSetup())
+        }
+        await quietPeriod()
+
+        #expect(guest.role == .solo, "its own match, not the host's")
+        #expect(guest.canEndSession, "and so its own to end")
+        #expect(host.state == nil, "the host was not handed it")
+        #expect(sharing.phase == .off, "and the link to the host came down")
+    }
+}

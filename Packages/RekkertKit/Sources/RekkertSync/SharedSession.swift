@@ -99,9 +99,11 @@ public final class SharedSession {
         }
         // The watch stepped off and the store went with it. The link to the host is still up,
         // and left standing it would hand the match straight back on the next snapshot.
-        store.onLeft = { [weak self] in
-            Task { @MainActor in self?.letGo() }
-        }
+        //
+        // Let go of there and then, not on a later turn: starting a match of your own steps off
+        // on the way in, and the first snapshot of it goes out before a later turn comes round —
+        // to a host with nothing on, which takes it up as its own.
+        store.onLeft = { [weak self] in self?.letGo() }
         if let bluetooth {
             watchingBluetooth = Task { [weak self] in
                 for await _ in bluetooth.reachability {
