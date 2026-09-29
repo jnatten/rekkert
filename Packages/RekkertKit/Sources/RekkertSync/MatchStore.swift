@@ -173,6 +173,21 @@ public final class MatchStore {
         record(.setServeOrder(round: round, court: court, order: order.swappingPlayers(of: serving)))
     }
 
+    /// Recorded rather than sent through `configure`, which would reset the board's flip.
+    public func setChangeEnds(_ rule: ChangeEndsRule) {
+        guard let current = state?.changeEnds, current != rule else { return }
+        switch state {
+        case .traditional(var session):
+            session.rules.changeEnds = rule
+            record(.configure(.traditional(rules: session.rules, teams: session.teams)))
+        case .friendly(var session):
+            session.rules.changeEnds = rule
+            record(.configure(.friendly(session)))
+        case .tournament, .winnerCourt, .pointCount, .none:
+            break
+        }
+    }
+
     public func setRoundConfirmed(_ round: Int, _ isConfirmed: Bool = true) {
         record(.setRoundConfirmed(round: round, isConfirmed: isConfirmed))
     }

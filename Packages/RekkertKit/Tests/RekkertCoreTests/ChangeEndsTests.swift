@@ -207,5 +207,28 @@ struct ChangeEndsTests {
             teams: BySide(a: TeamInfo(name: "Blue"), b: TeamInfo(name: "Orange"))
         )
         #expect(ScoreboardSnapshot.make(from: .winnerCourt(court))?.endsSwapped == false)
+        #expect(SessionState.pointCount(points).changeEnds == nil)
+        #expect(SessionState.winnerCourt(court).changeEnds == nil)
+    }
+
+    @Test func switchingTheRuleOnMidMatchKeepsTheScoreAndTurnsTheBoard() throws {
+        let device = DeviceID()
+        let teams = BySide(a: TeamInfo(name: "Blue"), b: TeamInfo(name: "Orange"))
+        var log = MatchLog()
+        log.append(.configure(.traditional(rules: TraditionalRules(), teams: teams)), from: device)
+        for _ in 0 ..< 4 { log.append(.point(round: 0, court: 0, team: .a), from: device) }
+        let before = try #require(SessionReducer.state(of: log))
+        #expect(ScoreboardSnapshot.make(from: before)?.endsSwapped == false)
+
+        log.append(.configure(.traditional(rules: TraditionalRules(changeEnds: .oddGames), teams: teams)), from: device)
+
+        let after = try #require(SessionReducer.state(of: log))
+        guard case .traditional(let was) = before, case .traditional(let now) = after else {
+            Issue.record("still a match")
+            return
+        }
+        #expect(now.score == was.score, "the game played stays played")
+        #expect(after.changeEnds == .oddGames)
+        #expect(ScoreboardSnapshot.make(from: after)?.endsSwapped == true, "and the board goes where the rule puts it")
     }
 }

@@ -469,6 +469,27 @@ struct SyncTests {
         #expect(pair.watch.display.isDefault, "and the watch reads the new one the same way")
     }
 
+    @Test func changingTheEndsRuleMidMatchKeepsTheScoreAndTheFlip() async throws {
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        await quietPeriod()
+
+        pair.phone.configure(setup)
+        for _ in 0 ..< 4 { pair.phone.tap(team: .a) }
+        pair.phone.setScoreboardMirrored(true)
+        pair.phone.setChangeEnds(.oddGames)
+        await eventually { pair.watch.state?.changeEnds == .oddGames && inStep(pair.phone, pair.watch) }
+
+        guard case .traditional(let session) = pair.watch.state else {
+            Issue.record("the match is still on")
+            return
+        }
+        #expect(session.rules.changeEnds == .oddGames)
+        #expect(session.score.games == BySide(a: 1, b: 0), "the game played stays played")
+        #expect(pair.phone.display.isMirrored, "and the flip is not reset like a new match")
+    }
+
     // MARK: - Buzzing
 
     @Test func howTheWatchBuzzesCanBeSetFromEitherDevice() async throws {

@@ -73,6 +73,14 @@ struct MatchOptionsMenu: View {
             Button("Swap sides", systemImage: "rectangle.2.swap") {
                 model.store.toggleScoreboardMirrored()
             }
+            if let changeEnds = model.store.state?.changeEnds {
+                Picker(selection: Binding(get: { changeEnds }, set: { model.store.setChangeEnds($0) })) {
+                    ForEach(ChangeEndsRule.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                } label: {
+                    Label("Swap sides automatically", systemImage: "arrow.2.squarepath")
+                }
+                .pickerStyle(.menu)
+            }
             Button("Swap colours", systemImage: "circle.lefthalf.filled") {
                 model.store.toggleTeamColors()
             }

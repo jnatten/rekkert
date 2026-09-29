@@ -267,6 +267,14 @@ public enum SessionState: Codable, Sendable, Hashable {
         }
     }
 
+    public var changeEnds: ChangeEndsRule? {
+        switch self {
+        case .traditional(let session): session.rules.changeEnds
+        case .friendly(let session): session.rules.changeEnds
+        case .tournament, .winnerCourt, .pointCount: nil
+        }
+    }
+
     /// What it was played as. A tournament is named by its format, since Americano and
     /// Mexicano are what you would call them rather than "tournament".
     public var modeName: String {
