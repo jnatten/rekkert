@@ -398,6 +398,32 @@ struct WatchStandInTests {
         #expect(court.watch.state == nil)
     }
 
+    /// The wrist joined on its own with the phone out of reach, and the phone picked the match up
+    /// from it when it came back — solo, on a match it cannot end, with Leave as the only button.
+    /// That button went by the phone's own role, found nothing to step off, and did nothing.
+    @Test func aPhoneThatFollowedItsWatchOntoAMatchCanLeaveIt() async throws {
+        let court = Court()
+        court.phoneGoesAway()
+        let tasks = court.run()
+        defer { tasks.forEach { $0.cancel() } }
+        court.standIn.join(code)
+        await eventually { court.standIn.joining == .joined }
+
+        court.phoneComesBack()
+        await eventually { court.phone.log.sessionID == court.host.log.sessionID && !court.phone.canEndSession }
+        #expect(court.phone.role == .solo)
+        #expect(court.phone.canEndSession == false, "so the phone offers Leave")
+
+        let phoneSharing = SharedSession(store: court.phone, link: LocalNetworkTransport())
+        defer { phoneSharing.close() }
+        phoneSharing.stop()
+        await eventually { court.phone.state == nil && court.watch.state == nil }
+
+        #expect(court.phone.state == nil, "the phone is off the match")
+        #expect(court.watch.state == nil, "and its watch went with it")
+        #expect(court.host.state != nil, "which goes on for whoever is still on it")
+    }
+
     /// The host's own watch has nobody to reach but the phone it is paired to.
     @Test func aHostsWatchNeverStandsIn() async throws {
         let court = Court(hostLog: MatchLog(), hostRole: .solo)

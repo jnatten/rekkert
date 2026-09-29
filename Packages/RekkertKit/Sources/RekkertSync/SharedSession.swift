@@ -100,7 +100,7 @@ public final class SharedSession {
         // The watch stepped off and the store went with it. The link to the host is still up,
         // and left standing it would hand the match straight back on the next snapshot.
         store.onLeft = { [weak self] in
-            Task { @MainActor in self?.stop() }
+            Task { @MainActor in self?.letGo() }
         }
         if let bluetooth {
             watchingBluetooth = Task { [weak self] in
@@ -233,8 +233,21 @@ public final class SharedSession {
         switch store.role {
         case .host: store.stopSharing()
         case .guest: store.leaveSharedSession()
+        // Solo on a match this end cannot end is following its own watch onto somebody else's,
+        // which the watch joined by itself. Leaving it is leaving it, whoever did the joining.
+        case .solo where !store.canEndSession && !store.log.isEmpty: store.leaveSharedSession()
         case .solo: store.cancelJoining()
         }
+        forgetWhatWasAskedFor()
+        standbyCode = nil
+    }
+
+    /// The store has already stepped off by the time it says so, so there is nothing left to
+    /// decide — only the links to let go of. Not `stop()`, which decides by what is on the store
+    /// when it runs, and by then that can be the match this end has just started.
+    private func letGo() {
+        cutLinks()
+        store.cancelJoining()
         forgetWhatWasAskedFor()
         standbyCode = nil
     }
