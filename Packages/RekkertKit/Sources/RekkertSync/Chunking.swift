@@ -43,6 +43,21 @@ nonisolated enum Chunking {
         return chunks
     }
 
+    /// A write longer than one packet reaches a peripheral as pieces, each at its offset into
+    /// the value written. Puts them back into the chunks that were written, in order; a piece
+    /// that does not continue the one before it is dropped rather than read as a chunk.
+    static func chunks(fromWrites writes: [(offset: Int, value: Data)]) -> [Data] {
+        var chunks: [Data] = []
+        for write in writes {
+            if write.offset == 0 {
+                chunks.append(write.value)
+            } else if let last = chunks.indices.last, chunks[last].count == write.offset {
+                chunks[last].append(write.value)
+            }
+        }
+        return chunks
+    }
+
     /// Holds the pieces until a message is whole. Not `Sendable` on purpose: it belongs to one
     /// link, and the transport keeps it under the same lock as everything else about that link.
     final class Reassembler {

@@ -285,7 +285,9 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             return central.maximumUpdateValueLength
         }
         if let server = lock.withLock({ self.server }) {
-            return server.maximumWriteValueLength(for: .withResponse)
+            // One packet's worth, though the write waits for its response: `.withResponse`
+            // reports 512, and anything past one packet goes as a long write in pieces.
+            return server.maximumWriteValueLength(for: .withoutResponse)
         }
         return Self.conservativeMTU
     }
@@ -443,11 +445,20 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     }
 
     fileprivate func wrote(_ requests: [CBATTRequest], on manager: CBPeripheralManager) {
+        var writers: [Peer] = []
+        var writes: [ObjectIdentifier: [(offset: Int, value: Data)]] = [:]
         for request in requests {
             guard let peer = lock.withLock({ peers[ObjectIdentifier(request.central)] }),
                   let value = request.value
             else { continue }
-            receive(value, from: peer)
+            let token = ObjectIdentifier(peer)
+            if writes[token] == nil { writers.append(peer) }
+            writes[token, default: []].append((request.offset, value))
+        }
+        for peer in writers {
+            for chunk in Chunking.chunks(fromWrites: writes[ObjectIdentifier(peer)] ?? []) {
+                receive(chunk, from: peer)
+            }
         }
         if let first = requests.first { manager.respond(to: first, withResult: .success) }
     }

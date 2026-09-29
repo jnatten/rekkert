@@ -81,6 +81,36 @@ struct ChunkingTests {
             }
         }
     }
+
+    /// A 512-byte chunk over a link that carries 182 at a time, as the host is handed it.
+    private func pieces(of chunk: Data, packet: Int = 182) -> [(offset: Int, value: Data)] {
+        stride(from: 0, to: chunk.count, by: packet).map { start in
+            (start, chunk.subdata(in: start ..< min(start + packet, chunk.count)))
+        }
+    }
+
+    @Test func aChunkWrittenInPiecesIsPutBackTogether() throws {
+        let payload = Data((0 ..< 3_000).map { UInt8($0 % 251) })
+        let reassembler = Chunking.Reassembler()
+        var last: Data?
+        for chunk in Chunking.split(payload, mtu: 512) {
+            for rebuilt in Chunking.chunks(fromWrites: pieces(of: chunk)) {
+                last = try reassembler.accept(rebuilt)
+            }
+        }
+        #expect(last == payload)
+    }
+
+    @Test func twoWritesHandedOverTogetherStayTwo() {
+        let first = Data(repeating: 1, count: 300)
+        let second = Data(repeating: 2, count: 40)
+        #expect(Chunking.chunks(fromWrites: pieces(of: first) + pieces(of: second)) == [first, second])
+    }
+
+    @Test func aPieceThatContinuesNothingIsDropped() {
+        let chunk = Data(repeating: 3, count: 300)
+        #expect(Chunking.chunks(fromWrites: Array(pieces(of: chunk).dropFirst())).isEmpty)
+    }
 }
 
 @Suite("Sealed frames")
