@@ -1,21 +1,15 @@
 name: TestFlight
 
-# Every push to main that changes the app goes to TestFlight, numbered one past the latest
-# build App Store Connect has, with the commits since the last successful run as its What to
-# Test. The secrets this needs are listed under "Releasing" in the README.
+# Sends the branch it is run on to TestFlight, numbered one past the latest build App Store
+# Connect has, with what it brings over the last successful run as its What to Test. Run it
+# from the Actions tab; the tests run on every push, in test.yml. The secrets this needs are
+# listed under "Releasing" in the README.
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - "docs/**"
-      - "**.md"
-      - "fastlane/**"
-      - "LICENSE"
   workflow_dispatch:
 
 # One upload at a time, so two runs never pick the same number. A run is never cancelled
-# once it has started; a newer push waiting behind it replaces an older one still waiting.
+# once it has started; a newer run waiting behind it replaces an older one still waiting.
 concurrency:
   group: testflight
   cancel-in-progress: false
@@ -28,6 +22,7 @@ jobs:
   upload:
     runs-on: xcode-27
     timeout-minutes: 60
+    environment: testflight
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
       # Ruby and fastlane are only for the App Store listing, which is uploaded by hand.
@@ -88,15 +83,15 @@ jobs:
           echo "Uploading as build **$number**." >> "$GITHUB_STEP_SUMMARY"
 
       # A run only succeeds once its build is up, and runs never overlap, so the commits
-      # since the last successful one are what this build brings. Without one to go by,
-      # only the newest commit is listed.
+      # this has that the last successful one did not are what this build brings, whichever
+      # branch that one was from. Without one to go by, only the newest commit is listed.
       - name: Write what to test
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          since=$(gh run list --workflow testflight.yml --branch main --status success --limit 1 \
+          since=$(gh run list --workflow testflight.yml --status success --limit 1 \
             --json headSha --jq '.[0].headSha // empty')
-          if [ -z "$since" ] || ! git merge-base --is-ancestor "$since" HEAD 2> /dev/null; then
+          if [ -z "$since" ] || ! git cat-file -e "$since^{commit}" 2> /dev/null; then
             since=HEAD~1
           fi
           scripts/test-notes.sh "$since" > "$RUNNER_TEMP/what-to-test.txt"

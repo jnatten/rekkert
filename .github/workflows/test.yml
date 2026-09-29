@@ -1,0 +1,38 @@
+name: Test
+
+# Every push, on any branch, runs scripts/verify.sh: the package tests, both apps built for
+# the simulator, and the checks on what is embedded in them. It needs no secrets.
+
+on:
+  push:
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - "fastlane/**"
+      - "LICENSE"
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: xcode-27
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+      MISE_DISABLE_TOOLS: ruby,gem:fastlane
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+
+      - name: Show the toolchain
+        run: |
+          xcodebuild -version
+          mise exec -- tuist version
+
+      - run: scripts/verify.sh

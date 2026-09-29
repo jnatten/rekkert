@@ -24,8 +24,8 @@
 # A key's role cannot be changed afterwards, so a wrong one has to be replaced.
 #
 # The watch app rides along inside the iPhone app, so this uploads both.
-# Every upload needs a build number no earlier upload used. Every push to main is uploaded
-# by .github/workflows/testflight.yml with App Store Connect's latest plus one, so an upload
+# Every upload needs a build number no earlier upload used. Uploads from
+# .github/workflows/testflight.yml take App Store Connect's latest plus one, so an upload
 # from here should ask for the same thing:
 #
 #   scripts/release.sh --build-number=$(swift scripts/build-number.swift next)

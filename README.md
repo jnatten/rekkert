@@ -461,6 +461,9 @@ three-line regression test for the whole watch-embedding story. It does the same
 Live Activity extension at `Rekkert.app/PlugIns/`, and for the plist key without which iOS
 refuses to start one.
 
+`.github/workflows/test.yml` runs `scripts/verify.sh` on every push, on any branch, unless
+the push only touches `docs/`, a Markdown file, the listing in `fastlane/` or the licence.
+
 The Live Activity shows on an iPhone simulator with a Dynamic Island once the app is sent
 to the background — `xcrun simctl launch <udid> com.apple.Preferences` does it. A screenshot
 hides the island, so record a second of video instead. A late tap timed to land after the
@@ -560,23 +563,23 @@ the simulator's own resolution.
 
 ## Releasing
 
-Every push to `main` that changes the app goes to TestFlight by itself, through
-`.github/workflows/testflight.yml`. Pushes that only touch `docs/`, a Markdown file, the
-listing in `fastlane/` or the licence do not; **Run workflow** on the Actions tab sends one
-whenever you like. The job runs on GitHub's Xcode 27 image and does what
+A build goes to TestFlight when you ask for one: **Run workflow** on the TestFlight
+workflow in the Actions tab, from whichever branch you pick, runs
+`.github/workflows/testflight.yml`. Each run is listed under the `testflight` environment
+in the repository's Deployments. The job runs on GitHub's Xcode 27 image and does what
 `scripts/release.sh` does here — the package tests, an archive, the checks that the watch
 app and the Live Activity are inside it, export, validation, upload — and then waits until
 App Store Connect lists the build.
 
 The build number is App Store Connect's highest plus one, or `CURRENT_PROJECT_VERSION` in
 `Project.swift` if that is higher, and nothing is committed back: the number in the project
-is a floor, not a record of what was sent. Uploads run one at a time, so two pushes close
+is a floor, not a record of what was sent. Uploads run one at a time, so two runs close
 together never ask for the same number.
 
-Each build's **What to Test**, the text under it in TestFlight, lists the commits since the
-last successful run: `feat:` under New, `fix:` under Fixed, the rest under Other, with the
-prefix taken off, and the commit it was built from at the end. The run's summary shows the
-same text. `scripts/test-notes.sh <commit>` prints what a build of HEAD would say over one
+Each build's **What to Test**, the text under it in TestFlight, lists the commits it has
+that the last successful run did not, whichever branch that was from: `feat:` under New,
+`fix:` under Fixed, the rest under Other, with the prefix taken off, and the commit it was
+built from at the end. The run's summary shows the same text. `scripts/test-notes.sh <commit>` prints what a build of HEAD would say over one
 of `<commit>`, and `swift scripts/build-number.swift notes <number> <file>` puts a file on a
 build that is already listed, which is how to give a build from this Mac its notes.
 
