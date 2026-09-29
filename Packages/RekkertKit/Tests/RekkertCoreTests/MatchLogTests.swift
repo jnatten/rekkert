@@ -147,6 +147,16 @@ struct MatchLogTests {
         #expect(try JSONCoding.encoder.encode(log) == data, "same log encodes to the same bytes")
     }
 
+    /// A vector arrives in every hello, from whatever build is on the other phone. One naming a
+    /// device twice used to trap on decoding, and every phone on the match went down with it.
+    @Test func aVectorNamingADeviceTwiceKeepsTheHigherNumber() throws {
+        let device = deviceA.raw.uuidString
+        let twice = #"[{"device":{"raw":"\#(device)"},"seq":5},{"device":{"raw":"\#(device)"},"seq":2}]"#
+        let vector = try JSONCoding.decoder.decode(VersionVector.self, from: Data(twice.utf8))
+        #expect(vector[deviceA] == 5)
+        #expect(vector == VersionVector([deviceA: 5]))
+    }
+
     @Test func replayIsDeterministicUnderShufflingAndDuplication() {
         var source = configuredLog()
         var generator = SeededGenerator(seed: 99)

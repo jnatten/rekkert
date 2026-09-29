@@ -36,7 +36,9 @@ public struct VersionVector: Sendable, Hashable, Codable {
 
     public init(from decoder: any Decoder) throws {
         let list = try decoder.singleValueContainer().decode([Entry].self)
-        entries = Dictionary(uniqueKeysWithValues: list.map { ($0.device, $0.seq) })
+        // This arrives in every hello, from whatever build is on the other phone. A device named
+        // twice keeps its higher number rather than trapping and taking the match down with it.
+        entries = Dictionary(list.map { ($0.device, $0.seq) }, uniquingKeysWith: max)
     }
 
     public func encode(to encoder: any Encoder) throws {
