@@ -103,6 +103,8 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     /// so one of these checked first would otherwise be checked again and again while the
     /// right one, found in the meantime, was dropped for being second.
     private var rejected: Set<UUID> = []
+    /// When the host being dialled is let go of, unless it has proved itself by then.
+    private var candidateDeadline: DispatchWorkItem?
 
     private enum Intent: Sendable {
         case none
@@ -113,15 +115,18 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     private let replyTimeout: DispatchTimeInterval
     /// How long a host that passed the greeting has to prove it holds the key.
     private let proofTimeout: DispatchTimeInterval
+    /// How long a host that has only been found has to get as far as the greeting.
+    private let candidateTimeout: DispatchTimeInterval
     /// What a write will carry when nothing better is known. `maximumWriteValueLength` is asked
     /// for the moment there is a peripheral to ask, and this only covers the gap before that.
     private static let conservativeMTU = 20
 
     private var shim: Shim?
 
-    public init(replyTimeout: Int = 4, proofTimeout: Int = 10) {
+    public init(replyTimeout: Int = 4, proofTimeout: Int = 10, candidateTimeout: Int = 15) {
         self.replyTimeout = .seconds(replyTimeout)
         self.proofTimeout = .seconds(proofTimeout)
+        self.candidateTimeout = .seconds(candidateTimeout)
 
         var packetContinuation: AsyncStream<InboundPacket>.Continuation!
         inbound = AsyncStream { packetContinuation = $0 }
@@ -169,8 +174,9 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     }
 
     public func stop() {
-        let (peripheral, central, connected, pending) = lock.withLock {
-            let values = (peripheralManager, centralManager, server, Array(waiting.values))
+        let (peripheral, central, connected, pending, deadline) = lock.withLock {
+            let values = (peripheralManager, centralManager, server, Array(waiting.values), candidateDeadline)
+            candidateDeadline = nil
             peripheralManager = nil
             centralManager = nil
             outbox = nil
@@ -183,6 +189,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             rejected = []
             return values
         }
+        deadline?.cancel()
         peripheral?.stopAdvertising()
         peripheral?.removeAllServices()
         central?.stopScan()
@@ -366,7 +373,12 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         // answers it at once, so the guest has its proof whatever the store gets round to saying.
         if lock.withLock({ !peer.isReady }) {
             ready(peer)
-            if peer.central != nil { send(Self.probe, to: peer) }
+            if peer.central != nil {
+                send(Self.probe, to: peer)
+            } else {
+                // The host, proven: from here a drop is a reconnect, which waits as long as it takes.
+                lock.withLock { candidateDeadline }?.cancel()
+            }
         }
 
         switch frame.kind {
@@ -500,6 +512,37 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         // No timeout, which is the reconnect: the system holds the request and wakes the app
         // when the peer comes back, whether that is thirty seconds or the rest of the set.
         manager.connect(peripheral, options: nil)
+        letGoUnlessGreeted(ObjectIdentifier(peripheral))
+    }
+
+    /// No timeout is right for a host this has been on, and wrong for one it has only found:
+    /// there is one place for a host, and one that walked off mid-connect, or never finished
+    /// saying what it was, held it while the right one went unheard. Let go of rather than
+    /// refused — it may be the right one, back in range — and the scan started over for the rest.
+    ///
+    /// A host that did get as far as the greeting is `awaitProof`'s to settle.
+    private func letGoUnlessGreeted(_ token: ObjectIdentifier) {
+        let deadline = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            let (stale, manager) = self.lock.withLock { () -> (CBPeripheral?, CBCentralManager?) in
+                guard let server = self.server, ObjectIdentifier(server) == token,
+                      self.peers[token] == nil else { return (nil, nil) }
+                self.server = nil
+                self.serverInbox = nil
+                return (server, self.centralManager)
+            }
+            guard let stale, let manager else { return }
+            manager.cancelPeripheralConnection(stale)
+            manager.stopScan()
+            manager.scanForPeripherals(withServices: [Self.serviceUUID], options: nil)
+        }
+        let previous = lock.withLock { () -> DispatchWorkItem? in
+            let previous = candidateDeadline
+            candidateDeadline = deadline
+            return previous
+        }
+        previous?.cancel()
+        queue.asyncAfter(deadline: .now() + candidateTimeout, execute: deadline)
     }
 
     fileprivate func connected(_ peripheral: CBPeripheral) {
@@ -508,16 +551,19 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
 
     fileprivate func disconnected(_ peripheral: CBPeripheral, on manager: CBCentralManager) {
         forget(ObjectIdentifier(peripheral))
-        let wasRejected = lock.withLock {
-            if server === peripheral {
+        let reconnects = lock.withLock { () -> Bool in
+            guard server === peripheral else { return false }
+            serverInbox = nil
+            guard !rejected.contains(peripheral.identifier), case .joining = intent else {
                 server = nil
-                serverInbox = nil
+                return false
             }
-            return rejected.contains(peripheral.identifier)
+            return true
         }
-        // The hang-up after a wrong greeting lands here too, and is not a link to put back.
-        guard !wasRejected, case .joining = lock.withLock({ intent }) else { return }
-        lock.withLock { server = peripheral }
+        // Only the host being dialled. The hang-up after a wrong greeting lands here too, and so
+        // does one let go of, and neither is a link to put back: dialled again, it would take the
+        // place of whichever host is being dialled now.
+        guard reconnects else { return }
         manager.connect(peripheral, options: nil)
     }
 
@@ -539,12 +585,22 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         }
     }
 
-    fileprivate func updated(_ characteristic: CBCharacteristic, on peripheral: CBPeripheral) {
+    fileprivate func updated(_ characteristic: CBCharacteristic, on peripheral: CBPeripheral, failed: Bool) {
         switch characteristic.uuid {
         case Self.greetingUUID:
+            // A read that failed says nothing about which court this is, and reading it as a wrong
+            // greeting refused the host for the rest of the join. Hanging up is what reads it
+            // again: the reconnect asks afresh, and one that never answers is let go of in time.
+            guard !failed else {
+                lock.withLock { centralManager }?.cancelPeripheralConnection(peripheral)
+                return
+            }
             greeted(characteristic.value, on: peripheral)
         case Self.outboxUUID:
-            guard let peer = lock.withLock({ peers[ObjectIdentifier(peripheral)] }),
+            // The value is still the last one that arrived, and taking it again would put that
+            // chunk into the message twice.
+            guard !failed,
+                  let peer = lock.withLock({ peers[ObjectIdentifier(peripheral)] }),
                   let value = characteristic.value
             else { return }
             receive(value, from: peer)
@@ -728,7 +784,7 @@ nonisolated private final class Shim: NSObject, CBPeripheralManagerDelegate,
         didUpdateValueFor characteristic: CBCharacteristic,
         error: (any Error)?
     ) {
-        transport?.updated(characteristic, on: peripheral)
+        transport?.updated(characteristic, on: peripheral, failed: error != nil)
     }
 
     func peripheral(
@@ -756,7 +812,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     public let inbound = AsyncStream<InboundPacket> { $0.finish() }
     public let reachability = AsyncStream<Bool> { $0.finish() }
 
-    public init(replyTimeout: Int = 4, proofTimeout: Int = 10) {}
+    public init(replyTimeout: Int = 4, proofTimeout: Int = 10, candidateTimeout: Int = 15) {}
 
     public var isReachable: Bool { false }
     public var reachableCount: Int { 0 }
