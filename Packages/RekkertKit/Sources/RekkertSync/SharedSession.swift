@@ -197,15 +197,19 @@ public final class SharedSession {
     }
 
     public func join(_ code: SessionCode) {
+        let steppingOff = hosted != nil || (wanted != nil && wanted != code)
         // Joining somebody else's match is the end of hosting this one.
         if hosted != nil { stop() }
-        store.beginJoining()
+        store.beginJoining(steppingOff: steppingOff)
         dial(code)
     }
 
     private func dial(_ code: SessionCode) {
         wanted = code
         hasJoinedBefore = false
+        // Whatever was through belonged to the last code.
+        peers = 0
+        bluetoothPeers = 0
         link.startJoining(code: code)
         bluetooth?.startJoining(code: code)
         phase = .searching

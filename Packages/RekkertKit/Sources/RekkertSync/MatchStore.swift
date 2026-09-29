@@ -92,6 +92,7 @@ public final class MatchStore {
     /// step aside when it has been, which the role alone does not say for a guest walking
     /// back in.
     public private(set) var isJoining = false
+    private var joinRefuses: UUID?
     /// The logs the last few sessions ended on, by session id. The outbox is cleared with
     /// the session, so this is the only copy of the point that ended a match once it has
     /// been filed — and the thing to hand a counterpart that was out of reach for it.
@@ -302,8 +303,12 @@ public final class MatchStore {
 
     /// Waits to be handed somebody else's session. Until one arrives this device goes on
     /// showing whatever it had.
-    public func beginJoining() {
+    ///
+    /// `steppingOff` when this device is on somebody's match, or hosting one, and was given a
+    /// different code: whatever that match still sends is not the answer to this join.
+    public func beginJoining(steppingOff: Bool = false) {
         isJoining = true
+        joinRefuses = steppingOff && !log.isEmpty ? log.sessionID : nil
         leftSessionID = nil
         counterpartLeftSessionID = nil
         // Say hello straight away rather than waiting to be spoken to. The counterpart
@@ -314,6 +319,13 @@ public final class MatchStore {
 
     public func cancelJoining() {
         isJoining = false
+        joinRefuses = nil
+    }
+
+    private func tellThePairItLeft(_ session: UUID) {
+        let notice = encode(.left(sessionID: session))
+        transport.queue(notice)
+        Task { _ = await sendLive(notice) }
     }
 
     /// A watch on a match through its phone holds no role of its own: the phone's decides.
@@ -334,9 +346,7 @@ public final class MatchStore {
         leftSessionID = log.sessionID
         // The watch on the same wrist mirrors this match and would go on showing it — and
         // offering it back — unless told. Queued as well as sent: it may not be running.
-        let notice = encode(.left(sessionID: log.sessionID))
-        transport.queue(notice)
-        Task { _ = await sendLive(notice) }
+        tellThePairItLeft(log.sessionID)
         dropSession()
     }
 
@@ -531,9 +541,7 @@ public final class MatchStore {
         let steppingOff = role == .guest || isJoining
         if leaving {
             leftSessionID = log.sessionID
-            let notice = encode(.left(sessionID: log.sessionID))
-            transport.queue(notice)
-            Task { _ = await sendLive(notice) }
+            tellThePairItLeft(log.sessionID)
         } else {
             retire(log.sessionID)
             leftSessionID = nil
@@ -1090,7 +1098,9 @@ public final class MatchStore {
                 // is its next unlock.
                 offerOurSession(live: true)
             } else if isJoining, !packet.isFromPairedDevice {
-                if incoming.sessionID == log.sessionID {
+                if incoming.sessionID == joinRefuses {
+                    // The match this device is walking away from, still in flight.
+                } else if incoming.sessionID == log.sessionID {
                     // Already holding the match that was asked for — back from a relaunch,
                     // or handed it before the code was typed. Taken up rather than adopted:
                     // adopting would file the live match to History as displaced and drop
@@ -1103,10 +1113,18 @@ public final class MatchStore {
                     // even if there is nothing here to weigh it against. Unless it is this
                     // device's own watch talking, which repeats what is already here and
                     // offers nothing.
+                    let steppedOff = log.sessionID
+                    let wasShared = !log.isEmpty && (role == .guest || pairedRole == .guest)
                     adopt(incoming)
                     role = .guest
                     isJoining = false
+                    joinRefuses = nil
                     shareRole()
+                    // Off the last shared match, for the watch on the same wrist too.
+                    if wasShared {
+                        leftSessionID = steppedOff
+                        tellThePairItLeft(steppedOff)
+                    }
                 }
             } else if incoming.sessionID == leftSessionID {
                 // Stepped off this one on purpose. Whoever is still on it is not being
@@ -1182,8 +1200,10 @@ public final class MatchStore {
     /// the phone is, so the first answer to a join is always its, naming the session already on
     /// screen — and taking that as the host's would end the join on a stranger's behalf.
     private func arrive(on sessionID: UUID, from packet: InboundPacket) {
-        guard isJoining, !packet.isFromPairedDevice, sessionID == log.sessionID, !log.isEmpty else { return }
+        guard isJoining, !packet.isFromPairedDevice, sessionID == log.sessionID, sessionID != joinRefuses,
+              !log.isEmpty else { return }
         isJoining = false
+        joinRefuses = nil
         role = .guest
         shareRole()
     }

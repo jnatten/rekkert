@@ -183,6 +183,7 @@ public final class WatchStandIn {
         // Said before it went. It says it again on the way back.
         if !isPairReachable, phoneStandby?.isThrough == true { phoneStandby?.isThrough = false }
         let isPhoneThrough = isPairReachable && phoneStandby?.isThrough == true
+            && phoneStandby?.code == sharing.standbyCode
         if isPhoneThrough { phoneLastThrough = now }
 
         let hasLanded = switch pending {

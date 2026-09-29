@@ -162,6 +162,21 @@ struct BluetoothCoexistenceTests {
         ])
     }
 
+    @Test func aNewCodeIsNotThroughBeforeAnythingIsFoundOnIt() async throws {
+        let (sharing, _, radio) = make()
+        let first = try #require(SessionCode("111111"))
+        let second = try #require(SessionCode("222222"))
+        sharing.join(first)
+        radio.present(1)
+        await eventually { sharing.reachablePeers == 1 }
+
+        var told: [SharingStandby?] = []
+        sharing.onStandby = { told.append($0) }
+        sharing.join(second)
+
+        #expect(told.compactMap { $0 }.filter { $0.code == second && $0.isThrough }.isEmpty)
+    }
+
     @Test func aHostTellsItsWatchNoCode() {
         let (sharing, store, _) = make()
         var told: [SharingStandby?] = []

@@ -223,6 +223,23 @@ struct WatchStandInTests {
         #expect(court.sharing.standbyCode == code, "but keeps the code in case it has to")
     }
 
+    @Test func aPhoneThroughOnAnotherCodeIsNotTheJoinLanding() async throws {
+        var timing = quick
+        timing.phoneWait = .seconds(30)
+        let court = Court(timing: timing)
+        let tasks = court.run()
+        defer { tasks.forEach { $0.cancel() } }
+        await court.phoneJoins()
+
+        let other = try #require(SessionCode("730264"))
+        court.standIn.join(other)
+        await eventually { court.heardOnThePhone.contains(.join(other)) }
+        await court.phone.send(.standby(SharingStandby(code: code, isThrough: true)))
+        try await Task.sleep(for: .milliseconds(200))
+
+        #expect(court.standIn.joining == .searching, "through on the old code says nothing about the new one")
+    }
+
     @Test func aPhoneThatFindsNothingHandsTheJoinToTheWrist() async throws {
         let court = Court()
         let tasks = court.run()

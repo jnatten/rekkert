@@ -70,6 +70,14 @@ private final class Radio: SharedLink, @unchecked Sendable {
     }
 }
 
+/// A host's link to somebody else's phone, scoped as in the app.
+@MainActor
+private func sharing(_ link: LoopbackTransport) -> FanOutTransport {
+    let fan = FanOutTransport()
+    fan.attach(link, as: .sharedSession)
+    return fan
+}
+
 /// A phone and its watch, each through a fan-out on the paired scope as in the app.
 @MainActor
 private func pocket(phone phoneSession: ActiveSession?, watch watchSession: ActiveSession?)
@@ -153,6 +161,46 @@ struct PairAgreementTests {
         #expect(phone.canEndSession)
     }
 
+    @Test func aJoinToAnotherHostIsNotAnsweredByTheOneBeingLeft() async throws {
+        let (host1ToPhone, phoneToHost1) = LoopbackTransport.pair()
+        let (host2ToPhone, phoneToHost2) = LoopbackTransport.pair()
+        host2ToPhone.setReachable(false)
+        phoneToHost2.setReachable(false)
+        let host1 = MatchStore(
+            device: DeviceID(), transport: sharing(host1ToPhone),
+            session: ActiveSession(log: seeded(points: 1), role: .host), snapshotInterval: 0
+        )
+        let host2 = MatchStore(
+            device: DeviceID(), transport: sharing(host2ToPhone),
+            session: ActiveSession(log: seeded(points: 3), role: .host), snapshotInterval: 0
+        )
+        let (phoneToWatch, watchToPhone) = LoopbackTransport.pair()
+        let phoneFan = FanOutTransport()
+        phoneFan.attach(phoneToWatch, as: .pairedDevice)
+        phoneFan.attach(phoneToHost1, as: .sharedSession)
+        phoneFan.attach(phoneToHost2, as: .sharedSession)
+        let phone = MatchStore(device: DeviceID(), transport: phoneFan, snapshotInterval: 0)
+        let watchFan = FanOutTransport()
+        watchFan.attach(watchToPhone, as: .pairedDevice)
+        let watch = MatchStore(device: DeviceID(), transport: watchFan, snapshotInterval: 0, keepsHistory: false)
+        let tasks = [host1, host2, phone, watch].map { store in Task { await store.run() } }
+        defer { tasks.forEach { $0.cancel() } }
+
+        phone.beginJoining()
+        await eventually { phone.role == .guest && watch.log.sessionID == host1.log.sessionID }
+
+        // The first host is still on the line: its packets are what a link cut a moment
+        // ago leaves behind.
+        for link in [phoneToHost2, host2ToPhone] { link.setReachable(true) }
+        phone.beginJoining(steppingOff: true)
+        host1.tap(team: .a)
+        await eventually { phone.log.sessionID == host2.log.sessionID && watch.log.sessionID == host2.log.sessionID }
+
+        #expect(phone.log.sessionID == host2.log.sessionID)
+        #expect(phone.role == .guest)
+        #expect(watch.log.sessionID == host2.log.sessionID)
+    }
+
     @Test func aWatchThatStoodInFollowsItsPhoneToTheNextHost() async throws {
         let (host1ToPhone, phoneToHost1) = LoopbackTransport.pair()
         let (host2ToPhone, phoneToHost2) = LoopbackTransport.pair()
@@ -169,7 +217,7 @@ struct PairAgreementTests {
             session: ActiveSession(log: seeded(points: 1), role: .host), snapshotInterval: 0
         )
         let host2 = MatchStore(
-            device: DeviceID(), transport: host2ToPhone,
+            device: DeviceID(), transport: sharing(host2ToPhone),
             session: ActiveSession(log: seeded(points: 3), role: .host), snapshotInterval: 0
         )
 
