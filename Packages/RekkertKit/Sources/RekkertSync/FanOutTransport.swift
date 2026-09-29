@@ -205,8 +205,12 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
 
     /// Cleared when a session ends, so a phone attaching afterwards is not handed the
     /// farewell and does not file a result for a match it never played.
+    ///
+    /// Every child's copy too. The network and the radio each keep their own for the phones
+    /// that dial in to them, and those arrive as links inside a child rather than as children.
     public func forgetSnapshot() {
         lock.withLock { lastSnapshot = nil }
+        for child in snapshotOfChildren() { child.transport.forgetSnapshot() }
     }
 
     private func snapshotOfChildren() -> [Child] {
