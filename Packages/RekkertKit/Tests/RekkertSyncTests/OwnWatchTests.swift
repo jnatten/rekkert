@@ -29,6 +29,7 @@ private final class PhoneWithWatch {
     let host: MatchStore
     /// The phone's end of the link to the other phone.
     let phoneToHost: LoopbackTransport
+    let hostToPhone: LoopbackTransport
     /// Each end of the link between the phone and its watch, for handing either one a packet.
     let phoneToWatch: LoopbackTransport
     let watchToPhone: LoopbackTransport
@@ -40,6 +41,7 @@ private final class PhoneWithWatch {
         let (phoneToWatch, watchToPhone) = LoopbackTransport.pair()
         let (hostToPhone, phoneToHost) = LoopbackTransport.pair()
         self.phoneToHost = phoneToHost
+        self.hostToPhone = hostToPhone
         self.phoneToWatch = phoneToWatch
         self.watchToPhone = watchToPhone
 
@@ -113,6 +115,32 @@ struct OwnWatchTests {
         #expect(points(pair.phone) == BySide(a: 1, b: 0))
         await eventually { pair.watch.log.sessionID == pair.host.log.sessionID }
         #expect(pair.watch.log.sessionID == pair.host.log.sessionID, "and the watch follows")
+    }
+
+    /// The phone's copy won it with the host out of reach, while the host took back the point
+    /// before, so the host plays on and the phone picks the match back up. Its watch saw the same
+    /// ending through the phone and has to come back with it.
+    @Test func theWatchComesBackOntoAMatchItsPhonePicksBackUp() async throws {
+        let pair = PhoneWithWatch(phoneLog: nil, hostLog: seeded(DeviceID(), points: 63))
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        pair.phone.beginJoining()
+        await eventually { pair.phone.role == .guest && inStep(pair.watch, pair.host) && !pair.watch.canEndSession }
+        await drain(pair.host, pair.phone)
+        pair.phoneToHost.setReachable(false)
+        pair.hostToPhone.setReachable(false)
+
+        pair.phone.tap(team: .a)
+        pair.host.undoLast()
+        await eventually { pair.phone.state == nil && pair.watch.state == nil }
+        #expect(pair.watch.state == nil, "the watch saw it end through the phone")
+
+        pair.phoneToHost.setReachable(true)
+        pair.hostToPhone.setReachable(true)
+        await eventually { inStep(pair.phone, pair.host) && inStep(pair.watch, pair.host) }
+        #expect(pair.host.state?.isFinished == false, "together it is still in play")
+        #expect(inStep(pair.phone, pair.host), "the phone is back on the match")
+        #expect(inStep(pair.watch, pair.host), "and so is its watch")
     }
 
     /// A guest's reply that times out is a guest that did not get the event. The watch answering

@@ -129,6 +129,62 @@ struct FarewellTests {
         #expect(try persistence.history().count == 1)
     }
 
+    /// The guest's copy won it while cut off, and at the same moment the host took back the point
+    /// before. Together they are not over, so the host plays on. The guest had retired the match
+    /// on its own copy's say-so and refused it for good, typing the code again included, and
+    /// answered every point the host sent with its ending rather than an acknowledgement — so
+    /// the host's outbox never emptied either.
+    @Test func aGuestWhoseCopyWonAloneIsBackOnTheMatchTheHostPlaysOn() async throws {
+        let base = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: base) }
+        let hostPersistence = SessionStore(directory: base.appending(path: "host"))
+        let guestPersistence = SessionStore(directory: base.appending(path: "guest"))
+        let pair = HostAndGuest(hostStore: hostPersistence, guestStore: guestPersistence)
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        await pair.playToTheBrink()
+
+        await pair.cut()
+        pair.guest.tap(team: .a)
+        pair.host.undoLast()
+        await eventually { pair.guest.state == nil }
+        #expect(winner(pair.guest.lastResult) == .a, "the guest's copy won it")
+
+        pair.reconnect()
+        await eventually { inStep(pair.host, pair.guest) }
+        #expect(pair.host.state != nil && winner(pair.host.state) == nil, "together it is still in play")
+        #expect(inStep(pair.host, pair.guest), "and the guest is back on it")
+        #expect(pair.guest.lastResult == nil, "without the result that was never the match's")
+        #expect(try guestPersistence.history().isEmpty, "which is out of History too")
+
+        pair.host.tap(team: .b)
+        await eventually { inStep(pair.host, pair.guest) }
+        #expect(points(pair.guest.state) == points(pair.host.state), "it hears the host again")
+        await eventually { (try? hostPersistence.loadActive())??.outbox.isEmpty == true }
+        #expect(try hostPersistence.loadActive()?.outbox.isEmpty == true, "and everything the host sent has landed")
+    }
+
+    /// The same crossing the other way round. The match is the host's, so its ending is the
+    /// match's: it is not picked back up, and the guest still playing is told it is over.
+    @Test func aHostWhoseCopyWonAloneStaysFinished() async throws {
+        let pair = HostAndGuest()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        await pair.playToTheBrink()
+
+        await pair.cut()
+        pair.host.tap(team: .a)
+        pair.guest.undoLast()
+        await eventually { pair.host.state == nil }
+
+        pair.reconnect()
+        await eventually { pair.guest.state == nil }
+        #expect(pair.guest.state == nil, "the guest is told it ended")
+        await quietPeriod()
+        #expect(pair.host.state == nil, "and the host is not put back on it")
+        #expect(winner(pair.host.lastResult) == .a)
+    }
+
     /// A guest that merely retired its copy — its watch called off a match on a role it had
     /// wrong, say — is still saying something about its own phone, not the match.
     @Test func aGuestsRetirementWithoutAnEndingDoesNotEndTheHostsMatch() async throws {

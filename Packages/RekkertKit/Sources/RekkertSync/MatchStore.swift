@@ -976,8 +976,11 @@ public final class MatchStore {
             packet.reply?(encode(.events(sessionID: log.sessionID, events: log.events(missingRelativeTo: vector))))
 
         case .events(let sessionID, let events):
-            guard !retired.contains(sessionID) else {
-                return announceRetirement(of: sessionID, to: packet)
+            if retired.contains(sessionID) {
+                guard let ended = overturnedEnding(of: sessionID, by: events) else {
+                    return announceRetirement(of: sessionID, to: packet)
+                }
+                pickBackUp(ended)
             }
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
             arrive(on: sessionID, from: packet)
@@ -1091,7 +1094,11 @@ public final class MatchStore {
 
         case .snapshot(let incoming):
             if retired.contains(incoming.sessionID) {
-                return announceRetirement(of: incoming.sessionID, to: packet)
+                guard let ended = overturnedEnding(of: incoming.sessionID, by: incoming.ordered) else {
+                    return announceRetirement(of: incoming.sessionID, to: packet)
+                }
+                pickBackUp(ended)
+                relay(incoming.ordered)
             } else if incoming.isEmpty {
                 // A peer that has not started anything yet is not a competing session, but
                 // it does need ours — and it cannot ask for it, since the reply it would
@@ -1384,6 +1391,34 @@ public final class MatchStore {
             transport.queue(notice)
             Task { _ = await sendLive(notice) }
         }
+    }
+
+    /// The log this end ended on, when what just arrived for that match means it did not end.
+    ///
+    /// A copy can finish on its own — the winning point scored out of earshot while somebody
+    /// else took back the point before it — and together the two are still in play. Whoever the
+    /// match belongs to plays on, and this end, holding its own copy's ending as final, refused
+    /// the match for good and answered every point with a notice of an ending nobody else had.
+    ///
+    /// Never for the end the match belongs to, whose ending is the match's; and only onto
+    /// nothing, so it never displaces anything else.
+    private func overturnedEnding(of session: UUID, by incoming: [MatchEvent]) -> MatchLog? {
+        guard !canEndSession, log.isEmpty, !isJoining, let ended = farewells[session] else { return nil }
+        var merged = ended
+        guard merged.merge(incoming), SessionReducer.state(of: merged)?.isFinished == false else { return nil }
+        return ended
+    }
+
+    /// Back on a match whose ending turned out to be this copy's alone. The result filed for it
+    /// goes, since that is not how it ended; what it ended on goes back out, since that may be
+    /// exactly what the others are missing.
+    private func pickBackUp(_ ended: MatchLog) {
+        retired.removeAll { $0 == ended.sessionID }
+        discarded.removeAll { $0 == ended.sessionID }
+        if keepsHistory { try? store?.deleteHistory(ended.sessionID) }
+        log = ended
+        outbox = Outbox(pending: ended.ordered)
+        Task { await flush() }
     }
 
     /// Throttled, but never dropped: a change that arrives inside the window is published
