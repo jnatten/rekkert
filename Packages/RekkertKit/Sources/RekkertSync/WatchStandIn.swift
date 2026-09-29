@@ -103,6 +103,9 @@ public final class WatchStandIn {
         self.sharing = sharing
         self.timing = timing
         self.tick = tick
+        // No link of the wrist's own survives a relaunch, and a role kept from one is what left a
+        // watch refusing its own phone's match.
+        store.followPairedDevice()
     }
 
     public func join(_ code: SessionCode) {
@@ -223,11 +226,13 @@ public final class WatchStandIn {
             sharing.standIn()
         case .standDown:
             sharing.standDown()
+            store.followPairedDevice()
         }
     }
 
     private func lookOnTheWrist() {
         pending = .own(since: .now)
-        sharing.standIn()
+        guard let code = sharing.standbyCode, !sharing.isSharing else { return }
+        sharing.join(code)
     }
 }

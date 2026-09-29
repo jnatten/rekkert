@@ -85,6 +85,9 @@ public final class MatchStore {
     /// What the counterpart on the paired channel says it is. A guest's watch must not offer
     /// to end a match that belongs to whoever started it.
     private var pairedRole: SessionRole = .solo
+    /// A step down to solo that the pair may not have heard, since a reconnect otherwise keeps
+    /// quiet about solo.
+    private var roleIsUnsaid = false
     /// Waiting to be handed somebody else's session. Readable so the screen that asked can
     /// step aside when it has been, which the role alone does not say for a guest walking
     /// back in.
@@ -247,7 +250,7 @@ public final class MatchStore {
     ///
     /// A convention rather than a boundary: with nobody holding the ring there is nothing to
     /// stop a modified client appending the event itself. These are four people on a court.
-    public var canEndSession: Bool { role != .guest && pairedRole != .guest }
+    public var canEndSession: Bool { role == .host || (role != .guest && pairedRole != .guest) }
 
     /// Says that this phone's score is the score, for everybody.
     ///
@@ -311,6 +314,15 @@ public final class MatchStore {
 
     public func cancelJoining() {
         isJoining = false
+    }
+
+    /// A watch on a match through its phone holds no role of its own: the phone's decides.
+    public func followPairedDevice() {
+        guard role == .guest, !isJoining else { return }
+        role = .solo
+        roleIsUnsaid = true
+        persist()
+        shareRole()
     }
 
     /// Steps off a shared session without ending it for anybody else.
@@ -1119,13 +1131,25 @@ public final class MatchStore {
             } else if incoming.sessionID == log.sessionID {
                 arrive(on: incoming.sessionID, from: packet)
                 relay(incoming.ordered)
+            } else if packet.isFromPairedDevice, pairedRole == .host {
+                // A host is never taken over, so the watch on the same wrist is the one that
+                // gives way, whatever it thought it was on.
+                follow(incoming)
+            } else if role == .guest, packet.isFromPairedDevice, pairedRole == .guest {
+                // Both of the pair joined something. Each refusing the other would have them
+                // pushing sessions at each other for ever, so the clock settles it.
+                if incoming.createdAt > log.createdAt {
+                    follow(incoming)
+                } else if incoming.createdAt < log.createdAt {
+                    offerOurSession()
+                }
             } else if role != .solo {
                 // A host is never taken over. The people in front of it are playing this
                 // match, and a phone that happened to start one a moment ago is not. Nor is a
                 // guest: it chose its match by code, and the only thing left to offer it
                 // another is its own watch, still holding what the phone had before.
                 offerOurSession()
-            } else if pairedRole == .guest {
+            } else if packet.isFromPairedDevice, pairedRole == .guest {
                 // The phone this is paired to joined somebody else's match. Whatever it holds
                 // is that match, and it is not this end's to weigh against the clock.
                 adopt(incoming)
@@ -1202,6 +1226,16 @@ public final class MatchStore {
         publishSnapshot(force: true)
     }
 
+    /// Takes the pair's match, and steps off whatever shared one this end was on.
+    private func follow(_ incoming: MatchLog) {
+        adopt(incoming)
+        guard role != .solo else { return }
+        role = .solo
+        persist()
+        shareRole()
+        onLeft?()
+    }
+
     /// Offered on every reconnect, so a watch that has never seen them catches up without
     /// anyone having to think about it.
     /// Tells this device's own watch, or its own phone, what the workout is doing.
@@ -1274,8 +1308,8 @@ public final class MatchStore {
     /// reads solo as this end having dropped a session, and a reconnect is not that.
     private func shareRoleOnReconnect() {
         Task {
-            guard role != .solo else { return }
-            _ = await sendLive(encode(.role(role)))
+            guard role != .solo || roleIsUnsaid else { return }
+            if await sendLive(encode(.role(role))) != nil, role == .solo { roleIsUnsaid = false }
         }
     }
 

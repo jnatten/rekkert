@@ -308,6 +308,23 @@ struct WatchStandInTests {
         #expect(points(court.host) == BySide(a: 2, b: 1))
     }
 
+    @Test func standingInLeavesTheWatchFollowingItsPhone() async throws {
+        let court = Court()
+        let tasks = court.run()
+        defer { tasks.forEach { $0.cancel() } }
+        await court.phoneJoins()
+
+        court.phoneGoesAway()
+        await eventually { court.radio.joined == code && court.sharing.reachablePeers > 0 }
+        #expect(court.watch.role == .solo, "on the phone's match, not a guest of its own")
+        #expect(!court.watch.canEndSession)
+
+        court.phoneComesBack()
+        await court.phone.send(.standby(SharingStandby(code: code, isThrough: true)))
+        await eventually { !court.sharing.isSharing }
+        #expect(court.watch.role == .solo)
+    }
+
     @Test func theWatchHandsBackWhenItsPhoneIsThroughAgain() async throws {
         let court = Court()
         let tasks = court.run()

@@ -199,9 +199,13 @@ public final class SharedSession {
     public func join(_ code: SessionCode) {
         // Joining somebody else's match is the end of hosting this one.
         if hosted != nil { stop() }
+        store.beginJoining()
+        dial(code)
+    }
+
+    private func dial(_ code: SessionCode) {
         wanted = code
         hasJoinedBefore = false
-        store.beginJoining()
         link.startJoining(code: code)
         bluetooth?.startJoining(code: code)
         phase = .searching
@@ -240,9 +244,11 @@ public final class SharedSession {
         standbyCode = code
     }
 
+    /// A link of its own to the match already on the wrist. Not a join: the watch is on that
+    /// match through its phone, and stays a follower of the phone while it carries it.
     public func standIn() {
         guard let standbyCode, !isSharing else { return }
-        join(standbyCode)
+        dial(standbyCode)
     }
 
     public func standDown() {
