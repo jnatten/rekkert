@@ -67,6 +67,35 @@ struct SharingSignalTests {
         #expect(heard.all == [.cancel])
     }
 
+    /// Reachable, and the message still did not land: WatchConnectivity's error handler.
+    @Test func aJoinThatDidNotLandIsNotActedOnLater() async throws {
+        let (phoneEnd, watchEnd) = LoopbackTransport.pair()
+        let phoneLinks = FanOutTransport()
+        phoneLinks.attach(phoneEnd, as: .pairedDevice)
+        let watchLinks = FanOutTransport()
+        watchLinks.attach(watchEnd, as: .pairedDevice)
+        let phone = MatchStore(device: DeviceID(), transport: phoneLinks, snapshotInterval: 0)
+        let watch = MatchStore(device: DeviceID(), transport: watchLinks, snapshotInterval: 0, keepsHistory: false)
+        let tasks = [Task { await phone.run() }, Task { await watch.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+        await quietPeriod()
+
+        let heard = Heard()
+        phone.onSharing = { heard.append($0) }
+        var workouts: [WorkoutSignal] = []
+        watch.onWorkout = { workouts.append($0) }
+
+        watchEnd.setSwallowing(true)
+        let landed = await watch.send(.join(code))
+        phoneEnd.setSwallowing(true)
+        phone.send(.stop)
+        await quietPeriod()
+
+        #expect(!landed)
+        #expect(heard.all.isEmpty, "the wrist was told it did not land, and went on without it")
+        #expect(workouts.isEmpty, "a stop that arrived later would end whatever workout was on by then")
+    }
+
     // MARK: - Where it must not go
 
     /// The load-bearing one. The code is the key to the match: a peer handed it could let

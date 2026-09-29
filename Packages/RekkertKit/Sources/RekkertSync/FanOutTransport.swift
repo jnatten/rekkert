@@ -147,7 +147,9 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
                     // A live send that did not land still has to reach a channel that
                     // survives the counterpart not running, or attaching a second child
                     // would quietly switch the watch's durable fallback off.
-                    if reply == nil, child.scope.isDurable { child.transport.queue(payload) }
+                    if reply == nil, child.scope.isDurable, Self.keepsOverDelay(wire) {
+                        child.transport.queue(payload)
+                    }
                     return (reply, child.scope.isPairedDevice)
                 }
             }
@@ -173,6 +175,17 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         // everybody — it is the one with a durable queue behind it — meant a guest whose reply
         // timed out was acknowledged past, and the outbox forgot the event it never got.
         return ReplyFold.fold(acknowledgements, expected: present).acknowledgement
+    }
+
+    /// Whether a live send that missed its moment is still worth delivering late.
+    static func keepsOverDelay(_ wire: Wire) -> Bool {
+        switch wire {
+        case .events, .snapshot, .retired, .left, .role, .presets, .display, .haptics: true
+        case .workout(.finished), .workout(.series): true
+        case .workout(.stop), .workout(.pause), .workout(.resume), .workout(.running),
+             .workout(.paused), .workout(.idle): false
+        case .hello, .sharing: false
+        }
     }
 
     public func publishSnapshot(_ payload: Data) {
