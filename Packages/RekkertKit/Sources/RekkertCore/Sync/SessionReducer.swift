@@ -118,7 +118,11 @@ public enum SessionReducer {
                 state = .tournament(next)
 
             case .friendly(let session):
+                // Only over a round that is over. A draw that crossed the winning point being
+                // taken back, or a late point turning it into deuce, would otherwise leave that
+                // round open behind the next with no way back to it.
                 guard !session.isFinished, session.rounds.count == after + 1,
+                      session.currentRound?.isFinished ?? true,
                       var next = try? FriendlyScheduler.appendingRound(to: session),
                       let drawn = next.rounds.indices.last else { return }
                 next.rounds[drawn].startedAt = at

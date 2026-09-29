@@ -189,6 +189,48 @@ struct FriendlyModeTests {
                 "both devices fold the same log into the same state")
     }
 
+    @Test func takingTheWinningPointBackAsTheNextRoundIsDrawnReopensTheRound() throws {
+        var value = log()
+        winGames(&value, 6, for: .a, round: 0)
+        let watch = DeviceID()
+
+        var onPhone = value
+        var onWatch = value
+        let draw = onPhone.drawFriendlyRound(from: device)
+        let winning = try #require(onWatch.lastUndoableEvent())
+        let undo = onWatch.append(.undo(winning.id), from: watch)
+
+        onPhone.merge([undo])
+        onWatch.merge([draw])
+
+        let friendly = try #require(session(onPhone))
+        #expect(friendly.rounds.count == 1, "no round drawn over one that is no longer won")
+        #expect(friendly.rounds[0].isFinished == false)
+        #expect(SessionReducer.state(of: onPhone) == SessionReducer.state(of: onWatch))
+    }
+
+    @Test func aLatePointThatTurnsTheWinningPointIntoDeuceHoldsTheDrawBack() throws {
+        var value = log()
+        winGames(&value, 5, for: .a, round: 0)
+        score(&value, round: 0, [.a, .a, .a, .b, .b])
+        // Ordered first, on the same stamp as the point the phone won the round with.
+        let watch = DeviceID(UUID(uuidString: "00000000-0000-0000-0000-000000000001")!)
+
+        var onWatch = value
+        let late = onWatch.append(.point(round: 0, court: 0, team: .b), from: watch)
+        var onPhone = value
+        score(&onPhone, round: 0, [.a])
+        onPhone.drawFriendlyRound(from: device)
+
+        onPhone.merge([late])
+        onWatch.merge(onPhone.ordered)
+
+        let friendly = try #require(session(onPhone))
+        #expect(friendly.rounds.count == 1)
+        #expect(friendly.rounds[0].isFinished == false, "advantage, not game: the round is still on")
+        #expect(SessionReducer.state(of: onPhone) == SessionReducer.state(of: onWatch))
+    }
+
     @Test func aScoreCorrectionNeverRePairsALaterRound() throws {
         var straight = log()
         for round in 0 ..< 3 {
