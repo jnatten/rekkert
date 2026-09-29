@@ -205,7 +205,9 @@ struct WatchStandInTests {
     }
 
     @Test func thePhoneGetsTheFirstGoWhenItIsThere() async throws {
-        let court = Court()
+        var timing = quick
+        timing.phoneWait = .seconds(30)
+        let court = Court(timing: timing)
         let tasks = court.run()
         defer { tasks.forEach { $0.cancel() } }
         await eventually { court.watch.isPairReachable }
@@ -252,7 +254,9 @@ struct WatchStandInTests {
     }
 
     @Test func aWrongCodeIsNotTriedAgainOnTheWrist() async throws {
-        let court = Court()
+        var timing = quick
+        timing.phoneWait = .seconds(30)
+        let court = Court(timing: timing)
         let tasks = court.run()
         defer { tasks.forEach { $0.cancel() } }
         await eventually { court.watch.isPairReachable }
