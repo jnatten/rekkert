@@ -57,9 +57,9 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     /// is only ever touched under `lock`.
     private final class Peer: @unchecked Sendable {
         let reassembler = Chunking.Reassembler()
-        /// Chunks the link would not take yet. Bluetooth refuses rather than buffers, and a
+        /// Frames the link would not take yet. Bluetooth refuses rather than buffers, and a
         /// refused chunk that is dropped is a frame that will never open on the other side.
-        var backlog: [Data] = []
+        var backlog: [Outgoing] = []
         var isReady = false
         var key: SymmetricKey?
         /// Guest side only. A write is answered before the next one goes out: CoreBluetooth
@@ -71,6 +71,14 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         let central: CBCentral?
 
         init(central: CBCentral? = nil) { self.central = central }
+    }
+
+    /// Whole frames, so one nobody is waiting for any more can be dropped before its first
+    /// chunk goes out, never halfway through, which would take the frame after it down too.
+    private struct Outgoing {
+        let chunks: [Data]
+        var sent = 0
+        let expires: DispatchTime?
     }
 
     private let packets: AsyncStream<InboundPacket>.Continuation
@@ -264,7 +272,8 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         else { return }
 
         let chunks = Chunking.split(sealed, mtu: mtu(for: peer))
-        lock.withLock { peer.backlog.append(contentsOf: chunks) }
+        let expires: DispatchTime? = frame.kind == .oneway ? nil : .now() + replyTimeout
+        lock.withLock { peer.backlog.append(Outgoing(chunks: chunks, expires: expires)) }
         // Drained on the one queue CoreBluetooth already calls back on, so a send from a reply
         // closure, a send from the store and the "ready again" callback never drain the same
         // backlog at once — two of them would put the same chunk on the air and skip the next.
@@ -286,10 +295,20 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     /// somebody waits out the timeout for.
     private func drain(_ peer: Peer) {
         while true {
-            let next = lock.withLock { peer.backlog.first }
+            let next = lock.withLock { () -> Data? in
+                let now = DispatchTime.now()
+                while let first = peer.backlog.first, first.sent == 0, let expires = first.expires, expires < now {
+                    peer.backlog.removeFirst()
+                }
+                return peer.backlog.first.map { $0.chunks[$0.sent] }
+            }
             guard let next else { return }
             guard deliver(next, to: peer) else { return }
-            lock.withLock { if !peer.backlog.isEmpty { peer.backlog.removeFirst() } }
+            lock.withLock {
+                guard !peer.backlog.isEmpty else { return }
+                peer.backlog[0].sent += 1
+                if peer.backlog[0].sent == peer.backlog[0].chunks.count { peer.backlog.removeFirst() }
+            }
             // A guest may only have one write outstanding, so the acknowledgement is what
             // fetches the next chunk rather than this loop.
             if lock.withLock({ peer.isWriting }) { return }

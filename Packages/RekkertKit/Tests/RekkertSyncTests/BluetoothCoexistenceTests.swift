@@ -254,6 +254,18 @@ struct TwoLinkReplyTests {
         #expect(folded.acknowledgement == nil, "somebody did not answer, so nothing may be forgotten")
     }
 
+    @Test func answersAboutDifferentMatchesAcknowledgeNothing() throws {
+        var vector = VersionVector()
+        vector[DeviceID()] = 4
+
+        let folded = ReplyFold.fold([
+            try Wire.hello(sessionID: session, vector: vector).encoded(),
+            try Wire.hello(sessionID: UUID(), vector: vector).encoded(),
+        ], expected: 2)
+
+        #expect(folded.acknowledgement == nil)
+    }
+
     /// Two phones genuinely at different points still bound the outbox at the slower one.
     @Test func theSlowerOfTwoStillSetsTheBound() throws {
         let phone = DeviceID()

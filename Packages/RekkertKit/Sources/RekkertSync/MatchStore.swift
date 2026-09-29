@@ -74,7 +74,8 @@ public final class MatchStore {
     private let store: SessionStore?
     private var lastSnapshotPublished = Date.distantPast
     private var isFlushing = false
-    private var needsFlush = false
+    private var retryPatience = 1
+    private static let maximumRetryPatience = 8
     private var snapshotPending = false
     private var lastQueued: [EventID] = []
     private var retired: [UUID]
@@ -727,11 +728,10 @@ public final class MatchStore {
     }
 
     private func consumeInbound() async {
+        // Never await an outbound round trip here: the peer may be waiting on a reply
+        // that only this loop can deliver.
         for await packet in transport.inbound {
             handle(packet)
-            // Never await an outbound round trip here: the peer may be waiting on a reply
-            // that only this loop can deliver.
-            Task { await self.flush() }
         }
     }
 
@@ -740,12 +740,17 @@ public final class MatchStore {
     /// full with nothing ever prompting another attempt.
     private func retryUndelivered() async {
         while !Task.isCancelled {
-            try? await Task.sleep(for: retryInterval)
-            guard !outbox.isEmpty else { continue }
+            try? await Task.sleep(for: retryInterval * retryPatience)
+            guard !outbox.isEmpty else {
+                retryPatience = 1
+                continue
+            }
 
             if transport.isReachable {
                 await flush()
+                retryPatience = outbox.isEmpty ? 1 : min(retryPatience * 2, Self.maximumRetryPatience)
             } else {
+                retryPatience = 1
                 queuePending()
             }
         }
@@ -765,6 +770,7 @@ public final class MatchStore {
         for await reachable in transport.reachability {
             isReachable = reachable
             isPairReachable = transport.isPairReachable
+            retryPatience = 1
             if reachable { await synchronise() }
         }
     }
@@ -807,7 +813,7 @@ public final class MatchStore {
         refresh()
         announce([event], before: before, after: after, session: session)
         publishSnapshot(force: false)
-        Task { await self.flush() }
+        push([event], in: session)
     }
 
     /// Tells whoever is listening that a point was played, and only when one really was.
@@ -856,15 +862,9 @@ public final class MatchStore {
     }
 
     private func flush() async {
-        guard !isFlushing else {
-            needsFlush = true
-            return
-        }
+        guard !isFlushing else { return }
         isFlushing = true
-        repeat {
-            needsFlush = false
-            await sendPending()
-        } while needsFlush
+        await sendPending()
         isFlushing = false
     }
 
@@ -872,20 +872,39 @@ public final class MatchStore {
         isReachable = transport.isReachable
         isPairReachable = transport.isPairReachable
         guard !outbox.isEmpty, transport.isReachable else { return }
-        guard let payload = try? Wire.events(sessionID: log.sessionID, events: outbox.pending).encoded() else { return }
+        let session = log.sessionID
+        guard let payload = try? Wire.events(sessionID: session, events: outbox.pending).encoded() else { return }
 
         guard let reply = await sendLive(payload) else {
             queuePending()
             return
         }
-        if case .hello(_, let vector, _)? = try? Wire.decode(reply) {
-            outbox.acknowledge(upTo: vector)
-            persist()
-        } else {
+        acknowledge(reply, for: session)
+    }
+
+    /// On its own round trip, never queued behind a retry that one slow peer can hold for seconds.
+    private func push(_ events: [MatchEvent], in session: UUID) {
+        guard !events.isEmpty, transport.isReachable,
+              let payload = try? Wire.events(sessionID: session, events: events).encoded()
+        else { return }
+        Task {
+            guard let reply = await sendLive(payload) else {
+                if session == log.sessionID { queuePending() }
+                return
+            }
+            acknowledge(reply, for: session)
+        }
+    }
+
+    private func acknowledge(_ reply: Data, for session: UUID) {
+        guard case .hello(let answered, let vector, _)? = try? Wire.decode(reply) else {
             // Anything else is the counterpart saying it is not on the session we just
             // sent — which is the one thing that has to be acted on rather than dropped.
-            handle(InboundPacket(payload: reply))
+            return handle(InboundPacket(payload: reply))
         }
+        guard answered == session, session == log.sessionID else { return }
+        outbox.acknowledge(upTo: vector)
+        persist()
     }
 
     /// WatchConnectivity does not promise to call back. A reply that never arrives would
@@ -1151,6 +1170,7 @@ public final class MatchStore {
         let session = log.sessionID
         guard log.merge(fresh) else { return }
         outbox.enqueue(contentsOf: fresh)
+        push(fresh, in: session)
         // Only what was genuinely new, so the same point arriving over both radios is
         // mentioned once, and the board as it stands before this device redraws it.
         let after = SessionReducer.state(of: log)

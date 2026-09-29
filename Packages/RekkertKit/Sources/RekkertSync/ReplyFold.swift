@@ -22,6 +22,7 @@ nonisolated enum ReplyFold {
         var folded = Folded()
         var sessionID: UUID?
         var vectors: [VersionVector] = []
+        var agree = true
 
         for reply in replies.compactMap({ $0 }) {
             guard case .hello(let session, let vector, _)? = try? Wire.decode(reply) else {
@@ -29,10 +30,11 @@ nonisolated enum ReplyFold {
                 continue
             }
             sessionID = sessionID ?? session
+            agree = agree && session == sessionID
             vectors.append(vector)
         }
 
-        guard let sessionID, vectors.count == expected else { return folded }
+        guard let sessionID, agree, vectors.count == expected else { return folded }
         folded.acknowledgement = try? Wire.hello(
             sessionID: sessionID,
             vector: VersionVector.lowerBound(of: vectors)
