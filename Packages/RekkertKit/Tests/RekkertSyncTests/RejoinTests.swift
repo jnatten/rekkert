@@ -8,10 +8,6 @@ private let setup = SessionSetup.traditional(
     teams: BySide(a: .home, b: .away)
 )
 
-private func settle() async throws {
-    try await Task.sleep(for: .milliseconds(250))
-}
-
 private func seeded(_ device: DeviceID, points: Int = 0) -> MatchLog {
     var log = MatchLog()
     log.append(.configure(setup), from: device)
@@ -263,7 +259,7 @@ struct AbandonedJoinTests {
 
         // A guest that was handed the match repeats it back, as the first one always does.
         one.queue(try Wire.snapshot(store.log).encoded())
-        try await settle()
+        await quietPeriod()
 
         #expect(store.role == .host, "still the host of its own match")
         #expect(store.canEndSession)

@@ -5,10 +5,6 @@ import Testing
 
 private let oneSet = SessionSetup.traditional(rules: TraditionalRules(setsToWin: 1), teams: BySide(a: .home, b: .away))
 
-private func settle() async throws {
-    try await Task.sleep(for: .milliseconds(250))
-}
-
 private func scratch() -> URL {
     URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
 }
@@ -45,7 +41,7 @@ struct TimelineFilingTests {
 
         let before = Date()
         winASet(on: phone)
-        try await settle()
+        await eventually { (try? store.history().first).flatMap { store.timeline($0.id) } != nil }
 
         let record = try #require(try store.history().first)
         let timeline = try #require(store.timeline(record.id))
@@ -69,7 +65,7 @@ struct TimelineFilingTests {
         defer { task.cancel() }
 
         winASet(on: phone)
-        try await settle()
+        await eventually { (try? store.history().count) == 1 }
         let record = try #require(try store.history().first)
         try store.deleteHistory(record.id)
 
@@ -85,14 +81,14 @@ struct TimelineFilingTests {
         defer { task.cancel() }
 
         winASet(on: phone)
-        try await settle()
+        await eventually { (try? store.history().first?.startedAt) != nil }
         let started = try #require(try store.history().first?.startedAt)
 
         phone.undoResult()
         phone.tap(team: .b)
         phone.tap(team: .b)
         phone.finish()
-        try await settle()
+        await eventually { (try? store.history().first).flatMap { store.timeline($0.id) }?.entries.count == 23 + 2 }
 
         let records = try store.history()
         let timeline = try #require(records.first.flatMap { store.timeline($0.id) })
@@ -110,20 +106,20 @@ struct TimelineFilingTests {
         let (phone, watch) = pair(directory)
         let tasks = [Task { await phone.run() }, Task { await watch.run() }]
         defer { tasks.forEach { $0.cancel() } }
-        try await settle()
+        await quietPeriod()
 
         winASet(on: phone)
-        try await settle()
+        await eventually { (try? store.history().count) == 1 && watch.resultRewind != nil }
         #expect(try store.history().count == 1)
 
         watch.undoResult()
-        try await settle()
+        await eventually { (try? store.history().isEmpty) == true }
         #expect(try store.history().isEmpty, "the phone's record of a result nobody holds any more")
 
         watch.tap(team: .b)
-        try await settle()
+        await eventually { inStep(phone, watch) }
         phone.finish()
-        try await settle()
+        await eventually { (try? store.history().first).flatMap { store.timeline($0.id) }?.entries.last?.winner == .b }
 
         let records = try store.history()
         let timeline = try #require(records.first.flatMap { store.timeline($0.id) })
@@ -141,16 +137,16 @@ struct TimelineFilingTests {
         defer { task.cancel() }
 
         winASet(on: phone)
-        try await settle()
+        await eventually { phone.resultRewind != nil }
         phone.undoResult()
         phone.tap(team: .a)
-        try await settle()
+        await eventually { (try? store.history().count) == 1 }
         #expect(try store.history().count == 1, "won again")
 
         phone.undoResult()
         phone.tap(team: .b)
         phone.finish()
-        try await settle()
+        await eventually { (try? store.history().first).flatMap { store.timeline($0.id) }?.entries.last?.winner == .b }
 
         let records = try store.history()
         let timeline = try #require(records.first.flatMap { store.timeline($0.id) })
@@ -170,13 +166,13 @@ struct TimelineFilingTests {
         phone.configure(oneSet)
         for _ in 0 ..< 8 { phone.tap(team: .a) }
         phone.finish()
-        try await settle()
+        await eventually { (try? store.history().count) == 1 }
         let first = try #require(try store.history().first)
 
         phone.resume(first.state, from: first.id)
         phone.tap(team: .b)
         phone.finish()
-        try await settle()
+        await eventually { (try? store.history().count) == 2 }
 
         let second = try #require(try store.history().first { $0.id != first.id })
         let timeline = try #require(store.timeline(second.id))
@@ -196,7 +192,7 @@ struct TimelineFilingTests {
         for _ in 0 ..< 5 { phone.tap(team: .a) }
         let session = phone.log.sessionID
         phone.discardSession()
-        try await settle()
+        await quietPeriod()
 
         #expect(SessionStore(directory: directory).timeline(session) == nil)
     }
@@ -211,10 +207,10 @@ struct TimelineFilingTests {
         let (phone, watch) = pair(directory, watchDirectory: watchDirectory)
         let tasks = [Task { await phone.run() }, Task { await watch.run() }]
         defer { tasks.forEach { $0.cancel() } }
-        try await settle()
+        await quietPeriod()
 
         winASet(on: watch)
-        try await settle()
+        await eventually { (try? SessionStore(directory: directory).history().count) == 1 }
 
         let timelines = watchDirectory.appending(path: "timelines")
         #expect(!FileManager.default.fileExists(atPath: timelines.path()))
@@ -233,7 +229,7 @@ struct TimelineFilingTests {
         defer { task.cancel() }
 
         winASet(on: phone)
-        try await settle()
+        await eventually { (try? store.history().first?.startedAt) != nil }
 
         let started = try #require(try store.history().first?.startedAt)
         #expect(started > Date().addingTimeInterval(-60))

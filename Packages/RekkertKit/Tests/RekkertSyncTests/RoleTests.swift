@@ -8,10 +8,6 @@ private let setup = SessionSetup.traditional(
     teams: BySide(a: .home, b: .away)
 )
 
-private func settle() async throws {
-    try await Task.sleep(for: .milliseconds(250))
-}
-
 /// A session that already exists before anybody is connected, so the two devices are not
 /// quietly negotiating one into being while the test is still setting up.
 private func seeded(
@@ -46,7 +42,7 @@ struct RoleTests {
         let tasks = [Task { await host.run() }, Task { await guest.run() }]
         defer { tasks.forEach { $0.cancel() } }
         // Both run loops have to be consuming before anybody asks anything of the other.
-        try await settle()
+        await quietPeriod()
 
         guest.beginJoining()
         await eventually { guest.role == .guest }
@@ -59,7 +55,7 @@ struct RoleTests {
 
         guest.finish()
         guest.discardSession()
-        try await settle()
+        await quietPeriod()
 
         #expect(guest.canEndSession == false)
         #expect(host.state != nil, "and ending is not")
@@ -118,8 +114,7 @@ struct RoleTests {
         )
         let tasks = [Task { await host.run() }, Task { await newcomer.run() }]
         defer { tasks.forEach { $0.cancel() } }
-        try await settle()
-        try await settle()
+        await quietPeriod()
 
         #expect(host.role == .host)
         #expect(points(host) == BySide(a: 1, b: 0), "the court's match, untouched")
@@ -145,7 +140,7 @@ struct RoleTests {
         )
         let tasks = [Task { await host.run() }, Task { await joiner.run() }]
         defer { tasks.forEach { $0.cancel() } }
-        try await settle()
+        await quietPeriod()
 
         joiner.beginJoining()
         await eventually { joiner.role == .guest }
@@ -169,7 +164,7 @@ struct RoleTests {
         let tasks = [Task { await host.run() }, Task { await guest.run() }]
         defer { tasks.forEach { $0.cancel() } }
         // Both run loops have to be consuming before anybody asks anything of the other.
-        try await settle()
+        await quietPeriod()
 
         guest.beginJoining()
         await eventually { guest.role == .guest }
@@ -205,7 +200,7 @@ struct RoleTests {
         let guest = MatchStore(device: DeviceID(), transport: guestFan, snapshotInterval: 0)
         let tasks = [Task { await host.run() }, Task { await guest.run() }]
         defer { tasks.forEach { $0.cancel() } }
-        try await settle()
+        await quietPeriod()
 
         guest.beginJoining()
         await eventually { guest.role == .guest }
@@ -216,7 +211,7 @@ struct RoleTests {
 
         host.tap(team: .b)
         await eventually { points(host) == BySide(a: 1, b: 1) }
-        try await settle()
+        await quietPeriod()
 
         #expect(guest.state == nil, "left means left")
         #expect(guest.canEndSession, "with nothing on it, this phone is nobody's guest")
@@ -273,7 +268,7 @@ struct RoleTests {
         guest.onLeft = { letGo = true }
         let tasks = [Task { await host.run() }, Task { await guest.run() }]
         defer { tasks.forEach { $0.cancel() } }
-        try await settle()
+        await quietPeriod()
 
         guest.beginJoining()
         await eventually { guest.role == .guest }
@@ -283,7 +278,7 @@ struct RoleTests {
         guest.configure(setup)
         host.tap(team: .b)
         await eventually { points(host) == BySide(a: 1, b: 1) }
-        try await settle()
+        await quietPeriod()
 
         #expect(points(host) == BySide(a: 1, b: 1), "the host plays on")
         #expect(host.lastResult == nil, "and was shown no result")
@@ -309,7 +304,7 @@ struct RoleTests {
         let guest = MatchStore(device: DeviceID(), transport: guestFan, snapshotInterval: 0)
         let tasks = [Task { await host.run() }, Task { await guest.run() }]
         defer { tasks.forEach { $0.cancel() } }
-        try await settle()
+        await quietPeriod()
 
         guest.beginJoining()
         await eventually { guest.role == .guest }
@@ -348,16 +343,17 @@ struct RoleTests {
         let guest = MatchStore(device: DeviceID(), transport: guestFan, store: persistence, snapshotInterval: 0)
         let tasks = [Task { await host.run() }, Task { await guest.run() }]
         defer { tasks.forEach { $0.cancel() } }
-        try await settle()
+        await quietPeriod()
 
         guest.beginJoining()
         await eventually { guest.role == .guest && points(guest) == BySide(a: 1, b: 0) }
+        await drain(guest)
 
         one.setReachable(false)
         two.setReachable(false)
         host.discardSession()
         await eventually { host.state == nil }
-        try await settle()
+        await quietPeriod()
         #expect(guest.state != nil, "out of reach, the guest heard nothing")
 
         one.setReachable(true)

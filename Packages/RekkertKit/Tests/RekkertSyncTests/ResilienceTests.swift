@@ -81,7 +81,10 @@ struct ResilienceTests {
         phone.configure(setup)
         phone.tap(team: .a)
         phone.tap(team: .a)
-        try await Task.sleep(for: .milliseconds(400))
+        await eventually {
+            guard case .traditional(let session)? = watch.state else { return false }
+            return session.score.points == BySide(a: 2, b: 0)
+        }
 
         guard case .traditional(let session)? = watch.state else {
             Issue.record("the watch never received the session")
@@ -107,7 +110,10 @@ struct ResilienceTests {
         // A burst well inside the throttle window: only the first would publish before,
         // leaving the context holding a stale score.
         for _ in 0 ..< 3 { phone.tap(team: .a) }
-        try await Task.sleep(for: .milliseconds(400))
+        await eventually {
+            guard case .traditional(let session)? = watch.state else { return false }
+            return session.score.points == BySide(a: 3, b: 0)
+        }
 
         guard case .traditional(let session)? = watch.state else {
             Issue.record("the watch never received the session")

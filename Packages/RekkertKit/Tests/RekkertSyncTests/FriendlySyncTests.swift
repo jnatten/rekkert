@@ -28,10 +28,6 @@ private struct Pair {
     }
 }
 
-private func settle() async throws {
-    try await Task.sleep(for: .milliseconds(250))
-}
-
 private func friendly(_ store: MatchStore) -> FriendlySession? {
     guard case .friendly(let session) = store.state else { return nil }
     return session
@@ -48,11 +44,11 @@ struct FriendlySyncTests {
         let pair = Pair()
         let tasks = pair.run()
         defer { tasks.forEach { $0.cancel() } }
-        try await settle()
+        await quietPeriod()
 
         pair.phone.configure(setup())
         pair.phone.nextRound()
-        try await settle()
+        await eventually { inStep(pair.phone, pair.watch) }
 
         let onWatch = try #require(friendly(pair.watch))
         #expect(onWatch.rounds.count == 1)
@@ -64,21 +60,21 @@ struct FriendlySyncTests {
         let pair = Pair()
         let tasks = pair.run()
         defer { tasks.forEach { $0.cancel() } }
-        try await settle()
+        await quietPeriod()
 
         pair.phone.configure(setup())
         pair.phone.nextRound()
-        try await settle()
+        await eventually { inStep(pair.phone, pair.watch) }
 
         // The watch takes the round to 5–0 and then, at the same moment as the phone
         // finishes it off and draws the next one, taps one more point into the old round.
         winGames(pair.watch, 5, for: .a, round: 0)
-        try await settle()
+        await eventually { inStep(pair.phone, pair.watch) }
 
         winGames(pair.phone, 1, for: .a, round: 0)
         pair.watch.tap(round: 0, court: 0, team: .b)
         pair.phone.nextRound()
-        try await settle()
+        await eventually { inStep(pair.phone, pair.watch) }
 
         let onPhone = try #require(friendly(pair.phone))
         #expect(onPhone.rounds.count == 2, "one new round, however the two interleaved")
@@ -90,17 +86,17 @@ struct FriendlySyncTests {
         let pair = Pair()
         let tasks = pair.run()
         defer { tasks.forEach { $0.cancel() } }
-        try await settle()
+        await quietPeriod()
 
         pair.phone.configure(setup(players: 4))
         pair.phone.nextRound()
-        try await settle()
+        await eventually { inStep(pair.phone, pair.watch) }
 
         for _ in 0 ..< 6 {
             pair.phone.tap(round: 0, court: 0, team: .a)
             pair.watch.tap(round: 0, court: 0, team: .b)
         }
-        try await settle()
+        await eventually { inStep(pair.phone, pair.watch) }
 
         // Alternating points never win a game under advantage, so all twelve are still on
         // the board — which is exactly what makes them worth counting.

@@ -123,22 +123,23 @@ struct OwnWatchTests {
         let tasks = pair.run()
         defer { tasks.forEach { $0.cancel() } }
         pair.phone.startSharing()
-        // Let the start-up hellos finish first: a reply to a question asked before the cut
-        // still gets through it, as it would, and this is not about that. The empty phone is
-        // handed the match in the meantime, and the join has to conclude all the same.
-        await eventually { pair.watch.log.sessionID == pair.phone.log.sessionID }
-        try await Task.sleep(for: .milliseconds(250))
+        // The empty phone is handed the match first, and the join has to conclude all the same.
+        await eventually {
+            pair.watch.log.sessionID == pair.phone.log.sessionID
+                && pair.host.log.sessionID == pair.phone.log.sessionID
+        }
 
         pair.host.beginJoining()
         await eventually { pair.host.log.sessionID == pair.phone.log.sessionID && pair.host.role == .guest }
         #expect(pair.host.role == .guest, "joined the match it was already holding")
-        try await Task.sleep(for: .milliseconds(250))
+        await eventually { inStep(pair.host, pair.phone) }
+        await drain(pair.host)
 
         // The other phone's app is suspended mid-request: still connected, answering nothing.
         pair.phoneToHost.setSwallowing(true)
         pair.phone.tap(team: .a)
         await eventually { points(pair.watch) == BySide(a: 1, b: 0) }
-        try await Task.sleep(for: .milliseconds(300))
+        await quietPeriod()
         #expect(points(pair.host) == BySide(a: 0, b: 0), "cut off, so far")
 
         // Back, with nothing on the wire to say so.
@@ -165,7 +166,7 @@ struct OwnWatchTests {
         // The host plays on, still connected, and its snapshot is not taken up.
         pair.host.tap(team: .a)
         await eventually { points(pair.host) == BySide(a: 2, b: 0) }
-        try await Task.sleep(for: .milliseconds(250))
+        await quietPeriod()
         #expect(pair.phone.state == nil, "left means left")
         #expect(pair.watch.state == nil)
 
@@ -188,11 +189,11 @@ struct OwnWatchTests {
 
         pair.phone.leaveSharedSession()
         await eventually { pair.watch.state == nil }
-        try await Task.sleep(for: .milliseconds(250))
+        await quietPeriod()
 
         pair.phoneToWatch.queue(stale)
         pair.watchToPhone.queue(stale)
-        try await Task.sleep(for: .milliseconds(250))
+        await quietPeriod()
         #expect(pair.watch.state == nil, "the watch does not take it back from its own phone")
         #expect(pair.phone.state == nil, "nor the phone from its own watch")
     }
@@ -214,7 +215,7 @@ struct OwnWatchTests {
         pair.host.tap(team: .a)
         await eventually { points(pair.host) == BySide(a: 2, b: 0) }
         await pair.phone.synchronise()
-        try await Task.sleep(for: .milliseconds(250))
+        await quietPeriod()
         #expect(pair.phone.state == nil, "the host's match is not taken back up")
         #expect(pair.watch.state == nil)
 
@@ -265,7 +266,7 @@ struct OwnWatchTests {
         defer { running.cancel() }
         pair.phoneFan.attach(phoneToLate, as: .pairedDevice)
 
-        try await Task.sleep(for: .milliseconds(250))
+        await quietPeriod()
         #expect(late.state == nil, "a match nobody here is on is not handed out")
         #expect(pair.phone.state == nil)
     }

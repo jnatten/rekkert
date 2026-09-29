@@ -15,10 +15,6 @@ private let counting = SessionSetup.pointCount(
     teams: BySide(a: .home, b: .away)
 )
 
-private func settle() async throws {
-    try await Task.sleep(for: .milliseconds(400))
-}
-
 /// One host and several guests, wired the way the local network will wire them: every guest
 /// has exactly one link, to the host, and the host holds all of them behind a fan-out. Both
 /// ends scope the link the way a stranger's phone is scoped in production.
@@ -135,6 +131,7 @@ struct StarTests {
 
         star.host.configure(counting)
         await star.ready()
+        await drain(star.guests[1])
 
         star.links[1].setReachable(false)
         for _ in 0 ..< 3 { star.guests[0].tap(team: .a) }
@@ -180,7 +177,7 @@ struct StarTests {
         )))
         // Nothing to wait *for* here — the point is that nothing arrives — so this one
         // genuinely has to sit out a stretch of time.
-        try await settle()
+        await quietPeriod()
 
         #expect(star.host.presets.presets.map(\.name) == ["Thursday"], "kept its own")
         #expect(star.guests[0].presets.presets.map(\.name) == ["Mine"], "and so did the guest")
@@ -198,7 +195,7 @@ struct StarTests {
         star.host.setHaptics(mode: .byTeam, strength: .strong)
         // Nothing to wait for on the guest — the point is that it stays put — so the only
         // honest way to say "it did not travel" is to give it time to.
-        try await settle()
+        await quietPeriod()
 
         #expect(star.host.haptics.mode == .byTeam)
         #expect(star.guests[0].haptics.mode == .off, "the guest's wrist is its own business")
@@ -215,7 +212,7 @@ struct StarTests {
         star.host.toggleTeamColors()
         // Nothing to wait for on the guest — the point is that the swap stays put — so the
         // only honest way to say "it did not travel" is to give it time to.
-        try await settle()
+        await quietPeriod()
 
         #expect(star.host.display.areColorsSwapped)
         #expect(star.guests[0].display.areColorsSwapped == false, "the guest draws it their own way")
@@ -237,6 +234,7 @@ struct SplitBrainTests {
 
         star.host.configure(counting)
         await star.ready()
+        await drain(star.host, star.guests[0])
 
         star.links[0].setReachable(false)
         for _ in 0 ..< 2 { star.host.tap(team: .a) }
@@ -276,7 +274,7 @@ struct SplitBrainTests {
         star.links[0].setReachable(false)
         star.guests[0].tap(team: .b)
         star.host.tap(team: .a)
-        try await settle()
+        await quietPeriod()
         star.links[0].setReachable(true)
         await eventually { points(star.guests[0]) == BySide(a: 1, b: 1) }
 
@@ -295,7 +293,7 @@ struct SplitBrainTests {
         star.links[0].setReachable(false)
         star.guests[0].tap(team: .a)
         star.host.tap(team: .b)
-        try await settle()
+        await quietPeriod()
         star.links[0].setReachable(true)
         await eventually { points(star.guests[0]) == BySide(a: 1, b: 1) }
 

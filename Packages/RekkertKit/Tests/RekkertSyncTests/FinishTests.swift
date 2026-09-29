@@ -8,10 +8,6 @@ private let winnerCourt = SessionSetup.winnerCourt(
     teams: BySide(a: .home, b: .away)
 )
 
-private func settle() async throws {
-    try await Task.sleep(for: .milliseconds(250))
-}
-
 @Suite("Finishing a session", .serialized)
 @MainActor
 struct FinishTests {
@@ -35,7 +31,7 @@ struct FinishTests {
 
         phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
         for _ in 0 ..< 5 { phone.tap(team: .a) }
-        try await settle()
+        await eventually { inStep(phone, watch) }
         #expect(phone.state?.isFinished == false, "nobody has won it")
 
         phone.finish()
@@ -55,10 +51,10 @@ struct FinishTests {
 
         phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
         for _ in 0 ..< 3 { phone.tap(team: .b) }
-        try await settle()
+        await eventually { inStep(phone, watch) }
 
         watch.finish()
-        try await settle()
+        await eventually { phone.state == nil && watch.state == nil }
 
         #expect(watch.state == nil)
         #expect(phone.state == nil)
@@ -74,10 +70,10 @@ struct FinishTests {
 
         phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
         for _ in 0 ..< 5 { phone.tap(team: .a) }
-        try await settle()
+        await quietPeriod()
 
         phone.discardSession()
-        try await settle()
+        await quietPeriod()
 
         #expect(phone.state == nil)
         #expect(try store.history().isEmpty, "cancelling throws it away rather than filing it")
@@ -93,10 +89,10 @@ struct FinishTests {
 
         phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
         for _ in 0 ..< 5 { phone.tap(team: .a) }
-        try await settle()
+        await eventually { inStep(phone, watch) }
 
         watch.discardSession()
-        try await settle()
+        await eventually { phone.state == nil }
 
         #expect(try store.history().isEmpty, "the decision travels with the event")
         #expect(phone.state == nil)
@@ -112,7 +108,7 @@ struct FinishTests {
 
         phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
         for _ in 0 ..< 48 { phone.tap(team: .a) }   // two straight sets
-        try await settle()
+        await eventually { phone.state == nil && (try? store.history().count) == 1 }
 
         #expect(phone.state == nil, "it ends itself")
         #expect(try store.history().count == 1)
@@ -127,7 +123,7 @@ struct FinishTests {
 
         phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
         for _ in 0 ..< 48 { phone.tap(team: .a) }
-        try await settle()
+        await eventually { phone.state == nil && phone.lastResult != nil && watch.lastResult != nil }
 
         #expect(phone.state == nil, "the session is over")
         #expect(phone.lastResult != nil, "but there is something to show for it")
@@ -147,7 +143,7 @@ struct FinishTests {
         phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
         for _ in 0 ..< 5 { phone.tap(team: .a) }
         phone.discardSession()
-        try await settle()
+        await quietPeriod()
 
         #expect(phone.state == nil)
         #expect(phone.lastResult == nil, "it was thrown away, so there is nothing to celebrate")
@@ -162,7 +158,7 @@ struct FinishTests {
 
         phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
         for _ in 0 ..< 48 { phone.tap(team: .a) }
-        try await settle()
+        await eventually { phone.lastResult != nil }
         #expect(phone.lastResult != nil)
 
         phone.startNewSession()
@@ -180,13 +176,14 @@ struct FinishTests {
         phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
         for _ in 0 ..< 8 { phone.tap(team: .a) }   // two games
         phone.finish()
-        try await settle()
+        // Nil is also how the watch starts, so its result is what says it heard the ending.
+        await eventually { phone.state == nil && watch.state == nil && watch.lastResult != nil }
         #expect(phone.state == nil)
         #expect(watch.state == nil, "cleared on both")
 
         let archived = try #require(try store.history().first).state
         phone.resume(archived)
-        try await settle()
+        await eventually { watch.state != nil && watch.state == phone.state }
 
         guard case .traditional(let resumed)? = watch.state else {
             Issue.record("the watch should be holding the resumed match")
@@ -208,12 +205,13 @@ struct FinishTests {
         phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
         for _ in 0 ..< 4 { phone.tap(team: .a) }
         phone.finish()
-        try await settle()
+        // Over on the watch too before it is picked back up.
+        await eventually { watch.lastResult != nil }
 
         phone.resume(try #require(try store.history().first).state)
-        try await settle()
+        await eventually { inStep(phone, watch) }
         watch.tap(team: .b)
-        try await settle()
+        await eventually { inStep(phone, watch) }
 
         guard case .traditional(let session)? = phone.state else {
             Issue.record("expected a traditional session")
@@ -233,7 +231,7 @@ struct FinishTests {
 
         phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
         for _ in 0 ..< 48 { phone.tap(team: .a) }   // two straight sets, so it wins itself
-        try await settle()
+        await eventually { phone.state == nil && watch.lastResult != nil }
 
         #expect(phone.state == nil)
         #expect(try store.history().count == 1, "filed on the way out")
@@ -241,7 +239,7 @@ struct FinishTests {
         #expect(rewind.undoesAPoint, "it was a point that ended it, not a deliberate finish")
 
         phone.undoResult()
-        try await settle()
+        await eventually { phone.state != nil && watch.state == phone.state }
 
         guard case .traditional(let session)? = phone.state else {
             Issue.record("the match should be in play again")
@@ -266,10 +264,10 @@ struct FinishTests {
         phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
         phone.toggleTeamColors()
         for _ in 0 ..< 48 { phone.tap(team: .a) }
-        try await settle()
+        await eventually { watch.lastResult != nil }
 
         phone.undoResult()
-        try await settle()
+        await eventually { watch.state != nil && watch.state == phone.state && watch.display.areColorsSwapped }
 
         #expect(phone.display.areColorsSwapped, "the same match is back on, not a new one")
         #expect(watch.display.areColorsSwapped)
@@ -285,13 +283,13 @@ struct FinishTests {
         phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
         for _ in 0 ..< 5 { phone.tap(team: .a) }
         phone.finish()
-        try await settle()
+        await eventually { phone.resultRewind != nil }
 
         let rewind = try #require(phone.resultRewind)
         #expect(rewind.undoesAPoint == false, "what ended it was the ending, not a point")
 
         phone.undoResult()
-        try await settle()
+        await eventually { phone.state != nil }
 
         guard case .traditional(let session)? = phone.state else {
             Issue.record("the match should be in play again")
@@ -312,7 +310,7 @@ struct FinishTests {
         phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
         for _ in 0 ..< 3 { phone.tap(team: .a) }
         phone.discardSession()
-        try await settle()
+        await quietPeriod()
 
         #expect(phone.lastResult == nil, "nothing is shown for it")
         #expect(phone.resultRewind == nil, "and so nothing offers a way back into it")
@@ -327,7 +325,7 @@ struct FinishTests {
 
         phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
         for _ in 0 ..< 48 { phone.tap(team: .a) }
-        try await settle()
+        await eventually { phone.resultRewind != nil }
 
         phone.acknowledgeResult()
         #expect(phone.resultRewind == nil)
@@ -344,11 +342,11 @@ struct FinishTests {
 
         phone.configure(winnerCourt)
         for _ in 0 ..< 4 { phone.tap(team: .a) }
-        try await settle()
+        await eventually { inStep(phone, watch) }
         #expect(watch.state != nil)
 
         phone.finish()
-        try await settle()
+        await eventually { phone.state == nil && watch.state == nil }
 
         #expect(phone.state == nil, "the phone is back to a clean slate")
         #expect(watch.state == nil, "and so is the watch")
@@ -363,15 +361,15 @@ struct FinishTests {
 
         phone.configure(winnerCourt)
         for _ in 0 ..< 4 { phone.tap(team: .a) }
-        try await settle()
+        await eventually { inStep(phone, watch) }
 
         phone.finish()
-        try await settle()
+        await eventually { phone.state == nil && watch.state == nil }
 
         // Everything that wakes the pair up later: reconnects, wrist raises, the retry loop.
         await watch.synchronise()
         await phone.synchronise()
-        try await settle()
+        await quietPeriod()
 
         #expect(phone.state == nil, "the finished session stays finished")
         #expect(watch.state == nil)
@@ -387,13 +385,13 @@ struct FinishTests {
 
         phone.configure(winnerCourt)
         for _ in 0 ..< 4 { phone.tap(team: .a) }
-        try await settle()
+        await eventually { inStep(phone, watch) }
 
         // Finished from the watch, to prove the phone still keeps the record.
         watch.finish()
-        try await settle()
+        await eventually { phone.state == nil && (try? store.history().count) == 1 }
         await phone.synchronise()
-        try await settle()
+        await quietPeriod()
 
         #expect(try store.history().count == 1, "archived once, by the device that keeps history")
         #expect(phone.state == nil)
@@ -409,9 +407,9 @@ struct FinishTests {
         defer { task.cancel() }
 
         phone.configure(winnerCourt)
-        try await settle()
+        await quietPeriod()
         phone.finish()
-        try await settle()
+        await quietPeriod()
 
         #expect(try store.history().isEmpty, "nothing was played, so there is nothing to keep")
         #expect(phone.state == nil)
@@ -426,13 +424,13 @@ struct FinishTests {
 
         phone.configure(winnerCourt)
         for _ in 0 ..< 4 { phone.tap(team: .a) }
-        try await settle()
+        await eventually { inStep(phone, watch) }
 
         phone.startNewSession()
         phone.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
-        try await settle()
+        await eventually { inStep(phone, watch) }
         await watch.synchronise()
-        try await settle()
+        await quietPeriod()
 
         #expect(phone.state?.isTournament == false)
         if case .traditional? = phone.state {} else { Issue.record("the phone lost the new session") }

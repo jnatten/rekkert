@@ -8,10 +8,6 @@ private let setup = SessionSetup.traditional(
     teams: BySide(a: .home, b: .away)
 )
 
-private func settle() async throws {
-    try await Task.sleep(for: .milliseconds(300))
-}
-
 @Suite("Turning up late")
 @MainActor
 struct LateJoinerTests {
@@ -29,15 +25,15 @@ struct LateJoinerTests {
         let early = MatchStore(device: DeviceID(), transport: firstGuestSide, snapshotInterval: 0)
         let earlyTask = Task { await early.run() }
         defer { earlyTask.cancel() }
-        try await settle()
+        await quietPeriod()
 
         host.configure(setup)
         host.tap(team: .a)
-        try await settle()
+        await eventually { inStep(early, host) }
         #expect(early.state != nil, "the one who was here got the match")
 
         host.finish()
-        try await settle()
+        await eventually { host.state == nil && early.state == nil }
         #expect(host.state == nil, "and it is over")
 
         // Somebody wanders up afterwards.
@@ -46,8 +42,7 @@ struct LateJoinerTests {
         let latecomer = MatchStore(device: DeviceID(), transport: lateGuestSide, snapshotInterval: 0)
         let lateTask = Task { await latecomer.run() }
         defer { lateTask.cancel() }
-        try await settle()
-        try await settle()
+        await quietPeriod()
 
         #expect(latecomer.state == nil, "handed nothing, because there is nothing to play")
         #expect(latecomer.lastResult == nil, "and no result for a match they never played")
@@ -58,18 +53,18 @@ struct LateJoinerTests {
         let host = MatchStore(device: DeviceID(), transport: links, snapshotInterval: 0)
         let running = Task { await host.run() }
         defer { running.cancel() }
-        try await settle()
+        await quietPeriod()
 
         host.configure(setup)
         host.tap(team: .b)
-        try await settle()
+        await quietPeriod()
 
         let (hostSide, guestSide) = LoopbackTransport.pair()
         links.attach(hostSide, as: .sharedSession)
         let latecomer = MatchStore(device: DeviceID(), transport: guestSide, snapshotInterval: 0)
         let joining = Task { await latecomer.run() }
         defer { joining.cancel() }
-        try await settle()
+        await eventually { inStep(latecomer, host) }
 
         guard case .traditional(let session)? = latecomer.state else {
             Issue.record("the latecomer should have been handed the match")

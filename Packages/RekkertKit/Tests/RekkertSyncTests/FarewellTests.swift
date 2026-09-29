@@ -8,10 +8,6 @@ private let setup = SessionSetup.traditional(
     teams: BySide(a: .home, b: .away)
 )
 
-private func settle() async throws {
-    try await Task.sleep(for: .milliseconds(250))
-}
-
 /// Two straight sets on the default rules, which is where a match ends itself.
 private let tapsToWin = 48
 
@@ -64,7 +60,8 @@ private final class HostAndGuest {
         await eventually { guest.log.events.count == host.log.events.count }
     }
 
-    func cut() {
+    func cut() async {
+        await drain(host, guest)
         hostSide.setReachable(false)
         guestSide.setReachable(false)
     }
@@ -90,7 +87,7 @@ struct FarewellTests {
         defer { tasks.forEach { $0.cancel() } }
         await pair.playToTheBrink()
 
-        pair.cut()
+        await pair.cut()
         pair.host.tap(team: .a)
         await eventually { pair.host.state == nil }
         #expect(winner(pair.host.lastResult) == .a, "won on the host")
@@ -117,7 +114,7 @@ struct FarewellTests {
         defer { tasks.forEach { $0.cancel() } }
         await pair.playToTheBrink()
 
-        pair.cut()
+        await pair.cut()
         pair.guest.tap(team: .a)
         await eventually { pair.guest.state == nil }
         #expect(winner(pair.guest.lastResult) == .a, "won on the guest")
@@ -147,7 +144,7 @@ struct FarewellTests {
         // Bare, the way an older build says it, and the way a device that no longer has the
         // log says it.
         pair.guestSide.queue(try Wire.retired(sessionID: pair.host.log.sessionID, archive: true).encoded())
-        try await settle()
+        await quietPeriod()
 
         #expect(pair.host.state != nil, "the host plays on")
         #expect(pair.host.lastResult == nil)
@@ -275,7 +272,7 @@ struct LiveOfferTests {
         let tasks = [Task { await host.run() }, Task { await guest.run() }]
         defer { tasks.forEach { $0.cancel() } }
         // The hellos both say on starting up are done with; from here the guest asks nothing.
-        try await settle()
+        await quietPeriod()
 
         host.configure(setup)
         host.tap(team: .a)
