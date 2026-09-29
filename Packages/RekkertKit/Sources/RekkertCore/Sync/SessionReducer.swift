@@ -88,7 +88,7 @@ public enum SessionReducer {
             }
 
         case .setRoundConfirmed(let round, let isConfirmed):
-            guard case .tournament(var tournament) = state,
+            guard case .tournament(var tournament) = state, !tournament.isFinished,
                   tournament.rounds.indices.contains(round) else { return }
             for court in tournament.rounds[round].matches.indices {
                 tournament.rounds[round].matches[court].isConfirmed = isConfirmed
@@ -104,6 +104,9 @@ public enum SessionReducer {
         case .nextRound(let after, let at, let sitOuts):
             switch state {
             case .tournament(let tournament):
+                // A draw that crossed the finish would add a round nobody played to the
+                // standings, and pay its bench for sitting it out.
+                guard !tournament.isFinished else { return }
                 let drawing: Tournament? = if tournament.rounds.count == after + 1 {
                     try? TournamentEngine.appendingRound(to: tournament, sitOuts: sitOuts)
                 } else if let sitOuts, tournament.rounds.count == after + 2, tournament.canRedrawCurrentRound {
@@ -221,8 +224,11 @@ public enum SessionReducer {
         tournament change: (PointCountEngine, inout CourtMatch) -> Void,
         traditional: (inout TraditionalSession) -> Void
     ) {
+        // Nothing lands on a session somebody ended. A match played to its end already turns
+        // points away by itself; one called off part way has to be told.
         switch state {
         case .traditional(var session):
+            guard !session.isStopped else { return }
             traditional(&session)
             state = .traditional(session)
 
@@ -251,7 +257,7 @@ public enum SessionReducer {
             state = .friendly(session)
 
         case .tournament(var current):
-            guard current.rounds.indices.contains(round), !current.rounds[round].isCancelled,
+            guard !current.isFinished, current.rounds.indices.contains(round), !current.rounds[round].isCancelled,
                   let index = current.rounds[round].matches.firstIndex(where: { $0.courtIndex == court }),
                   !current.rounds[round].matches[index].isConfirmed
             else { return }

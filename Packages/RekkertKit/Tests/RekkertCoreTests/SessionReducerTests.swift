@@ -3,6 +3,8 @@ import Testing
 @testable import RekkertCore
 
 private let device = DeviceID(UUID(uuidString: "CCCCCCCC-0000-0000-0000-000000000003")!)
+/// Sorts after `device` wherever the two tie, so what it does at the same moment folds last.
+private let later = DeviceID(UUID(uuidString: "FFFFFFFF-0000-0000-0000-000000000003")!)
 
 private func tournamentLog(players: Int = 8, courts: Int = 2, target: Int = 16) -> MatchLog {
     let tournament = Tournament(
@@ -107,6 +109,56 @@ struct SessionReducerTests {
         log.append(.finish(archive: true), from: device)
         #expect(tournament(log)?.isFinished == true)
         #expect(SessionReducer.state(of: log)?.isFinished == true)
+    }
+
+    /// A round drawn on one phone as the tournament was finished on another. Folded after the
+    /// finish, it put a round nobody played on the finished tournament, and paid its bench for
+    /// sitting it out.
+    @Test func aDrawThatCrossesTheFinishDoesNotLand() throws {
+        var onHost = tournamentLog(players: 9)
+        var onGuest = onHost
+        let finish = onHost.append(.finish(archive: true), from: device)
+        let draw = onGuest.drawRound(from: later)
+        onHost.merge([draw])
+        onGuest.merge([finish])
+
+        let value = try #require(tournament(onHost))
+        #expect(value.isFinished)
+        #expect(value.rounds.count == 1, "it ends as it was finished")
+        #expect(SessionReducer.state(of: onHost) == SessionReducer.state(of: onGuest))
+    }
+
+    @Test func aPointThatCrossesTheFinishDoesNotLand() throws {
+        var onHost = tournamentLog()
+        var onGuest = onHost
+        let finish = onHost.append(.finish(archive: true), from: device)
+        let point = onGuest.append(.point(round: 0, court: 0, team: .a), from: later)
+        onHost.merge([point])
+        onGuest.merge([finish])
+
+        let value = try #require(tournament(onHost))
+        #expect(value.rounds[0].matches[0].state.points == BySide(a: 0, b: 0))
+        #expect(SessionReducer.state(of: onHost) == SessionReducer.state(of: onGuest))
+    }
+
+    /// A match called off on one phone as a point went in on another. Stopped is where it stopped.
+    @Test func aPointThatCrossesAStopDoesNotLand() throws {
+        var onHost = MatchLog()
+        onHost.append(.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away))), from: device)
+        onHost.append(.point(round: 0, court: 0, team: .a), from: device)
+        var onGuest = onHost
+        let stop = onHost.append(.finish(archive: true), from: device)
+        let point = onGuest.append(.point(round: 0, court: 0, team: .b), from: later)
+        onHost.merge([point])
+        onGuest.merge([stop])
+
+        guard case .traditional(let session)? = SessionReducer.state(of: onHost) else {
+            Issue.record("a match")
+            return
+        }
+        #expect(session.isStopped)
+        #expect(session.score.points == BySide(a: 1, b: 0))
+        #expect(SessionReducer.state(of: onHost) == SessionReducer.state(of: onGuest))
     }
 
     @Test func courtCountReflectsTheCurrentRound() {
