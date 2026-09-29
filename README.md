@@ -439,6 +439,8 @@ Bluetooth cannot carry the code in its advertisement — a backgrounded peripher
 name and service data and moves its service UUID into an overflow area — so the UUID is fixed
 and app-wide, and the code is checked after connecting instead: the host publishes a share id
 and a one-byte fingerprint, and every frame is then sealed with a key derived from the code.
+Neither end counts the other as on the match until something it sealed has opened, so a host
+that agreed on the one byte by accident is hung up on and the next one tried.
 Deriving the service UUID from the code would be worse than saying nothing, since twenty bits
 of code under a hash broadcast in the clear comes straight back out.
 

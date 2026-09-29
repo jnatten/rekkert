@@ -60,6 +60,8 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         /// Frames the link would not take yet. Bluetooth refuses rather than buffers, and a
         /// refused chunk that is dropped is a frame that will never open on the other side.
         var backlog: [Outgoing] = []
+        /// Only once something it sealed has opened here. Anybody in range can connect and
+        /// subscribe, and one byte of fingerprint agrees by accident now and again.
         var isReady = false
         var key: SymmetricKey?
         /// Guest side only. A write is answered before the next one goes out: CoreBluetooth
@@ -109,14 +111,17 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     }
 
     private let replyTimeout: DispatchTimeInterval
+    /// How long a host that passed the greeting has to prove it holds the key.
+    private let proofTimeout: DispatchTimeInterval
     /// What a write will carry when nothing better is known. `maximumWriteValueLength` is asked
     /// for the moment there is a peripheral to ask, and this only covers the gap before that.
     private static let conservativeMTU = 20
 
     private var shim: Shim?
 
-    public init(replyTimeout: Int = 4) {
+    public init(replyTimeout: Int = 4, proofTimeout: Int = 10) {
         self.replyTimeout = .seconds(replyTimeout)
+        self.proofTimeout = .seconds(proofTimeout)
 
         var packetContinuation: AsyncStream<InboundPacket>.Continuation!
         inbound = AsyncStream { packetContinuation = $0 }
@@ -357,6 +362,13 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
               let frame = SealedFrame.open(whole, with: key)
         else { return }
 
+        // The first thing that opens is the proof this peer was given the same code. A host
+        // answers it at once, so the guest has its proof whatever the store gets round to saying.
+        if lock.withLock({ !peer.isReady }) {
+            ready(peer)
+            if peer.central != nil { send(Self.probe, to: peer) }
+        }
+
         switch frame.kind {
         case .reply:
             let pending = lock.withLock { waiting.removeValue(forKey: frame.correlation) }
@@ -368,9 +380,14 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
                 self.send(Frame(kind: .reply, correlation: correlation, payload: answer), to: peer)
             })
         case .oneway:
+            guard !frame.payload.isEmpty else { return }
             packets.yield(InboundPacket(payload: frame.payload))
         }
     }
+
+    /// Says nothing but that it was sealed with the key. An older build hands it on as a
+    /// packet the store cannot read, and drops it.
+    private static let probe = Frame(kind: .oneway, payload: Data())
 
     private func ready(_ peer: Peer) {
         lock.withLock { peer.isReady = true }
@@ -436,8 +453,10 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         guard case .hosting(let code, let share) = lock.withLock({ intent }) else { return }
         let peer = Peer(central: central)
         peer.key = SessionKey.sealingKey(for: code, share: share)
+        // Not ready until something it sent opens. Counted on subscribing, a central with the
+        // wrong code — or any Bluetooth tool at all — was waited on by every send, answered
+        // none of them, and kept the outbox from ever being acknowledged.
         lock.withLock { peers[ObjectIdentifier(central)] = peer }
-        ready(peer)
     }
 
     fileprivate func unsubscribed(_ central: CBCentral) {
@@ -544,23 +563,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
               let greeting = try? JSONCoding.decoder.decode(Greeting.self, from: value),
               greeting.v == 1,
               greeting.fp == SessionKey.fingerprint(for: code, share: greeting.share)
-        else {
-            let manager = lock.withLock { centralManager }
-            lock.withLock {
-                rejected.insert(peripheral.identifier)
-                if server === peripheral {
-                    server = nil
-                    serverInbox = nil
-                }
-            }
-            manager?.cancelPeripheralConnection(peripheral)
-            // Started over rather than left running: whatever else was found while this one
-            // was being checked was reported once and dropped, and only a fresh scan says it
-            // again.
-            manager?.stopScan()
-            manager?.scanForPeripherals(withServices: [Self.serviceUUID], options: nil)
-            return
-        }
+        else { return reject(peripheral) }
 
         let peer = Peer()
         peer.key = SessionKey.sealingKey(for: code, share: greeting.share)
@@ -572,7 +575,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
 
         // Not ready yet. The host only learns of this peer when the subscription lands, and
         // anything written before that is answered "success" and dropped on the floor — so the
-        // hello and the snapshot wait for `subscribed(to:on:)`, which the host has seen first.
+        // probe waits for `subscribed(to:on:)`, which the host has seen first.
         for service in peripheral.services ?? [] where service.uuid == Self.serviceUUID {
             for characteristic in service.characteristics ?? []
             where characteristic.uuid == Self.outboxUUID {
@@ -592,7 +595,42 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             return
         }
         guard lock.withLock({ !peer.isReady }) else { return }
-        ready(peer)
+        send(Self.probe, to: peer)
+        awaitProof(from: ObjectIdentifier(peripheral), peer)
+    }
+
+    /// A host that agreed on the one byte of fingerprint by accident was told another code, and
+    /// nothing it seals will ever open here. Held on to, it stopped the scan that would have found
+    /// the right host, and a wrong code was never called one: it looked like a match found.
+    private func awaitProof(from token: ObjectIdentifier, _ peer: Peer) {
+        queue.asyncAfter(deadline: .now() + proofTimeout) { [weak self] in
+            guard let self else { return }
+            let unproven = self.lock.withLock { () -> CBPeripheral? in
+                guard self.peers[token] === peer, !peer.isReady,
+                      let server = self.server, ObjectIdentifier(server) == token else { return nil }
+                return server
+            }
+            if let unproven { self.reject(unproven) }
+        }
+    }
+
+    /// Somebody else's court: hung up on, and not dialled again for the rest of this join.
+    ///
+    /// The scan is started over rather than left running: whatever else was found while this one
+    /// was being checked was reported once and dropped, and only a fresh scan says it again.
+    private func reject(_ peripheral: CBPeripheral) {
+        let manager = lock.withLock { () -> CBCentralManager? in
+            rejected.insert(peripheral.identifier)
+            peers.removeValue(forKey: ObjectIdentifier(peripheral))
+            if server === peripheral {
+                server = nil
+                serverInbox = nil
+            }
+            return centralManager
+        }
+        manager?.cancelPeripheralConnection(peripheral)
+        manager?.stopScan()
+        manager?.scanForPeripherals(withServices: [Self.serviceUUID], options: nil)
     }
 }
 
@@ -718,7 +756,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     public let inbound = AsyncStream<InboundPacket> { $0.finish() }
     public let reachability = AsyncStream<Bool> { $0.finish() }
 
-    public init(replyTimeout: Int = 4) {}
+    public init(replyTimeout: Int = 4, proofTimeout: Int = 10) {}
 
     public var isReachable: Bool { false }
     public var reachableCount: Int { 0 }
