@@ -51,7 +51,7 @@ struct BluetoothCoexistenceTests {
         let radio = FakeLink()
         let sharing = SharedSession(
             store: store, link: LocalNetworkTransport(), bluetooth: radio,
-            graceBeforeNotice: .milliseconds(60)
+            graceBeforeNotice: .milliseconds(60), radioGrace: .milliseconds(60)
         )
         return (sharing, store, radio)
     }
@@ -188,13 +188,14 @@ struct BluetoothCoexistenceTests {
         #expect(told.allSatisfy { $0 == nil })
     }
 
-    @Test func aSearchThatFailedIsNoMatchToStandInFor() throws {
+    @Test func aSearchThatFailedIsNoMatchToStandInFor() async throws {
         let (sharing, _, _) = make()
         var told: [SharingStandby?] = []
         sharing.onStandby = { told.append($0) }
 
         sharing.join(try #require(SessionCode("482915")))
         sharing.apply(.failed(.notFound))
+        await eventually { told.last == .some(nil) }
 
         #expect(told.last == .some(nil))
     }

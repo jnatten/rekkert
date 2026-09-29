@@ -77,17 +77,23 @@ public final class SharedSession {
     /// drops that were already healing. The badge carries the short-term truth now, which is
     /// what lets this be reserved for a real absence.
     private let graceBeforeNotice: Duration
+    /// How long the radio is still given once the network has found nothing: a host whose screen
+    /// is off can only be reached over Bluetooth, and finding it there takes its own time.
+    private let radioGrace: Duration
+    private var waitingForTheRadio: Task<Void, Never>?
 
     public init(
         store: MatchStore,
         link: LocalNetworkTransport,
         bluetooth: (any SharedLink)? = nil,
-        graceBeforeNotice: Duration = .seconds(20)
+        graceBeforeNotice: Duration = .seconds(20),
+        radioGrace: Duration = .seconds(10)
     ) {
         self.store = store
         self.link = link
         self.bluetooth = bluetooth
         self.graceBeforeNotice = graceBeforeNotice
+        self.radioGrace = radioGrace
         watching = Task { [weak self] in
             for await status in link.status { self?.apply(status) }
         }
@@ -102,6 +108,9 @@ public final class SharedSession {
                     guard let self else { return }
                     self.bluetoothPeers = bluetooth.reachableCount
                     self.reportStandby()
+                    if self.bluetoothPeers > 0, self.waitingForTheRadio != nil, let wanted = self.wanted {
+                        self.keepLooking(for: wanted)
+                    }
                     // The network may have been gone a while with the radio carrying the
                     // match. When the radio goes too, that is the moment it is lost.
                     if self.bluetoothPeers == 0, case .searching = self.phase, self.hasJoinedBefore {
@@ -205,6 +214,8 @@ public final class SharedSession {
     }
 
     private func dial(_ code: SessionCode) {
+        waitingForTheRadio?.cancel()
+        waitingForTheRadio = nil
         wanted = code
         hasJoinedBefore = false
         // Whatever was through belonged to the last code.
@@ -278,6 +289,8 @@ public final class SharedSession {
         hasJoinedBefore = false
         noticing?.cancel()
         noticing = nil
+        waitingForTheRadio?.cancel()
+        waitingForTheRadio = nil
     }
 
     /// Stops watching the transport. The app holds this for its whole life, so this is here
@@ -363,14 +376,45 @@ public final class SharedSession {
             // a link to keep looking for, not a code to send somebody back to the keyboard
             // over; and the transport stopped itself to say so, so it is put back to looking.
             if let wanted, hasTheMatch || bluetoothPeers > 0 {
-                hasJoinedBefore = true
-                link.resumeJoining(code: wanted)
-                return apply(.searching)
+                return keepLooking(for: wanted)
             }
-            peers = 0
-            store.cancelJoining()
-            phase = .failed(failure)
+            if let wanted, bluetooth != nil, hosted == nil, failure != .rejected {
+                peers = 0
+                return waitForTheRadio(wanted, else: failure)
+            }
+            giveUp(failure)
         }
+    }
+
+    private func keepLooking(for code: SessionCode) {
+        waitingForTheRadio?.cancel()
+        waitingForTheRadio = nil
+        hasJoinedBefore = true
+        link.resumeJoining(code: code)
+        apply(.searching)
+    }
+
+    private func waitForTheRadio(_ code: SessionCode, else failure: LocalNetworkTransport.Failure) {
+        guard waitingForTheRadio == nil else { return }
+        waitingForTheRadio = Task { [weak self, radioGrace] in
+            try? await Task.sleep(for: radioGrace)
+            guard let self, !Task.isCancelled, self.wanted == code else { return }
+            self.waitingForTheRadio = nil
+            if self.hasTheMatch || self.bluetoothPeers > 0 {
+                self.keepLooking(for: code)
+            } else {
+                self.giveUp(failure)
+            }
+        }
+    }
+
+    /// Nothing is left dialling: a radio still looking after the screen said "not found" would
+    /// hand over the match later to a phone that no longer thinks it is joining.
+    private func giveUp(_ failure: LocalNetworkTransport.Failure) {
+        peers = 0
+        if hosted == nil { cutLinks() }
+        store.cancelJoining()
+        phase = .failed(failure)
     }
 
     private func reportStandby() {

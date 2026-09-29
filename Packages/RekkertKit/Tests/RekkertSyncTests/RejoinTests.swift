@@ -44,7 +44,10 @@ private final class RadioStandIn: SharedLink, @unchecked Sendable {
     func resumeHosting(code: SessionCode, share: UUID) {}
     func startJoining(code: SessionCode) {}
     func resumeJoining(code: SessionCode) {}
-    func stop() { lock.withLock { count = 0 } }
+    func stop() { lock.withLock { count = 0; stopCount += 1 } }
+
+    private var stopCount = 0
+    var stops: Int { lock.withLock { stopCount } }
 }
 
 /// A guest that types the code for a match it is already holding — back from a relaunch, or
@@ -197,16 +200,56 @@ struct RejoinTests {
         #expect(store.isJoining, "still waiting to be handed the match")
     }
 
-    @Test func nothingFoundOnEitherLinkIsStillAFailure() throws {
+    @Test func nothingFoundOnEitherLinkIsStillAFailure() async throws {
+        let store = MatchStore(device: DeviceID(), transport: LoopbackTransport(), snapshotInterval: 0)
+        let radio = RadioStandIn()
+        let sharing = SharedSession(
+            store: store, link: LocalNetworkTransport(), bluetooth: radio, radioGrace: .milliseconds(60)
+        )
+
+        sharing.join(try #require(SessionCode("482915")))
+        sharing.apply(.failed(.notFound))
+        #expect(sharing.phase == .searching, "the radio gets its own moment")
+        await eventually { sharing.phase == .failed(.notFound) }
+
+        #expect(sharing.phase == .failed(.notFound))
+        #expect(store.isJoining == false)
+        #expect(radio.stops > 0, "and is hung up, so nothing arrives after the screen has said so")
+    }
+
+    @Test func aMatchTheRadioFindsAfterTheNetworkGaveUpIsJoined() async throws {
+        let (one, two) = LoopbackTransport.pair()
+        let guestFan = FanOutTransport()
+        guestFan.attach(two, as: .sharedSession)
+        let store = MatchStore(device: DeviceID(), transport: guestFan, snapshotInterval: 0)
+        let radio = RadioStandIn()
+        let sharing = SharedSession(
+            store: store, link: LocalNetworkTransport(), bluetooth: radio, radioGrace: .seconds(5)
+        )
+        let running = Task { await store.run() }
+        defer { running.cancel() }
+
+        sharing.join(try #require(SessionCode("482915")))
+        sharing.apply(.failed(.notFound))
+        radio.present(1)
+        one.queue(try Wire.snapshot(seeded(DeviceID(), points: 2)).encoded())
+        await eventually { store.role == .guest && sharing.reachablePeers == 1 }
+
+        #expect(store.role == .guest)
+        #expect(sharing.phase == .searching)
+        #expect(sharing.isSharing)
+    }
+
+    @Test func aWrongCodeIsNotWaitedOutOnTheRadio() throws {
         let store = MatchStore(device: DeviceID(), transport: LoopbackTransport(), snapshotInterval: 0)
         let radio = RadioStandIn()
         let sharing = SharedSession(store: store, link: LocalNetworkTransport(), bluetooth: radio)
 
         sharing.join(try #require(SessionCode("482915")))
-        sharing.apply(.failed(.notFound))
+        sharing.apply(.failed(.rejected))
 
-        #expect(sharing.phase == .failed(.notFound))
-        #expect(store.isJoining == false)
+        #expect(sharing.phase == .failed(.rejected))
+        #expect(radio.stops > 0)
     }
 
     /// The network went first and the radio carried the match for a while; when the radio goes
