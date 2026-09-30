@@ -42,6 +42,12 @@ nonisolated public enum FrameCodec {
         case unknownKind(UInt8)
     }
 
+    /// Whether the far end will take it. Sent anyway, the far end hangs up on it, and a link that
+    /// hands the same snapshot to every connection as it comes up does so again, for ever.
+    public static func fits(_ frame: Frame) -> Bool {
+        frame.payload.count <= maximumPayload
+    }
+
     public static func encode(_ frame: Frame) -> Data {
         var out = Data(capacity: headerSize + frame.payload.count)
         out.append(bigEndian: UInt32(frame.payload.count))

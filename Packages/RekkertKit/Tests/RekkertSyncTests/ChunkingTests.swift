@@ -156,6 +156,11 @@ struct SealedFrameTests {
         #expect(SealedFrame.open(sealed, with: key) == nil)
     }
 
+    @Test func aFrameOverTheLimitIsNotSealed() {
+        let key = SessionKey.sealingKey(for: code, share: share, direction: .hostToGuest)
+        #expect(SealedFrame.seal(Frame(kind: .oneway, payload: Data(count: FrameCodec.maximumPayload + 1)), with: key) == nil)
+    }
+
     @Test func rubbishOpensNothing() {
         let key = SessionKey.sealingKey(for: code, share: share, direction: .hostToGuest)
         #expect(SealedFrame.open(Data(), with: key) == nil)

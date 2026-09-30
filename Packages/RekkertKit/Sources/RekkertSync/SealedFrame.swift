@@ -10,7 +10,8 @@ import Foundation
 /// stops being listened to, whatever it said a moment ago.
 nonisolated enum SealedFrame {
     static func seal(_ frame: Frame, with key: SymmetricKey) -> Data? {
-        try? ChaChaPoly.seal(FrameCodec.encode(frame), using: key).combined
+        guard FrameCodec.fits(frame) else { return nil }
+        return try? ChaChaPoly.seal(FrameCodec.encode(frame), using: key).combined
     }
 
     /// `nil` for anything that will not open, which is the same answer for a wrong code, a

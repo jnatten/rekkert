@@ -8,6 +8,14 @@ private func payload(_ size: Int, seed: UInt8 = 0) -> Data {
 
 @Suite("Framing")
 struct FramingTests {
+    /// Sent, a frame over the limit is one the far end hangs up on — and the local network hands
+    /// its snapshot to every connection as it comes up, so it went round again, for ever.
+    @Test func aFrameOverTheLimitIsNotSent() {
+        let tooBig = Frame(kind: .oneway, payload: Data(count: FrameCodec.maximumPayload + 1))
+        #expect(!FrameCodec.fits(tooBig))
+        #expect(FrameCodec.fits(Frame(kind: .oneway, payload: Data(count: FrameCodec.maximumPayload))))
+    }
+
     @Test func aFrameSurvivesTheRoundTrip() throws {
         for size in [0, 1, 9, 1024, 3 << 20] {
             let original = Frame(kind: .request, correlation: 7, payload: payload(size))

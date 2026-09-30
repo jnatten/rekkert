@@ -681,6 +681,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     }
 
     private func send(_ frame: Frame, on link: Link) {
+        guard FrameCodec.fits(frame) else { return }
         link.connection.send(
             content: FrameCodec.encode(frame),
             completion: .contentProcessed { _ in }
