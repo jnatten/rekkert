@@ -44,18 +44,20 @@ struct SharingBadge: View {
 
     var body: some View {
         if model.sharing.isSharing {
-            Button {
-                model.showingShareCode = true
-            } label: {
-                // Icon only: the scoreboard toolbar is already full, and a count here pushes
-                // the rest into an overflow menu. Colour says whether anybody is on, and the
-                // sheet behind it says how many.
-                Label("\(model.sharing.reachablePeers)", systemImage: symbol)
-                    .labelStyle(.iconOnly)
-                    .symbolEffect(.pulse, isActive: model.sharing.isReconnecting)
+            if isHosting || model.sharing.isReconnecting {
+                Button {
+                    // A guest has no code to read out. Lost, it may have a new one to type in.
+                    if isHosting { model.showingShareCode = true } else { model.showingJoin = true }
+                } label: {
+                    glyph
+                }
+                .tint(tint)
+                .accessibilityLabel(description)
+            } else {
+                glyph
+                    .foregroundStyle(tint)
+                    .accessibilityLabel(description)
             }
-            .tint(tint)
-            .accessibilityLabel(description)
         } else if isCutOff {
             Button {
                 model.showingJoin = true
@@ -66,6 +68,16 @@ struct SharingBadge: View {
             .tint(.secondary)
             .accessibilityLabel("Not connected to the shared match. Rejoin")
         }
+    }
+
+    private var isHosting: Bool { model.sharing.code != nil }
+
+    // Icon only: the scoreboard toolbar is already full, and a count here pushes the rest into
+    // an overflow menu. Colour says whether anybody is on, and the sheet behind it says how many.
+    private var glyph: some View {
+        Label("\(model.sharing.reachablePeers)", systemImage: symbol)
+            .labelStyle(.iconOnly)
+            .symbolEffect(.pulse, isActive: model.sharing.isReconnecting)
     }
 
     /// Somebody else's match with no link to it. The code goes with the app, so a guest back from a
@@ -88,6 +100,9 @@ struct SharingBadge: View {
 
     private var description: String {
         if model.sharing.isReconnecting { return "Reconnecting to the shared match" }
+        guard isHosting else {
+            return model.sharing.reachablePeers > 0 ? "Connected to the shared match" : "Looking for the shared match"
+        }
         switch model.sharing.reachablePeers {
         case 0: return "Sharing, nobody has joined yet"
         case 1: return "Sharing with 1 phone"

@@ -127,6 +127,11 @@ struct SharingMenuItems: View {
             Button("Rejoin the match", systemImage: "arrow.right.circle") {
                 model.showingJoin = true
             }
+        } else if model.store.role == .guest, model.sharing.isReconnecting {
+            // The host's app was relaunched, most likely, and shares the match on a code of its own.
+            Button("Enter a new code", systemImage: "arrow.right.circle") {
+                model.showingJoin = true
+            }
         } else if model.store.canEndSession {
             Button("Share this match", systemImage: "person.2.wave.2") {
                 model.sharing.host()

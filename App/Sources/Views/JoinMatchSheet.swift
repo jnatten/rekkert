@@ -11,12 +11,15 @@ struct JoinMatchSheet: View {
     var submitsImmediately = false
 
     @State private var typed = ""
+    /// Whether this sheet has sent a code. A guest whose host shared the match again on a new
+    /// code opens it while still looking for the old one, and was shown that search, not a field.
+    @State private var submitted = false
     @FocusState private var typing: Bool
 
     var body: some View {
         NavigationStack {
             Group {
-                switch model.sharing.phase {
+                switch submitted ? model.sharing.phase : .off {
                 case .searching: waiting("Looking for the match…")
                 case .joined: waiting("Joined. Waiting for the match…")
                 case .failed(let failure): trouble(failure)
@@ -28,9 +31,10 @@ struct JoinMatchSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     // Not `stop()`, which for a guest back from a relaunch would leave the
-                    // match it still holds.
+                    // match it still holds. And only a join sent from here: a guest that opened
+                    // this and thought better of it goes on looking for the host it had.
                     Button("Cancel") {
-                        model.sharing.cancelJoining()
+                        if submitted { model.sharing.cancelJoining() }
                         dismiss()
                     }
                 }
@@ -48,7 +52,7 @@ struct JoinMatchSheet: View {
             .onDisappear {
                 // Swiped away mid-search: a search left running would conclude with nobody
                 // watching, or make a phone that goes on to share a guest of its own guests.
-                if model.store.isJoining { model.sharing.cancelJoining() }
+                if submitted, model.store.isJoining { model.sharing.cancelJoining() }
             }
         }
     }
@@ -104,6 +108,7 @@ struct JoinMatchSheet: View {
         } actions: {
             Button("Try again") {
                 model.sharing.dismissFailure()
+                submitted = false
                 typed = ""
                 typing = true
             }
@@ -120,6 +125,7 @@ struct JoinMatchSheet: View {
     private func submit() {
         guard let code = SessionCode(typed) else { return }
         typing = false
+        submitted = true
         model.sharing.join(code)
     }
 }

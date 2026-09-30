@@ -90,12 +90,16 @@ struct RootView: View {
             )
         ) {
             Button("Keep looking") { model.sharing.acknowledgeLostMatch() }
+            Button("Enter a new code") {
+                model.sharing.acknowledgeLostMatch()
+                model.showingJoin = true
+            }
             Button("Leave", role: .destructive) {
                 model.sharing.acknowledgeLostMatch()
                 model.sharing.stop()
             }
         } message: {
-            Text("Whoever shared this match is out of reach. The score here is the last that got through, and Rekkert will pick it up again if they come back.")
+            Text("Whoever shared this match is out of reach. The score here is the last that got through, and Rekkert will pick it up again if they come back. If they shared it again on a new code, enter that one.")
         }
         .alert(
             "Switched to the newer match",

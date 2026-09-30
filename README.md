@@ -497,7 +497,10 @@ even that is held until the search runs out, since one byte of fingerprint agree
 court's now and again — the right match, found after it over either link, still counts.
 Guests keep dialling on a timer rather than waiting for a Bonjour change that never comes, and
 a reconnect merges rather than replaces — both sides keep whatever they scored while apart. If
-the merged score is one nobody recognises, the host can settle it from the match menu.
+the merged score is one nobody recognises, the host can settle it from the match menu. A host
+whose app was relaunched shares the match again on a new code, since the code is never kept; a
+guest still looking for the old one types the new one in, from the match menu or the notice
+that the match is out of reach, and is back on the same match with what it scored meanwhile.
 
 ## Verifying
 
