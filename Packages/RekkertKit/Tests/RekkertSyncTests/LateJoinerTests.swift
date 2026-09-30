@@ -82,6 +82,73 @@ struct LateJoinerTests {
         #expect(latecomer.isJoining, "still waiting for the host's next one")
     }
 
+    /// A host between matches keeps its code for the evening. A phone joining it with a match of
+    /// its own on screen offered that match to the host, which took it up as its own — and the
+    /// phone that typed the code became a guest on its own match.
+    @Test func aHostBetweenMatchesIsNotHandedAJoinersOwnMatch() async throws {
+        let network = Hub()
+        let hostLinks = FanOutTransport()
+        hostLinks.attach(network, as: .sharedSession)
+        let host = MatchStore(device: DeviceID(), transport: hostLinks, snapshotInterval: 0)
+        host.startSharing()
+
+        let joinerDevice = DeviceID()
+        var own = MatchLog()
+        own.append(.configure(setup), from: joinerDevice)
+        own.append(.point(round: 0, court: 0, team: .a), from: joinerDevice)
+        let joinerLinks = FanOutTransport()
+        joinerLinks.attach(network.dialIn(), as: .sharedSession)
+        let joiner = MatchStore(
+            device: joinerDevice, transport: joinerLinks, session: ActiveSession(log: own), snapshotInterval: 0
+        )
+        let tasks = [Task { await host.run() }, Task { await joiner.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+
+        joiner.beginJoining()
+        await quietPeriod()
+        await quietPeriod()
+        #expect(host.state == nil, "the host is not handed somebody else's match")
+        #expect(joiner.isJoining, "and the joiner is still waiting for the host's")
+        #expect(joiner.log.sessionID == own.sessionID)
+
+        host.configure(setup)
+        await eventually { joiner.log.sessionID == host.log.sessionID && joiner.role == .guest }
+        #expect(joiner.log.sessionID == host.log.sessionID, "the host's next match is the one joined")
+        #expect(joiner.role == .guest)
+    }
+
+    /// The same host, joined by a phone walking away from another host's match. The idle host took
+    /// that match up, and the phone — refusing the match it was stepping off — waited for ever.
+    @Test func aHostBetweenMatchesIsNotHandedTheMatchAJoinerIsLeaving() async throws {
+        let network = Hub()
+        let hostLinks = FanOutTransport()
+        hostLinks.attach(network, as: .sharedSession)
+        let host = MatchStore(device: DeviceID(), transport: hostLinks, snapshotInterval: 0)
+        host.startSharing()
+
+        var other = MatchLog()
+        other.append(.configure(setup), from: DeviceID())
+        other.append(.point(round: 0, court: 0, team: .b), from: DeviceID())
+        let joinerLinks = FanOutTransport()
+        joinerLinks.attach(network.dialIn(), as: .sharedSession)
+        let joiner = MatchStore(
+            device: DeviceID(), transport: joinerLinks,
+            session: ActiveSession(log: other, role: .guest), snapshotInterval: 0
+        )
+        let tasks = [Task { await host.run() }, Task { await joiner.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+
+        joiner.beginJoining(steppingOff: true)
+        await quietPeriod()
+        await quietPeriod()
+        #expect(host.state == nil, "the other host's match stays with the other host")
+
+        host.configure(setup)
+        await eventually { joiner.log.sessionID == host.log.sessionID && joiner.role == .guest }
+        #expect(joiner.log.sessionID == host.log.sessionID)
+        #expect(!joiner.isJoining)
+    }
+
     @Test func aPhoneArrivingMidMatchIsHandedTheScore() async throws {
         let links = FanOutTransport()
         let host = MatchStore(device: DeviceID(), transport: links, snapshotInterval: 0)

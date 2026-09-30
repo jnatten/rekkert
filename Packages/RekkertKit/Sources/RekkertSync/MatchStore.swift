@@ -1106,8 +1106,9 @@ public final class MatchStore {
                 // ask down is the one it just used to tell us it has nothing. Live as well
                 // as queued: the queue reaches only this device's own watch, and a phone
                 // saying this over Bluetooth would otherwise wait for its next hello, which
-                // is its next unlock.
-                offerOurSession(live: true)
+                // is its next unlock. Not while joining, though: that nothing is the host
+                // between matches, and what this end holds is not what it went looking for.
+                offerOurSession(live: !isJoining)
             } else if isJoining, !packet.isFromPairedDevice {
                 if incoming.sessionID == joinRefuses {
                     // The match this device is walking away from, still in flight.
@@ -1143,6 +1144,10 @@ public final class MatchStore {
             } else if incoming.sessionID == counterpartLeftSessionID {
                 // Off this one as a pair, and neither the host's link nor the pair's own
                 // packets in flight can be trusted to have caught up.
+            } else if log.isEmpty, role == .host, !packet.isFromPairedDevice, !takesBackOneOfOurs(incoming) {
+                // A host between matches keeps its code, and the phones dialling in bring whatever
+                // they have on. That is theirs: the only match a guest can hand a host is the
+                // host's own, taken back.
             } else if log.isEmpty {
                 log = incoming
                 // An empty guest is handed the host's next match; that is the code lasting
@@ -1271,6 +1276,10 @@ public final class MatchStore {
         let others = Set(incoming.events.keys.map(\.device)).subtracting([device])
         guard let pairedDevice else { return others.count <= 1 }
         return others.isSubset(of: [pairedDevice])
+    }
+
+    private func takesBackOneOfOurs(_ incoming: MatchLog) -> Bool {
+        incoming.takesBack.map(retired.contains) ?? false
     }
 
     /// Takes the pair's match, and steps off whatever shared one this end was on.
