@@ -7,11 +7,12 @@ struct ConnectionBadge: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        Image(systemName: model.store.isReachable
+        // The pair's link alone: any link at all is also every other phone on a shared match.
+        Image(systemName: model.store.isPairReachable
               ? "applewatch.radiowaves.left.and.right"
               : "applewatch.slash")
-            .foregroundStyle(model.store.isReachable ? .green : .secondary)
-            .accessibilityLabel(model.store.isReachable ? "Watch connected" : "Watch not reachable")
+            .foregroundStyle(model.store.isPairReachable ? .green : .secondary)
+            .accessibilityLabel(model.store.isPairReachable ? "Watch connected" : "Watch not reachable")
     }
 }
 
