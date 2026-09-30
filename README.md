@@ -485,12 +485,13 @@ password-authenticated key exchange would close that, and a padel score is not w
 
 A Bluetooth link can stay up with nothing on the other end, so it is not taken at its word: a
 host whose service goes away is hung up on and dialled again, three unanswered questions in a
-row and a peer stops counting as there, and the radio switched off and on starts everything
-afresh. A host that went away, or was hung up on for not answering, is looked for as well as
-dialled where it was, since an iPhone's Bluetooth address moves on; one that proved itself once is
-never written off for being slow to do it again, and a connection that comes back before the
-host's service does is let go of and found again. What is waiting to go out
-goes a piece for each peer in turn, so one peer's long answer holds up nobody else's.
+row with nothing arriving meanwhile and a peer stops counting as there, and the radio switched
+off and on starts everything afresh. A host that went away, or was hung up on for not
+answering, is looked for as well as dialled where it was, since an iPhone's Bluetooth address
+moves on; one that proved itself once is never written off for being slow to do it again, and a
+connection that comes back before the host's service does is let go of and found again. What is
+waiting to go out goes a piece for each peer in turn, so one peer's long answer holds up nobody
+else's.
 
 A drop is not a refusal. `ReconnectPolicy` decides what losing a connection means, and the
 only thing that tells a wrong code from a host who walked off is whether anything ever worked.

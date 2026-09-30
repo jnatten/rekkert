@@ -445,6 +445,10 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     }
 
     private func receive(_ chunk: Data, from peer: Peer) {
+        // Anything arriving is the peer still there. Behind a long answer the next ones queue at
+        // the far end and run out of time, and counting those as unanswered hung up on a host
+        // part way through sending, which then started over on the reconnect.
+        lock.withLock { if peer.seal.isProven { peer.health.answered() } }
         let whole: Data?
         do {
             whole = try lock.withLock { try peer.reassembler.accept(chunk) }
