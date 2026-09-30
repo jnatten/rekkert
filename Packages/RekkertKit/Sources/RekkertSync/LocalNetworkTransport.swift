@@ -81,6 +81,9 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     /// connection that fails is the only evidence there is that the code was wrong;
     /// afterwards it is only evidence that a phone went into a pocket.
     private var hasEverJoined = false
+    /// Matches whose fingerprint agreed with the code and whose key did not. One byte agrees by
+    /// accident now and again, so each is somebody else's court, not yet an answer about the code.
+    private var refused: Set<UUID> = []
     private var lastSnapshot: Data?
     private var searchDeadline: DispatchWorkItem?
     private var redialTimer: DispatchSourceTimer?
@@ -247,8 +250,9 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             }
             // Final rather than a notice: left running, the timer's next dial could still land
             // after "not found", and the screen would say joined while nothing was joining.
+            let wasRefused = self.lock.withLock { !self.refused.isEmpty }
             self.stop()
-            self.publish(.failed(.notFound))
+            self.publish(.failed(wasRefused ? .rejected : .notFound))
         }
         lock.withLock { searchDeadline = deadline }
         queue.asyncAfter(deadline: .now() + delay, execute: deadline)
@@ -314,6 +318,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             listenerAttempts = 0
             intent = .none
             hasEverJoined = false
+            refused = []
             lastSnapshot = nil
             return values
         }
@@ -423,7 +428,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             // The browser reports everything it can see every time anything changes, and it
             // is rebuilt each time the app comes back — so a host this is already on comes
             // round again, and dialling it again would hold two links to one phone.
-            guard !lock.withLock({ links.values.contains { $0.share == share } }) else { continue }
+            guard !lock.withLock({ refused.contains(share) || links.values.contains { $0.share == share } }) else { continue }
 
             let connection = NWConnection(
                 to: result.endpoint,
@@ -472,8 +477,8 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
                 }
                 self.reachabilityUpdates.yield(true)
                 self.announce()
-            case .failed:
-                self.close(token, refusable: true)
+            case .failed(let error):
+                self.close(token, refusable: Self.isRefusal(error))
             case .cancelled:
                 // Never a rejection: a wrong pre-shared key surfaces as a failure, and a
                 // cancel is somebody hanging up — usually this end.
@@ -550,8 +555,10 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
 
         switch ReconnectPolicy.loss(circumstances) {
         case .refused:
-            // It was there and it would not have us, which is what a wrong code looks like.
-            publish(.failed(.rejected))
+            // A wrong code, or another court whose byte of fingerprint agreed. Said only when the
+            // search runs out, so the right match found after it, over either link, still counts.
+            lock.withLock { if let share = link.share { refused.insert(share) } }
+            announce()
         case .keepLooking:
             // It was working and went away — the host walked off, or a phone went in a
             // pocket. Go back to looking rather than sitting there with nothing. A dial that
@@ -603,6 +610,13 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         let (intent, count) = lock.withLock { (self.intent, links.count) }
         guard case .joining(let code) = intent, count == 0, let browser = browser.current else { return }
         consider(browser.browseResults, code: code)
+    }
+
+    /// A wrong key is refused in the handshake and surfaces as a TLS failure. Anything else — a
+    /// reset, a path that went away — says nothing about the code.
+    private static func isRefusal(_ error: NWError) -> Bool {
+        if case .tls = error { return true }
+        return false
     }
 
     private func receive(on link: Link) {

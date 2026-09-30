@@ -487,6 +487,9 @@ Bluetooth address moves on.
 
 A drop is not a refusal. `ReconnectPolicy` decides what losing a connection means, and the
 only thing that tells a wrong code from a host who walked off is whether anything ever worked.
+Nor is every failed dial one: only the handshake refusing the key counts against the code, and
+even that is held until the search runs out, since one byte of fingerprint agrees with another
+court's now and again — the right match, found after it over either link, still counts.
 Guests keep dialling on a timer rather than waiting for a Bonjour change that never comes, and
 a reconnect merges rather than replaces — both sides keep whatever they scored while apart. If
 the merged score is one nobody recognises, the host can settle it from the match menu.
