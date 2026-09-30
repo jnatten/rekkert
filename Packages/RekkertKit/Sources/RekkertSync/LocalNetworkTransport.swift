@@ -85,6 +85,10 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     /// accident now and again, so each is somebody else's court, not yet an answer about the code.
     private var refused: Set<UUID> = []
     private var lastSnapshot: Data?
+    /// The match last said to every link. Said again on every change, the whole log went out to
+    /// every phone for each point, and back from each guest relaying it, while the point itself
+    /// had already gone as an event.
+    private var broadcastSession: UUID?
     private var searchDeadline: DispatchWorkItem?
     private var redialTimer: DispatchSourceTimer?
     /// Per link, so a dial that never arrives can be given up on. Keyed the same way `links` is.
@@ -325,6 +329,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             hasEverJoined = false
             refused = []
             lastSnapshot = nil
+            broadcastSession = nil
             return values
         }
         for dial in dials { dial.cancel() }
@@ -342,7 +347,10 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     public func activate() {}
 
     public func forgetSnapshot() {
-        lock.withLock { lastSnapshot = nil }
+        lock.withLock {
+            lastSnapshot = nil
+            broadcastSession = nil
+        }
     }
 
     public var isReachable: Bool {
@@ -380,10 +388,16 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     }
 
     /// Kept, and handed to each connection as it becomes ready, so a phone joining mid-match
-    /// sees the score without waiting for a round trip of its own.
+    /// sees the score without waiting for a round trip of its own. Said to everybody only when it
+    /// is another match: the next one, or a result taken back.
     public func publishSnapshot(_ payload: Data) {
-        lock.withLock { lastSnapshot = payload }
-        broadcast(payload)
+        let session: UUID? = if case .snapshot(let log)? = try? Wire.decode(payload) { log.sessionID } else { nil }
+        let isAnotherMatch = lock.withLock { () -> Bool in
+            lastSnapshot = payload
+            defer { broadcastSession = session }
+            return session == nil || session != broadcastSession
+        }
+        if isAnotherMatch { broadcast(payload) }
     }
 
     // MARK: - Connections
