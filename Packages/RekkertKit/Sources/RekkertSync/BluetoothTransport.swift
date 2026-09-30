@@ -371,8 +371,13 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             guard let manager, let characteristic else { return false }
             return manager.updateValue(chunk, for: characteristic, onSubscribedCentrals: [central])
         }
-        let (server, inbox) = lock.withLock { (self.server, serverInbox) }
-        guard let server, let inbox else { return false }
+        let (server, inbox, isCurrent) = lock.withLock { () -> (CBPeripheral?, CBCharacteristic?, Bool) in
+            guard let server = self.server else { return (nil, nil, false) }
+            return (server, serverInbox, peers[ObjectIdentifier(server)] === peer)
+        }
+        // What was waiting for a peer since dropped belongs to a link that is gone. Written into
+        // the one that replaced it, it breaks whatever frame that one is in the middle of.
+        guard isCurrent, let server, let inbox else { return false }
         guard lock.withLock({ !peer.isWriting }) else { return false }
         lock.withLock { peer.isWriting = true }
         // With a response rather than without: the point of this link is that it goes on
