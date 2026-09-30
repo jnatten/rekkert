@@ -377,7 +377,15 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
 
     private func deliver(_ chunk: Data, to peer: Peer) -> Bool {
         if let central = peer.central {
-            let (manager, characteristic) = lock.withLock { (peripheralManager, outbox) }
+            let (manager, characteristic, isCurrent) = lock.withLock {
+                (peripheralManager, outbox, peers[ObjectIdentifier(central)] === peer)
+            }
+            // The same central subscribed again, and is another peer now: written into its new
+            // connection, this would break whatever frame that one is in the middle of.
+            guard isCurrent else {
+                lock.withLock { peer.backlog.removeAll() }
+                return false
+            }
             guard let manager, let characteristic else { return false }
             return manager.updateValue(chunk, for: characteristic, onSubscribedCentrals: [central])
         }
@@ -640,9 +648,10 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     }
 
     fileprivate func discovered(_ peripheral: CBPeripheral, on manager: CBCentralManager) {
-        guard isCurrent(manager) else { return }
+        // Checked under the lock that takes the peripheral: checked apart, a `stop()` and the next
+        // join in between left this one's host in the new join's place.
         let (take, stale) = lock.withLock { () -> (Bool, CBPeripheral?) in
-            guard !rejected.contains(peripheral.identifier) else { return (false, nil) }
+            guard centralManager === manager, !rejected.contains(peripheral.identifier) else { return (false, nil) }
             guard let current = server else {
                 server = peripheral
                 return (true, nil)
@@ -698,7 +707,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
 
     fileprivate func connected(_ peripheral: CBPeripheral, on manager: CBCentralManager) {
         // One given up on for another, that got there anyway.
-        guard isCurrent(manager), lock.withLock({ server === peripheral }) else {
+        guard lock.withLock({ centralManager === manager && server === peripheral }) else {
             return manager.cancelPeripheralConnection(peripheral)
         }
         // A reconnect as much as a first connect. The phone can be back before its service is,
@@ -753,7 +762,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         for characteristic in service.characteristics ?? [] {
             switch characteristic.uuid {
             case Self.greetingUUID: peripheral.readValue(for: characteristic)
-            case Self.inboxUUID: lock.withLock { serverInbox = characteristic }
+            case Self.inboxUUID: lock.withLock { if server === peripheral { serverInbox = characteristic } }
             default: break
             }
         }
