@@ -419,14 +419,40 @@ replayed delivery is harmless. Two simultaneous taps on both devices are distinc
 and both count. Undo is a tombstone event rather than a deletion, so an undo on the watch
 and a point on the phone both survive.
 
+Undo takes back the last thing that moved the board, not merely the last thing recorded. Two
+devices drawing the same round or blowing the same whistle leave two of it in the log, and
+only the first counts — so the second changed nothing, and taking back the first alone would
+only let the second count instead. Undo takes back both. On a tournament court's own screen,
+on the phone or the watch, it takes back only what was scored on that court: with a phone on
+every court, court 2's Undo is not court 1's to use.
+
+The point that won a match can be taken back from the result screen by anybody on it, which
+reopens the match where it stood. The host's own Finish or Discard can be taken back only on
+the host's side. Reopened, the match takes a name worked out from the one it was taken back
+from, so two devices taking it back at once reopen the same match rather than one each. A
+guest that takes the point back just as the host starts its next match goes onto the host's,
+and the match it took back is filed as it ended.
+
+A shared match ends only on the host's side. The reducer would apply a Finish from any device,
+so a host takes back any that reaches it from a phone other than itself or its own watch — an
+older build that let a guest end it, say — and a guest whose copy that Finish ended is put
+back on the match by it. A guest's own watch ending its copy alone ends nothing of the host's.
+
+An event of a kind this build cannot read — recorded by a newer one — changes nothing here,
+is kept in its place in the log and passed on unchanged, so a newer phone on the match never
+stalls an older one.
+
 Live updates go over `sendMessage`, whose reply doubles as an acknowledgement carrying the
 peer's version vector — one round trip that both confirms delivery and reconciles.
 Durability is an outbox we persist ourselves rather than `transferUserInfo`, which is not
 supported on the watchOS Simulator. `updateApplicationContext` carries a whole-log snapshot
-as the cold-start backstop.
+as the cold-start backstop. WatchConnectivity refuses a message, a reply or a queued transfer
+over 64 KB and a context over 256 KB, without telling anybody, and a whole log is past 64 KB
+by the middle of an evening's americano; anything too big goes as a file instead.
 
 If a phone and a watch each end up with a session of their own, the more recently started
-one wins and the other is archived to History rather than dropped.
+one wins and the other is archived to History rather than dropped. The watch keeps no History,
+so what it lets go of it hands to its phone, which files it.
 
 Between phones the same conversation runs over two links at once. The local network —
 Bonjour over Network.framework, with the six-digit code as a TLS pre-shared key — is the
@@ -438,11 +464,24 @@ both hears everything twice, which costs bytes and nothing else, because merging
 Bluetooth cannot carry the code in its advertisement — a backgrounded peripheral drops its
 name and service data and moves its service UUID into an overflow area — so the UUID is fixed
 and app-wide, and the code is checked after connecting instead: the host publishes a share id
-and a one-byte fingerprint, and every frame is then sealed with a key derived from the code.
+and a one-byte fingerprint, and every frame is then sealed with a key derived from the code —
+one key each way, so nothing that merely echoes a guest's frames back can pass for the host.
 Neither end counts the other as on the match until something it sealed has opened, so a host
-that agreed on the one byte by accident is hung up on and the next one tried.
+that agreed on the one byte by accident is hung up on and the next one tried. The host proves
+itself first and sends the match after: behind a long log, the proof came too late to count.
 Deriving the service UUID from the code would be worse than saying nothing, since twenty bits
 of code under a hash broadcast in the clear comes straight back out.
+
+Twenty bits keeps out anybody passing who was not told the code. It does not keep out somebody
+in range who sets out to get in: one frame caught over Bluetooth, or one handshake against a
+listener made to look like the host's, is enough to try every code offline. Only a
+password-authenticated key exchange would close that, and a padel score is not worth one.
+
+A Bluetooth link can stay up with nothing on the other end, so it is not taken at its word: a
+host whose service goes away is hung up on and dialled again, three unanswered questions in a
+row and a peer stops counting as there, and the radio switched off and on starts everything
+afresh. A host that went away is looked for as well as dialled where it was, since an iPhone's
+Bluetooth address moves on.
 
 A drop is not a refusal. `ReconnectPolicy` decides what losing a connection means, and the
 only thing that tells a wrong code from a host who walked off is whether anything ever worked.

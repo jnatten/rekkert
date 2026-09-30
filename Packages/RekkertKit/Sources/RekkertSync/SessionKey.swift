@@ -32,10 +32,9 @@ nonisolated public enum SessionKey {
     ///
     /// One and not more. The code carries twenty bits, so every bit of a hash of it published
     /// in the clear is a bit anyone within earshot of the network can take off it offline.
-    /// Eight bits leaves some four thousand candidates, each of which has to be tried against a
-    /// live host one failed handshake at a time. The cost is a wasted handshake once in every
-    /// 256 sessions picked, which is why the joiner tries every advertisement that matches
-    /// rather than only the first.
+    /// Eight bits leaves some four thousand candidates for somebody who only listens. The cost
+    /// is a wasted handshake once in every 256 sessions picked, which is why the joiner tries
+    /// every advertisement that matches rather than only the first.
     public static func fingerprint(for code: SessionCode, share: UUID) -> String {
         let digest = HKDF<SHA256>.deriveKey(
             inputKeyMaterial: SymmetricKey(data: Data(code.letters.utf8)),
