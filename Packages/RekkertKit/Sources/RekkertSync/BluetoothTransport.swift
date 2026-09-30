@@ -499,8 +499,15 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
 
     // MARK: - Hosting
 
+    /// Whether a callback comes from the manager in use. `stop()` lets go of one, and whatever it
+    /// had in flight still arrives — a late one advertised on a manager nobody holds, or dialled a
+    /// host in the middle of the next join.
+    private func isCurrent(_ manager: CBPeripheralManager) -> Bool { lock.withLock { peripheralManager === manager } }
+    private func isCurrent(_ manager: CBCentralManager) -> Bool { lock.withLock { centralManager === manager } }
+
     fileprivate func peripheralManagerDidUpdateState(_ manager: CBPeripheralManager) {
         #if os(iOS)
+        guard isCurrent(manager) else { return }
         guard manager.state == .poweredOn else { return lostTheRadio() }
         guard case .hosting = lock.withLock({ intent }) else { return }
 
@@ -526,7 +533,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     }
 
     fileprivate func answerGreeting(_ request: CBATTRequest, on manager: CBPeripheralManager) {
-        guard case .hosting(let code, let share) = lock.withLock({ intent }),
+        guard isCurrent(manager), case .hosting(let code, let share) = lock.withLock({ intent }),
               let body = try? JSONCoding.encoder.encode(Greeting(
                   v: Greeting.version, share: share, fp: SessionKey.fingerprint(for: code, share: share)
               ))
@@ -539,8 +546,8 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         manager.respond(to: request, withResult: .success)
     }
 
-    fileprivate func subscribed(_ central: CBCentral) {
-        guard case .hosting(let code, let share) = lock.withLock({ intent }) else { return }
+    fileprivate func subscribed(_ central: CBCentral, on manager: CBPeripheralManager) {
+        guard isCurrent(manager), case .hosting(let code, let share) = lock.withLock({ intent }) else { return }
         let peer = Peer(central: central)
         peer.sealing = SessionKey.sealingKey(for: code, share: share, direction: .hostToGuest)
         peer.opening = SessionKey.sealingKey(for: code, share: share, direction: .guestToHost)
@@ -555,6 +562,10 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     }
 
     fileprivate func wrote(_ requests: [CBATTRequest], on manager: CBPeripheralManager) {
+        guard isCurrent(manager) else {
+            if let first = requests.first { manager.respond(to: first, withResult: .attributeNotFound) }
+            return
+        }
         var writers: [Peer] = []
         var writes: [ObjectIdentifier: [(offset: Int, value: Data)]] = [:]
         for request in requests {
@@ -580,12 +591,14 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     // MARK: - Joining
 
     fileprivate func centralManagerDidUpdateState(_ manager: CBCentralManager) {
+        guard isCurrent(manager) else { return }
         guard manager.state == .poweredOn else { return lostTheRadio() }
         guard case .joining = lock.withLock({ intent }) else { return }
         manager.scanForPeripherals(withServices: [Self.serviceUUID], options: nil)
     }
 
     fileprivate func discovered(_ peripheral: CBPeripheral, on manager: CBCentralManager) {
+        guard isCurrent(manager) else { return }
         let (take, stale) = lock.withLock { () -> (Bool, CBPeripheral?) in
             guard !rejected.contains(peripheral.identifier) else { return (false, nil) }
             guard let current = server else {
@@ -642,13 +655,16 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
 
     fileprivate func connected(_ peripheral: CBPeripheral, on manager: CBCentralManager) {
         // One given up on for another, that got there anyway.
-        guard lock.withLock({ server === peripheral }) else { return manager.cancelPeripheralConnection(peripheral) }
+        guard isCurrent(manager), lock.withLock({ server === peripheral }) else {
+            return manager.cancelPeripheralConnection(peripheral)
+        }
         peripheral.discoverServices([Self.serviceUUID])
     }
 
     /// `failed` for a connection that never came up. Dialled again at once, one that fails at once
     /// does so as fast as the radio can go round.
     fileprivate func disconnected(_ peripheral: CBPeripheral, on manager: CBCentralManager, failed: Bool) {
+        guard isCurrent(manager) else { return }
         let wasProven = lock.withLock { peers[ObjectIdentifier(peripheral)]?.isReady == true }
         forget(ObjectIdentifier(peripheral))
         let reconnects = lock.withLock { () -> Bool in
@@ -723,6 +739,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     /// settles it cheaply, and the seal settles it for good — a peer that agreed on one byte
     /// by accident still cannot produce a frame this end will open.
     private func greeted(_ value: Data?, on peripheral: CBPeripheral) {
+        guard lock.withLock({ server === peripheral }) else { return }
         guard case .joining(let code) = lock.withLock({ intent }),
               let value,
               let greeting = try? JSONCoding.decoder.decode(Greeting.self, from: value),
@@ -830,7 +847,7 @@ nonisolated private final class Shim: NSObject, CBPeripheralManagerDelegate,
         central: CBCentral,
         didSubscribeTo characteristic: CBCharacteristic
     ) {
-        transport?.subscribed(central)
+        transport?.subscribed(central, on: peripheral)
     }
 
     func peripheralManager(
