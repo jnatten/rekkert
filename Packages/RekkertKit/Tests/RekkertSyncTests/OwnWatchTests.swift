@@ -324,6 +324,27 @@ struct OwnWatchTests {
         #expect(pair.phone.state == nil, "nor the phone from its own watch")
     }
 
+    /// The phone and its own watch both take the result back at once. The newer of the two fresh
+    /// matches won, and the phone filed its own take-back as a displaced match.
+    @Test func aResultTakenBackOnThePhoneAndTheWatchAtOnceIsOneMatch() async throws {
+        let pair = PhoneWithWatch(phoneLog: nil, hostLog: nil)
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        pair.phone.configure(.pointCount(rules: PointCountRules(target: 2), teams: BySide(a: .home, b: .away)))
+        pair.phone.tap(team: .a)
+        await eventually { inStep(pair.phone, pair.watch) }
+
+        pair.phone.tap(team: .a)
+        await eventually { pair.phone.resultRewind != nil && pair.watch.resultRewind != nil }
+        pair.phone.undoResult()
+        pair.watch.undoResult()
+        await eventually { inStep(pair.phone, pair.watch) }
+
+        #expect(pair.phone.log.sessionID == pair.watch.log.sessionID)
+        #expect(pair.phone.replacedSessionTitle == nil, "nothing was displaced")
+        #expect(pair.phone.state?.isFinished == false)
+    }
+
     /// A watch hands its last snapshot over again every time it wakes. After a relaunch, or a join
     /// that was called off, the phone no longer remembered leaving that match, and took it up as
     /// a match of its own.

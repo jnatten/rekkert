@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Observation
 import RekkertCore
@@ -672,6 +673,9 @@ public final class MatchStore {
         // a result back is not stepping off — the host takes the reopened match up.
         leftSessionID = nil
         clearSession()
+        // The same session wherever it is taken back, so two devices doing it at once reopen
+        // one match rather than splitting it in two.
+        if let filed { log = MatchLog(sessionID: Self.reopening(filed), createdAt: farewells[filed]?.createdAt ?? Date()) }
         if keepsHistory, let filed, let ended = farewells[filed] {
             try? store?.save(carry: .takingBack(
                 ended, into: log.sessionID, carried: store?.carry(for: filed), me: me(in: filed)
@@ -679,6 +683,17 @@ public final class MatchStore {
         }
         record(.restore(rewind.state, takingBack: filed))
         if keepsHistory, let filed { try? store?.deleteHistory(filed) }
+    }
+
+    /// A name for the match a session is taken back into, the same on every device.
+    static func reopening(_ ended: UUID) -> UUID {
+        var bytes = Array(SHA256.hash(data: Data("rekkert.reopened|".utf8) + withUnsafeBytes(of: ended.uuid) { Data($0) }).prefix(16))
+        bytes[6] = (bytes[6] & 0x0F) | 0x50
+        bytes[8] = (bytes[8] & 0x3F) | 0x80
+        return UUID(uuid: (
+            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+            bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
+        ))
     }
 
     /// Files a session under its own id, with the timeline its log leaves behind. The one way

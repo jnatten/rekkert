@@ -414,6 +414,40 @@ struct RoleTests {
         #expect(host.log.sessionID == guest.log.sessionID, "which the host took up again")
     }
 
+    /// The host and a guest both reach for the way back at once. Each made a fresh match of its
+    /// own, each refused the other's as somebody else's, and the match was split in two for good.
+    @Test func aResultTakenBackOnTwoPhonesAtOnceIsOneMatch() async throws {
+        let hostDevice = DeviceID()
+        let (one, two) = LoopbackTransport.pair()
+        let hostFan = FanOutTransport()
+        hostFan.attach(one, as: .sharedSession)
+        let guestFan = FanOutTransport()
+        guestFan.attach(two, as: .sharedSession)
+        var twoPoints = MatchLog()
+        twoPoints.append(.configure(.pointCount(rules: PointCountRules(target: 2), teams: BySide(a: .home, b: .away))), from: hostDevice)
+        twoPoints.append(.point(round: 0, court: 0, team: .a), from: hostDevice)
+        let host = MatchStore(
+            device: hostDevice, transport: hostFan, session: ActiveSession(log: twoPoints, role: .host), snapshotInterval: 0
+        )
+        let guest = MatchStore(device: DeviceID(), transport: guestFan, snapshotInterval: 0)
+        let tasks = [Task { await host.run() }, Task { await guest.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+        await quietPeriod()
+        guest.beginJoining()
+        await eventually { guest.role == .guest }
+
+        host.tap(team: .a)
+        await eventually { guest.resultRewind != nil && host.resultRewind != nil }
+        host.undoResult()
+        guest.undoResult()
+        await eventually { inStep(host, guest) }
+
+        #expect(host.log.sessionID == guest.log.sessionID, "one match, taken back twice")
+        #expect(inStep(host, guest))
+        #expect(host.state?.isFinished == false)
+        #expect(guest.role == .guest)
+    }
+
     /// The host's Finish is the host's. Taken back by a guest, it reopened a match the host had
     /// ended — and if the host had moved on, left the guest alone on it.
     @Test func aGuestCannotTakeBackTheHostsFinish() async throws {
