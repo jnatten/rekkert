@@ -991,7 +991,7 @@ public final class MatchStore {
             }
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
             arrive(on: sessionID, from: packet)
-            relay(events)
+            relay(events, from: packet)
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
         case .retired(let sessionID, let archive, let farewell):
@@ -1003,7 +1003,7 @@ public final class MatchStore {
                 // won the match out of earshot end it here too — the winning point is in
                 // there — while a guest that merely retired its copy ends nothing.
                 if let farewell, farewell.sessionID == sessionID {
-                    relay(farewell.ordered)
+                    relay(farewell.ordered, from: packet)
                 }
                 // Still in play after that, so the ending has to be said. The same path the
                 // `.finish` event would have taken, so the match is archived and the result
@@ -1110,7 +1110,7 @@ public final class MatchStore {
                 }
                 pickBackUp(ended)
                 arrive(on: ended.sessionID, from: packet)
-                relay(incoming.ordered)
+                relay(incoming.ordered, from: packet)
             } else if incoming.isEmpty {
                 // A peer that has not started anything yet is not a competing session, but
                 // it does need ours — and it cannot ask for it, since the reply it would
@@ -1129,7 +1129,7 @@ public final class MatchStore {
                     // adopting would file the live match to History as displaced and drop
                     // whatever was scored here while out of reach.
                     arrive(on: incoming.sessionID, from: packet)
-                    relay(incoming.ordered)
+                    relay(incoming.ordered, from: packet)
                 } else {
                     // A code was typed, so this is the session that was asked for, whatever
                     // the clocks say about which of the two was started more recently — and
@@ -1182,7 +1182,7 @@ public final class MatchStore {
                 }
             } else if incoming.sessionID == log.sessionID {
                 arrive(on: incoming.sessionID, from: packet)
-                relay(incoming.ordered)
+                relay(incoming.ordered, from: packet)
             } else if packet.isFromPairedDevice, pairedRole == .host {
                 // A host is never taken over, so the watch on the same wrist is the one that
                 // gives way, whatever it thought it was on.
@@ -1243,13 +1243,14 @@ public final class MatchStore {
         shareRole()
     }
 
-    private func relay(_ incoming: [MatchEvent]) {
+    private func relay(_ incoming: [MatchEvent], from packet: InboundPacket) {
         let fresh = incoming.filter { log.events[$0.id] == nil }
         let before = state
         let session = log.sessionID
         guard log.merge(fresh) else { return }
-        outbox.enqueue(contentsOf: fresh)
-        push(fresh, in: session)
+        let overruled = packet.isFromPairedDevice ? [] : overrule(endingsIn: fresh)
+        outbox.enqueue(contentsOf: fresh + overruled)
+        push(fresh + overruled, in: session)
         // Only what was genuinely new, so the same point arriving over both radios is
         // mentioned once, and the board as it stands before this device redraws it.
         let after = SessionReducer.state(of: log)
@@ -1264,6 +1265,17 @@ public final class MatchStore {
         // got, acknowledged on the sender's behalf by a peer that did. Nothing is coming to
         // fill it unprompted, so ask now rather than wait for the next reconnect.
         if log.coverage != log.vector { Task { await askWhatIsMissing() } }
+    }
+
+    /// A shared match ends where it belongs. A Finish from anybody else's phone — a build that let
+    /// a guest end it, or a watch that took the host's match for its own — is taken back here
+    /// before it can end anything, and the taking back goes out to everybody who has it.
+    private func overrule(endingsIn fresh: [MatchEvent]) -> [MatchEvent] {
+        guard role == .host else { return [] }
+        return fresh.compactMap { event in
+            guard case .finish = event.kind, event.id.device != device, event.id.device != pairedDevice else { return nil }
+            return log.append(.undo(event.id), from: device, at: MatchEvent.stamp())
+        }
     }
 
     /// Replaces the local session with the peer's. Anything already scored locally is

@@ -208,6 +208,32 @@ struct FarewellTests {
         #expect(winner(pair.host.lastResult) == .a)
     }
 
+    /// A Finish written by somebody who is not the host — an older build that let a guest end it,
+    /// or a watch that took the host's match for its own — reached the host like any other event
+    /// and ended the match for everybody. The host takes it back, and the guest comes back too.
+    @Test func aFinishFromAGuestDoesNotEndTheHostsMatch() async throws {
+        let pair = HostAndGuest()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        pair.host.configure(setup)
+        pair.guest.beginJoining()
+        await eventually { pair.guest.role == .guest }
+        pair.host.tap(team: .a)
+        await eventually { inStep(pair.host, pair.guest) }
+
+        var forged = pair.guest.log
+        let finish = forged.append(.finish(archive: true), from: DeviceID())
+        let push = try Wire.events(sessionID: forged.sessionID, events: [finish]).encoded()
+        pair.guestSide.queue(push)
+        pair.hostSide.queue(push)
+        await eventually { pair.host.log.events[finish.id] != nil || pair.host.state == nil }
+        await eventually { inStep(pair.host, pair.guest) && pair.guest.state != nil }
+
+        #expect(pair.host.state?.isFinished == false, "the host plays on")
+        #expect(pair.guest.state?.isFinished == false, "and the guest is back on it")
+        #expect(inStep(pair.host, pair.guest))
+    }
+
     /// A guest that merely retired its copy — its watch called off a match on a role it had
     /// wrong, say — is still saying something about its own phone, not the match.
     @Test func aGuestsRetirementWithoutAnEndingDoesNotEndTheHostsMatch() async throws {
