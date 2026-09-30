@@ -22,3 +22,23 @@ nonisolated enum LinkReplies {
         [probe] + (snapshot.map { [Frame(kind: .oneway, payload: $0)] } ?? [])
     }
 }
+
+/// Whether a peer that is still connected is still answering.
+///
+/// A link can stay up and carry nothing: the host stopped sharing or its app went away, and
+/// Bluetooth kept the connection. The peer went on counting as there, so the loss was never
+/// noticed, every send waited on it, and nothing it was sent was ever acknowledged.
+nonisolated struct LinkHealth {
+    /// In a row, and only questions that went out whole: a peer still being sent a long frame
+    /// is slow, not gone.
+    static let patience = 3
+    private(set) var misses = 0
+
+    mutating func answered() { misses = 0 }
+
+    /// Whether that was one too many.
+    mutating func missed() -> Bool {
+        misses += 1
+        return misses >= Self.patience
+    }
+}

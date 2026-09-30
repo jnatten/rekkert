@@ -30,3 +30,21 @@ struct LinkRepliesTests {
         #expect(LinkReplies.opening(snapshot: nil, probe: probe) == [probe])
     }
 }
+
+@Suite("Whether a peer is still there")
+struct LinkHealthTests {
+    @Test func threeUnansweredQuestionsInARowAreAPeerGone() {
+        var health = LinkHealth()
+        let verdicts = (0 ..< 3).map { _ in health.missed() }
+        #expect(verdicts == [false, false, true], "the third in a row")
+    }
+
+    @Test func anAnswerInBetweenStartsTheCountAgain() {
+        var health = LinkHealth()
+        _ = health.missed()
+        _ = health.missed()
+        health.answered()
+        let verdicts = (0 ..< 2).map { _ in health.missed() }
+        #expect(verdicts == [false, false])
+    }
+}

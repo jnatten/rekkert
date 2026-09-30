@@ -70,6 +70,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         /// This end's frames are sealed with one, the other end's opened with the other.
         var sealing: SymmetricKey?
         var opening: SymmetricKey?
+        var health = LinkHealth()
         /// Guest side only. A write is answered before the next one goes out: CoreBluetooth
         /// will take more than it can carry and then drop the overflow, and a dropped chunk is
         /// a frame that never opens at the far end and a reply somebody waits the timeout out
@@ -264,7 +265,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             nextCorrelation &+= 1
             return value
         }
-        return await withCheckedContinuation { continuation in
+        let reply = await withCheckedContinuation { continuation in
             let once = ResumeOnce(continuation)
             lock.withLock { waiting[correlation] = once }
             send(Frame(kind: .request, correlation: correlation, payload: payload), to: peer)
@@ -277,6 +278,32 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
                 once.resume(nil)
             }
         }
+        if reply != nil {
+            lock.withLock { peer.health.answered() }
+        } else if lock.withLock({ peer.backlog.isEmpty }) {
+            missed(peer)
+        }
+        return reply
+    }
+
+    /// A question that went out whole and was never answered, or a write that failed. Enough of
+    /// them in a row and the peer is not counted as there: a host is hung up on, so the reconnect
+    /// dials it afresh, and a guest waits to prove itself again with its next frame.
+    private func missed(_ peer: Peer) {
+        let givenUp = lock.withLock { () -> Bool in
+            guard peer.isReady, peer.health.missed() else { return false }
+            peer.isReady = false
+            peer.health = LinkHealth()
+            return true
+        }
+        guard givenUp else { return }
+        reachabilityUpdates.yield(isReachable)
+        guard peer.central == nil else { return }
+        let (manager, server) = lock.withLock { () -> (CBCentralManager?, CBPeripheral?) in
+            guard let server, peers[ObjectIdentifier(server)] === peer else { return (nil, nil) }
+            return (centralManager, server)
+        }
+        if let server { manager?.cancelPeripheralConnection(server) }
     }
 
     private func broadcast(_ payload: Data) {
@@ -352,10 +379,26 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         return true
     }
 
-    fileprivate func wroteChunk(to peripheral: CBPeripheral) {
+    fileprivate func wroteChunk(to peripheral: CBPeripheral, failed: Bool) {
         guard let peer = lock.withLock({ peers[ObjectIdentifier(peripheral)] }) else { return }
         lock.withLock { peer.isWriting = false }
+        if failed { missed(peer) }
         drain(peer)
+    }
+
+    /// The host took its service away — it stopped sharing, or its app went — and Bluetooth kept
+    /// the connection up with nothing on the other end of it. Hung up on, the reconnect finds
+    /// the service when it comes back, or finds that it is somebody else's now.
+    fileprivate func servicesChanged(_ invalidated: [CBService], on peripheral: CBPeripheral) {
+        guard invalidated.contains(where: { $0.uuid == Self.serviceUUID }) else { return }
+        let manager = lock.withLock { () -> CBCentralManager? in
+            guard server === peripheral else { return nil }
+            serverInbox = nil
+            return centralManager
+        }
+        guard let manager else { return }
+        forget(ObjectIdentifier(peripheral))
+        manager.cancelPeripheralConnection(peripheral)
     }
 
     private func drainEverybody() {
@@ -821,7 +864,11 @@ nonisolated private final class Shim: NSObject, CBPeripheralManagerDelegate,
         didWriteValueFor characteristic: CBCharacteristic,
         error: (any Error)?
     ) {
-        transport?.wroteChunk(to: peripheral)
+        transport?.wroteChunk(to: peripheral, failed: error != nil)
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didModifyServices invalidatedServices: [CBService]) {
+        transport?.servicesChanged(invalidatedServices, on: peripheral)
     }
 
     func peripheral(
