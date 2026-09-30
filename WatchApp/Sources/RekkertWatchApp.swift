@@ -25,6 +25,12 @@ struct RekkertWatchApp: App {
 final class WatchAppDelegate: NSObject, WKApplicationDelegate {
     let model = AppModel()
 
+    /// Here as well as on the window: a workout started from the phone launches this app in the
+    /// background, before there is a window to start anything.
+    func applicationDidFinishLaunching() {
+        model.start()
+    }
+
     func handle(_ workoutConfiguration: HKWorkoutConfiguration) {
         model.workout.handle(workoutConfiguration)
     }

@@ -27,4 +27,14 @@ final class PhoneAppDelegate: NSObject, UIApplicationDelegate {
         super.init()
         BoardSceneDelegate.model = model
     }
+
+    /// Here as well as on the window: the system launches the app in the background for the
+    /// watch or the radio, and no window is made then, so nothing would be listening.
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        model.start()
+        return true
+    }
 }
