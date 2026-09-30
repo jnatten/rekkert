@@ -57,6 +57,48 @@ nonisolated private final class SlowGuest: PeerTransport, @unchecked Sendable {
     func queue(_ payload: Data) {}
 }
 
+/// This phone's own watch, there and slow to answer, with what it is sent live and queued
+/// counted by kind — and a way for it to say hello.
+nonisolated private final class SlowWatch: PeerTransport, @unchecked Sendable {
+    let inbound: AsyncStream<InboundPacket>
+    let reachability = AsyncStream<Bool> { _ in }
+    private let packets: AsyncStream<InboundPacket>.Continuation
+    private let lock = NSLock()
+    private var live: [String: Int] = [:]
+    private var queued: [String: Int] = [:]
+
+    init() {
+        var continuation: AsyncStream<InboundPacket>.Continuation!
+        inbound = AsyncStream { continuation = $0 }
+        packets = continuation
+    }
+
+    func sent(_ kind: String) -> Int { lock.withLock { live[kind, default: 0] + queued[kind, default: 0] } }
+
+    func sayHello(on session: UUID) throws {
+        packets.yield(InboundPacket(payload: try Wire.hello(sessionID: session, vector: VersionVector(), from: DeviceID()).encoded()))
+    }
+
+    var isReachable: Bool { true }
+    func activate() {}
+    func sendLive(_ payload: Data) async -> Data? {
+        lock.withLock { live[Self.kind(payload), default: 0] += 1 }
+        try? await Task.sleep(for: .milliseconds(60))
+        return nil
+    }
+    func publishSnapshot(_ payload: Data) {}
+    func queue(_ payload: Data) { lock.withLock { queued[Self.kind(payload), default: 0] += 1 } }
+
+    private static func kind(_ payload: Data) -> String {
+        switch try? Wire.decode(payload) {
+        case .presets?: "presets"
+        case .display?: "display"
+        case .role?: "role"
+        default: "other"
+        }
+    }
+}
+
 nonisolated private func queuedEventCount(_ payloads: [Data]) -> Int {
     payloads.reduce(0) { total, payload in
         guard case .events(_, let events)? = try? Wire.decode(payload) else { return total }
@@ -115,5 +157,38 @@ struct DurableQueueTests {
 
         #expect(inStep(host, watch))
         #expect(queuedEventCount(toWatch.queued) <= host.log.events.count)
+    }
+
+    /// Every other phone's hello had this one say its saved setups, its display and its role again
+    /// to its own watch — which had them — and queue the lot whenever the watch was slow to answer.
+    @Test func anotherPhonesHelloIsNotRepeatedToTheWatch() async throws {
+        let watch = SlowWatch()
+        let (hostEnd, guestEnd) = LoopbackTransport.pair()
+        let links = FanOutTransport(childTimeout: .milliseconds(30))
+        links.attach(watch, as: .pairedDevice)
+        links.attach(hostEnd, as: .sharedSession)
+        let host = MatchStore(device: DeviceID(), transport: links, snapshotInterval: 0)
+        host.configure(setup)
+        host.startSharing()
+        host.savePreset(Preset(name: "Thursday", configuration: .traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away))))
+        host.setScoreboardMirrored(true)
+        let task = Task { await host.run() }
+        defer { task.cancel() }
+        await quietPeriod()
+        let before = (watch.sent("presets"), watch.sent("display"), watch.sent("role"))
+
+        for _ in 0 ..< 10 {
+            _ = await guestEnd.sendLive(try Wire.hello(sessionID: host.log.sessionID, vector: VersionVector(), from: DeviceID()).encoded())
+        }
+        await quietPeriod()
+        #expect(watch.sent("presets") == before.0)
+        #expect(watch.sent("display") == before.1)
+        #expect(watch.sent("role") == before.2)
+
+        // The watch coming back is what they are for.
+        try watch.sayHello(on: host.log.sessionID)
+        await eventually { watch.sent("presets") > before.0 && watch.sent("role") > before.2 }
+        #expect(watch.sent("presets") > before.0)
+        #expect(watch.sent("role") > before.2)
     }
 }

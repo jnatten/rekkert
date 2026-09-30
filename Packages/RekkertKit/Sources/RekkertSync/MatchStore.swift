@@ -1025,12 +1025,16 @@ public final class MatchStore {
             // Only the pair's: a stranger's phone is somebody else by definition, and on a
             // watch every packet arrives through its own phone anyway.
             if packet.isFromPairedDevice, let sender, sender != device { pairedDevice = sender }
-            sharePresets()
-            shareDisplay()
-            shareHaptics()
-            shareRoleOnReconnect()
-            shareWorkoutOnReconnect()
-            shareStandbyOnReconnect()
+            // The pair coming back is what these are said again for. Every other phone's hello
+            // repeated them to this one's own watch, and onto its queue whenever it was slow.
+            if packet.isFromPairedDevice {
+                sharePresets()
+                shareDisplay()
+                shareHaptics()
+                shareRoleOnReconnect()
+                shareWorkoutOnReconnect()
+                shareStandbyOnReconnect()
+            }
             guard !retired.contains(sessionID) else {
                 return announceRetirement(of: sessionID, to: packet)
             }
