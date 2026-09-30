@@ -1000,10 +1000,11 @@ public final class MatchStore {
                 }
                 // Still in play after that, so the ending has to be said. The same path the
                 // `.finish` event would have taken, so the match is archived and the result
-                // shown rather than quietly dropped. A host hears it only from its own
-                // watch: the match is its to end, and a guest that retired its copy is
-                // saying something about its own phone, not the match.
-                if sessionID == log.sessionID, !log.isEmpty, role != .host || packet.isFromPairedDevice {
+                // shown rather than quietly dropped. Only an ending from whoever may end the
+                // match counts: a host hears it from its own watch, a guest from the host — and
+                // never from its own watch, whose copy ending alone ends nothing of the host's.
+                let isTheMatchsToEnd = packet.isFromPairedDevice ? canEndSession : role != .host
+                if sessionID == log.sessionID, !log.isEmpty, isTheMatchsToEnd {
                     record(.finish(archive: archive))
                 }
             }
@@ -1385,9 +1386,10 @@ public final class MatchStore {
         ))
         if let reply = packet.reply {
             reply(notice)
-        } else if role != .guest {
+        } else if canEndSession {
             // Refusing a packet is not the same as ending a match, and a push has no
-            // addressee: a guest doing this would tell everybody the host's match was over.
+            // addressee: a guest doing this — or a watch following one — would tell everybody
+            // the host's match was over.
             transport.queue(notice)
             Task { _ = await sendLive(notice) }
         }

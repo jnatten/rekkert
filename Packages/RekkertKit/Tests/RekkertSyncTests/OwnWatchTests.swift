@@ -143,6 +143,32 @@ struct OwnWatchTests {
         #expect(inStep(pair.watch, pair.host), "and so is its watch")
     }
 
+    /// The watch's copy won it while the watch was cut off, and the host took back the point before.
+    /// The watch's ending is its own copy's, and a guest's watch cannot end the host's match —
+    /// so its notice must not become a Finish the phone hands on to the host.
+    @Test func aGuestsWatchThatEndedAloneDoesNotEndTheHostsMatch() async throws {
+        let pair = PhoneWithWatch(phoneLog: nil, hostLog: seeded(DeviceID(), points: 63))
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        pair.phone.beginJoining()
+        await eventually { pair.phone.role == .guest && inStep(pair.watch, pair.host) && !pair.watch.canEndSession }
+
+        let session = pair.phone.log.sessionID
+        var farewell = pair.phone.log
+        farewell.append(.point(round: 0, court: 0, team: .a), from: pair.watch.device)
+        pair.host.undoLast()
+        await eventually { points(pair.phone) == BySide(a: 62, b: 0) }
+
+        let notice = try Wire.retired(sessionID: session, archive: true, farewell: farewell).encoded()
+        pair.watchToPhone.queue(notice)
+        await eventually { points(pair.host) == BySide(a: 63, b: 0) }
+        await quietPeriod()
+
+        #expect(pair.host.state?.isFinished == false, "the host's match goes on")
+        #expect(pair.phone.log.sessionID == session, "and the phone is still on it")
+        #expect(!pair.phone.log.events.values.contains { if case .finish = $0.kind { true } else { false } })
+    }
+
     /// A guest's reply that times out is a guest that did not get the event. The watch answering
     /// on everybody's behalf let the outbox forget it, and nothing ever sent it again.
     @Test func theWatchDoesNotAcknowledgeOnAGuestsBehalf() async throws {
