@@ -29,6 +29,16 @@
 				<string>CA92.1</string>
 			</array>
 		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<!-- C617.1: when the app's own files in its own container were last written, to keep
+			     only the last few endings and timeline carries it saved. -->
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>
