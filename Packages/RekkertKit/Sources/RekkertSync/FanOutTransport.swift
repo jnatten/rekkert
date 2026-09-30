@@ -102,8 +102,10 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
     @discardableResult
     public func attach(_ transport: any PeerTransport, as scope: Scope) -> ObjectIdentifier {
         let token = ObjectIdentifier(transport as AnyObject)
+        let inbound = transport.inbound
+        let changes = transport.reachability
         let drain = Task { [weak self] in
-            for await packet in transport.inbound {
+            for await packet in inbound {
                 guard let self else { return }
                 guard scope.admits(packet.payload) else { continue }
                 self.packets.yield(InboundPacket(
@@ -112,7 +114,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
             }
         }
         let watch = Task { [weak self] in
-            for await _ in transport.reachability {
+            for await _ in changes {
                 self?.reachabilityChanged()
             }
         }

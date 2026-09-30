@@ -105,8 +105,9 @@ public final class SharedSession {
         // to a host with nothing on, which takes it up as its own.
         store.onLeft = { [weak self] in self?.letGo() }
         if let bluetooth {
+            let changes = bluetooth.reachability
             watchingBluetooth = Task { [weak self] in
-                for await _ in bluetooth.reachability {
+                for await _ in changes {
                     guard let self else { return }
                     self.bluetoothPeers = bluetooth.reachableCount
                     self.reportStandby()

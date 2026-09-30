@@ -55,7 +55,8 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     }
 
     public let inbound: AsyncStream<InboundPacket>
-    public let reachability: AsyncStream<Bool>
+    /// A stream of its own for every caller: the fan-out and the coordinator both listen.
+    public var reachability: AsyncStream<Bool> { reachabilityUpdates.stream() }
 
     /// One peer's end of the conversation. Unchecked for the same reason `Link` is: every field
     /// is only ever touched under `lock`.
@@ -91,7 +92,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     }
 
     private let packets: AsyncStream<InboundPacket>.Continuation
-    private let reachabilityUpdates: AsyncStream<Bool>.Continuation
+    private let reachabilityUpdates = Broadcast<Bool>()
 
     private let queue = DispatchQueue(label: "dev.natten.rekkert.bluetooth")
     private let lock = NSLock()
@@ -140,10 +141,6 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         var packetContinuation: AsyncStream<InboundPacket>.Continuation!
         inbound = AsyncStream { packetContinuation = $0 }
         packets = packetContinuation
-
-        var reachabilityContinuation: AsyncStream<Bool>.Continuation!
-        reachability = AsyncStream { reachabilityContinuation = $0 }
-        reachabilityUpdates = reachabilityContinuation
 
         shim = Shim(self)
     }
