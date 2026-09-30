@@ -36,6 +36,15 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         /// This device's own watch: the whole conversation, and the only durable channel.
         public static let pairedDevice = Scope(isDurable: true, isPairedDevice: true)
 
+        /// The same line drawn on the way in. A phone that is not this one's pair has no business
+        /// telling it to step off a match, whose saved setups to keep, or when to buzz — and a
+        /// build that drew the line differently, or ignores it, must not be listened to.
+        /// Anything that does not read as a `Wire` at all goes through, to be answered as such.
+        func admits(_ payload: Data) -> Bool {
+            guard !isPairedDevice, let wire = try? Wire.decode(payload) else { return true }
+            return carries(wire)
+        }
+
         /// Somebody else's phone: the match, and nothing personal.
         public static let sharedSession = Scope(isDurable: false) { wire in
             switch wire {
@@ -90,6 +99,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         let drain = Task { [weak self] in
             for await packet in transport.inbound {
                 guard let self else { return }
+                guard scope.admits(packet.payload) else { continue }
                 self.packets.yield(InboundPacket(
                     payload: packet.payload, reply: packet.reply, isFromPairedDevice: scope.isPairedDevice
                 ))
@@ -151,6 +161,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
                     if reply == nil, child.scope.isDurable, Self.keepsOverDelay(wire) {
                         child.transport.queue(payload)
                     }
+                    guard let reply, child.scope.admits(reply) else { return (nil, child.scope.isPairedDevice) }
                     return (reply, child.scope.isPairedDevice)
                 }
             }

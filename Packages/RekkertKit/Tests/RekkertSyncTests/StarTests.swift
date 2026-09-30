@@ -183,6 +183,37 @@ struct StarTests {
         #expect(star.guests[0].presets.presets.map(\.name) == ["Mine"], "and so did the guest")
     }
 
+    /// The scope was only drawn on the way out. A phone that ignores it — an older build, or one
+    /// that never drew it — could tell a guest to step off its match, or replace its saved setups.
+    @Test func whatIsPersonalIsNotTakenFromAnotherPersonsPhone() async throws {
+        var hosts = MatchLog()
+        hosts.append(.configure(counting), from: DeviceID())
+        let (mine, theirs) = LoopbackTransport.pair()
+        let links = FanOutTransport()
+        links.attach(mine, as: .sharedSession)
+        let guest = MatchStore(
+            device: DeviceID(), transport: links, session: ActiveSession(log: hosts, role: .guest), snapshotInterval: 0
+        )
+        guest.savePreset(Preset(name: "Mine", configuration: .winnerCourt(
+            rules: WinnerCourtRules(), teams: BySide(a: .home, b: .away)
+        )))
+        let running = Task { await guest.run() }
+        defer { running.cancel() }
+
+        var theirLibrary = PresetLibrary()
+        theirLibrary.save(Preset(name: "Theirs", configuration: .traditional(
+            rules: TraditionalRules(), teams: BySide(a: .home, b: .away)
+        )))
+        theirs.queue(try Wire.presets(theirLibrary).encoded())
+        theirs.queue(try Wire.left(sessionID: hosts.sessionID).encoded())
+        theirs.queue(try Wire.role(.host).encoded())
+        await quietPeriod()
+
+        #expect(guest.log.sessionID == hosts.sessionID, "still on the match")
+        #expect(guest.presets.presets.map(\.name) == ["Mine"], "and still with its own setups")
+        #expect(guest.canEndSession == false)
+    }
+
     /// Somebody else's phone has no business telling this wrist how hard to tap.
     @Test func howTheWatchBuzzesStaysPersonal() async throws {
         let star = Star(guests: 1)
