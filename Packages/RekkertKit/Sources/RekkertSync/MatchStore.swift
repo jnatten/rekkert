@@ -78,7 +78,9 @@ public final class MatchStore {
     private var retryPatience = 1
     private static let maximumRetryPatience = 8
     private var snapshotPending = false
-    private var lastQueued: [EventID] = []
+    /// With the session: event ids start again at one in every match, so the first events of the
+    /// next one would otherwise read as the batch already queued.
+    private var lastQueued: (session: UUID, events: [EventID])?
     private var retired: [UUID]
     /// The retired sessions that were called off rather than kept. The retirement notice
     /// carries it, so a counterpart that missed the ending does not file a match nobody wanted.
@@ -841,8 +843,8 @@ public final class MatchStore {
     /// also arrives live costs nothing.
     private func queuePending() {
         let pending = outbox.pending.map(\.id)
-        guard !pending.isEmpty, pending != lastQueued else { return }
-        lastQueued = pending
+        guard !pending.isEmpty, lastQueued?.session != log.sessionID || lastQueued?.events != pending else { return }
+        lastQueued = (log.sessionID, pending)
         transport.queue(encode(.events(sessionID: log.sessionID, events: outbox.pending)))
     }
 

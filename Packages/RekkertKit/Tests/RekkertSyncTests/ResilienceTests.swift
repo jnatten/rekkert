@@ -38,9 +38,53 @@ private final class SilentTransport: PeerTransport, @unchecked Sendable {
     func queue(_ payload: Data) { lock.withLock { _queued.append(payload) } }
 }
 
+/// Nobody there, and every queued payload kept.
+private final class AwayTransport: PeerTransport, @unchecked Sendable {
+    let inbound = AsyncStream<InboundPacket> { _ in }
+    let reachability = AsyncStream<Bool> { _ in }
+    private let lock = NSLock()
+    private var _queued: [Data] = []
+    var queued: [Data] { lock.withLock { _queued } }
+
+    var isReachable: Bool { false }
+    func activate() {}
+    func sendLive(_ payload: Data) async -> Data? { nil }
+    func publishSnapshot(_ payload: Data) {}
+    func queue(_ payload: Data) { lock.withLock { _queued.append(payload) } }
+
+    func queuedEvents(for session: UUID) -> Bool {
+        queued.contains { payload in
+            if case .events(session, _)? = try? Wire.decode(payload) { true } else { false }
+        }
+    }
+}
+
 @Suite("Sync resilience", .serialized)
 @MainActor
 struct ResilienceTests {
+    /// Event ids start again at one in every match. The queue remembered the ids it had last
+    /// handed over and not the match they belonged to, so the next match's first events read as
+    /// already queued and never went.
+    @Test func theNextMatchsFirstEventsStillGoOnTheDurableQueue() async throws {
+        let transport = AwayTransport()
+        let store = MatchStore(
+            device: DeviceID(), transport: transport, snapshotInterval: 0, retryInterval: .milliseconds(30)
+        )
+        let task = Task { await store.run() }
+        defer { task.cancel() }
+
+        store.configure(setup)
+        let first = store.log.sessionID
+        await eventually { transport.queuedEvents(for: first) }
+        store.startNewSession()
+        store.configure(setup)
+        let second = store.log.sessionID
+        await eventually { transport.queuedEvents(for: second) }
+
+        #expect(transport.queuedEvents(for: first))
+        #expect(transport.queuedEvents(for: second), "the next match's opening event is queued too")
+    }
+
     @Test func aReplyThatNeverArrivesDoesNotWedgeTheOutbox() async throws {
         let transport = SilentTransport()
         let store = MatchStore(
