@@ -112,6 +112,10 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     /// so one of these checked first would otherwise be checked again and again while the
     /// right one, found in the meantime, was dropped for being second.
     private var rejected: Set<UUID> = []
+    /// Hosts that proved themselves during this join. Hung up on or gone quiet, each is still the
+    /// right host: looked for wherever it has gone, and never written off for being slow to prove
+    /// itself again.
+    private var proven: Set<UUID> = []
     /// When the host being dialled is let go of, unless it has proved itself by then.
     private var candidateDeadline: DispatchWorkItem?
     /// A host this was on has gone, and is being dialled again as well as looked for afresh.
@@ -194,6 +198,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             waiting = [:]
             intent = .none
             rejected = []
+            proven = []
             return values
         }
         deadline?.cancel()
@@ -403,19 +408,22 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     /// the connection up with nothing on the other end of it. Hung up on, the reconnect finds
     /// the service when it comes back, or finds that it is somebody else's now.
     fileprivate func servicesChanged(_ invalidated: [CBService], on peripheral: CBPeripheral) {
-        guard invalidated.contains(where: { $0.uuid == Self.serviceUUID }) else { return }
-        let (manager, wasProven) = lock.withLock { () -> (CBCentralManager?, Bool) in
-            guard server === peripheral else { return (nil, false) }
+        guard invalidated.contains(where: { $0.uuid == Self.serviceUUID }) else {
+            // Put up rather than taken away, which names nothing invalidated: a host back from its
+            // radio going off and on, on a connection that came back before its service did.
+            if lock.withLock({ server === peripheral && serverInbox == nil }) {
+                peripheral.discoverServices([Self.serviceUUID])
+            }
+            return
+        }
+        let manager = lock.withLock { () -> CBCentralManager? in
+            guard server === peripheral else { return nil }
             serverInbox = nil
-            // Forgotten before the hang-up lands, so the hang-up cannot tell it was proven.
-            let proven = peers[ObjectIdentifier(peripheral)]?.seal.isProven == true
-            if proven { isRedialling = true }
-            return (centralManager, proven)
+            return centralManager
         }
         guard let manager else { return }
         forget(ObjectIdentifier(peripheral))
         manager.cancelPeripheralConnection(peripheral)
-        if wasProven { manager.scanForPeripherals(withServices: [Self.serviceUUID], options: nil) }
     }
 
     /// A chunk from each in turn. Drained one at a time, whoever came first filled the queue with
@@ -459,7 +467,13 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             // Ahead of anything the store sends once it hears the link is up.
             if let confirmation { enqueue(confirmation, to: peer) }
             // The host, proven: from here a drop is a reconnect, which waits as long as it takes.
-            if peer.central == nil { lock.withLock { candidateDeadline }?.cancel() }
+            if peer.central == nil {
+                let deadline = lock.withLock { () -> DispatchWorkItem? in
+                    if let server, peers[ObjectIdentifier(server)] === peer { proven.insert(server.identifier) }
+                    return candidateDeadline
+                }
+                deadline?.cancel()
+            }
             ready(peer)
         case .frame(let frame):
             // Proven on this connection already, and back from having gone quiet.
@@ -514,6 +528,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             serverInbox = nil
             candidateDeadline = nil
             rejected = []
+            proven = []
             isRedialling = false
             return values
         }
@@ -646,10 +661,11 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         letGoUnlessGreeted(ObjectIdentifier(peripheral))
     }
 
-    /// No timeout is right for a host this has been on, and wrong for one it has only found:
-    /// there is one place for a host, and one that walked off mid-connect, or never finished
-    /// saying what it was, held it while the right one went unheard. Let go of rather than
-    /// refused — it may be the right one, back in range — and the scan started over for the rest.
+    /// No timeout is right for reaching a host this has been on, and wrong for one it has only
+    /// found: there is one place for a host, and one that walked off mid-connect, or never finished
+    /// saying what it was, held it while the right one went unheard. Once connected, either has
+    /// only so long to get as far as the greeting. Let go of rather than refused — it may be the
+    /// right one, back in range — and the scan started over for the rest.
     ///
     /// A host that did get as far as the greeting is `awaitProof`'s to settle.
     private func letGoUnlessGreeted(_ token: ObjectIdentifier) {
@@ -681,6 +697,9 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         guard isCurrent(manager), lock.withLock({ server === peripheral }) else {
             return manager.cancelPeripheralConnection(peripheral)
         }
+        // A reconnect as much as a first connect. The phone can be back before its service is,
+        // and a connection that never gets as far as a greeting carried nothing, for good.
+        letGoUnlessGreeted(ObjectIdentifier(peripheral))
         peripheral.discoverServices([Self.serviceUUID])
     }
 
@@ -688,9 +707,10 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     /// does so as fast as the radio can go round.
     fileprivate func disconnected(_ peripheral: CBPeripheral, on manager: CBCentralManager, failed: Bool) {
         guard isCurrent(manager) else { return }
-        // Proven rather than ready: one hung up on for not answering is not ready any more, and is
+        // Proven at any point in this join, rather than ready now: one hung up on for not answering
+        // is not ready any more, one whose service went has been forgotten already, and either is
         // just as likely to have moved.
-        let wasProven = lock.withLock { peers[ObjectIdentifier(peripheral)]?.seal.isProven == true }
+        let wasProven = lock.withLock { proven.contains(peripheral.identifier) }
         forget(ObjectIdentifier(peripheral))
         let reconnects = lock.withLock { () -> Bool in
             guard server === peripheral else { return false }
@@ -812,12 +832,19 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     private func awaitProof(from token: ObjectIdentifier, _ peer: Peer) {
         queue.asyncAfter(deadline: .now() + proofTimeout) { [weak self] in
             guard let self else { return }
-            let unproven = self.lock.withLock { () -> CBPeripheral? in
+            let (unproven, manager, provedBefore) = self.lock.withLock { () -> (CBPeripheral?, CBCentralManager?, Bool) in
                 guard self.peers[token] === peer, !peer.isReady,
-                      let server = self.server, ObjectIdentifier(server) == token else { return nil }
-                return server
+                      let server = self.server, ObjectIdentifier(server) == token else { return (nil, nil, false) }
+                return (server, self.centralManager, self.proven.contains(server.identifier))
             }
-            if let unproven { self.reject(unproven) }
+            guard let unproven else { return }
+            if provedBefore {
+                // Slow over a poor link, not somebody else's court: hung up on, so the reconnect
+                // asks again.
+                manager?.cancelPeripheralConnection(unproven)
+            } else {
+                self.reject(unproven)
+            }
         }
     }
 
