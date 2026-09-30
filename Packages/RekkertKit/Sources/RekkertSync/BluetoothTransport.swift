@@ -330,12 +330,12 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
 
     private func mtu(for peer: Peer) -> Int {
         if let central = peer.central {
-            return central.maximumUpdateValueLength
+            return Chunking.packetLength(reportedMaximum: central.maximumUpdateValueLength)
         }
         if let server = lock.withLock({ self.server }) {
             // One packet's worth, though the write waits for its response: `.withResponse`
             // reports 512, and anything past one packet goes as a long write in pieces.
-            return server.maximumWriteValueLength(for: .withoutResponse)
+            return Chunking.packetLength(reportedMaximum: server.maximumWriteValueLength(for: .withoutResponse))
         }
         return Self.conservativeMTU
     }

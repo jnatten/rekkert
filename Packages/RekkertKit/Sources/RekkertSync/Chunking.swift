@@ -24,6 +24,12 @@ nonisolated enum Chunking {
         case oversized
     }
 
+    /// An attribute value is at most 512 bytes whatever the link negotiated, and a write longer
+    /// than that is refused outright — so on a link that reports more, every chunk was.
+    static func packetLength(reportedMaximum: Int) -> Int {
+        Swift.min(reportedMaximum, 512)
+    }
+
     /// `mtu` is the whole packet, header included. An empty payload still produces one chunk:
     /// a message nobody sent and a message that says nothing are different things.
     static func split(_ payload: Data, mtu: Int) -> [Data] {

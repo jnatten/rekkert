@@ -107,6 +107,15 @@ struct ChunkingTests {
         #expect(Chunking.chunks(fromWrites: pieces(of: first) + pieces(of: second)) == [first, second])
     }
 
+    /// A link can report more room than an attribute has. Written at that length, every chunk
+    /// over 512 bytes was refused, and nothing longer than one packet ever arrived.
+    @Test func noChunkIsLongerThanAnAttributeCanHold() {
+        #expect(Chunking.packetLength(reportedMaximum: 514) == 512)
+        #expect(Chunking.packetLength(reportedMaximum: 182) == 182)
+        let chunks = Chunking.split(Data(repeating: 1, count: 5_000), mtu: Chunking.packetLength(reportedMaximum: 514))
+        #expect(chunks.allSatisfy { $0.count <= 512 })
+    }
+
     @Test func aPieceThatContinuesNothingIsDropped() {
         let chunk = Data(repeating: 3, count: 300)
         #expect(Chunking.chunks(fromWrites: Array(pieces(of: chunk).dropFirst())).isEmpty)
