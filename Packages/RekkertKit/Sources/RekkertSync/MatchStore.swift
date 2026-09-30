@@ -81,7 +81,7 @@ public final class MatchStore {
     private var snapshotPending = false
     /// With the session: event ids start again at one in every match, so the first events of the
     /// next one would otherwise read as the batch already queued.
-    private var lastQueued: (session: UUID, events: [EventID])?
+    private var queued = QueueLedger()
     private var retired: [UUID]
     /// The retired sessions that were called off rather than kept. The retirement notice
     /// carries it, so a counterpart that missed the ending does not file a match nobody wanted.
@@ -846,10 +846,9 @@ public final class MatchStore {
     /// counterpart whose app is not running. Merging is idempotent, so a duplicate that
     /// also arrives live costs nothing.
     private func queuePending() {
-        let pending = outbox.pending.map(\.id)
-        guard !pending.isEmpty, lastQueued?.session != log.sessionID || lastQueued?.events != pending else { return }
-        lastQueued = (log.sessionID, pending)
-        transport.queue(encode(.events(sessionID: log.sessionID, events: outbox.pending)))
+        let fresh = queued.admitting(outbox.pending, in: log.sessionID)
+        guard !fresh.isEmpty else { return }
+        transport.queue(encode(.events(sessionID: log.sessionID, events: fresh)))
     }
 
     private func consumeReachability() async {

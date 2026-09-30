@@ -68,6 +68,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
     public let reachability: AsyncStream<Bool>
 
     private struct Child {
+        let token: ObjectIdentifier
         let transport: any PeerTransport
         let scope: Scope
         let drain: Task<Void, Never>
@@ -82,6 +83,8 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
     /// has just woken: a peer joining mid-match sees the score without waiting for its own
     /// round trip to come back.
     private var lastSnapshot: Data?
+    /// Per durable child, the events its queue already holds.
+    private var queued: [ObjectIdentifier: QueueLedger] = [:]
 
     /// How long any one child is waited on. The network and the radio give up on a quiet peer
     /// after four seconds of their own; WatchConnectivity does not promise to answer at all, and
@@ -119,7 +122,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
             }
         }
         lock.withLock {
-            children[token] = Child(transport: transport, scope: scope, drain: drain, watch: watch)
+            children[token] = Child(token: token, transport: transport, scope: scope, drain: drain, watch: watch)
         }
         transport.activate()
         if let snapshot = lock.withLock({ lastSnapshot }) { transport.publishSnapshot(snapshot) }
@@ -128,7 +131,10 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
     }
 
     public func detach(_ token: ObjectIdentifier) {
-        let child = lock.withLock { children.removeValue(forKey: token) }
+        let child = lock.withLock { () -> Child? in
+            queued[token] = nil
+            return children.removeValue(forKey: token)
+        }
         child?.drain.cancel()
         child?.watch.cancel()
         reachabilityChanged()
@@ -169,7 +175,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
                     // survives the counterpart not running, or attaching a second child
                     // would quietly switch the watch's durable fallback off.
                     if reply == nil, child.scope.isDurable, Self.keepsOverDelay(wire) {
-                        child.transport.queue(payload)
+                        self.keep(payload, wire, on: child)
                     }
                     guard let reply, child.scope.admits(reply) else { return nil }
                     // Answers that were not acknowledgements — a snapshot, a retirement notice —
@@ -228,8 +234,18 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
     public func queue(_ payload: Data) {
         guard let wire = try? Wire.decode(payload) else { return }
         for child in snapshotOfChildren() where child.scope.isDurable && child.scope.carries(wire) {
-            child.transport.queue(payload)
+            keep(payload, wire, on: child)
         }
+    }
+
+    /// Onto a child's durable queue, holding back the events it already has there: a live send
+    /// of the whole outbox that did not land is mostly what went the last time.
+    private func keep(_ payload: Data, _ wire: Wire, on child: Child) {
+        guard case .events(let session, let events) = wire else { return child.transport.queue(payload) }
+        let fresh = lock.withLock { queued[child.token, default: QueueLedger()].admitting(events, in: session) }
+        guard !fresh.isEmpty else { return }
+        let trimmed = fresh.count == events.count ? payload : (try? Wire.events(sessionID: session, events: fresh).encoded())
+        if let trimmed { child.transport.queue(trimmed) }
     }
 
     /// Cleared when a session ends, so a phone attaching afterwards is not handed the
