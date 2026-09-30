@@ -102,6 +102,8 @@ public final class MatchStore {
     /// the session, so this is the only copy of the point that ended a match once it has
     /// been filed — and the thing to hand a counterpart that was out of reach for it.
     private var farewells: [UUID: MatchLog]
+    /// Oldest ending first, which is the order they are let go of in.
+    private var farewellsInOrder: [UUID]
     /// The session this device stepped off, so a peer still on it — the watch on the same
     /// wrist, or a host whose link has not been cut yet — cannot hand it straight back.
     private var leftSessionID: UUID?
@@ -147,9 +149,9 @@ public final class MatchStore {
         self.snapshotInterval = snapshotInterval
         self.log = session?.log ?? MatchLog()
         self.outbox = session?.outbox ?? Outbox()
-        self.farewells = Dictionary(
-            (store?.farewells() ?? []).map { ($0.sessionID, $0) }, uniquingKeysWith: { first, _ in first }
-        )
+        let saved = store?.farewells() ?? []
+        self.farewells = Dictionary(saved.map { ($0.sessionID, $0) }, uniquingKeysWith: { first, _ in first })
+        self.farewellsInOrder = saved.reversed().map(\.sessionID)
         self.presets = store?.loadPresets() ?? PresetLibrary()
         self.display = store?.loadDisplay() ?? DisplayPreferences()
         self.haptics = store?.loadHaptics() ?? HapticPreferences()
@@ -672,9 +674,10 @@ public final class MatchStore {
     /// Bounded tighter than the retired list: these are whole logs.
     private func remember(farewell: MatchLog) {
         farewells[farewell.sessionID] = farewell
-        while farewells.count > SessionStore.farewellsKept,
-              let oldest = farewells.values.min(by: { $0.createdAt < $1.createdAt }) {
-            farewells.removeValue(forKey: oldest.sessionID)
+        farewellsInOrder.removeAll { $0 == farewell.sessionID }
+        farewellsInOrder.append(farewell.sessionID)
+        while farewellsInOrder.count > SessionStore.farewellsKept {
+            farewells.removeValue(forKey: farewellsInOrder.removeFirst())
         }
         try? store?.save(farewell: farewell)
     }

@@ -269,6 +269,34 @@ struct FarewellTests {
         #expect(farewell == nil)
     }
 
+    /// A long match joined late started before the few that were played meanwhile. Kept by when
+    /// each match started, its ending was the oldest the moment it was saved, and was let go of on
+    /// the spot — taking the way back into it, and the answer to anybody who missed it, with it.
+    @Test func theLatestEndingIsKeptHoweverLongAgoItsMatchStarted() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = SessionStore(directory: directory)
+        let device = DeviceID()
+        var evening = MatchLog(createdAt: .now.addingTimeInterval(-4 * 3600))
+        evening.append(.configure(setup), from: DeviceID())
+        let store = MatchStore(
+            device: device, transport: LoopbackTransport(reachable: false), store: persistence,
+            session: ActiveSession(log: evening)
+        )
+        let longOne = store.log.sessionID
+        for _ in 0 ..< SessionStore.farewellsKept {
+            let other = MatchStore(device: DeviceID(), transport: LoopbackTransport(reachable: false), store: persistence)
+            other.configure(setup)
+            other.tap(team: .a)
+            other.finish()
+        }
+        store.tap(team: .a)
+        store.finish()
+
+        #expect(persistence.farewells().map(\.sessionID).contains(longOne), "the ending just saved is kept")
+        #expect(persistence.farewells().count == SessionStore.farewellsKept)
+    }
+
     @Test func theFarewellSurvivesARelaunchAndOnlyTheLastFewAreKept() async throws {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }

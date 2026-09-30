@@ -196,15 +196,16 @@ public struct SessionStore: Sendable {
         }
     }
 
-    /// Newest first.
+    /// Most recently saved first. Not by when the match started: a long one joined late ends
+    /// after matches that started later, and would be the first let go of.
     public func farewells() -> [MatchLog] {
         let urls = (try? FileManager.default.contentsOfDirectory(
-            at: farewellsDirectory, includingPropertiesForKeys: nil
+            at: farewellsDirectory, includingPropertiesForKeys: [.contentModificationDateKey]
         )) ?? []
         return urls
             .filter { $0.pathExtension == "json" }
+            .sorted { modified($0) > modified($1) }
             .compactMap { try? decoder.decode(MatchLog.self, from: Data(contentsOf: $0)) }
-            .sorted { $0.createdAt > $1.createdAt }
     }
 
     // MARK: - History
