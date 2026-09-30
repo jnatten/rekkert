@@ -425,13 +425,32 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         reachabilityUpdates.yield(isReachable)
     }
 
+    /// The radio switched off, Airplane mode, bluetoothd starting over: every connection goes with
+    /// it, and CoreBluetooth says so once, here, rather than peer by peer. Everything about them
+    /// is let go of — kept, a peer went on counting as there and a host still on the books kept
+    /// the scan from ever finding it again — so the radio coming back starts afresh.
+    private func lostTheRadio() {
+        let (pending, deadline, hadPeers) = lock.withLock {
+            let values = (Array(waiting.values), candidateDeadline, !peers.isEmpty)
+            peers = [:]
+            waiting = [:]
+            server = nil
+            serverInbox = nil
+            candidateDeadline = nil
+            rejected = []
+            return values
+        }
+        deadline?.cancel()
+        for resume in pending { resume.resume(nil) }
+        if hadPeers { reachabilityUpdates.yield(false) }
+    }
+
     // MARK: - Hosting
 
     fileprivate func peripheralManagerDidUpdateState(_ manager: CBPeripheralManager) {
         #if os(iOS)
-        guard manager.state == .poweredOn,
-              case .hosting = lock.withLock({ intent })
-        else { return }
+        guard manager.state == .poweredOn else { return lostTheRadio() }
+        guard case .hosting = lock.withLock({ intent }) else { return }
 
         let greeting = CBMutableCharacteristic(
             type: Self.greetingUUID, properties: [.read], value: nil, permissions: [.readable]
@@ -509,7 +528,8 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     // MARK: - Joining
 
     fileprivate func centralManagerDidUpdateState(_ manager: CBCentralManager) {
-        guard manager.state == .poweredOn, case .joining = lock.withLock({ intent }) else { return }
+        guard manager.state == .poweredOn else { return lostTheRadio() }
+        guard case .joining = lock.withLock({ intent }) else { return }
         manager.scanForPeripherals(withServices: [Self.serviceUUID], options: nil)
     }
 
