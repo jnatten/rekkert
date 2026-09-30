@@ -16,13 +16,16 @@ private nonisolated enum Key {
 nonisolated private final class WCShim: NSObject, WCSessionDelegate, @unchecked Sendable {
     private let onPacket: @Sendable (InboundPacket) -> Void
     private let onReachability: @Sendable (Bool) -> Void
+    private let onActivated: @Sendable () -> Void
 
     init(
         onPacket: @escaping @Sendable (InboundPacket) -> Void,
-        onReachability: @escaping @Sendable (Bool) -> Void
+        onReachability: @escaping @Sendable (Bool) -> Void,
+        onActivated: @escaping @Sendable () -> Void
     ) {
         self.onPacket = onPacket
         self.onReachability = onReachability
+        self.onActivated = onActivated
     }
 
     func session(
@@ -30,6 +33,7 @@ nonisolated private final class WCShim: NSObject, WCSessionDelegate, @unchecked 
         activationDidCompleteWith activationState: WCSessionActivationState,
         error: (any Error)?
     ) {
+        if activationState == .activated { onActivated() }
         onReachability(session.isReachable)
         if let data = session.receivedApplicationContext[Key.payload] as? Data {
             onPacket(InboundPacket(payload: data))
@@ -152,6 +156,7 @@ nonisolated public final class WatchConnectivityTransport: PeerTransport, @unche
     private let reachabilityUpdates: AsyncStream<Bool>.Continuation
     private let shim: WCShim
     private let revision = Revision()
+    private let held: Held
 
     public init() {
         var packetContinuation: AsyncStream<InboundPacket>.Continuation!
@@ -164,9 +169,12 @@ nonisolated public final class WatchConnectivityTransport: PeerTransport, @unche
 
         let sendPacket = packetContinuation!
         let sendReachability = reachabilityContinuation!
+        let held = Held()
+        self.held = held
         shim = WCShim(
             onPacket: { sendPacket.yield($0) },
-            onReachability: { sendReachability.yield($0) }
+            onReachability: { sendReachability.yield($0) },
+            onActivated: { for payload in held.release() { Self.transfer(payload) } }
         )
     }
 
@@ -206,7 +214,11 @@ nonisolated public final class WatchConnectivityTransport: PeerTransport, @unche
     /// running — a phone cannot wake its counterpart the way a watch can. Unsupported on
     /// the Simulator, where it simply does nothing.
     public func queue(_ payload: Data) {
-        guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
+        guard WCSession.isSupported(), !held.keepIfInactive(payload) else { return }
+        Self.transfer(payload)
+    }
+
+    private static func transfer(_ payload: Data) {
         guard WatchPayloadRoute.forMessage(payload.count) == .inline else { return WatchFiles.send(payload) }
         WCSession.default.transferUserInfo([Key.payload: payload])
     }
@@ -220,6 +232,32 @@ nonisolated public final class WatchConnectivityTransport: PeerTransport, @unche
             Key.payload: payload,
             Key.revision: revision.next(),
         ])
+    }
+}
+
+/// What was handed to the queue before the session was up to take it. Dropped, it never went at
+/// all: each event goes on the queue once, so nothing offers it again.
+nonisolated private final class Held: @unchecked Sendable {
+    private static let limit = 500
+    private let lock = NSLock()
+    private var payloads: [Data] = []
+
+    /// Kept for later, unless the session can take it now. Asked under the lock `release` takes,
+    /// so nothing kept in the moment the session comes up is left behind.
+    func keepIfInactive(_ payload: Data) -> Bool {
+        lock.withLock {
+            guard WCSession.default.activationState != .activated else { return false }
+            payloads.append(payload)
+            if payloads.count > Self.limit { payloads.removeFirst(payloads.count - Self.limit) }
+            return true
+        }
+    }
+
+    func release() -> [Data] {
+        lock.withLock {
+            defer { payloads = [] }
+            return payloads
+        }
     }
 }
 
