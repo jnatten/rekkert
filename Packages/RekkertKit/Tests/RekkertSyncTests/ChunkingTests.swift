@@ -1,11 +1,7 @@
-import CryptoKit
 import Foundation
 import RekkertCore
 import Testing
 @testable import RekkertSync
-
-private let share = UUID(uuidString: "6F2A9C41-0000-0000-0000-000000000001")!
-private let other = UUID(uuidString: "6F2A9C41-0000-0000-0000-000000000002")!
 
 /// The byte handling on its own. This is where a packet protocol usually goes wrong — a
 /// message that lands one byte over the limit, a read that stops halfway — and none of it
@@ -119,72 +115,5 @@ struct ChunkingTests {
     @Test func aPieceThatContinuesNothingIsDropped() {
         let chunk = Data(repeating: 3, count: 300)
         #expect(Chunking.chunks(fromWrites: Array(pieces(of: chunk).dropFirst())).isEmpty)
-    }
-}
-
-@Suite("Sealed frames")
-struct SealedFrameTests {
-    private let code = SessionCode("482915")!
-
-    @Test func aFrameComesBackAsItself() throws {
-        let key = SessionKey.sealingKey(for: code, share: share, direction: .hostToGuest)
-        let frame = Frame(kind: .request, correlation: 42, payload: Data("score".utf8))
-
-        let sealed = try #require(SealedFrame.seal(frame, with: key))
-        #expect(SealedFrame.open(sealed, with: key) == frame)
-    }
-
-    @Test func theWrongCodeOpensNothing() throws {
-        let frame = Frame(kind: .oneway, payload: Data("score".utf8))
-        let sealed = try #require(
-            SealedFrame.seal(frame, with: SessionKey.sealingKey(for: code, share: share, direction: .hostToGuest))
-        )
-
-        let wrongCode = SessionKey.sealingKey(for: SessionCode("730264")!, share: share, direction: .hostToGuest)
-        #expect(SealedFrame.open(sealed, with: wrongCode) == nil)
-
-        // And a code overheard at one match is worth nothing at the next.
-        let wrongShare = SessionKey.sealingKey(for: code, share: other, direction: .hostToGuest)
-        #expect(SealedFrame.open(sealed, with: wrongShare) == nil)
-    }
-
-    @Test func aTamperedFrameOpensNothing() throws {
-        let key = SessionKey.sealingKey(for: code, share: share, direction: .hostToGuest)
-        var sealed = try #require(SealedFrame.seal(Frame(kind: .oneway, payload: Data("1-0".utf8)), with: key))
-        sealed[sealed.count - 1] ^= 0xFF
-
-        #expect(SealedFrame.open(sealed, with: key) == nil)
-    }
-
-    @Test func aFrameOverTheLimitIsNotSealed() {
-        let key = SessionKey.sealingKey(for: code, share: share, direction: .hostToGuest)
-        #expect(SealedFrame.seal(Frame(kind: .oneway, payload: Data(count: FrameCodec.maximumPayload + 1)), with: key) == nil)
-    }
-
-    @Test func rubbishOpensNothing() {
-        let key = SessionKey.sealingKey(for: code, share: share, direction: .hostToGuest)
-        #expect(SealedFrame.open(Data(), with: key) == nil)
-        #expect(SealedFrame.open(Data(repeating: 7, count: 64), with: key) == nil)
-    }
-
-    /// One key for both ways let a guest's own frame open for that guest, so a peripheral that did
-    /// nothing but echo passed the proof and stood in for the host. Each way has its own key.
-    @Test func aFrameSealedOneWayDoesNotOpenTheOther() throws {
-        let frame = Frame(kind: .oneway, payload: Data())
-        let fromGuest = try #require(SealedFrame.seal(
-            frame, with: SessionKey.sealingKey(for: code, share: share, direction: .guestToHost)
-        ))
-        #expect(SealedFrame.open(fromGuest, with: SessionKey.sealingKey(for: code, share: share, direction: .guestToHost)) == frame)
-        #expect(SealedFrame.open(fromGuest, with: SessionKey.sealingKey(for: code, share: share, direction: .hostToGuest)) == nil,
-                "echoed back, it opens nothing")
-    }
-
-    /// The whole point of sealing over Bluetooth: it is the same guarantee the pre-shared key
-    /// gives on the local network, so neither link is the weak one.
-    @Test func sealingIsNotTheSameKeyAsTheHandshake() {
-        #expect(
-            SessionKey.sealingKey(for: code, share: share, direction: .hostToGuest)
-                != SessionKey.presharedKey(for: code, share: share)
-        )
     }
 }

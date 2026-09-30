@@ -468,9 +468,13 @@ name and service data and moves its service UUID into an overflow area — so th
 and app-wide, and the code is checked after connecting instead: the host publishes a share id
 and a one-byte fingerprint, and every frame is then sealed with a key derived from the code —
 one key each way, so nothing that merely echoes a guest's frames back can pass for the host.
-Neither end counts the other as on the match until something it sealed has opened, so a host
-that agreed on the one byte by accident is hung up on and the next one tried. The host proves
-itself first and sends the match after: behind a long log, the proof came too late to count.
+Each connection is proved afresh: the guest opens with a nonce, the host answers with it and one
+of its own, and the guest confirms with the host's, so a frame caught on one connection proves
+nothing on the next. Every frame after that is bound to both nonces and numbered, so it opens
+once, and only there. Neither end counts the other as on the match until it has proved itself,
+so a host that agreed on the one byte by accident is hung up on and the next one tried. No
+whole match goes over this link, which carries a few kilobytes a second: once it is up, each end
+says hello and is sent only what it is missing.
 Deriving the service UUID from the code would be worse than saying nothing, since twenty bits
 of code under a hash broadcast in the clear comes straight back out.
 
@@ -482,8 +486,9 @@ password-authenticated key exchange would close that, and a padel score is not w
 A Bluetooth link can stay up with nothing on the other end, so it is not taken at its word: a
 host whose service goes away is hung up on and dialled again, three unanswered questions in a
 row and a peer stops counting as there, and the radio switched off and on starts everything
-afresh. A host that went away is looked for as well as dialled where it was, since an iPhone's
-Bluetooth address moves on.
+afresh. A host that went away, or was hung up on for not answering, is looked for as well as
+dialled where it was, since an iPhone's Bluetooth address moves on. What is waiting to go out
+goes a piece for each peer in turn, so one peer's long answer holds up nobody else's.
 
 A drop is not a refusal. `ReconnectPolicy` decides what losing a connection means, and the
 only thing that tells a wrong code from a host who walked off is whether anything ever worked.

@@ -3,7 +3,6 @@ import RekkertCore
 
 #if os(iOS) || os(watchOS)
 import CoreBluetooth
-import CryptoKit
 
 /// The same match, over the one radio iOS will let an app keep open with the screen off.
 ///
@@ -49,9 +48,10 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         var share: UUID
         var fp: String
 
-        /// 2 since each way has its own key. A build on 1 cannot open anything sealed now, so
-        /// the two refuse each other at the greeting rather than half-connecting.
-        static let version = 2
+        /// 3 since each connection is proved afresh and its frames numbered. An older build cannot
+        /// open anything sealed now, so the two refuse each other at the greeting rather than
+        /// half-connecting.
+        static let version = 3
     }
 
     public let inbound: AsyncStream<InboundPacket>
@@ -65,12 +65,11 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         /// Frames the link would not take yet. Bluetooth refuses rather than buffers, and a
         /// refused chunk that is dropped is a frame that will never open on the other side.
         var backlog: [Outgoing] = []
-        /// Only once something it sealed has opened here. Anybody in range can connect and
-        /// subscribe, and one byte of fingerprint agrees by accident now and again.
+        /// Only once it has proved itself on this connection, and while it goes on answering.
+        /// Anybody in range can connect and subscribe, and one byte of fingerprint agrees by
+        /// accident now and again.
         var isReady = false
-        /// This end's frames are sealed with one, the other end's opened with the other.
-        var sealing: SymmetricKey?
-        var opening: SymmetricKey?
+        var seal: LinkSeal
         var health = LinkHealth()
         /// Guest side only. A write is answered before the next one goes out: CoreBluetooth
         /// will take more than it can carry and then drop the overflow, and a dropped chunk is
@@ -80,7 +79,10 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         /// Only a host has one of these, and only to answer the right central.
         let central: CBCentral?
 
-        init(central: CBCentral? = nil) { self.central = central }
+        init(seal: LinkSeal, central: CBCentral? = nil) {
+            self.seal = seal
+            self.central = central
+        }
     }
 
     /// Whole frames, so one nobody is waiting for any more can be dropped before its first
@@ -106,7 +108,6 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     private var waiting: [UInt32: ResumeOnce] = [:]
     private var nextCorrelation: UInt32 = 1
     private var intent: Intent = .none
-    private var lastSnapshot: Data?
     /// Hosts that turned out to be somebody else's court. A scan reports each peripheral once,
     /// so one of these checked first would otherwise be checked again and again while the
     /// right one, found in the meantime, was dropped for being second.
@@ -192,7 +193,6 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             peers = [:]
             waiting = [:]
             intent = .none
-            lastSnapshot = nil
             rejected = []
             return values
         }
@@ -215,10 +215,6 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
 
     public var reachableCount: Int {
         lock.withLock { peers.values.count { $0.isReady } }
-    }
-
-    public func forgetSnapshot() {
-        lock.withLock { lastSnapshot = nil }
     }
 
     public func sendLive(_ payload: Data) async -> Data? {
@@ -246,16 +242,13 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         broadcast(payload)
     }
 
-    /// Kept, and handed to each peer as it arrives — and to nobody else.
-    ///
-    /// Deliberately not a broadcast, which is what the local network does with it. `MatchStore`
-    /// publishes a whole log on every scoring change, and that is a sensible thing to push over
-    /// a socket and a hopeless one to push over Bluetooth every second for two hours. The
-    /// ordinary traffic here is the much smaller event deltas, with the hello and its version
-    /// vector catching up anything that went missing.
-    public func publishSnapshot(_ payload: Data) {
-        lock.withLock { lastSnapshot = payload }
-    }
+    /// Not carried at all. `MatchStore` publishes a whole log on every scoring change, which is a
+    /// sensible thing to push over a socket and a hopeless one over Bluetooth. Handed only to each
+    /// peer as it connected, it still went both ways on every reconnect, ahead of everything else;
+    /// each end says hello when a link comes up instead, and is sent only what it is missing.
+    public func publishSnapshot(_ payload: Data) {}
+
+    public func forgetSnapshot() {}
 
     // MARK: - Talking
 
@@ -312,16 +305,26 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     }
 
     private func send(_ frame: Frame, to peer: Peer) {
-        guard let key = lock.withLock({ peer.sealing }),
-              let sealed = SealedFrame.seal(frame, with: key)
-        else { return }
-
-        let chunks = Chunking.split(sealed, mtu: mtu(for: peer))
+        let mtu = mtu(for: peer)
         let expires: DispatchTime? = frame.kind == .oneway ? nil : .now() + replyTimeout
-        lock.withLock { peer.backlog.append(Outgoing(chunks: chunks, expires: expires)) }
+        // Sealed and queued under the one lock: frames are numbered as they are sealed, and one
+        // that overtook an earlier one on its way into the backlog would be refused as seen.
+        let queued = lock.withLock { () -> Bool in
+            guard let sealed = peer.seal.seal(frame) else { return false }
+            peer.backlog.append(Outgoing(chunks: Chunking.split(sealed, mtu: mtu), expires: expires))
+            return true
+        }
+        guard queued else { return }
         // Drained on the one queue CoreBluetooth already calls back on, so a send from a reply
         // closure, a send from the store and the "ready again" callback never drain the same
         // backlog at once — two of them would put the same chunk on the air and skip the next.
+        queue.async { [weak self] in self?.drain(peer) }
+    }
+
+    /// The proof, which is sealed already.
+    private func enqueue(_ sealed: Data, to peer: Peer) {
+        let mtu = mtu(for: peer)
+        lock.withLock { peer.backlog.append(Outgoing(chunks: Chunking.split(sealed, mtu: mtu), expires: nil)) }
         queue.async { [weak self] in self?.drain(peer) }
     }
 
@@ -341,25 +344,30 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     /// offered again — dropping one is a frame that never opens on the other side and a reply
     /// somebody waits out the timeout for.
     private func drain(_ peer: Peer) {
-        while true {
-            let next = lock.withLock { () -> Data? in
-                let now = DispatchTime.now()
-                while let first = peer.backlog.first, first.sent == 0, let expires = first.expires, expires < now {
-                    peer.backlog.removeFirst()
-                }
-                return peer.backlog.first.map { $0.chunks[$0.sent] }
+        while step(peer) == .sent {}
+    }
+
+    private enum Step { case sent, blocked, done }
+
+    /// One chunk of the peer's oldest frame, if the link will take it.
+    private func step(_ peer: Peer) -> Step {
+        let next = lock.withLock { () -> Data? in
+            let now = DispatchTime.now()
+            while let first = peer.backlog.first, first.sent == 0, let expires = first.expires, expires < now {
+                peer.backlog.removeFirst()
             }
-            guard let next else { return }
-            guard deliver(next, to: peer) else { return }
-            lock.withLock {
-                guard !peer.backlog.isEmpty else { return }
-                peer.backlog[0].sent += 1
-                if peer.backlog[0].sent == peer.backlog[0].chunks.count { peer.backlog.removeFirst() }
-            }
-            // A guest may only have one write outstanding, so the acknowledgement is what
-            // fetches the next chunk rather than this loop.
-            if lock.withLock({ peer.isWriting }) { return }
+            return peer.backlog.first.map { $0.chunks[$0.sent] }
         }
+        guard let next else { return .done }
+        guard deliver(next, to: peer) else { return .blocked }
+        lock.withLock {
+            guard !peer.backlog.isEmpty else { return }
+            peer.backlog[0].sent += 1
+            if peer.backlog[0].sent == peer.backlog[0].chunks.count { peer.backlog.removeFirst() }
+        }
+        // A guest may only have one write outstanding, so the acknowledgement is what
+        // fetches the next chunk rather than this loop.
+        return lock.withLock({ peer.isWriting }) ? .blocked : .sent
     }
 
     private func deliver(_ chunk: Data, to peer: Peer) -> Bool {
@@ -396,18 +404,36 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     /// the service when it comes back, or finds that it is somebody else's now.
     fileprivate func servicesChanged(_ invalidated: [CBService], on peripheral: CBPeripheral) {
         guard invalidated.contains(where: { $0.uuid == Self.serviceUUID }) else { return }
-        let manager = lock.withLock { () -> CBCentralManager? in
-            guard server === peripheral else { return nil }
+        let (manager, wasProven) = lock.withLock { () -> (CBCentralManager?, Bool) in
+            guard server === peripheral else { return (nil, false) }
             serverInbox = nil
-            return centralManager
+            // Forgotten before the hang-up lands, so the hang-up cannot tell it was proven.
+            let proven = peers[ObjectIdentifier(peripheral)]?.seal.isProven == true
+            if proven { isRedialling = true }
+            return (centralManager, proven)
         }
         guard let manager else { return }
         forget(ObjectIdentifier(peripheral))
         manager.cancelPeripheralConnection(peripheral)
+        if wasProven { manager.scanForPeripherals(withServices: [Self.serviceUUID], options: nil) }
     }
 
+    /// A chunk from each in turn. Drained one at a time, whoever came first filled the queue with
+    /// a long frame every time it had room, and everybody else's replies waited until too late.
     private func drainEverybody() {
-        for peer in lock.withLock({ Array(peers.values) }) { drain(peer) }
+        var turn = lock.withLock { Array(peers.values) }
+        while !turn.isEmpty {
+            var next: [Peer] = []
+            for peer in turn {
+                switch step(peer) {
+                case .sent: next.append(peer)
+                case .done: break
+                // A host's queue is one queue for every subscriber: full for one, full for all.
+                case .blocked: if peer.central != nil { return }
+                }
+            }
+            turn = next
+        }
     }
 
     private func receive(_ chunk: Data, from peer: Peer) {
@@ -418,23 +444,31 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             lock.withLock { peer.reassembler.reset() }
             return
         }
-        guard let whole,
-              let key = lock.withLock({ peer.opening }),
-              let frame = SealedFrame.open(whole, with: key)
-        else { return }
+        guard let whole, let opened = lock.withLock({ peer.seal.open(whole) }) else { return }
 
-        // The first thing that opens is the proof this peer was given the same code. A host
-        // answers it at once, so the guest has its proof whatever the store gets round to saying.
-        if lock.withLock({ !peer.isReady }) {
-            if peer.central != nil {
-                ready(peer, opening: LinkReplies.opening(snapshot: lock.withLock { lastSnapshot }, probe: Self.probe))
-            } else {
-                ready(peer, opening: lock.withLock { lastSnapshot }.map { [Frame(kind: .oneway, payload: $0)] } ?? [])
-                // The host, proven: from here a drop is a reconnect, which waits as long as it takes.
-                lock.withLock { candidateDeadline }?.cancel()
+        switch opened {
+        case .answer(let answer):
+            // A guest starting over on this connection is not on the match until it confirms.
+            let wasReady = lock.withLock { () -> Bool in
+                defer { peer.isReady = false }
+                return peer.isReady
             }
+            if wasReady { reachabilityUpdates.yield(isReachable) }
+            enqueue(answer, to: peer)
+        case .proven(let confirmation):
+            // Ahead of anything the store sends once it hears the link is up.
+            if let confirmation { enqueue(confirmation, to: peer) }
+            // The host, proven: from here a drop is a reconnect, which waits as long as it takes.
+            if peer.central == nil { lock.withLock { candidateDeadline }?.cancel() }
+            ready(peer)
+        case .frame(let frame):
+            // Proven on this connection already, and back from having gone quiet.
+            if lock.withLock({ !peer.isReady }) { ready(peer) }
+            handOn(frame, from: peer)
         }
+    }
 
+    private func handOn(_ frame: Frame, from peer: Peer) {
         switch frame.kind {
         case .reply:
             if let pending = lock.withLock({ waiting.removeValue(forKey: frame.correlation) }) {
@@ -454,17 +488,11 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         }
     }
 
-    /// Says nothing but that it was sealed with the key. An older build hands it on as a
-    /// packet the store cannot read, and drops it.
-    private static let probe = Frame(kind: .oneway, payload: Data())
-
-    /// The snapshot is handed only to whoever has just turned up, which is the whole snapshot
-    /// policy: a phone joining mid-match sees the score without a round trip, and nobody else
-    /// pays for it.
-    private func ready(_ peer: Peer, opening: [Frame]) {
+    /// Counted from here, and said: each end's store says hello when it hears, which is what
+    /// catches either side up.
+    private func ready(_ peer: Peer) {
         lock.withLock { peer.isReady = true }
         reachabilityUpdates.yield(true)
-        for frame in opening { send(frame, to: peer) }
     }
 
     private func forget(_ token: ObjectIdentifier) {
@@ -545,10 +573,8 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
 
     fileprivate func subscribed(_ central: CBCentral, on manager: CBPeripheralManager) {
         guard isCurrent(manager), case .hosting(let code, let share) = lock.withLock({ intent }) else { return }
-        let peer = Peer(central: central)
-        peer.sealing = SessionKey.sealingKey(for: code, share: share, direction: .hostToGuest)
-        peer.opening = SessionKey.sealingKey(for: code, share: share, direction: .guestToHost)
-        // Not ready until something it sent opens. Counted on subscribing, a central with the
+        let peer = Peer(seal: LinkSeal(role: .host, code: code, share: share), central: central)
+        // Not ready until it has proved itself. Counted on subscribing, a central with the
         // wrong code — or any Bluetooth tool at all — was waited on by every send, answered
         // none of them, and kept the outbox from ever being acknowledged.
         lock.withLock { peers[ObjectIdentifier(central)] = peer }
@@ -662,7 +688,9 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     /// does so as fast as the radio can go round.
     fileprivate func disconnected(_ peripheral: CBPeripheral, on manager: CBCentralManager, failed: Bool) {
         guard isCurrent(manager) else { return }
-        let wasProven = lock.withLock { peers[ObjectIdentifier(peripheral)]?.isReady == true }
+        // Proven rather than ready: one hung up on for not answering is not ready any more, and is
+        // just as likely to have moved.
+        let wasProven = lock.withLock { peers[ObjectIdentifier(peripheral)]?.seal.isProven == true }
         forget(ObjectIdentifier(peripheral))
         let reconnects = lock.withLock { () -> Bool in
             guard server === peripheral else { return false }
@@ -745,9 +773,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         else { return reject(peripheral) }
 
         lock.withLock { isRedialling = false }
-        let peer = Peer()
-        peer.sealing = SessionKey.sealingKey(for: code, share: greeting.share, direction: .guestToHost)
-        peer.opening = SessionKey.sealingKey(for: code, share: greeting.share, direction: .hostToGuest)
+        let peer = Peer(seal: LinkSeal(role: .guest, code: code, share: greeting.share))
         lock.withLock { peers[ObjectIdentifier(peripheral)] = peer }
         // Nothing left to look for. The connection carries its own reconnect from here — the
         // request handed to `connect` outlives the link — and a scan left running is a radio
@@ -756,7 +782,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
 
         // Not ready yet. The host only learns of this peer when the subscription lands, and
         // anything written before that is answered "success" and dropped on the floor — so the
-        // probe waits for `subscribed(to:on:)`, which the host has seen first.
+        // challenge waits for `subscribed(to:on:)`, which the host has seen first.
         for service in peripheral.services ?? [] where service.uuid == Self.serviceUUID {
             for characteristic in service.characteristics ?? []
             where characteristic.uuid == Self.outboxUUID {
@@ -775,8 +801,8 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             lock.withLock { centralManager }?.cancelPeripheralConnection(peripheral)
             return
         }
-        guard lock.withLock({ !peer.isReady }) else { return }
-        send(Self.probe, to: peer)
+        guard lock.withLock({ !peer.isReady }), let challenge = lock.withLock({ peer.seal.challenge() }) else { return }
+        enqueue(challenge, to: peer)
         awaitProof(from: ObjectIdentifier(peripheral), peer)
     }
 
