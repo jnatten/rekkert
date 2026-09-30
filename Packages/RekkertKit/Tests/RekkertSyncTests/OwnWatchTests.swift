@@ -534,6 +534,58 @@ struct OwnWatchTests {
     }
 }
 
+/// A link to the host that the store's `onLeft` can cut, keeping every snapshot published over it
+/// while it was up.
+private final class CuttableLink: PeerTransport, @unchecked Sendable {
+    let inbound = AsyncStream<InboundPacket> { _ in }
+    let reachability = AsyncStream<Bool> { _ in }
+    private let lock = NSLock()
+    private var connected = true
+    private var _published: [MatchLog] = []
+    var published: [MatchLog] { lock.withLock { _published } }
+
+    func cut() { lock.withLock { connected = false } }
+    var isReachable: Bool { lock.withLock { connected } }
+    func activate() {}
+    func sendLive(_ payload: Data) async -> Data? { nil }
+    func queue(_ payload: Data) {}
+    func publishSnapshot(_ payload: Data) {
+        guard case .snapshot(let log)? = try? Wire.decode(payload) else { return }
+        lock.withLock { if connected { _published.append(log) } }
+    }
+}
+
+@Suite("Stepping off with the watch")
+@MainActor
+struct SteppingOffTests {
+    /// The watch left, and the phone dropped the match with it — saying "nothing here" to the
+    /// host over a link it was about to cut, which the host answered by handing the whole match
+    /// out to everybody again.
+    @Test func thePhoneSaysNothingToTheHostOnItsWayOffWithTheWatch() async throws {
+        var hosts = MatchLog()
+        hosts.append(.configure(counting), from: DeviceID())
+        let host = CuttableLink()
+        let (toPhone, fromWatch) = LoopbackTransport.pair()
+        let links = FanOutTransport()
+        links.attach(fromWatch, as: .pairedDevice)
+        links.attach(host, as: .sharedSession)
+        let phone = MatchStore(
+            device: DeviceID(), transport: links, session: ActiveSession(log: hosts, role: .guest), snapshotInterval: 0
+        )
+        phone.onLeft = { host.cut() }
+        let running = Task { await phone.run() }
+        defer { running.cancel() }
+        await eventually { !host.published.isEmpty }
+
+        toPhone.queue(try Wire.left(sessionID: hosts.sessionID).encoded())
+        await eventually { phone.state == nil }
+        await quietPeriod()
+
+        #expect(phone.state == nil, "off the match with the watch")
+        #expect(!host.published.contains { $0.isEmpty }, "without a word to the host on the way")
+    }
+}
+
 /// Records what the store sends and lets the test speak back to it.
 private final class RecordingTransport: PeerTransport, @unchecked Sendable {
     let inbound: AsyncStream<InboundPacket>

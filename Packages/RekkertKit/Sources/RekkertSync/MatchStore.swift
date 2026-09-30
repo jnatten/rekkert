@@ -44,9 +44,10 @@ public final class MatchStore {
     /// cannot.
     @ObservationIgnored public var onSharing: ((SharingSignal) -> Void)?
     /// This device is off a match that belongs to somebody else — its watch stepped off and
-    /// took it along, or something of its own was started on top. The store has dropped the
-    /// session by the time this fires; whatever is holding a link to the host open has to let
-    /// go of it too.
+    /// took it along, or something of its own was started on top. Whatever is holding a link to
+    /// the host open has to let go of it. Fired as the session is dropped: after, when something
+    /// of this device's own is started, and before, when its watch stepped off, so nothing said
+    /// on the way off reaches the host.
     @ObservationIgnored public var onLeft: (() -> Void)?
     /// The last thing this device said about its own workout, so a reconnect can say it
     /// again. The whole signal rather than the moment it started: a held clock carries the
@@ -1121,9 +1122,11 @@ public final class MatchStore {
                     shareRole()
                     offerOurSession()
                 } else {
+                    // Links first: what the store says on its way off is for its own watch, and
+                    // said to the host it would hand the whole match out to everybody again.
+                    onLeft?()
                     counterpartLeftSessionID = sessionID
                     dropSession()
-                    onLeft?()
                 }
             }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))

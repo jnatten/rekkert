@@ -244,8 +244,8 @@ public final class SharedSession {
         standbyCode = nil
     }
 
-    /// The store has already stepped off by the time it says so, so there is nothing left to
-    /// decide — only the links to let go of. Not `stop()`, which decides by what is on the store
+    /// The store is stepping off as it says so, so there is nothing left to decide — only the
+    /// links to let go of. Not `stop()`, which decides by what is on the store
     /// when it runs, and by then that can be the match this end has just started.
     private func letGo() {
         cutLinks()
