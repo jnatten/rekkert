@@ -48,3 +48,22 @@ struct LinkHealthTests {
         #expect(verdicts == [false, false])
     }
 }
+
+@Suite("One listener, one browser")
+struct SlotTests {
+    private final class Thing {}
+
+    /// The word that a cancelled listener is gone comes in after its replacement is up. Taken at
+    /// its word, it let go of the replacement, which went on running where nothing could stop it.
+    @Test func lateWordOfTheOldOneLeavesTheNewOneInPlace() {
+        let slot = Slot<Thing>()
+        let old = Thing(), new = Thing()
+        slot.install(old)
+        #expect(slot.install(new) === old, "handed back, to be stopped")
+
+        #expect(!slot.clear(ifStill: old))
+        #expect(slot.current === new)
+        #expect(slot.clear(ifStill: new))
+        #expect(slot.current == nil)
+    }
+}

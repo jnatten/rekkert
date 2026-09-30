@@ -62,8 +62,8 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     private let queue = DispatchQueue(label: "dev.natten.rekkert.localnetwork")
     private let lock = NSLock()
 
-    private var listener: NWListener?
-    private var browser: NWBrowser?
+    private let listener = Slot<NWListener>()
+    private let browser = Slot<NWBrowser>()
     private var links: [ObjectIdentifier: Link] = [:]
     private var waiting: [UInt32: ResumeOnce] = [:]
     private var nextCorrelation: UInt32 = 1
@@ -147,18 +147,12 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     /// rather than torn down and re-advertised.
     public func resumeHosting(code: SessionCode, share: UUID) {
         sweepDeadLinks()
-        let needed = lock.withLock { () -> Bool in
+        lock.withLock {
             intent = .hosting(code: code, share: share)
-            return listener == nil || listener?.state != .ready
+            // A fresh try: what failed before the app was put down says nothing about now.
+            listenerAttempts = 0
         }
-        guard needed else { return announce() }
-
-        let old = lock.withLock { () -> NWListener? in
-            let previous = listener
-            listener = nil
-            return previous
-        }
-        old?.cancel()
+        guard listener.current.map({ $0.state != .ready }) ?? true else { return announce() }
         standUpListener(code: code, share: share)
     }
 
@@ -176,7 +170,8 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         guard attempts <= Self.rebuildAttempts else { return publish(.failed(.blocked)) }
 
         queue.asyncAfter(deadline: .now() + .seconds(1)) { [weak self] in
-            guard let self, case .hosting = self.lock.withLock({ self.intent }) else { return }
+            // Put back meanwhile by the app coming to the front is put back already.
+            guard let self, case .hosting = self.lock.withLock({ self.intent }), self.listener.current == nil else { return }
             self.standUpListener(code: code, share: share)
         }
     }
@@ -198,23 +193,24 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             txtRecord: txt
         )
         listener.newConnectionHandler = { [weak self] in self?.accept($0) }
-        listener.stateUpdateHandler = { [weak self] state in
-            guard let self else { return }
+        listener.stateUpdateHandler = { [weak self, weak listener] state in
+            guard let self, let listener else { return }
             switch state {
             case .ready:
                 self.lock.withLock { self.listenerAttempts = 0 }
             case .failed:
-                self.lock.withLock { self.listener = nil }
+                // Only the one in use. One already replaced is nothing to rebuild.
+                guard self.listener.clear(ifStill: listener) else { return }
                 self.standUpListenerAgain()
             case .cancelled:
                 // iOS takes the listener away when the app goes into the background. Letting
                 // go of it here is what lets `resume()` know there is something to rebuild.
-                self.lock.withLock { self.listener = nil }
+                self.listener.clear(ifStill: listener)
             default:
                 break
             }
         }
-        lock.withLock { self.listener = listener }
+        self.listener.install(listener)?.cancel()
         listener.start(queue: queue)
         publish(.hosting(peers: reachableCount))
     }
@@ -265,17 +261,8 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     /// standing, so a dial that misses is still read as a host in a pocket.
     public func resumeJoining(code: SessionCode) {
         sweepDeadLinks()
-        let needed = lock.withLock { () -> Bool in
-            intent = .joining(code)
-            return browser == nil || browser?.state != .ready
-        }
-        if needed {
-            let old = lock.withLock { () -> NWBrowser? in
-                let previous = browser
-                browser = nil
-                return previous
-            }
-            old?.cancel()
+        lock.withLock { intent = .joining(code) }
+        if browser.current.map({ $0.state != .ready }) ?? true {
             standUpBrowser(code: code)
         }
         startRedialling()
@@ -293,38 +280,33 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         browser.browseResultsChangedHandler = { [weak self] results, _ in
             self?.consider(results, code: code)
         }
-        browser.stateUpdateHandler = { [weak self] state in
-            guard let self else { return }
+        browser.stateUpdateHandler = { [weak self, weak browser] state in
+            guard let self, let browser else { return }
             switch state {
             case .failed:
-                let joinedBefore = self.lock.withLock { () -> Bool in
-                    self.browser = nil
-                    return self.hasEverJoined
-                }
+                guard self.browser.clear(ifStill: browser) else { return }
+                let joinedBefore = self.lock.withLock { self.hasEverJoined }
                 // Before anything has ever worked, a browser that fails really is the refused
                 // permission. Afterwards it is the system having taken it away with the app,
                 // and the redial timer puts it back without troubling anybody about it.
                 if !joinedBefore { self.publish(.failed(.blocked)) }
             case .cancelled:
-                self.lock.withLock { self.browser = nil }
+                self.browser.clear(ifStill: browser)
             default:
                 break
             }
         }
-        lock.withLock { self.browser = browser }
+        self.browser.install(browser)?.cancel()
         browser.start(queue: queue)
         publish(.searching)
     }
 
     public func stop() {
         stopRedialling()
-        let (oldListener, oldBrowser, oldLinks, pending, deadline, dials) = lock.withLock {
-            let values = (
-                listener, browser, Array(links.values), Array(waiting.values),
-                searchDeadline, Array(dialDeadlines.values)
-            )
-            listener = nil
-            browser = nil
+        let oldListener = listener.install(nil)
+        let oldBrowser = browser.install(nil)
+        let (oldLinks, pending, deadline, dials) = lock.withLock {
+            let values = (Array(links.values), Array(waiting.values), searchDeadline, Array(dialDeadlines.values))
             links = [:]
             waiting = [:]
             searchDeadline = nil
@@ -429,6 +411,9 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     }
 
     private func consider(_ results: Set<NWBrowser.Result>, code: SessionCode) {
+        // A browser for some other code, or for none — one let go of whose word came in late —
+        // has nothing to dial.
+        guard case .joining(let wanted) = lock.withLock({ intent }), wanted == code else { return }
         for result in results {
             guard case .bonjour(let txt) = result.metadata,
                   txt["v"] == "1",
@@ -459,6 +444,12 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         // foreground can be looking at the same advertisement at once, and the check in
         // `consider` alone let both of them through to hold two links to one phone.
         let isNew = lock.withLock {
+            // Dialled only while joining, and taken in only while hosting: a connection from the
+            // other is left over from before a stop.
+            switch (intent, share) {
+            case (.joining, .some), (.hosting, .none): break
+            default: return false
+            }
             if let share, links.values.contains(where: { $0.share == share }) { return false }
             links[token] = link
             return true
@@ -596,16 +587,8 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     }
 
     private func lookAgain() {
-        let (intent, browser) = lock.withLock { (self.intent, self.browser) }
-        guard case .joining(let code) = intent else { return }
-        guard browser == nil || browser?.state != .ready else { return redial() }
-
-        let old = lock.withLock { () -> NWBrowser? in
-            let previous = self.browser
-            self.browser = nil
-            return previous
-        }
-        old?.cancel()
+        guard case .joining(let code) = lock.withLock({ intent }) else { return }
+        if let current = browser.current, current.state == .ready { return redial() }
         standUpBrowser(code: code)
     }
 
@@ -615,8 +598,8 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     /// stopped advertising produces no new event, so a guest whose link dropped would wait
     /// for one that never comes.
     private func redial() {
-        let (intent, browser, count) = lock.withLock { (self.intent, self.browser, links.count) }
-        guard case .joining(let code) = intent, count == 0, let browser else { return }
+        let (intent, count) = lock.withLock { (self.intent, links.count) }
+        guard case .joining(let code) = intent, count == 0, let browser = browser.current else { return }
         consider(browser.browseResults, code: code)
     }
 
