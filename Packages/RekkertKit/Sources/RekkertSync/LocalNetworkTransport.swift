@@ -195,7 +195,12 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             type: Self.serviceType,
             txtRecord: txt
         )
-        listener.newConnectionHandler = { [weak self] in self?.accept($0) }
+        // A listener already replaced can still hand over a connection it had in hand, made on the
+        // old code; taken in, it put somebody on the new share who was never given that code.
+        listener.newConnectionHandler = { [weak self, weak listener] connection in
+            guard let self, let listener, self.listener.current === listener else { return connection.cancel() }
+            self.accept(connection)
+        }
         listener.stateUpdateHandler = { [weak self, weak listener] state in
             guard let self, let listener else { return }
             switch state {
@@ -466,11 +471,16 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             guard let self else { return }
             switch state {
             case .ready:
-                self.forgetDialDeadline(token)
-                self.lock.withLock {
+                // A connection let go of by `stop()` can still say it is ready, after the next
+                // join has begun; counted, it read as that join having found its match.
+                let isCurrent = self.lock.withLock { () -> Bool in
+                    guard self.links[token] === link else { return false }
                     link.isReady = true
                     self.hasEverJoined = true
+                    return true
                 }
+                guard isCurrent else { return link.connection.cancel() }
+                self.forgetDialDeadline(token)
                 self.receive(on: link)
                 if let snapshot = self.lock.withLock({ self.lastSnapshot }) {
                     self.send(Frame(kind: .oneway, payload: snapshot), on: link)
