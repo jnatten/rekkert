@@ -16,6 +16,12 @@ private func configuredLog() -> MatchLog {
     return log
 }
 
+private extension MatchLog {
+    static func decodeRoundTrip(_ log: MatchLog) throws -> MatchLog {
+        try JSONCoding.decoder.decode(MatchLog.self, from: JSONCoding.encoder.encode(log))
+    }
+}
+
 private func score(_ log: MatchLog) -> BySide<Int>? {
     guard case .traditional(let session) = SessionReducer.state(of: log) else { return nil }
     return session.score.points
@@ -23,6 +29,33 @@ private func score(_ log: MatchLog) -> BySide<Int>? {
 
 @Suite("Match log")
 struct MatchLogTests {
+    /// A newer build records a kind of event this one has never heard of. The whole batch it came
+    /// in used to fail to read — every point beside it with it — and the gap it left in the log
+    /// was asked for again and again and never filled.
+    @Test func anEventOfAKindFromANewerBuildIsKeptAndPassedOn() throws {
+        var log = configuredLog()
+        let point = log.append(.point(round: 0, court: 0, team: .a), from: deviceB)
+        let future = #"{"id":{"device":{"raw":"\#(deviceB.raw.uuidString)"},"seq":2},"kind":{"somethingNew":{"level":3}},"lamport":9}"#
+        let pointJSON = String(decoding: try JSONCoding.encoder.encode(point), as: UTF8.self)
+        let batch = Data(#"{"events":{"events":[\#(pointJSON),\#(future)],"sessionID":"\#(log.sessionID.uuidString)"}}"#.utf8)
+
+        guard case .events(_, let events) = try Wire.decode(batch) else {
+            Issue.record("the batch should read")
+            return
+        }
+        #expect(events.count == 2, "the point beside it is not lost")
+        var received = configuredLog()
+        received.merge(events)
+        #expect(score(received) == BySide(a: 1, b: 0), "the point counts; the unknown event changes nothing")
+        #expect(received.coverage[deviceB] == 2, "and leaves no hole to be asked for")
+        #expect(received.lastUndoableEvent()?.id == point.id, "nor is it something to take back")
+
+        let passedOn = try MatchLog.decodeRoundTrip(received)
+        let kept = try #require(passedOn.events[EventID(device: deviceB, seq: 2)])
+        #expect(kept.unrecognisedKind == .object(["somethingNew": .object(["level": .number(3)])]),
+                "handed on as it came, for a build that can read it")
+    }
+
     @Test func sequenceNumbersAreConsecutivePerDevice() {
         var log = configuredLog()
         log.append(.point(round: 0, court: 0, team: .a), from: deviceB)

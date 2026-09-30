@@ -50,12 +50,18 @@ public enum EventKind: Codable, Sendable, Hashable {
     /// is: the same match going on, so whatever filed that session's record should drop it.
     case restore(SessionState, takingBack: UUID? = nil)
     case undo(EventID)
+    /// Something a newer build recorded that this one cannot read. It changes nothing here, but
+    /// it is kept and passed on as it came: dropped, it would leave a hole the log could never
+    /// fill, and every batch it travelled in would be refused along with it.
+    case unrecognised
 }
 
 public struct MatchEvent: Codable, Sendable, Hashable, Identifiable {
     public let id: EventID
     public let lamport: UInt64
     public let kind: EventKind
+    /// What `kind` was on the wire, when this build could not read it.
+    public let unrecognisedKind: JSONValue?
     /// When the device that recorded it did, by its own clock. For the timeline only: the
     /// log is ordered by Lamport stamp, and nothing that decides the score reads this.
     /// Absent from events written before it existed, and dropped by an older build that
@@ -66,7 +72,36 @@ public struct MatchEvent: Codable, Sendable, Hashable, Identifiable {
         self.id = id
         self.lamport = lamport
         self.kind = kind
+        self.unrecognisedKind = nil
         self.at = at
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, lamport, kind, at }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(EventID.self, forKey: .id)
+        lamport = try container.decode(UInt64.self, forKey: .lamport)
+        at = try container.decodeIfPresent(Date.self, forKey: .at)
+        if let known = try? container.decode(EventKind.self, forKey: .kind) {
+            kind = known
+            unrecognisedKind = nil
+        } else {
+            kind = .unrecognised
+            unrecognisedKind = try container.decode(JSONValue.self, forKey: .kind)
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(lamport, forKey: .lamport)
+        try container.encodeIfPresent(at, forKey: .at)
+        if let unrecognisedKind {
+            try container.encode(unrecognisedKind, forKey: .kind)
+        } else {
+            try container.encode(kind, forKey: .kind)
+        }
     }
 
     /// A moment to a tenth of a second: finer than any timeline is drawn at, and a dozen
@@ -82,7 +117,7 @@ public struct MatchEvent: Codable, Sendable, Hashable, Identifiable {
         case .point, .setScore, .setRoundConfirmed, .setRoundCancelled, .nextRound, .finish, .endRound: true
         // A serve correction is its own undo — swapping again puts it back — and undo
         // should keep meaning "take back the last thing that changed the score".
-        case .configure, .restore, .undo, .chooseServeSide, .setFirstServer, .setServeOrder: false
+        case .configure, .restore, .undo, .chooseServeSide, .setFirstServer, .setServeOrder, .unrecognised: false
         }
     }
 }
@@ -94,7 +129,7 @@ extension EventKind {
         switch self {
         case .configure(_, let at), .endRound(_, let at), .nextRound(_, let at, _): at
         case .point, .setScore, .setFirstServer, .setServeOrder, .chooseServeSide,
-             .setRoundConfirmed, .setRoundCancelled, .finish, .restore, .undo: nil
+             .setRoundConfirmed, .setRoundCancelled, .finish, .restore, .undo, .unrecognised: nil
         }
     }
 }

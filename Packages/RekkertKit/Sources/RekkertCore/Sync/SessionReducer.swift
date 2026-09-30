@@ -156,7 +156,7 @@ public enum SessionReducer {
                 break
             }
 
-        case .undo:
+        case .undo, .unrecognised:
             break
         }
     }
