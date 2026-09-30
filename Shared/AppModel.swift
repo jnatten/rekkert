@@ -267,12 +267,14 @@ final class AppModel {
     func join(_ code: SessionCode) { standIn.join(code) }
 
     func stopJoining() { standIn.cancel() }
+
+    func joinScreenClosed() { standIn.joinScreenClosed() }
     #else
     /// The wrist has typed a code, or given up on one. Doing the thing is this end's job.
     private func joinFromWatch(_ signal: SharingSignal) {
         switch signal {
         case .join(let code): sharing.join(code)
-        case .cancel: sharing.cancelJoining()
+        case .cancel: sharing.cancelJoiningFromTheWatch()
         // Said by this end, not heard by it.
         case .state, .standby: break
         }

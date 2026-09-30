@@ -200,6 +200,23 @@ struct BluetoothCoexistenceTests {
         #expect(told.last == .some(nil))
     }
 
+    /// Called off from the wrist a moment after the phone got there, which is when the watch's
+    /// join screen goes. Only a search still waiting is a search to call off.
+    @Test func theWatchCallingOffAJoinThatLandedLeavesTheLinksUp() throws {
+        let (sharing, store, radio) = make()
+        let code = try #require(SessionCode("482915"))
+        sharing.join(code)
+        store.cancelJoining()
+
+        sharing.cancelJoiningFromTheWatch()
+        #expect(radio.stops == 0, "the link to the host stays")
+        #expect(sharing.isSharing)
+
+        store.beginJoining()
+        sharing.cancelJoiningFromTheWatch()
+        #expect(radio.stops == 1, "a search still waiting is called off")
+    }
+
     @Test func standingDownKeepsTheMatchAndTheCode() throws {
         let (sharing, store, radio) = make()
         store.configure(setup)

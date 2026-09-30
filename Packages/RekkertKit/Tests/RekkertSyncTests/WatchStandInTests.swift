@@ -187,6 +187,25 @@ struct WatchStandInTests {
         #expect(points(court.watch) == BySide(a: 2, b: 1), "and hears the host")
     }
 
+    /// The host's match reached the wrist through the phone before the phone had said the join was
+    /// through. The join screen went at once, and calling the search off on its way out cut the
+    /// phone's link to the host it had just reached.
+    @Test func aMatchHandedOnByThePhoneIsAJoinThatLanded() async throws {
+        let court = Court()
+        let tasks = court.run()
+        defer { tasks.forEach { $0.cancel() } }
+        await eventually { court.watch.isPairReachable }
+        court.standIn.join(code)
+        court.phone.beginJoining()
+        await eventually { court.watch.log.sessionID == court.host.log.sessionID && !court.watch.canEndSession }
+
+        court.standIn.joinScreenClosed()
+        try await Task.sleep(for: .milliseconds(1_300))
+
+        #expect(court.standIn.joining == .joined)
+        #expect(!court.heardOnThePhone.contains(.cancel), "the phone is left on the host")
+    }
+
     @Test func aNewCodeTypedWhileOnTheHostsRadioIsTheOneDialled() async throws {
         let court = Court()
         court.phoneGoesAway()

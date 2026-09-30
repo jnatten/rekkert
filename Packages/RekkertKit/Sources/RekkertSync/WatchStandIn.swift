@@ -75,6 +75,9 @@ public final class WatchStandIn {
     @ObservationIgnored private var attempt = 0
     @ObservationIgnored private var phoneFailure: SharingFailure?
     @ObservationIgnored private var phoneHasJoined = false
+    /// What was on the wrist when the code was typed, so the host's match arriving is told apart
+    /// from the one already there.
+    @ObservationIgnored private var sessionAtJoin: UUID?
     private var phoneStandby: SharingStandby?
     /// An older phone never says, and is trusted to be carrying the match as it always was.
     private var hasHeardStandby = false
@@ -115,6 +118,7 @@ public final class WatchStandIn {
         phoneFailure = nil
         phoneHasJoined = false
         phoneStandby = nil
+        sessionAtJoin = store.log.sessionID
         // A link held for the last match would stop the new code being dialled, and would go
         // on feeding the old match in over the one the phone is fetching.
         if sharing.isSharing { sharing.standDown() }
@@ -138,10 +142,21 @@ public final class WatchStandIn {
         switch pending {
         case .askedPhone: Task { [store] in await store.send(.cancel) }
         case .own: sharing.cancelJoining()
+        // Through to a host with nothing on yet: the phone is still waiting on it.
+        case nil where joining == .joined && store.state == nil: Task { [store] in await store.send(.cancel) }
         case nil: break
         }
         pending = nil
         joining = .off
+    }
+
+    /// The join screen went away. A join that has landed is left alone, whatever the phone has
+    /// got round to saying about it: the screen goes the moment a match arrives, and calling the
+    /// search off then would cut the phone's link to the host it has just reached.
+    public func joinScreenClosed() {
+        evaluate()
+        guard case .searching = joining else { return }
+        cancel()
     }
 
     public func heard(_ signal: SharingSignal) {
@@ -186,8 +201,9 @@ public final class WatchStandIn {
             && phoneStandby?.code == sharing.standbyCode
         if isPhoneThrough { phoneLastThrough = now }
 
+        let isHandedTheHostsMatch = store.state != nil && !store.canEndSession && store.log.sessionID != sessionAtJoin
         let hasLanded = switch pending {
-        case .askedPhone: phoneHasJoined || isPhoneThrough
+        case .askedPhone: phoneHasJoined || isPhoneThrough || isHandedTheHostsMatch
         case .own: !store.isJoining && store.state != nil
         case nil: false
         }

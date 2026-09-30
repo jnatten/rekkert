@@ -262,6 +262,13 @@ public final class SharedSession {
         standbyCode = nil
     }
 
+    /// The wrist called off the join it asked for. Only a join still waiting is called off: one
+    /// that landed while the word was on its way is a link to a host that has to be kept.
+    public func cancelJoiningFromTheWatch() {
+        guard store.isJoining else { return }
+        cancelJoining()
+    }
+
     /// Not `stop()`, which goes by the role: a watch following its phone's match is solo on it.
     public func leave() {
         cutLinks()

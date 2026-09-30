@@ -43,7 +43,7 @@ struct WatchJoinView: View {
             .onDisappear {
                 // Swiped away mid-look: a search left running on the phone would conclude with
                 // nobody watching for it.
-                if case .searching = model.joining { model.stopJoining() }
+                model.joinScreenClosed()
             }
         }
     }
