@@ -261,7 +261,10 @@ public final class MatchStore {
     /// A convention rather than a boundary: with nobody holding the ring there is nothing to
     /// stop a modified client appending the event itself. These are four people on a court.
     public var canEndSession: Bool {
-        role == .host || (role != .guest && pairedRole != .guest && guestOf != log.sessionID)
+        role == .host || (
+            role != .guest && guestOf != log.sessionID
+                && (pairedRole != .guest || isThePairsOwn(log, strictly: true))
+        )
     }
 
     /// Says that this phone's score is the score, for everybody.
@@ -1059,10 +1062,10 @@ public final class MatchStore {
             // carry it — so the one match it can name is the one mirrored from there. A host
             // is not taken off its own match: that is ending it, and a watch cannot do that.
             if sessionID == log.sessionID, !log.isEmpty {
-                if role == .host {
-                    // The watch has already dropped its copy on a role it had wrong. Told
-                    // who holds the whistle, it lets go of the refusal, and is then handed
-                    // the match back.
+                if role == .host || isThePairsOwn(log, strictly: true) {
+                    // The watch has already dropped its copy on a role it had wrong: a Leave
+                    // names somebody else's match, and this one is not. Told who holds the
+                    // whistle, it lets go of the refusal, and is then handed the match back.
                     shareRole()
                     offerOurSession()
                 } else {
@@ -1152,10 +1155,10 @@ public final class MatchStore {
                     }
                     persist()
                 }
-            } else if incoming.sessionID == leftSessionID {
+            } else if incoming.sessionID == leftSessionID, !isThePairsOwnFromThePair(incoming, packet) {
                 // Stepped off this one on purpose. Whoever is still on it is not being
                 // refused — nothing is retired — only not taken up again.
-            } else if incoming.sessionID == counterpartLeftSessionID {
+            } else if incoming.sessionID == counterpartLeftSessionID, !isThePairsOwnFromThePair(incoming, packet) {
                 // Off this one as a pair, and neither the host's link nor the pair's own
                 // packets in flight can be trusted to have caught up.
             } else if log.isEmpty, role == .host, !packet.isFromPairedDevice, !takesBackOneOfOurs(incoming) {
@@ -1164,6 +1167,7 @@ public final class MatchStore {
                 // host's own, taken back.
             } else if log.isEmpty {
                 log = incoming
+                forgetLeaving(incoming.sessionID)
                 // An empty guest is handed the host's next match; that is the code lasting
                 // an evening. A match its own watch started is the pair stepping off the shared
                 // one — or the phone would be a guest on a match nobody hosts, unable to end it
@@ -1305,11 +1309,18 @@ public final class MatchStore {
     /// Started by this phone or its watch rather than handed on from somebody else's: no event in
     /// it is anybody else's, and it is not a result taken back. With the other half not yet
     /// known, a match with one author besides this device is read as that half's.
-    private func isThePairsOwn(_ incoming: MatchLog) -> Bool {
-        guard incoming.takesBack == nil else { return false }
+    ///
+    /// `strictly` refuses to guess: only a known other half counts.
+    private func isThePairsOwn(_ incoming: MatchLog, strictly: Bool = false) -> Bool {
+        guard !incoming.isEmpty, incoming.takesBack == nil else { return false }
         let others = Set(incoming.events.keys.map(\.device)).subtracting([device])
-        guard let pairedDevice else { return others.count <= 1 }
+        guard let pairedDevice else { return !strictly && others.count <= 1 }
         return others.isSubset(of: [pairedDevice])
+    }
+
+    /// Nobody leaves their own match — they end it — so a Leave that names one was a mistake.
+    private func isThePairsOwnFromThePair(_ incoming: MatchLog, _ packet: InboundPacket) -> Bool {
+        packet.isFromPairedDevice && isThePairsOwn(incoming, strictly: true)
     }
 
     private func takesBackOneOfOurs(_ incoming: MatchLog) -> Bool {

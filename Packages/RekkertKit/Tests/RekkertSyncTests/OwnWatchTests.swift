@@ -365,6 +365,27 @@ struct OwnWatchTests {
         #expect(again.state == nil, "nor after a join that was called off")
     }
 
+    /// A watch still reading its phone as a guest offers Leave on the phone's own new match. Only
+    /// a host was protected from that: a phone on its own match dropped it, and the watch went on
+    /// refusing it.
+    @Test func aLeaveOnThePhonesOwnMatchIsNotLeavingIt() async throws {
+        let pair = PhoneWithWatch(phoneLog: nil, hostLog: nil)
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        pair.phone.configure(counting)
+        pair.phone.tap(team: .a)
+        await eventually { inStep(pair.phone, pair.watch) && pair.watch.isOurs(pair.phone.device) }
+        let own = pair.phone.log.sessionID
+
+        pair.watch.leaveSharedSession()
+        await eventually { pair.watch.log.sessionID == own && pair.watch.state != nil }
+
+        #expect(pair.phone.log.sessionID == own, "the phone keeps its own match")
+        #expect(pair.phone.state != nil)
+        #expect(pair.watch.log.sessionID == own, "and the watch is handed it back")
+        #expect(pair.watch.canEndSession)
+    }
+
     /// The watch has a Leave of its own. The phone goes with it — and stays off, though its
     /// link to the host is still up and the host's next snapshot would put the match back.
     @Test func theWatchLeavingTakesThePhoneOffToo() async throws {
