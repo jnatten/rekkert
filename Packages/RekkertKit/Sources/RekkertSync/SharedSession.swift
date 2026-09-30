@@ -154,14 +154,23 @@ public final class SharedSession {
     /// The share id is minted here rather than taken from the session, so finishing one match
     /// and starting another keeps the same code — nobody has to be told a new one halfway
     /// through an evening.
-    public func host(code: SessionCode = .random()) {
+    public func host(code requested: SessionCode? = nil) {
         guard store.state != nil else { return }
         // A search still running underneath — the join sheet swiped away mid-look — would
         // conclude on the first guest to say hello and make this phone a guest on its own
         // match.
         if wanted != nil { cancelJoining() }
-        hosted = (code, UUID())
         store.startSharing()
+        // Still sharing underneath, on a code everybody at the court already has: put back what
+        // went rather than starting over on a new one.
+        if let hosted, requested == nil || requested == hosted.code {
+            link.resumeHosting(code: hosted.code, share: hosted.share)
+            bluetooth?.resumeHosting(code: hosted.code, share: hosted.share)
+            phase = .hosting(hosted.code)
+            return
+        }
+        let code = requested ?? .random()
+        hosted = (code, UUID())
         link.startHosting(code: code, share: hosted!.share)
         bluetooth?.startHosting(code: code, share: hosted!.share)
         phase = .hosting(code)
@@ -388,6 +397,11 @@ public final class SharedSession {
             hasJoinedBefore = true
             phase = .joined
         case .failed(let failure):
+            // A host's listener giving up is the network gone, not the match: the radio is still
+            // advertising the same code, and the listener is put back when the app next comes to
+            // the front. Saying sharing had failed dropped the code off the screen, and sharing
+            // again read out a new one that nobody already on the match had.
+            if hosted != nil { return }
             // A failure after the match has once been found is a drop, not a refusal. The
             // transport is meant never to send one now; if it ever does, the answer here is to
             // go on looking rather than to throw away a match somebody is in the middle of

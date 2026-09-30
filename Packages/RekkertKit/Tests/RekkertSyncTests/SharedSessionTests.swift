@@ -19,6 +19,23 @@ struct SharedSessionTests {
         return (SharedSession(store: store, link: LocalNetworkTransport()), store)
     }
 
+    /// The listener gave up after the app had been away, while Bluetooth went on hosting. The
+    /// code went off the screen, and sharing again read out a new one that none of the phones on
+    /// the match had.
+    @Test func aHostWhoseNetworkGaveUpKeepsItsCode() throws {
+        let (sharing, store) = make()
+        store.configure(setup)
+        sharing.host()
+        let code = try #require(sharing.code)
+
+        sharing.apply(.failed(.blocked))
+        #expect(sharing.code == code, "still sharing, on the same code")
+        #expect(sharing.isSharing)
+
+        sharing.host()
+        #expect(sharing.code == code, "and sharing again keeps it")
+    }
+
     @Test func thereIsNothingToShareBeforeAMatchStarts() {
         let (sharing, _) = make()
         sharing.host()
@@ -140,8 +157,8 @@ struct SharedSessionTests {
         #expect(store.role == .solo)
     }
 
-    /// A listener the system took away and the transport put back reports hosting again, and
-    /// the phase has to follow it out of the failure it was in meanwhile.
+    /// A listener the system took away and the transport put back reports hosting again. The
+    /// failure in between is not one the host is shown: the radio went on hosting the same code.
     @Test func hostingComesBackWhenTheListenerIsPutBack() throws {
         let (sharing, store) = make()
         store.configure(setup)
@@ -149,7 +166,7 @@ struct SharedSessionTests {
         let code = try #require(sharing.code)
 
         sharing.apply(.failed(.blocked))
-        #expect(sharing.phase == .failed(.blocked))
+        #expect(sharing.phase == .hosting(code))
 
         sharing.apply(.hosting(peers: 0))
         #expect(sharing.phase == .hosting(code))
