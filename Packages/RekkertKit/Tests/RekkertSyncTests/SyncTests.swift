@@ -287,6 +287,37 @@ struct SyncTests {
         #expect(phone.state != nil, "and the phone stays on its own")
     }
 
+    /// Two courts of one americano, a phone on each. Undo on court 2's screen took back whatever
+    /// had last been scored anywhere, court 1's point included.
+    @Test func undoOnACourtsOwnScreenTakesBackThatCourtsPoint() async throws {
+        let tournament = Tournament(
+            name: "Thursday",
+            format: .americano,
+            players: (0 ..< 8).map { Player(name: "P\($0)") },
+            config: TournamentConfig(courtCount: 2)
+        )
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        pair.phone.configure(.tournament(tournament))
+        pair.phone.nextRound()
+        await eventually { pair.watch.state == pair.phone.state && pair.watch.state != nil }
+
+        pair.phone.tap(round: 0, court: 1, team: .a)
+        await eventually { pair.watch.state == pair.phone.state }
+        pair.watch.tap(round: 0, court: 0, team: .b)
+        await eventually { pair.watch.state == pair.phone.state }
+
+        pair.phone.undoLast(round: 0, court: 1)
+        await eventually { pair.watch.state == pair.phone.state }
+        guard case .tournament(let played) = pair.phone.state, let round = played.rounds.first else {
+            Issue.record("no tournament")
+            return
+        }
+        #expect(round.matches.first { $0.courtIndex == 1 }?.state.points == BySide(a: 0, b: 0), "this court's point went")
+        #expect(round.matches.first { $0.courtIndex == 0 }?.state.points == BySide(a: 0, b: 1), "the other court's stayed")
+    }
+
     @Test func tournamentCourtsSyncIndependently() async throws {
         let tournament = Tournament(
             name: "Thursday",

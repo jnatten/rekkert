@@ -23,7 +23,7 @@ struct CourtScoreboardView: View {
                             snapshot: snapshot,
                             layout: .phone(snapshot, model.store.display),
                             onTap: { model.store.tap(round: round, court: court, team: $0) },
-                            onUndo: { model.store.undoLast() }
+                            onUndo: { model.store.undoLast(round: round, court: court) }
                         )
                         entry(snapshot)
                     }
@@ -49,8 +49,8 @@ struct CourtScoreboardView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Undo", systemImage: "arrow.uturn.backward") { model.store.undoLast() }
-                        .disabled(!model.store.canUndo)
+                    Button("Undo", systemImage: "arrow.uturn.backward") { model.store.undoLast(round: round, court: court) }
+                        .disabled(!model.store.canUndo(round: round, court: court))
                 }
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Full screen", systemImage: "arrow.up.left.and.arrow.down.right") {

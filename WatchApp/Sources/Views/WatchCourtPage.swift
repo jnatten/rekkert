@@ -182,8 +182,8 @@ struct WatchCourtPage: View {
                 .background(.black.opacity(0.4), in: .circle)
         }
         .buttonStyle(.plain)
-        .opacity(model.store.canUndo ? 1 : 0.35)
-        .disabled(!model.store.canUndo)
+        .opacity(canUndo ? 1 : 0.35)
+        .disabled(!canUndo)
         .padding(.leading, 3)
         .padding(.bottom, 3)
         .accessibilityLabel("Undo")
@@ -271,9 +271,19 @@ struct WatchCourtPage: View {
         model.store.tap(round: round, court: court, team: side)
     }
 
+    /// A tournament court is one of several, and somebody else's court is not this one's to
+    /// take back.
+    private var isOneOfSeveralCourts: Bool {
+        if case .tournament = model.store.state { true } else { false }
+    }
+
+    private var canUndo: Bool {
+        isOneOfSeveralCourts ? model.store.canUndo(round: round, court: court) : model.store.canUndo
+    }
+
     private func undo() {
         WKInterfaceDevice.current().play(.retry)
-        model.store.undoLast()
+        if isOneOfSeveralCourts { model.store.undoLast(round: round, court: court) } else { model.store.undoLast() }
     }
 
     /// Set before the tab view exists rather than in a task: handed a selection after its

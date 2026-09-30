@@ -268,11 +268,11 @@ struct FullscreenScoreView: View {
                     Spacer(minLength: 0)
 
                     controlButton("arrow.uturn.backward", label: "Undo") {
-                        model.store.undoLast()
+                        if let round { model.store.undoLast(round: round, court: court) } else { model.store.undoLast() }
                         revealControls()
                     }
                     .opacity(showingControls ? 1 : 0.4)
-                    .disabled(!model.store.canUndo)
+                    .disabled(!(round.map { model.store.canUndo(round: $0, court: court) } ?? model.store.canUndo))
                 }
             }
             .padding(.horizontal, 14)

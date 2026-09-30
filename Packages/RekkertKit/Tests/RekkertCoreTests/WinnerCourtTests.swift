@@ -24,6 +24,19 @@ private func score(_ log: inout MatchLog, _ sequence: [TeamSide]) {
 
 @Suite("Winner court")
 struct WinnerCourtTests {
+    /// Both devices blew the whistle on the same round. The second is a no-op, and Undo spent
+    /// itself on it: the first press did nothing and the round stayed closed.
+    @Test func undoAfterTwoWhistlesAtOnceReopensTheRound() throws {
+        var value = log()
+        score(&value, [.a, .a, .a, .a])
+        value.append(.endRound(round: 0), from: device)
+        value.append(.endRound(round: 0), from: DeviceID())
+        #expect(session(value)?.completedRounds.count == 1)
+
+        for target in value.undoTargets() { value.append(.undo(target.id), from: device) }
+        #expect(session(value)?.completedRounds.isEmpty == true, "one press reopens the round")
+    }
+
     @Test func gamesAccumulateWithoutEverCompletingASet() {
         var value = log()
         for _ in 0 ..< 9 { score(&value, [.a, .a, .a, .a]) }

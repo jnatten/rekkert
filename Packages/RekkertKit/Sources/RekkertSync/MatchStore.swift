@@ -537,11 +537,39 @@ public final class MatchStore {
         Task { _ = await sendLive(payload) }
     }
 
-    public var canUndo: Bool { log.lastUndoableEvent() != nil }
+    public var canUndo: Bool { !undoTargets(UndoScope()).isEmpty }
 
     public func undoLast() {
-        guard let target = log.lastUndoableEvent() else { return }
-        record(.undo(target.id))
+        for target in undoTargets(UndoScope()) { record(.undo(target.id)) }
+    }
+
+    /// Undo on one court's own screen: the last thing scored there, not on the court next door.
+    public func canUndo(round: Int, court: Int) -> Bool { !undoTargets(UndoScope(round: round, court: court)).isEmpty }
+
+    public func undoLast(round: Int, court: Int) {
+        for target in undoTargets(UndoScope(round: round, court: court)) { record(.undo(target.id)) }
+    }
+
+    private struct UndoScope: Hashable {
+        var round: Int?
+        var court: Int?
+    }
+
+    /// Worked out by replaying the log, and asked on every redraw, so kept until the log grows. A
+    /// session's log only ever grows, so its id and length say whether the answer still holds.
+    @ObservationIgnored private var knownUndoTargets: [UndoScope: (session: UUID, count: Int, targets: [MatchEvent])] = [:]
+
+    private func undoTargets(_ scope: UndoScope) -> [MatchEvent] {
+        if let known = knownUndoTargets[scope], known.session == log.sessionID, known.count == log.events.count {
+            return known.targets
+        }
+        let targets = if let round = scope.round, let court = scope.court {
+            log.undoTargets(round: round, court: court)
+        } else {
+            log.undoTargets()
+        }
+        knownUndoTargets[scope] = (log.sessionID, log.events.count, targets)
+        return targets
     }
 
     public func startNewSession() {
@@ -748,7 +776,8 @@ public final class MatchStore {
     /// The state one undo short of the end, or `nil` when there is nothing to take back or
     /// taking it back would not actually reopen the session.
     private func rewinding(_ ended: MatchLog) -> RewindableResult? {
-        guard let target = ended.lastUndoableEvent() else { return nil }
+        let targets = ended.undoTargets()
+        guard let target = targets.first else { return nil }
         let undoesAPoint: Bool
         switch target.kind {
         case .point, .setScore: undoesAPoint = true
@@ -759,7 +788,7 @@ public final class MatchStore {
         guard undoesAPoint || canEndSession else { return nil }
 
         var rewound = ended
-        rewound.append(.undo(target.id), from: device)
+        for target in targets { rewound.append(.undo(target.id), from: device) }
         guard let state = SessionReducer.state(of: rewound), !state.isFinished else { return nil }
         return RewindableResult(state: state, undoesAPoint: undoesAPoint)
     }

@@ -228,6 +228,39 @@ struct SessionReducerTests {
         #expect(tournament(log)?.rounds.count == 3, "advancing again still works")
     }
 
+    /// The draw that lost the race changed nothing, and it sorts last — so it was what Undo reached
+    /// for, and the first press did nothing at all.
+    @Test func undoAfterTwoDrawsAtOnceTakesBackTheRoundThatWasDrawn() throws {
+        let log = tournamentLog()
+        var onPhone = log
+        var onWatch = log
+        let fromPhone = onPhone.drawRound(from: device)
+        let fromWatch = onWatch.drawRound(from: later)
+        onPhone.merge([fromWatch])
+        #expect(tournament(onPhone)?.rounds.count == 2)
+
+        let target = try #require(onPhone.lastUndoableEvent())
+        #expect(target.id == fromPhone.id, "the draw that landed, not the one turned away")
+        let targets = onPhone.undoTargets()
+        #expect(Set(targets.map(\.id)) == [fromPhone.id, fromWatch.id], "and the one that would land in its place")
+        for target in targets { onPhone.append(.undo(target.id), from: device) }
+        #expect(tournament(onPhone)?.rounds.count == 1, "one press takes the round back")
+    }
+
+    /// Two courts, one phone each. Undo on court 2's own screen took back court 1's point.
+    @Test func undoOnOneCourtLeavesTheOtherCourtAlone() throws {
+        var log = tournamentLog()
+        let mine = log.append(.point(round: 0, court: 1, team: .a), from: device)
+        log.append(.point(round: 0, court: 0, team: .b), from: later)
+
+        let target = try #require(log.lastUndoableEvent(round: 0, court: 1))
+        #expect(target.id == mine.id)
+        log.append(.undo(target.id), from: device)
+        let round = try #require(tournament(log)?.rounds.first)
+        #expect(round.matches.first { $0.courtIndex == 0 }?.state.points == BySide(a: 0, b: 1), "court 1 keeps its point")
+        #expect(round.matches.first { $0.courtIndex == 1 }?.state.points == BySide(a: 0, b: 0))
+    }
+
     @Test func undoingTheDrawLeavesNoRoundButStaysRecoverable() {
         var log = tournamentLog()
         #expect(tournament(log)?.rounds.count == 1)

@@ -123,16 +123,67 @@ public struct MatchLog: Codable, Sendable, Hashable {
         return first ... last
     }
 
-    /// The most recent still-effective event that an undo should target.
+    /// The most recent still-effective event that an undo should target: the last one that moved
+    /// the board. One the reducer turned away — the second of two draws made at once, a whistle
+    /// both devices blew, a point for a round already over — changed nothing, and taking it back
+    /// would spend the undo on nothing.
     ///
     /// Nothing before a `.restore` qualifies: the restore replays the whole state over
     /// whatever came before it, so taking back an earlier point would change nothing on the
     /// board while still spending the undo.
-    public func lastUndoableEvent() -> MatchEvent? {
-        let effective = effectiveEvents
-        let floor = effective.lastIndex { if case .restore = $0.kind { true } else { false } }
-        let candidates = floor.map { effective[($0 + 1)...] } ?? effective[...]
-        return candidates.last { $0.isUndoable }
+    public func lastUndoableEvent(where touches: (EventKind) -> Bool = { _ in true }) -> MatchEvent? {
+        var state: SessionState?
+        var last: MatchEvent?
+        for event in effectiveEvents {
+            let before = state
+            SessionReducer.apply(event.kind, to: &state)
+            if case .restore = event.kind {
+                last = nil
+            } else if event.isUndoable, touches(event.kind), state != before {
+                last = event
+            }
+        }
+        return last
+    }
+
+    /// The same, for one court: what was scored there, or its round confirmed or called off. On a
+    /// court shared between phones, somebody else's court is not this one's to take back.
+    public func lastUndoableEvent(round: Int, court: Int) -> MatchEvent? {
+        lastUndoableEvent(where: Self.touching(round: round, court: court))
+    }
+
+    /// Everything an undo has to take back for the board to move back.
+    ///
+    /// Usually the one event. But two devices drawing the same round, or blowing the same whistle,
+    /// leave two of it in the log, and only the first counts — so taking that one back just lets
+    /// the other count instead. Each one that would stand in is taken back with it.
+    public func undoTargets(where touches: (EventKind) -> Bool = { _ in true }) -> [MatchEvent] {
+        guard let first = lastUndoableEvent(where: touches) else { return [] }
+        let board = SessionReducer.state(of: self)
+        let scratch = DeviceID()
+        var targets = [first]
+        var without = self
+        while targets.count < 8 {
+            without.append(.undo(targets[targets.count - 1].id), from: scratch)
+            guard SessionReducer.state(of: without) == board,
+                  let next = without.lastUndoableEvent(where: touches) else { break }
+            targets.append(next)
+        }
+        return targets
+    }
+
+    public func undoTargets(round: Int, court: Int) -> [MatchEvent] {
+        undoTargets(where: Self.touching(round: round, court: court))
+    }
+
+    private static func touching(round: Int, court: Int) -> (EventKind) -> Bool {
+        { kind in
+            switch kind {
+            case .point(let r, let c, _), .setScore(let r, let c, _): r == round && c == court
+            case .setRoundConfirmed(let r, _), .setRoundCancelled(let r, _): r == round
+            default: false
+            }
+        }
     }
 
     /// Encoded as an ordered array rather than a dictionary: half the bytes over the wire
