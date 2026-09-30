@@ -1224,6 +1224,15 @@ public final class MatchStore {
                     offerOurSession()
                     if packet.isFromPairedDevice { keep(incoming, handedOverBy: .refusedEnding) }
                 }
+            } else if role == .guest, !packet.isFromPairedDevice, let ended = untakenTakeBack() {
+                // The point that won it was taken back here after the host had already moved on,
+                // so the host never took the reopened match up and never will. The match ended as
+                // it ended; the host's next one is where this guest belongs.
+                giveUpTakingBack(ended)
+                log = incoming
+                outbox = Outbox()
+                refresh()
+                publishSnapshot(force: true)
             } else if role != .solo {
                 // A host is never taken over. The people in front of it are playing this
                 // match, and a phone that happened to start one a moment ago is not. Nor is a
@@ -1374,6 +1383,21 @@ public final class MatchStore {
         let others = Set(incoming.events.keys.map(\.device)).subtracting([device])
         guard let pairedDevice else { return !strictly && others.count <= 1 }
         return others.isSubset(of: [pairedDevice])
+    }
+
+    /// The session a result was taken back from, while nobody but this pair has touched the match
+    /// it was taken back into.
+    private func untakenTakeBack() -> UUID? {
+        guard let takenBack = log.takesBack, log.events.keys.allSatisfy({ isOurs($0.device) }) else { return nil }
+        return takenBack
+    }
+
+    private func giveUpTakingBack(_ ended: UUID) {
+        if keepsHistory, let farewell = farewells[ended], let state = SessionReducer.state(of: farewell) {
+            file(state, from: farewell)
+        }
+        if !retired.contains(log.sessionID) { retired.append(log.sessionID) }
+        if retired.count > 20 { retired.removeFirst(retired.count - 20) }
     }
 
     /// Nobody leaves their own match — they end it — so a Leave that names one was a mistake.

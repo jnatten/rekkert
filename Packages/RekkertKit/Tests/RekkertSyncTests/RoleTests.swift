@@ -448,6 +448,51 @@ struct RoleTests {
         #expect(guest.role == .guest)
     }
 
+    /// The guest took the winning point back just as the host started the next match, and the host
+    /// never saw the reopened one. The guest was left alone on it, refusing the host's next match
+    /// as somebody else's for the rest of the evening.
+    @Test func aGuestWhoseTakeBackTheHostMissedFollowsTheHostOn() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = SessionStore(directory: directory)
+        let hostDevice = DeviceID()
+        let (one, two) = LoopbackTransport.pair()
+        let hostFan = FanOutTransport()
+        hostFan.attach(one, as: .sharedSession)
+        let guestFan = FanOutTransport()
+        guestFan.attach(two, as: .sharedSession)
+        var twoPoints = MatchLog()
+        twoPoints.append(.configure(.pointCount(rules: PointCountRules(target: 2), teams: BySide(a: .home, b: .away))), from: hostDevice)
+        twoPoints.append(.point(round: 0, court: 0, team: .a), from: hostDevice)
+        let ended = twoPoints.sessionID
+        let host = MatchStore(
+            device: hostDevice, transport: hostFan, session: ActiveSession(log: twoPoints, role: .host), snapshotInterval: 0
+        )
+        let guest = MatchStore(device: DeviceID(), transport: guestFan, store: persistence, snapshotInterval: 0)
+        let tasks = [Task { await host.run() }, Task { await guest.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+        await quietPeriod()
+        guest.beginJoining()
+        await eventually { guest.role == .guest }
+
+        host.tap(team: .a)
+        await eventually { guest.resultRewind != nil && host.state == nil }
+        await drain(host, guest)
+        one.setReachable(false)
+        two.setReachable(false)
+        host.configure(setup)
+        guest.undoResult()
+        #expect(guest.state != nil, "the guest reopened the match")
+
+        one.setReachable(true)
+        two.setReachable(true)
+        await eventually { guest.log.sessionID == host.log.sessionID }
+
+        #expect(guest.log.sessionID == host.log.sessionID, "and follows the host onto its next one")
+        #expect(guest.role == .guest)
+        #expect(persistence.historyRecord(ended) != nil, "with the match filed as it ended")
+    }
+
     /// The host's Finish is the host's. Taken back by a guest, it reopened a match the host had
     /// ended — and if the host had moved on, left the guest alone on it.
     @Test func aGuestCannotTakeBackTheHostsFinish() async throws {
