@@ -169,6 +169,78 @@ struct OwnWatchTests {
         #expect(!pair.phone.log.events.values.contains { if case .finish = $0.kind { true } else { false } })
     }
 
+    /// A result taken back on a guest's watch is the host's match going on, not a match the watch
+    /// started. The phone took it for one, stepped off the host and let go of the link, so the
+    /// host never heard of it and the pair went on alone.
+    @Test func aResultTakenBackOnAGuestsWatchStaysTheHostsMatch() async throws {
+        let pair = PhoneWithWatch(phoneLog: nil, hostLog: seeded(DeviceID(), points: 63))
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        var letGo = false
+        pair.phone.onLeft = { letGo = true }
+        pair.phone.beginJoining()
+        await eventually { pair.phone.role == .guest && inStep(pair.watch, pair.host) && !pair.watch.canEndSession }
+
+        pair.host.tap(team: .a)
+        await eventually { pair.host.state == nil && pair.phone.state == nil && pair.watch.resultRewind != nil }
+        pair.watch.undoResult()
+        await eventually { pair.host.log.sessionID == pair.watch.log.sessionID && inStep(pair.phone, pair.watch) }
+
+        #expect(pair.phone.role == .guest, "still the host's match")
+        #expect(!letGo, "and the phone kept hold of the host")
+        #expect(pair.host.log.sessionID == pair.watch.log.sessionID, "which took it up again")
+        #expect(pair.host.state?.isFinished == false)
+    }
+
+    /// A watch standing in hears the host's next match first and hands it to its phone. That is the
+    /// host's match, and the phone is still the host's guest on it.
+    @Test func theHostsNextMatchHandedOnByTheWatchKeepsThePhoneAGuest() async throws {
+        let pair = PhoneWithWatch(phoneLog: nil, hostLog: seeded(DeviceID(), points: 1))
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        var letGo = false
+        pair.phone.onLeft = { letGo = true }
+        pair.phone.beginJoining()
+        await eventually { pair.phone.role == .guest && inStep(pair.watch, pair.host) }
+        pair.host.finish()
+        await eventually { pair.phone.state == nil && pair.watch.state == nil }
+        pair.phoneToHost.setReachable(false)
+        pair.hostToPhone.setReachable(false)
+
+        let next = seeded(pair.host.device, points: 2)
+        pair.watchToPhone.queue(try Wire.snapshot(next).encoded())
+        await eventually { pair.phone.log.sessionID == next.sessionID }
+
+        #expect(pair.phone.log.sessionID == next.sessionID)
+        #expect(pair.phone.role == .guest, "the host's next match is still the host's")
+        #expect(!letGo)
+        #expect(!pair.phone.canEndSession)
+    }
+
+    /// Typing the code again with the watch's own match arriving meanwhile is still a join.
+    @Test func theWatchsOwnMatchArrivingMidJoinDoesNotCallTheJoinOff() async throws {
+        let pair = PhoneWithWatch(phoneLog: nil, hostLog: seeded(DeviceID(), points: 1))
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        pair.phone.beginJoining()
+        await eventually { pair.phone.role == .guest && inStep(pair.watch, pair.host) && pair.phone.isOurs(pair.watch.device) }
+        pair.host.finish()
+        await eventually { pair.phone.state == nil && pair.watch.state == nil }
+        pair.phoneToHost.setReachable(false)
+        pair.hostToPhone.setReachable(false)
+
+        var letGo = false
+        pair.phone.onLeft = { letGo = true }
+        pair.phone.beginJoining()
+        let own = seeded(pair.watch.device, points: 1)
+        pair.watchToPhone.queue(try Wire.snapshot(own).encoded())
+        await eventually { pair.phone.log.sessionID == own.sessionID }
+        await quietPeriod()
+
+        #expect(pair.phone.isJoining, "still waiting for the host")
+        #expect(!letGo, "with the link to it left alone")
+    }
+
     /// A guest's reply that times out is a guest that did not get the event. The watch answering
     /// on everybody's behalf let the outbox forget it, and nothing ever sent it again.
     @Test func theWatchDoesNotAcknowledgeOnAGuestsBehalf() async throws {

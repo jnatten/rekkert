@@ -1146,17 +1146,23 @@ public final class MatchStore {
             } else if log.isEmpty {
                 log = incoming
                 // An empty guest is handed the host's next match; that is the code lasting
-                // an evening. But the only match its own watch can hand it that the host
-                // has not is one the watch started, and the pair is off the shared match
-                // with it — or the phone would be a guest on a match nobody hosts, unable
-                // to end it and offered a Leave that throws it away.
-                let steppingOff = role == .guest && packet.isFromPairedDevice
+                // an evening. A match its own watch started is the pair stepping off the shared
+                // one — or the phone would be a guest on a match nobody hosts, unable to end it
+                // and offered a Leave that throws it away. But the watch also hands on the
+                // host's: a result it took back, or the next match it heard standing in.
+                let steppingOff = role == .guest && packet.isFromPairedDevice && !isJoining
+                    && isThePairsOwn(incoming)
                 if steppingOff {
                     role = .solo
                     shareRole()
                 }
                 refresh()
-                if steppingOff { onLeft?() }
+                if steppingOff {
+                    onLeft?()
+                } else {
+                    publishSnapshot(force: true)
+                    if role == .guest, packet.isFromPairedDevice, !isJoining { offerOurSession(live: true) }
+                }
             } else if incoming.sessionID == log.sessionID {
                 arrive(on: incoming.sessionID, from: packet)
                 relay(incoming.ordered)
@@ -1255,6 +1261,16 @@ public final class MatchStore {
         // Nothing else says so. A watch holding nothing would otherwise learn of the match
         // the phone just joined only from the next point scored on it.
         publishSnapshot(force: true)
+    }
+
+    /// Started by this phone or its watch rather than handed on from somebody else's: no event in
+    /// it is anybody else's, and it is not a result taken back. With the other half not yet
+    /// known, a match with one author besides this device is read as that half's.
+    private func isThePairsOwn(_ incoming: MatchLog) -> Bool {
+        guard incoming.takesBack == nil else { return false }
+        let others = Set(incoming.events.keys.map(\.device)).subtracting([device])
+        guard let pairedDevice else { return others.count <= 1 }
+        return others.isSubset(of: [pairedDevice])
     }
 
     /// Takes the pair's match, and steps off whatever shared one this end was on.
