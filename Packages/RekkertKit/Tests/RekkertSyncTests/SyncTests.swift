@@ -225,6 +225,68 @@ struct SyncTests {
         #expect(try sessionStore.history().count == 1, "the discarded match went to history")
     }
 
+    /// The same, with a real watch, which keeps no history of its own. The phone's newer match
+    /// won, the watch dropped its own for it, and neither device filed what had been played there.
+    @Test func aMatchPlayedOnTheWatchAloneReachesThePhonesHistory() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appending(path: "rekkert-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessionStore = SessionStore(directory: directory)
+
+        let (phoneLink, watchLink) = LoopbackTransport.pair()
+        let old = ActiveSession(log: MatchLog(createdAt: .now.addingTimeInterval(-3600)))
+        let watch = MatchStore(
+            device: DeviceID(), transport: watchLink, session: old, snapshotInterval: 0, keepsHistory: false
+        )
+        watch.configure(setup)
+        watch.tap(team: .a)
+        let played = watch.log.sessionID
+
+        let phoneLinks = FanOutTransport()
+        phoneLinks.attach(phoneLink, as: .pairedDevice)
+        let phone = MatchStore(device: DeviceID(), transport: phoneLinks, store: sessionStore, snapshotInterval: 0)
+        phone.configure(setup)
+        phone.tap(team: .b)
+
+        let tasks = [Task { await phone.run() }, Task { await watch.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+        await eventually { watch.log.sessionID == phone.log.sessionID && sessionStore.historyRecord(played) != nil }
+
+        #expect(watch.log.sessionID == phone.log.sessionID, "the newer match wins")
+        #expect(sessionStore.historyRecord(played) != nil, "and what was played on the watch is in History")
+        #expect(phone.state != nil, "without disturbing the match on the phone")
+    }
+
+    /// A match the watch played to the end with the phone away reaches the phone only through the
+    /// queue, and can arrive after the watch's next one has already been taken up. Refused as the
+    /// older, its result was never filed anywhere.
+    @Test func aMatchTheWatchFinishedIsFiledEvenBehindANewerOne() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appending(path: "rekkert-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessionStore = SessionStore(directory: directory)
+
+        let (phoneLink, watchLink) = LoopbackTransport.pair()
+        let phoneLinks = FanOutTransport()
+        phoneLinks.attach(phoneLink, as: .pairedDevice)
+        let phone = MatchStore(device: DeviceID(), transport: phoneLinks, store: sessionStore, snapshotInterval: 0)
+        let running = Task { await phone.run() }
+        defer { running.cancel() }
+        phone.configure(setup)
+        phone.tap(team: .b)
+
+        let watchDevice = DeviceID()
+        var finished = MatchLog(createdAt: .now.addingTimeInterval(-3600))
+        finished.append(.configure(setup), from: watchDevice)
+        finished.append(.point(round: 0, court: 0, team: .a), from: watchDevice)
+        finished.append(.finish(archive: true), from: watchDevice)
+        watchLink.queue(try Wire.snapshot(finished).encoded())
+        await eventually { sessionStore.historyRecord(finished.sessionID) != nil }
+
+        #expect(sessionStore.historyRecord(finished.sessionID) != nil, "the watch's finished match is filed")
+        #expect(phone.state != nil, "and the phone stays on its own")
+    }
+
     @Test func tournamentCourtsSyncIndependently() async throws {
         let tournament = Tournament(
             name: "Thursday",

@@ -1100,6 +1100,10 @@ public final class MatchStore {
             onWorkout?(signal)
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
+        case .displaced(let lost):
+            if packet.isFromPairedDevice { keep(lost, handedOverBy: .displacement) }
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+
         case .sharing(let signal):
             // Only ever from the device in the same pocket — the scope drops this case before
             // it can reach anybody else — but said out loud here too, because acting on a
@@ -1200,6 +1204,7 @@ public final class MatchStore {
                     follow(incoming)
                 } else if incoming.createdAt < log.createdAt {
                     offerOurSession()
+                    if packet.isFromPairedDevice { keep(incoming, handedOverBy: .refusedEnding) }
                 }
             } else if role != .solo {
                 // A host is never taken over. The people in front of it are playing this
@@ -1207,6 +1212,7 @@ public final class MatchStore {
                 // guest: it chose its match by code, and the only thing left to offer it
                 // another is its own watch, still holding what the phone had before.
                 offerOurSession()
+                if packet.isFromPairedDevice { keep(incoming, handedOverBy: .refusedEnding) }
             } else if packet.isFromPairedDevice, pairedRole == .guest {
                 // The phone this is paired to joined somebody else's match. Whatever it holds
                 // is that match, and it is not this end's to weigh against the clock.
@@ -1217,6 +1223,7 @@ public final class MatchStore {
                 // Ours is the newer session and wins. Only the strictly newer one offers,
                 // so two devices can never sit pushing sessions at each other.
                 offerOurSession()
+                if packet.isFromPairedDevice { keep(incoming, handedOverBy: .refusedEnding) }
             }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
         }
@@ -1280,6 +1287,36 @@ public final class MatchStore {
         if log.coverage != log.vector { Task { await askWhatIsMissing() } }
     }
 
+    private enum Handover {
+        /// The watch let go of it for another match.
+        case displacement
+        /// Offered by the watch and refused here as the older, having already ended there.
+        case refusedEnding
+    }
+
+    /// Files a match the watch played and no longer has, since the watch keeps no history. Retired
+    /// here too, so a copy the watch sent before it let go is not taken up as live.
+    private func keep(_ lost: MatchLog, handedOverBy handover: Handover) {
+        guard keepsHistory, !lost.isEmpty, lost.sessionID != log.sessionID, !retired.contains(lost.sessionID),
+              let state = SessionReducer.state(of: lost) else { return }
+        let archive: Bool = lost.effectiveEvents.reversed().lazy.compactMap { event -> Bool? in
+            if case .finish(let archive) = event.kind { archive } else { nil }
+        }.first ?? true
+        switch handover {
+        case .displacement:
+            guard lost.hasProgress, store?.historyRecord(lost.sessionID) == nil else { break }
+            file(state, from: lost)
+        case .refusedEnding:
+            guard state.isFinished else { return }
+            if state.hasResults, archive { file(state, from: lost) }
+        }
+        retired.append(lost.sessionID)
+        if !archive { discarded.append(lost.sessionID) }
+        if retired.count > 20 { retired.removeFirst(retired.count - 20) }
+        discarded.removeAll { !retired.contains($0) }
+        persist()
+    }
+
     /// A shared match ends where it belongs. A Finish from anybody else's phone — a build that let
     /// a guest end it, or a watch that took the host's match for its own — is taken back here
     /// before it can end anything, and the taking back goes out to everybody who has it.
@@ -1297,6 +1334,9 @@ public final class MatchStore {
         if keepsHistory, log.hasProgress, let state = SessionReducer.state(of: log) {
             file(state, from: log)
             replacedSessionTitle = state.title
+        } else if !keepsHistory, log.hasProgress {
+            // Somebody else's history, then: the phone's.
+            transport.queue(encode(.displaced(log)))
         }
         log = incoming
         outbox = Outbox()

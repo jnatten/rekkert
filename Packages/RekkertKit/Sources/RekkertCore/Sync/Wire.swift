@@ -140,6 +140,10 @@ public enum Wire: Codable, Sendable, Hashable {
     /// Joining somebody's match from the wrist: the code one way, how it is going the other.
     /// Between a phone and its own watch only — it carries the code.
     case sharing(SharingSignal)
+    /// Watch to phone: a match the watch had on and has just let go of for another. The watch
+    /// keeps no history, so this is the only way what was played on it reaches one. Absent from
+    /// older builds, which cannot read it and drop it.
+    case displaced(MatchLog)
 
     public func encoded() throws -> Data {
         try JSONCoding.encoder.encode(self)

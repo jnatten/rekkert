@@ -49,7 +49,8 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
             // And least of all the code to a match: a peer that was handed it could let
             // anybody else in. It goes between a phone and the wrist in the same pocket,
             // and stops there.
-            case .presets, .display, .role, .workout, .left, .haptics, .sharing: false
+            // What was played on somebody's own wrist is for their own phone's history.
+            case .presets, .display, .role, .workout, .left, .haptics, .sharing, .displaced: false
             }
         }
     }
@@ -180,7 +181,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
     /// Whether a live send that missed its moment is still worth delivering late.
     static func keepsOverDelay(_ wire: Wire) -> Bool {
         switch wire {
-        case .events, .snapshot, .retired, .left, .role, .presets, .display, .haptics: true
+        case .events, .snapshot, .retired, .left, .role, .presets, .display, .haptics, .displaced: true
         case .workout(.finished), .workout(.series): true
         case .workout(.stop), .workout(.pause), .workout(.resume), .workout(.running),
              .workout(.paused), .workout(.idle): false
