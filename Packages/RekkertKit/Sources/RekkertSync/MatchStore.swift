@@ -84,7 +84,9 @@ public final class MatchStore {
     private var discarded: [UUID]
     /// What the counterpart on the paired channel says it is. A guest's watch must not offer
     /// to end a match that belongs to whoever started it.
-    private var pairedRole: SessionRole = .solo
+    private var pairedRole: SessionRole
+    /// The session this device was last a guest on, kept past the watch dropping its role.
+    private var guestOf: UUID?
     /// A step down to solo that the pair may not have heard, since a reconnect otherwise keeps
     /// quiet about solo.
     private var roleIsUnsaid = false
@@ -132,6 +134,8 @@ public final class MatchStore {
         self.retired = session?.retired ?? []
         self.discarded = session?.discarded ?? []
         self.role = session?.role ?? .solo
+        self.pairedRole = session?.pairedRole ?? .solo
+        self.guestOf = session?.guestOf
         self.device = device
         self.transport = transport
         self.store = store
@@ -254,7 +258,9 @@ public final class MatchStore {
     ///
     /// A convention rather than a boundary: with nobody holding the ring there is nothing to
     /// stop a modified client appending the event itself. These are four people on a court.
-    public var canEndSession: Bool { role == .host || (role != .guest && pairedRole != .guest) }
+    public var canEndSession: Bool {
+        role == .host || (role != .guest && pairedRole != .guest && guestOf != log.sessionID)
+    }
 
     /// Says that this phone's score is the score, for everybody.
     ///
@@ -334,6 +340,7 @@ public final class MatchStore {
     /// A watch on a match through its phone holds no role of its own: the phone's decides.
     public func followPairedDevice() {
         guard role == .guest, !isJoining else { return }
+        if !log.isEmpty { guestOf = log.sessionID }
         role = .solo
         roleIsUnsaid = true
         persist()
@@ -1016,7 +1023,10 @@ public final class MatchStore {
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
         case .role(let incoming):
-            pairedRole = incoming
+            if pairedRole != incoming {
+                pairedRole = incoming
+                persist()
+            }
             // Dropping a session says solo, so this is the pair confirming it is off the one
             // left here. Until then it may still be pushing that session back; from now on
             // the only way it can hold that session is by having walked back in. This reads
@@ -1132,6 +1142,7 @@ public final class MatchStore {
                     role = .guest
                     isJoining = false
                     joinRefuses = nil
+                    persist()
                     shareRole()
                     // Off the last shared match, for the watch on the same wrist too.
                     if wasShared {
@@ -1228,6 +1239,7 @@ public final class MatchStore {
         isJoining = false
         joinRefuses = nil
         role = .guest
+        persist()
         shareRole()
     }
 
@@ -1285,10 +1297,10 @@ public final class MatchStore {
 
     /// Takes the pair's match, and steps off whatever shared one this end was on.
     private func follow(_ incoming: MatchLog) {
-        adopt(incoming)
-        guard role != .solo else { return }
+        let wasShared = role != .solo
         role = .solo
-        persist()
+        adopt(incoming)
+        guard wasShared else { return }
         shareRole()
         onLeft?()
     }
@@ -1505,8 +1517,10 @@ public final class MatchStore {
     }
 
     private func persist() {
+        if role == .guest, !log.isEmpty { guestOf = log.sessionID }
         try? store?.save(ActiveSession(
-            log: log, outbox: outbox, retired: retired, discarded: discarded, role: role
+            log: log, outbox: outbox, retired: retired, discarded: discarded, role: role,
+            pairedRole: pairedRole, guestOf: guestOf
         ))
     }
 }

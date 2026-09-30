@@ -12,22 +12,32 @@ public struct ActiveSession: Codable, Sendable, Hashable {
     /// Which end of a shared session this is, so a guest that relaunches mid-match does not
     /// come back holding the whistle.
     public var role: SessionRole
+    /// What the other half of the pair last said it was, so a watch relaunched with its phone out
+    /// of reach does not take the host's match for its own.
+    public var pairedRole: SessionRole
+    /// The session this device was last somebody else's guest on. A watch drops its own role at
+    /// launch, and this is what still says the match on it is not the pair's to end.
+    public var guestOf: UUID?
 
     public init(
         log: MatchLog,
         outbox: Outbox = Outbox(),
         retired: [UUID] = [],
         discarded: [UUID] = [],
-        role: SessionRole = .solo
+        role: SessionRole = .solo,
+        pairedRole: SessionRole = .solo,
+        guestOf: UUID? = nil
     ) {
         self.log = log
         self.outbox = outbox
         self.retired = retired
         self.discarded = discarded
         self.role = role
+        self.pairedRole = pairedRole
+        self.guestOf = guestOf
     }
 
-    private enum CodingKeys: String, CodingKey { case log, outbox, retired, discarded, role }
+    private enum CodingKeys: String, CodingKey { case log, outbox, retired, discarded, role, pairedRole, guestOf }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -36,6 +46,8 @@ public struct ActiveSession: Codable, Sendable, Hashable {
         retired = try container.decodeIfPresent([UUID].self, forKey: .retired) ?? []
         discarded = try container.decodeIfPresent([UUID].self, forKey: .discarded) ?? []
         role = try container.decodeIfPresent(SessionRole.self, forKey: .role) ?? .solo
+        pairedRole = try container.decodeIfPresent(SessionRole.self, forKey: .pairedRole) ?? .solo
+        guestOf = try container.decodeIfPresent(UUID.self, forKey: .guestOf)
     }
 }
 

@@ -237,6 +237,95 @@ struct RoleTests {
         #expect(again.role == .host, "still hosting after being relaunched")
     }
 
+    /// The join concluded and nothing else happened before the app was put down. The role went to
+    /// disk only with the next change, so it came back solo on the host's match, offering End.
+    @Test func aGuestIsStillAGuestAfterARelaunchStraightAfterJoining() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = SessionStore(directory: directory)
+        let hostDevice = DeviceID()
+        let (one, two) = LoopbackTransport.pair()
+        let host = MatchStore(
+            device: hostDevice, transport: one,
+            session: ActiveSession(log: seeded(hostDevice, startedAt: .now, points: 1), role: .host),
+            snapshotInterval: 0
+        )
+        let guest = MatchStore(device: DeviceID(), transport: two, store: persistence, snapshotInterval: 0)
+        let tasks = [Task { await host.run() }, Task { await guest.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+        await quietPeriod()
+
+        guest.beginJoining()
+        await eventually { guest.role == .guest }
+
+        let again = MatchStore(
+            device: guest.device, transport: LoopbackTransport(reachable: false),
+            store: persistence, session: try persistence.loadActive(), snapshotInterval: 0
+        )
+        #expect(again.role == .guest)
+        #expect(again.canEndSession == false, "the host's match is still the host's to end")
+    }
+
+    /// A guest's watch relaunched with its phone out of reach heard nothing to say whose match it
+    /// holds, and offered to finish the host's.
+    @Test func aGuestsWatchRelaunchedAloneStillCannotEndTheHostsMatch() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = SessionStore(directory: directory)
+        let hostDevice = DeviceID()
+        let (hostSide, phoneSide) = LoopbackTransport.pair()
+        let (phoneToWatch, watchSide) = LoopbackTransport.pair()
+        let host = MatchStore(
+            device: hostDevice, transport: hostSide,
+            session: ActiveSession(log: seeded(hostDevice, startedAt: .now, points: 1), role: .host),
+            snapshotInterval: 0
+        )
+        let phoneLinks = FanOutTransport()
+        phoneLinks.attach(phoneSide, as: .sharedSession)
+        phoneLinks.attach(phoneToWatch, as: .pairedDevice)
+        let phone = MatchStore(device: DeviceID(), transport: phoneLinks, snapshotInterval: 0)
+        let watchLinks = FanOutTransport()
+        watchLinks.attach(watchSide, as: .pairedDevice)
+        let watch = MatchStore(
+            device: DeviceID(), transport: watchLinks, store: persistence, snapshotInterval: 0, keepsHistory: false
+        )
+        let tasks = [host, phone, watch].map { store in Task { await store.run() } }
+        defer { tasks.forEach { $0.cancel() } }
+
+        phone.beginJoining()
+        await eventually { phone.role == .guest && !watch.canEndSession && watch.log.sessionID == host.log.sessionID }
+
+        let again = MatchStore(
+            device: watch.device, transport: LoopbackTransport(reachable: false),
+            store: persistence, session: try persistence.loadActive(), snapshotInterval: 0, keepsHistory: false
+        )
+        again.followPairedDevice()
+        #expect(again.log.sessionID == host.log.sessionID)
+        #expect(again.canEndSession == false)
+    }
+
+    /// A watch that joined on its own drops its role at launch, so it follows its phone again. It
+    /// must not come to think the host's match is its own to end.
+    @Test func aWatchThatJoinedOnItsOwnStillCannotEndTheMatchAfterARelaunch() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = SessionStore(directory: directory)
+        let hosts = seeded(DeviceID(), startedAt: .now, points: 1)
+        let watch = MatchStore(
+            device: DeviceID(), transport: LoopbackTransport(reachable: false), store: persistence,
+            session: ActiveSession(log: hosts, role: .guest), snapshotInterval: 0, keepsHistory: false
+        )
+        watch.followPairedDevice()
+        #expect(watch.role == .solo)
+        #expect(watch.canEndSession == false)
+
+        let again = MatchStore(
+            device: watch.device, transport: LoopbackTransport(reachable: false),
+            store: persistence, session: try persistence.loadActive(), snapshotInterval: 0, keepsHistory: false
+        )
+        #expect(again.canEndSession == false)
+    }
+
     @Test func aStoredSessionFromBeforeRolesExistedIsNobodysGuest() throws {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
