@@ -83,7 +83,13 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
     /// round trip to come back.
     private var lastSnapshot: Data?
 
-    public init() {
+    /// How long any one child is waited on. The network and the radio give up on a quiet peer
+    /// after four seconds of their own; WatchConnectivity does not promise to answer at all, and
+    /// every child is waited on before anybody's acknowledgement is folded.
+    private let childTimeout: Duration
+
+    public init(childTimeout: Duration = .seconds(4)) {
+        self.childTimeout = childTimeout
         var packetContinuation: AsyncStream<InboundPacket>.Continuation!
         inbound = AsyncStream { packetContinuation = $0 }
         packets = packetContinuation
@@ -151,42 +157,51 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         let present = recipients.filter(\.transport.isReachable).count
         guard present > 0 else { return nil }
 
-        let answers = await withTaskGroup(of: (Data?, Bool).self) { group in
+        let timeout = childTimeout
+        let packets = packets
+        let acknowledgements = await withTaskGroup(of: Data?.self) { group in
             for child in recipients {
                 group.addTask {
-                    let reply = await child.transport.sendLive(payload)
+                    let reply = await Self.answer(from: child.transport, to: payload, within: timeout)
                     // A live send that did not land still has to reach a channel that
                     // survives the counterpart not running, or attaching a second child
                     // would quietly switch the watch's durable fallback off.
                     if reply == nil, child.scope.isDurable, Self.keepsOverDelay(wire) {
                         child.transport.queue(payload)
                     }
-                    guard let reply, child.scope.admits(reply) else { return (nil, child.scope.isPairedDevice) }
-                    return (reply, child.scope.isPairedDevice)
+                    guard let reply, child.scope.admits(reply) else { return nil }
+                    // Answers that were not acknowledgements — a snapshot, a retirement notice —
+                    // reach the store as packets the moment they arrive, marked with where they
+                    // came from, since the store cannot tell. Not after the slowest child.
+                    guard case .hello? = try? Wire.decode(reply) else {
+                        packets.yield(InboundPacket(payload: reply, isFromPairedDevice: child.scope.isPairedDevice))
+                        return nil
+                    }
+                    return reply
                 }
             }
-            var collected: [(Data?, Bool)] = []
+            var collected: [Data?] = []
             for await answer in group { collected.append(answer) }
             return collected
-        }
-
-        // Answers that were not acknowledgements — a snapshot, a retirement notice — reach the
-        // store as packets, marked with where they came from, since the store cannot tell.
-        var acknowledgements: [Data?] = []
-        for (reply, paired) in answers {
-            if let reply, case .hello? = try? Wire.decode(reply) {
-                acknowledgements.append(reply)
-            } else if let reply {
-                packets.yield(InboundPacket(payload: reply, isFromPairedDevice: paired))
-            } else {
-                acknowledgements.append(nil)
-            }
         }
 
         // The whole room folded together, the watch included. Letting the watch answer for
         // everybody — it is the one with a durable queue behind it — meant a guest whose reply
         // timed out was acknowledged past, and the outbox forgot the event it never got.
         return ReplyFold.fold(acknowledgements, expected: present).acknowledgement
+    }
+
+    /// A child's answer, or nothing once it has had its time. The send is left to finish on its
+    /// own: one parked on a continuation the framework never resumes cannot be cancelled.
+    private static func answer(from transport: any PeerTransport, to payload: Data, within timeout: Duration) async -> Data? {
+        await withCheckedContinuation { continuation in
+            let once = ResumeOnce(continuation)
+            Task { once.resume(await transport.sendLive(payload)) }
+            Task {
+                try? await Task.sleep(for: timeout)
+                once.resume(nil)
+            }
+        }
     }
 
     /// Whether a live send that missed its moment is still worth delivering late.

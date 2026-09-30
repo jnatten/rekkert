@@ -118,6 +118,54 @@ nonisolated private final class HangingTransport: PeerTransport, @unchecked Send
     }
 }
 
+/// Reachable, and answers everything with the same reply.
+nonisolated private final class Answering: PeerTransport, @unchecked Sendable {
+    let inbound = AsyncStream<InboundPacket> { _ in }
+    let reachability = AsyncStream<Bool> { _ in }
+    let reply: Data
+    init(_ reply: Data) { self.reply = reply }
+    var isReachable: Bool { true }
+    func activate() {}
+    func publishSnapshot(_ payload: Data) {}
+    func queue(_ payload: Data) {}
+    func sendLive(_ payload: Data) async -> Data? { reply }
+}
+
+@Suite("One quiet link among several")
+@MainActor
+struct QuietChildTests {
+    /// A joiner's hello went to its own watch and to the host at once. The host answered with its
+    /// match; the watch never answered at all, and the fan-out held the host's answer back until
+    /// it did — which, WatchConnectivity not promising to, could be never.
+    @Test func anAnswerIsHandedOnWithoutWaitingForAChildThatNeverAnswers() async throws {
+        let quiet = HangingTransport()
+        defer { quiet.release() }
+        var hosts = MatchLog()
+        hosts.append(.configure(.pointCount(rules: PointCountRules(target: 16), teams: BySide(a: .home, b: .away))), from: DeviceID())
+        let fan = FanOutTransport(childTimeout: .seconds(3))
+        fan.attach(quiet, as: .pairedDevice)
+        fan.attach(Answering(try Wire.snapshot(hosts).encoded()), as: .sharedSession)
+
+        let hello = try Wire.hello(sessionID: UUID(), vector: VersionVector()).encoded()
+        let started = ContinuousClock.now
+        let sending = Task { await fan.sendLive(hello) }
+        var iterator = fan.inbound.makeAsyncIterator()
+        let first = await iterator.next()
+        let heardAfter = ContinuousClock.now - started
+        _ = await sending.value
+        let doneAfter = ContinuousClock.now - started
+
+        guard let payload = first?.payload, case .snapshot(let log)? = try? Wire.decode(payload) else {
+            Issue.record("the host's answer should have been handed on")
+            return
+        }
+        #expect(log.sessionID == hosts.sessionID)
+        #expect(heardAfter < .seconds(2), "at once, not after the quiet child has had its time")
+        #expect(doneAfter < .seconds(6), "and the send itself is over once it has")
+        #expect(quiet.queued.isEmpty, "and a hello is not something to hand over late")
+    }
+}
+
 @Suite("A guest's point on the host's own watch")
 @MainActor
 struct RelayedPointTests {
