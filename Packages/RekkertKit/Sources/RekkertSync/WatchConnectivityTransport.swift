@@ -65,6 +65,16 @@ nonisolated private final class WCShim: NSObject, WCSessionDelegate, @unchecked 
         onPacket(InboundPacket(payload: data))
     }
 
+    /// Read before returning: the file is gone once this does.
+    func session(_ session: WCSession, didReceive file: WCSessionFile) {
+        guard let data = try? Data(contentsOf: file.fileURL) else { return }
+        onPacket(InboundPacket(payload: data))
+    }
+
+    func session(_ session: WCSession, didFinish fileTransfer: WCSessionFileTransfer, error: (any Error)?) {
+        try? FileManager.default.removeItem(at: fileTransfer.file.fileURL)
+    }
+
     #if os(iOS)
     func sessionDidBecomeInactive(_ session: WCSession) {}
 
@@ -81,7 +91,57 @@ nonisolated private final class WCShim: NSObject, WCSessionDelegate, @unchecked 
 nonisolated private final class UncheckedReply: @unchecked Sendable {
     private let handler: ([String: Any]) -> Void
     init(_ handler: @escaping ([String: Any]) -> Void) { self.handler = handler }
-    func send(_ data: Data) { handler([Key.payload: data]) }
+
+    /// Too big to go back as a reply, it is answered with nothing and follows as a file: the
+    /// asker hears it as though it had been sent unasked.
+    func send(_ data: Data) {
+        guard WatchPayloadRoute.forMessage(data.count) == .inline else {
+            handler([:])
+            return WatchFiles.send(data)
+        }
+        handler([Key.payload: data])
+    }
+}
+
+nonisolated private final class WatchFiles: @unchecked Sendable {
+    static let shared = WatchFiles()
+
+    private let lock = NSLock()
+    private var lastSent: (payload: Data, at: Date)?
+    private var waitingSnapshot: Data?
+
+    /// A live send that went as a file is queued straight after by whoever sent it, as every live
+    /// send that did not land is. It has already gone the durable way once.
+    static func send(_ data: Data) {
+        let repeated = shared.lock.withLock { () -> Bool in
+            if let last = shared.lastSent, last.payload == data, Date().timeIntervalSince(last.at) < 10 { return true }
+            shared.lastSent = (data, Date())
+            return false
+        }
+        guard !repeated, WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
+        let directory = FileManager.default.temporaryDirectory.appending(path: "rekkert-watch", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appending(path: "\(UUID().uuidString).json")
+        guard (try? data.write(to: url, options: .atomic)) != nil else { return }
+        WCSession.default.transferFile(url, metadata: nil)
+    }
+
+    /// A snapshot too big for the context goes as a file, but not every second of a match: the
+    /// newest one, half a minute after the first that would not fit.
+    static func sendSnapshot(_ data: Data) {
+        let isFirst = shared.lock.withLock { () -> Bool in
+            defer { shared.waitingSnapshot = data }
+            return shared.waitingSnapshot == nil
+        }
+        guard isFirst else { return }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 30) {
+            guard let newest = shared.lock.withLock({ () -> Data? in
+                defer { shared.waitingSnapshot = nil }
+                return shared.waitingSnapshot
+            }) else { return }
+            send(newest)
+        }
+    }
 }
 
 nonisolated public final class WatchConnectivityTransport: PeerTransport, @unchecked Sendable {
@@ -128,6 +188,10 @@ nonisolated public final class WatchConnectivityTransport: PeerTransport, @unche
 
     public func sendLive(_ payload: Data) async -> Data? {
         guard isReachable else { return nil }
+        guard WatchPayloadRoute.forMessage(payload.count) == .inline else {
+            WatchFiles.send(payload)
+            return nil
+        }
         return await withCheckedContinuation { continuation in
             let once = ResumeOnce(continuation)
             WCSession.default.sendMessage([Key.payload: payload]) { reply in
@@ -143,6 +207,7 @@ nonisolated public final class WatchConnectivityTransport: PeerTransport, @unche
     /// the Simulator, where it simply does nothing.
     public func queue(_ payload: Data) {
         guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
+        guard WatchPayloadRoute.forMessage(payload.count) == .inline else { return WatchFiles.send(payload) }
         WCSession.default.transferUserInfo([Key.payload: payload])
     }
 
@@ -150,6 +215,7 @@ nonisolated public final class WatchConnectivityTransport: PeerTransport, @unche
     /// dictionary equals the old one, so every publish carries a fresh revision.
     public func publishSnapshot(_ payload: Data) {
         guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
+        guard WatchPayloadRoute.forContext(payload.count) == .inline else { return WatchFiles.sendSnapshot(payload) }
         try? WCSession.default.updateApplicationContext([
             Key.payload: payload,
             Key.revision: revision.next(),
