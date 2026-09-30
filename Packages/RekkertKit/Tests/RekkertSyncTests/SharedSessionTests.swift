@@ -216,6 +216,18 @@ struct LostHostTests {
         #expect(sharing.hasLostTheMatch == false)
     }
 
+    /// A new code typed while the last one was being missed is a fresh search, and a search
+    /// has nothing to have lost. Timed from the old loss, the notice fired on the new search,
+    /// offering to leave a match that had only just been asked for.
+    @Test func aNewCodeIsNotCalledLostByTheLastOne() async throws {
+        let sharing = joined()
+        sharing.apply(.searching)
+        sharing.join(SessionCode("482915")!)
+
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(sharing.hasLostTheMatch == false)
+    }
+
     @Test func aHostIsNeverToldItLostItself() async throws {
         let store = MatchStore(device: DeviceID(), transport: LoopbackTransport(), snapshotInterval: 0)
         store.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))

@@ -230,6 +230,8 @@ public final class SharedSession {
     private func dial(_ code: SessionCode) {
         waitingForTheRadio?.cancel()
         waitingForTheRadio = nil
+        noticing?.cancel()
+        noticing = nil
         wanted = code
         hasJoinedBefore = false
         // Whatever was through belonged to the last code.
