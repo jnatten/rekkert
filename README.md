@@ -472,9 +472,11 @@ Each connection is proved afresh: the guest opens with a nonce, the host answers
 of its own, and the guest confirms with the host's, so a frame caught on one connection proves
 nothing on the next. Every frame after that is bound to both nonces and numbered, so it opens
 once, and only there. Neither end counts the other as on the match until it has proved itself,
-so a host that agreed on the one byte by accident is hung up on and the next one tried. No
-whole match goes over this link, which carries a few kilobytes a second: once it is up, each end
-says hello and is sent only what it is missing.
+so a host that agreed on the one byte by accident is hung up on and the next one tried. The
+snapshot the phone publishes on every point is not carried on this link, which manages a few
+kilobytes a second: once it is up, each end says hello and is sent only what it is missing. A
+whole log still crosses it when nothing less will do — the first copy to a phone arriving with
+nothing on, and the farewell when a match ends.
 Deriving the service UUID from the code would be worse than saying nothing, since twenty bits
 of code under a hash broadcast in the clear comes straight back out.
 
