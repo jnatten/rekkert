@@ -554,9 +554,11 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             publish(.failed(.rejected))
         case .keepLooking:
             // It was working and went away — the host walked off, or a phone went in a
-            // pocket. Go back to looking rather than sitting there with nothing.
+            // pocket. Go back to looking rather than sitting there with nothing. A dial that
+            // never got there waits for the timer: dialled again at once, one that fails at once
+            // goes round as fast as a handshake does.
             announce()
-            redial()
+            if circumstances.everGotThere { redial() }
         case .carryOn:
             announce()
         }
