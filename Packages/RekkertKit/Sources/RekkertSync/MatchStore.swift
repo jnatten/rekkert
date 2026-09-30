@@ -734,15 +734,18 @@ public final class MatchStore {
     /// taking it back would not actually reopen the session.
     private func rewinding(_ ended: MatchLog) -> RewindableResult? {
         guard let target = ended.lastUndoableEvent() else { return nil }
-        var rewound = ended
-        rewound.append(.undo(target.id), from: device)
-        guard let state = SessionReducer.state(of: rewound), !state.isFinished else { return nil }
-
         let undoesAPoint: Bool
         switch target.kind {
         case .point, .setScore: undoesAPoint = true
         default: undoesAPoint = false
         }
+        // A misclick that won the match is anybody's to take back. The ending somebody called is
+        // only theirs: a guest reopening the host's Finish would be a match nobody hosts.
+        guard undoesAPoint || canEndSession else { return nil }
+
+        var rewound = ended
+        rewound.append(.undo(target.id), from: device)
+        guard let state = SessionReducer.state(of: rewound), !state.isFinished else { return nil }
         return RewindableResult(state: state, undoesAPoint: undoesAPoint)
     }
 

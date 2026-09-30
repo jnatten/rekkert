@@ -385,6 +385,44 @@ struct RoleTests {
         hostFan.attach(one, as: .sharedSession)
         let guestFan = FanOutTransport()
         guestFan.attach(two, as: .sharedSession)
+        var twoPoints = MatchLog()
+        twoPoints.append(.configure(.pointCount(rules: PointCountRules(target: 2), teams: BySide(a: .home, b: .away))), from: hostDevice)
+        twoPoints.append(.point(round: 0, court: 0, team: .a), from: hostDevice)
+        let host = MatchStore(
+            device: hostDevice, transport: hostFan,
+            session: ActiveSession(log: twoPoints, role: .host),
+            snapshotInterval: 0
+        )
+        let guest = MatchStore(device: DeviceID(), transport: guestFan, snapshotInterval: 0)
+        let tasks = [Task { await host.run() }, Task { await guest.run() }]
+        defer { tasks.forEach { $0.cancel() } }
+        await quietPeriod()
+
+        guest.beginJoining()
+        await eventually { guest.role == .guest }
+
+        host.tap(team: .a)
+        await eventually { guest.lastResult != nil && host.state == nil }
+        #expect(guest.resultRewind != nil, "the point that won it can be taken back")
+
+        guest.undoResult()
+        await eventually { host.state != nil }
+
+        #expect(guest.role == .guest, "still somebody else's match")
+        #expect(guest.canEndSession == false)
+        #expect(host.role == .host)
+        #expect(host.log.sessionID == guest.log.sessionID, "which the host took up again")
+    }
+
+    /// The host's Finish is the host's. Taken back by a guest, it reopened a match the host had
+    /// ended — and if the host had moved on, left the guest alone on it.
+    @Test func aGuestCannotTakeBackTheHostsFinish() async throws {
+        let hostDevice = DeviceID()
+        let (one, two) = LoopbackTransport.pair()
+        let hostFan = FanOutTransport()
+        hostFan.attach(one, as: .sharedSession)
+        let guestFan = FanOutTransport()
+        guestFan.attach(two, as: .sharedSession)
         let host = MatchStore(
             device: hostDevice, transport: hostFan,
             session: ActiveSession(log: seeded(hostDevice, startedAt: .now, points: 1), role: .host),
@@ -397,18 +435,11 @@ struct RoleTests {
 
         guest.beginJoining()
         await eventually { guest.role == .guest }
-
         host.finish()
         await eventually { guest.lastResult != nil && host.state == nil }
-        #expect(guest.resultRewind != nil)
 
-        guest.undoResult()
-        await eventually { host.state != nil }
-
-        #expect(guest.role == .guest, "still somebody else's match")
-        #expect(guest.canEndSession == false)
-        #expect(host.role == .host)
-        #expect(host.log.sessionID == guest.log.sessionID, "which the host took up again")
+        #expect(guest.resultRewind == nil, "only the host may reopen what the host ended")
+        #expect(host.resultRewind != nil, "while the host still can")
     }
 
     /// A guest out of reach when the host called the match off used to be told only that it
