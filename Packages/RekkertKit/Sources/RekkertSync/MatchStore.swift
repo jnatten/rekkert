@@ -1099,6 +1099,7 @@ public final class MatchStore {
                     return announceRetirement(of: incoming.sessionID, to: packet)
                 }
                 pickBackUp(ended)
+                arrive(on: ended.sessionID, from: packet)
                 relay(incoming.ordered)
             } else if incoming.isEmpty {
                 // A peer that has not started anything yet is not a competing session, but
@@ -1428,9 +1429,11 @@ public final class MatchStore {
     /// the match for good and answered every point with a notice of an ending nobody else had.
     ///
     /// Never for the end the match belongs to, whose ending is the match's; and only onto
-    /// nothing, so it never displaces anything else.
+    /// nothing, so it never displaces anything else. A code typed again is asking for exactly
+    /// this match, unless it is the one being walked away from.
     private func overturnedEnding(of session: UUID, by incoming: [MatchEvent]) -> MatchLog? {
-        guard !canEndSession, log.isEmpty, !isJoining, let ended = farewells[session] else { return nil }
+        guard !canEndSession, log.isEmpty, !(isJoining && session == joinRefuses),
+              let ended = farewells[session] else { return nil }
         var merged = ended
         guard merged.merge(incoming), SessionReducer.state(of: merged)?.isFinished == false else { return nil }
         return ended

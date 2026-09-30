@@ -164,6 +164,29 @@ struct FarewellTests {
         #expect(try hostPersistence.loadActive()?.outbox.isEmpty == true, "and everything the host sent has landed")
     }
 
+    /// The same crossing, with the guest typing the code again before it hears from the host — the
+    /// way back after a relaunch. Joining refused the match it was asking for, answered every
+    /// packet with its own ending, and never concluded.
+    @Test func aGuestWhoseCopyWonAloneCanTypeTheCodeAgain() async throws {
+        let pair = HostAndGuest()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        await pair.playToTheBrink()
+
+        await pair.cut()
+        pair.guest.tap(team: .a)
+        pair.host.undoLast()
+        await eventually { pair.guest.state == nil }
+
+        pair.guest.beginJoining()
+        pair.reconnect()
+        await eventually { inStep(pair.host, pair.guest) && !pair.guest.isJoining }
+        #expect(inStep(pair.host, pair.guest), "back on the host's match")
+        #expect(!pair.guest.isJoining, "and the join concluded")
+        #expect(pair.guest.role == .guest)
+        #expect(pair.host.state?.isFinished == false)
+    }
+
     /// The same crossing the other way round. The match is the host's, so its ending is the
     /// match's: it is not picked back up, and the guest still playing is told it is over.
     @Test func aHostWhoseCopyWonAloneStaysFinished() async throws {
