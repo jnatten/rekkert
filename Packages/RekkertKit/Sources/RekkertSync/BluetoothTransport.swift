@@ -112,6 +112,8 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     private var rejected: Set<UUID> = []
     /// When the host being dialled is let go of, unless it has proved itself by then.
     private var candidateDeadline: DispatchWorkItem?
+    /// A host this was on has gone, and is being dialled again as well as looked for afresh.
+    private var isRedialling = false
 
     private enum Intent: Sendable {
         case none
@@ -184,6 +186,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         let (peripheral, central, connected, pending, deadline) = lock.withLock {
             let values = (peripheralManager, centralManager, server, Array(waiting.values), candidateDeadline)
             candidateDeadline = nil
+            isRedialling = false
             peripheralManager = nil
             centralManager = nil
             outbox = nil
@@ -481,6 +484,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             serverInbox = nil
             candidateDeadline = nil
             rejected = []
+            isRedialling = false
             return values
         }
         deadline?.cancel()
@@ -577,8 +581,23 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     }
 
     fileprivate func discovered(_ peripheral: CBPeripheral, on manager: CBCentralManager) {
-        guard lock.withLock({ server == nil && !rejected.contains(peripheral.identifier) }) else { return }
-        lock.withLock { server = peripheral }
+        let (take, stale) = lock.withLock { () -> (Bool, CBPeripheral?) in
+            guard !rejected.contains(peripheral.identifier) else { return (false, nil) }
+            guard let current = server else {
+                server = peripheral
+                return (true, nil)
+            }
+            // The host this was on went, and is being dialled where it was. Found again — its
+            // address moved on, as an iPhone's does, or it came back as another peripheral — it
+            // is dialled where it is now. Waiting on the old one alone waited for ever.
+            guard isRedialling, current !== peripheral, current.state != .connected else { return (false, nil) }
+            server = peripheral
+            serverInbox = nil
+            isRedialling = false
+            return (true, current)
+        }
+        guard take else { return }
+        if let stale { manager.cancelPeripheralConnection(stale) }
         peripheral.delegate = shim
         // No timeout, which is the reconnect: the system holds the request and wakes the app
         // when the peer comes back, whether that is thirty seconds or the rest of the set.
@@ -616,11 +635,16 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         queue.asyncAfter(deadline: .now() + candidateTimeout, execute: deadline)
     }
 
-    fileprivate func connected(_ peripheral: CBPeripheral) {
+    fileprivate func connected(_ peripheral: CBPeripheral, on manager: CBCentralManager) {
+        // One given up on for another, that got there anyway.
+        guard lock.withLock({ server === peripheral }) else { return manager.cancelPeripheralConnection(peripheral) }
         peripheral.discoverServices([Self.serviceUUID])
     }
 
-    fileprivate func disconnected(_ peripheral: CBPeripheral, on manager: CBCentralManager) {
+    /// `failed` for a connection that never came up. Dialled again at once, one that fails at once
+    /// does so as fast as the radio can go round.
+    fileprivate func disconnected(_ peripheral: CBPeripheral, on manager: CBCentralManager, failed: Bool) {
+        let wasProven = lock.withLock { peers[ObjectIdentifier(peripheral)]?.isReady == true }
         forget(ObjectIdentifier(peripheral))
         let reconnects = lock.withLock { () -> Bool in
             guard server === peripheral else { return false }
@@ -629,13 +653,22 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
                 server = nil
                 return false
             }
+            if wasProven { isRedialling = true }
             return true
         }
         // Only the host being dialled. The hang-up after a wrong greeting lands here too, and so
         // does one let go of, and neither is a link to put back: dialled again, it would take the
         // place of whichever host is being dialled now.
         guard reconnects else { return }
-        manager.connect(peripheral, options: nil)
+        if wasProven { manager.scanForPeripherals(withServices: [Self.serviceUUID], options: nil) }
+        guard failed else { return manager.connect(peripheral, options: nil) }
+        let dialled = ObjectIdentifier(peripheral), dialler = ObjectIdentifier(manager)
+        queue.asyncAfter(deadline: .now() + .seconds(1)) { [weak self] in
+            guard let self else { return }
+            let (server, manager) = self.lock.withLock { (self.server, self.centralManager) }
+            guard let server, let manager, ObjectIdentifier(server) == dialled, ObjectIdentifier(manager) == dialler else { return }
+            manager.connect(server, options: nil)
+        }
     }
 
     fileprivate func discoveredServices(_ peripheral: CBPeripheral) {
@@ -692,6 +725,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
               greeting.fp == SessionKey.fingerprint(for: code, share: greeting.share)
         else { return reject(peripheral) }
 
+        lock.withLock { isRedialling = false }
         let peer = Peer()
         peer.sealing = SessionKey.sealingKey(for: code, share: greeting.share, direction: .guestToHost)
         peer.opening = SessionKey.sealingKey(for: code, share: greeting.share, direction: .hostToGuest)
@@ -820,7 +854,7 @@ nonisolated private final class Shim: NSObject, CBPeripheralManagerDelegate,
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        transport?.connected(peripheral)
+        transport?.connected(peripheral, on: central)
     }
 
     func centralManager(
@@ -828,7 +862,7 @@ nonisolated private final class Shim: NSObject, CBPeripheralManagerDelegate,
         didDisconnectPeripheral peripheral: CBPeripheral,
         error: (any Error)?
     ) {
-        transport?.disconnected(peripheral, on: central)
+        transport?.disconnected(peripheral, on: central, failed: false)
     }
 
     func centralManager(
@@ -836,7 +870,7 @@ nonisolated private final class Shim: NSObject, CBPeripheralManagerDelegate,
         didFailToConnect peripheral: CBPeripheral,
         error: (any Error)?
     ) {
-        transport?.disconnected(peripheral, on: central)
+        transport?.disconnected(peripheral, on: central, failed: true)
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: (any Error)?) {
