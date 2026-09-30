@@ -378,10 +378,10 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         // The first thing that opens is the proof this peer was given the same code. A host
         // answers it at once, so the guest has its proof whatever the store gets round to saying.
         if lock.withLock({ !peer.isReady }) {
-            ready(peer)
             if peer.central != nil {
-                send(Self.probe, to: peer)
+                ready(peer, opening: LinkReplies.opening(snapshot: lock.withLock { lastSnapshot }, probe: Self.probe))
             } else {
+                ready(peer, opening: lock.withLock { lastSnapshot }.map { [Frame(kind: .oneway, payload: $0)] } ?? [])
                 // The host, proven: from here a drop is a reconnect, which waits as long as it takes.
                 lock.withLock { candidateDeadline }?.cancel()
             }
@@ -407,15 +407,13 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     /// packet the store cannot read, and drops it.
     private static let probe = Frame(kind: .oneway, payload: Data())
 
-    private func ready(_ peer: Peer) {
+    /// The snapshot is handed only to whoever has just turned up, which is the whole snapshot
+    /// policy: a phone joining mid-match sees the score without a round trip, and nobody else
+    /// pays for it.
+    private func ready(_ peer: Peer, opening: [Frame]) {
         lock.withLock { peer.isReady = true }
         reachabilityUpdates.yield(true)
-        // Handed only to whoever has just turned up, which is the whole snapshot policy: a
-        // phone joining mid-match sees the score without a round trip, and nobody else pays
-        // for it.
-        if let snapshot = lock.withLock({ lastSnapshot }) {
-            send(Frame(kind: .oneway, payload: snapshot), to: peer)
-        }
+        for frame in opening { send(frame, to: peer) }
     }
 
     private func forget(_ token: ObjectIdentifier) {
