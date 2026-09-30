@@ -56,7 +56,23 @@ struct SharingBadge: View {
             }
             .tint(tint)
             .accessibilityLabel(description)
+        } else if isCutOff {
+            Button {
+                model.showingJoin = true
+            } label: {
+                Label("Rejoin", systemImage: "person.2.slash")
+                    .labelStyle(.iconOnly)
+            }
+            .tint(.secondary)
+            .accessibilityLabel("Not connected to the shared match. Rejoin")
         }
+    }
+
+    /// Somebody else's match with no link to it. The code goes with the app, so a guest back from a
+    /// relaunch went on showing the match with no sign that none of it was getting through.
+    private var isCutOff: Bool {
+        guard model.store.role == .guest, model.store.state != nil, case .off = model.sharing.phase else { return false }
+        return true
     }
 
     /// A match that has gone quiet is not the same as one nobody has joined, and the grey of
