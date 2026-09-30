@@ -752,7 +752,8 @@ public final class MatchStore {
     private func absorbTakeBack() {
         guard keepsHistory, !log.isEmpty, checkedTakeBack != log.sessionID else { return }
         checkedTakeBack = log.sessionID
-        guard let takenBack = log.takesBack else { return }
+        guard let named = log.takesBack else { return }
+        let takenBack = store?.historyRecord(named) == nil ? endedHere(named) ?? named : named
 
         if store?.carry(for: log.sessionID) == nil {
             let carry: TimelineCarry?
@@ -1444,7 +1445,28 @@ public final class MatchStore {
     }
 
     private func takesBackOneOfOurs(_ incoming: MatchLog) -> Bool {
-        incoming.takesBack.map(retired.contains) ?? false
+        incoming.takesBack.flatMap(endedHere) != nil
+    }
+
+    /// The session that ended here which a take-back leads back to. A result taken back out of
+    /// reach can be won and taken back again, and the match that reopens then names one this end
+    /// never saw — but each reopened name follows from the last, so the chain can be walked on
+    /// from whatever ended here. The nearest one, when more than one of them did.
+    private func endedHere(_ takenBack: UUID) -> UUID? {
+        let ended = Set(retired).union(farewells.keys)
+        if ended.contains(takenBack) { return takenBack }
+        var nearest: (session: UUID, steps: Int)?
+        for session in ended {
+            var reopened = session
+            for steps in 1 ..< (nearest?.steps ?? 9) {
+                reopened = Self.reopening(reopened)
+                if reopened == takenBack {
+                    nearest = (session, steps)
+                    break
+                }
+            }
+        }
+        return nearest?.session
     }
 
     /// Takes the pair's match, and steps off whatever shared one this end was on.

@@ -429,9 +429,11 @@ every court, court 2's Undo is not court 1's to use.
 The point that won a match can be taken back from the result screen by anybody on it, which
 reopens the match where it stood. The host's own Finish or Discard can be taken back only on
 the host's side. Reopened, the match takes a name worked out from the one it was taken back
-from, so two devices taking it back at once reopen the same match rather than one each. A
-guest that takes the point back just as the host starts its next match goes onto the host's,
-and the match it took back is filed as it ended.
+from, so two devices taking it back at once reopen the same match rather than one each — and,
+each name following from the last, a host that saw only the first ending still knows the match
+when it was won and taken back again out of its reach. A guest that takes the point back just as
+the host starts its next match goes onto the host's, and the match it took back is filed as it
+ended.
 
 A shared match ends only on the host's side. The reducer would apply a Finish from any device,
 so a host takes back any that reaches it from a phone other than itself or its own watch — an
