@@ -324,6 +324,47 @@ struct OwnWatchTests {
         #expect(pair.phone.state == nil, "nor the phone from its own watch")
     }
 
+    /// A watch hands its last snapshot over again every time it wakes. After a relaunch, or a join
+    /// that was called off, the phone no longer remembered leaving that match, and took it up as
+    /// a match of its own.
+    @Test func aMatchLeftStaysLeftAfterARelaunchOrACalledOffJoin() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = SessionStore(directory: directory)
+        let hostDevice = DeviceID()
+        var hosts = MatchLog()
+        hosts.append(.configure(counting), from: hostDevice)
+        hosts.append(.point(round: 0, court: 0, team: .a), from: hostDevice)
+
+        let phone = MatchStore(
+            device: DeviceID(), transport: LoopbackTransport(reachable: false), store: persistence,
+            session: ActiveSession(log: hosts, role: .guest), snapshotInterval: 0
+        )
+        phone.leaveSharedSession()
+        #expect(phone.state == nil)
+
+        let (toPhone, fromWatch) = LoopbackTransport.pair()
+        let links = FanOutTransport()
+        links.attach(fromWatch, as: .pairedDevice)
+        let again = MatchStore(
+            device: phone.device, transport: links, store: persistence,
+            session: try persistence.loadActive(), snapshotInterval: 0
+        )
+        let running = Task { await again.run() }
+        defer { running.cancel() }
+        let stale = try Wire.snapshot(hosts).encoded()
+
+        toPhone.queue(stale)
+        await quietPeriod()
+        #expect(again.state == nil, "not taken back after a relaunch")
+
+        again.beginJoining()
+        again.cancelJoining()
+        toPhone.queue(stale)
+        await quietPeriod()
+        #expect(again.state == nil, "nor after a join that was called off")
+    }
+
     /// The watch has a Leave of its own. The phone goes with it — and stays off, though its
     /// link to the host is still up and the host's next snapshot would put the match back.
     @Test func theWatchLeavingTakesThePhoneOffToo() async throws {

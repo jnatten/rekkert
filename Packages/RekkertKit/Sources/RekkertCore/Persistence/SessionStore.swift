@@ -18,6 +18,11 @@ public struct ActiveSession: Codable, Sendable, Hashable {
     /// The session this device was last somebody else's guest on. A watch drops its own role at
     /// launch, and this is what still says the match on it is not the pair's to end.
     public var guestOf: UUID?
+    /// A match stepped off on purpose, and one the pair stepped off together. Both are still
+    /// offered back by whoever is on them — a watch hands its last snapshot over again every
+    /// time it wakes — so they have to outlive the app.
+    public var leftSessionID: UUID?
+    public var counterpartLeftSessionID: UUID?
 
     public init(
         log: MatchLog,
@@ -26,7 +31,9 @@ public struct ActiveSession: Codable, Sendable, Hashable {
         discarded: [UUID] = [],
         role: SessionRole = .solo,
         pairedRole: SessionRole = .solo,
-        guestOf: UUID? = nil
+        guestOf: UUID? = nil,
+        leftSessionID: UUID? = nil,
+        counterpartLeftSessionID: UUID? = nil
     ) {
         self.log = log
         self.outbox = outbox
@@ -35,9 +42,12 @@ public struct ActiveSession: Codable, Sendable, Hashable {
         self.role = role
         self.pairedRole = pairedRole
         self.guestOf = guestOf
+        self.leftSessionID = leftSessionID
+        self.counterpartLeftSessionID = counterpartLeftSessionID
     }
 
-    private enum CodingKeys: String, CodingKey { case log, outbox, retired, discarded, role, pairedRole, guestOf }
+    private enum CodingKeys: String, CodingKey { case log, outbox, retired, discarded, role, pairedRole, guestOf, leftSessionID, counterpartLeftSessionID
+    }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -48,6 +58,8 @@ public struct ActiveSession: Codable, Sendable, Hashable {
         role = try container.decodeIfPresent(SessionRole.self, forKey: .role) ?? .solo
         pairedRole = try container.decodeIfPresent(SessionRole.self, forKey: .pairedRole) ?? .solo
         guestOf = try container.decodeIfPresent(UUID.self, forKey: .guestOf)
+        leftSessionID = try container.decodeIfPresent(UUID.self, forKey: .leftSessionID)
+        counterpartLeftSessionID = try container.decodeIfPresent(UUID.self, forKey: .counterpartLeftSessionID)
     }
 }
 

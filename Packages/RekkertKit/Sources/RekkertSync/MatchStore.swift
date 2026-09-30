@@ -136,6 +136,8 @@ public final class MatchStore {
         self.role = session?.role ?? .solo
         self.pairedRole = session?.pairedRole ?? .solo
         self.guestOf = session?.guestOf
+        self.leftSessionID = session?.leftSessionID
+        self.counterpartLeftSessionID = session?.counterpartLeftSessionID
         self.device = device
         self.transport = transport
         self.store = store
@@ -318,8 +320,6 @@ public final class MatchStore {
     public func beginJoining(steppingOff: Bool = false) {
         isJoining = true
         joinRefuses = steppingOff && !log.isEmpty ? log.sessionID : nil
-        leftSessionID = nil
-        counterpartLeftSessionID = nil
         // Say hello straight away rather than waiting to be spoken to. The counterpart
         // answers a session id it does not recognise with its own, which is exactly the
         // offer being waited for.
@@ -1023,9 +1023,10 @@ public final class MatchStore {
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
         case .role(let incoming):
-            if pairedRole != incoming {
-                pairedRole = incoming
-                persist()
+            let heldBefore = (pairedRole, leftSessionID, counterpartLeftSessionID)
+            pairedRole = incoming
+            defer {
+                if heldBefore != (pairedRole, leftSessionID, counterpartLeftSessionID) { persist() }
             }
             // Dropping a session says solo, so this is the pair confirming it is off the one
             // left here. Until then it may still be pushing that session back; from now on
@@ -1142,13 +1143,14 @@ public final class MatchStore {
                     role = .guest
                     isJoining = false
                     joinRefuses = nil
-                    persist()
+                    forgetLeaving(log.sessionID)
                     shareRole()
                     // Off the last shared match, for the watch on the same wrist too.
                     if wasShared {
                         leftSessionID = steppedOff
                         tellThePairItLeft(steppedOff)
                     }
+                    persist()
                 }
             } else if incoming.sessionID == leftSessionID {
                 // Stepped off this one on purpose. Whoever is still on it is not being
@@ -1239,8 +1241,15 @@ public final class MatchStore {
         isJoining = false
         joinRefuses = nil
         role = .guest
+        forgetLeaving(sessionID)
         persist()
         shareRole()
+    }
+
+    /// Walked back in by code, so whatever said this match was left no longer does.
+    private func forgetLeaving(_ session: UUID) {
+        if leftSessionID == session { leftSessionID = nil }
+        if counterpartLeftSessionID == session { counterpartLeftSessionID = nil }
     }
 
     private func relay(_ incoming: [MatchEvent], from packet: InboundPacket) {
@@ -1532,7 +1541,8 @@ public final class MatchStore {
         if role == .guest, !log.isEmpty { guestOf = log.sessionID }
         try? store?.save(ActiveSession(
             log: log, outbox: outbox, retired: retired, discarded: discarded, role: role,
-            pairedRole: pairedRole, guestOf: guestOf
+            pairedRole: pairedRole, guestOf: guestOf,
+            leftSessionID: leftSessionID, counterpartLeftSessionID: counterpartLeftSessionID
         ))
     }
 }
