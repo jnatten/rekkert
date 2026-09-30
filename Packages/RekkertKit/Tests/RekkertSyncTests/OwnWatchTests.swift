@@ -113,6 +113,7 @@ struct OwnWatchTests {
         #expect(pair.phone.log.sessionID == pair.host.log.sessionID, "the match the code was for")
         #expect(pair.phone.role == .guest)
         #expect(points(pair.phone) == BySide(a: 1, b: 0))
+        #expect(pair.phone.replacedSessionTitle == nil, "a match left for a code typed in is no surprise")
         await eventually { pair.watch.log.sessionID == pair.host.log.sessionID }
         #expect(pair.watch.log.sessionID == pair.host.log.sessionID, "and the watch follows")
     }

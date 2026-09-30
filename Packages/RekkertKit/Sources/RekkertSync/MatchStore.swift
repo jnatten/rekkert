@@ -1196,6 +1196,8 @@ public final class MatchStore {
                     let steppedOff = log.sessionID
                     let wasShared = !log.isEmpty && (role == .guest || pairedRole == .guest)
                     adopt(incoming)
+                    // Filed all the same, but nobody needs telling: the code was typed to get here.
+                    replacedSessionTitle = nil
                     role = .guest
                     isJoining = false
                     joinRefuses = nil
