@@ -645,8 +645,11 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     private func deliver(_ frame: Frame, on link: Link) {
         switch frame.kind {
         case .reply:
-            let pending = lock.withLock { waiting.removeValue(forKey: frame.correlation) }
-            pending?.resume(frame.payload)
+            if let pending = lock.withLock({ waiting.removeValue(forKey: frame.correlation) }) {
+                pending.resume(frame.payload)
+            } else if LinkReplies.isWorthHandingOn(late: frame.payload) {
+                packets.yield(InboundPacket(payload: frame.payload))
+            }
         case .request:
             let correlation = frame.correlation
             packets.yield(InboundPacket(payload: frame.payload) { [weak self, weak link] answer in

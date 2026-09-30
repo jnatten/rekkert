@@ -5,6 +5,21 @@ import Testing
 
 @Suite("What the links make of a reply")
 struct LinkRepliesTests {
+    /// The answer to a hello is everything the asker was missing. Over Bluetooth it can take
+    /// longer to arrive than the asker waits, and was thrown away on arrival.
+    @Test func aLateAnswerThatCarriesTheMatchIsHandedOn() throws {
+        var log = MatchLog()
+        let point = log.append(.point(round: 0, court: 0, team: .a), from: DeviceID())
+        #expect(LinkReplies.isWorthHandingOn(late: try Wire.events(sessionID: log.sessionID, events: [point]).encoded()))
+        #expect(LinkReplies.isWorthHandingOn(late: try Wire.snapshot(log).encoded()))
+    }
+
+    @Test func aLateAcknowledgementIsNot() throws {
+        let hello = try Wire.hello(sessionID: UUID(), vector: VersionVector()).encoded()
+        #expect(!LinkReplies.isWorthHandingOn(late: hello))
+        #expect(!LinkReplies.isWorthHandingOn(late: Data("rubbish".utf8)))
+    }
+
     /// The guest gives the host ten seconds to prove itself, and the proof went out behind the
     /// whole match: with a long log over a slow link, the right host was written off.
     @Test func theHostsProofGoesAheadOfTheMatch() throws {
