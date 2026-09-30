@@ -48,6 +48,10 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         var v: Int
         var share: UUID
         var fp: String
+
+        /// 2 since each way has its own key. A build on 1 cannot open anything sealed now, so
+        /// the two refuse each other at the greeting rather than half-connecting.
+        static let version = 2
     }
 
     public let inbound: AsyncStream<InboundPacket>
@@ -63,7 +67,9 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         /// Only once something it sealed has opened here. Anybody in range can connect and
         /// subscribe, and one byte of fingerprint agrees by accident now and again.
         var isReady = false
-        var key: SymmetricKey?
+        /// This end's frames are sealed with one, the other end's opened with the other.
+        var sealing: SymmetricKey?
+        var opening: SymmetricKey?
         /// Guest side only. A write is answered before the next one goes out: CoreBluetooth
         /// will take more than it can carry and then drop the overflow, and a dropped chunk is
         /// a frame that never opens at the far end and a reply somebody waits the timeout out
@@ -279,7 +285,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     }
 
     private func send(_ frame: Frame, to peer: Peer) {
-        guard let key = lock.withLock({ peer.key }),
+        guard let key = lock.withLock({ peer.sealing }),
               let sealed = SealedFrame.seal(frame, with: key)
         else { return }
 
@@ -365,7 +371,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             return
         }
         guard let whole,
-              let key = lock.withLock({ peer.key }),
+              let key = lock.withLock({ peer.opening }),
               let frame = SealedFrame.open(whole, with: key)
         else { return }
 
@@ -450,7 +456,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     fileprivate func answerGreeting(_ request: CBATTRequest, on manager: CBPeripheralManager) {
         guard case .hosting(let code, let share) = lock.withLock({ intent }),
               let body = try? JSONCoding.encoder.encode(Greeting(
-                  v: 1, share: share, fp: SessionKey.fingerprint(for: code, share: share)
+                  v: Greeting.version, share: share, fp: SessionKey.fingerprint(for: code, share: share)
               ))
         else { return manager.respond(to: request, withResult: .attributeNotFound) }
 
@@ -464,7 +470,8 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     fileprivate func subscribed(_ central: CBCentral) {
         guard case .hosting(let code, let share) = lock.withLock({ intent }) else { return }
         let peer = Peer(central: central)
-        peer.key = SessionKey.sealingKey(for: code, share: share)
+        peer.sealing = SessionKey.sealingKey(for: code, share: share, direction: .hostToGuest)
+        peer.opening = SessionKey.sealingKey(for: code, share: share, direction: .guestToHost)
         // Not ready until something it sent opens. Counted on subscribing, a central with the
         // wrong code — or any Bluetooth tool at all — was waited on by every send, answered
         // none of them, and kept the outbox from ever being acknowledged.
@@ -617,12 +624,13 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         guard case .joining(let code) = lock.withLock({ intent }),
               let value,
               let greeting = try? JSONCoding.decoder.decode(Greeting.self, from: value),
-              greeting.v == 1,
+              greeting.v == Greeting.version,
               greeting.fp == SessionKey.fingerprint(for: code, share: greeting.share)
         else { return reject(peripheral) }
 
         let peer = Peer()
-        peer.key = SessionKey.sealingKey(for: code, share: greeting.share)
+        peer.sealing = SessionKey.sealingKey(for: code, share: greeting.share, direction: .guestToHost)
+        peer.opening = SessionKey.sealingKey(for: code, share: greeting.share, direction: .hostToGuest)
         lock.withLock { peers[ObjectIdentifier(peripheral)] = peer }
         // Nothing left to look for. The connection carries its own reconnect from here — the
         // request handed to `connect` outlives the link — and a scan left running is a radio

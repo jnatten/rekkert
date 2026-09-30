@@ -46,17 +46,33 @@ nonisolated public enum SessionKey {
         return digest.withUnsafeBytes { $0.map { String(format: "%02x", $0) }.joined() }
     }
 
+    /// Which way a sealed frame is going. Each way has a key of its own.
+    public enum Direction: Sendable {
+        case hostToGuest
+        case guestToHost
+
+        fileprivate var label: String {
+            switch self {
+            case .hostToGuest: "seal|h2g|"
+            case .guestToHost: "seal|g2h|"
+            }
+        }
+    }
+
     /// The key that seals what goes over Bluetooth, where there is no TLS to do it.
     ///
     /// Derived apart from the pre-shared key rather than reusing it: the two guard different
     /// links in different ways, and a key with one job is easier to reason about than a key
     /// with two. Salted by the share id for the same reason the pre-shared key is — a code
     /// overheard once is worth nothing against a later match.
-    public static func sealingKey(for code: SessionCode, share: UUID) -> SymmetricKey {
+    ///
+    /// One key each way. With one key for both, a frame a guest sealed opened for that guest
+    /// too, so something that only echoed a guest's own frames back passed for the host.
+    public static func sealingKey(for code: SessionCode, share: UUID, direction: Direction) -> SymmetricKey {
         HKDF<SHA256>.deriveKey(
             inputKeyMaterial: SymmetricKey(data: Data(code.letters.utf8)),
             salt: salt,
-            info: Data("seal|".utf8) + bytes(of: share),
+            info: Data(direction.label.utf8) + bytes(of: share),
             outputByteCount: 32
         )
     }
