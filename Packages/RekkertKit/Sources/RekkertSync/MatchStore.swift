@@ -915,7 +915,7 @@ public final class MatchStore {
         // takes the log and the state with it, and this is the only moment the board it
         // produced still exists.
         let after = SessionReducer.state(of: log)
-        refresh()
+        refresh(to: after)
         announce([event], before: before, after: after, session: session)
         publishSnapshot(force: false)
         push([event], in: session)
@@ -1366,7 +1366,7 @@ public final class MatchStore {
         // Only what was genuinely new, so the same point arriving over both radios is
         // mentioned once, and the board as it stands before this device redraws it.
         let after = SessionReducer.state(of: log)
-        refresh()
+        refresh(to: after)
         announce(fresh, before: before, after: after, session: session)
         // The snapshot channel too, exactly as a tap made here would. It is the one channel a
         // watch that was not reachable reads the moment it wakes; without it a point scored
@@ -1704,7 +1704,12 @@ public final class MatchStore {
     }
 
     private func refresh() {
-        state = SessionReducer.state(of: log)
+        refresh(to: SessionReducer.state(of: log))
+    }
+
+    /// With the board already folded where the caller needed it first, so each event folds the log once.
+    private func refresh(to reduced: SessionState?) {
+        state = reduced
         absorbTakeBack()
         // A session in play supersedes whatever result was on screen — including one the
         // counterpart took back, which arrives here as a new session.
