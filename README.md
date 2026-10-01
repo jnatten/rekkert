@@ -493,7 +493,9 @@ answering, is looked for as well as dialled where it was, since an iPhone's Blue
 moves on; one that proved itself once is never written off for being slow to do it again, and a
 connection that comes back before the host's service does is let go of and found again. What is
 waiting to go out goes a piece for each peer in turn, so one peer's long answer holds up nobody
-else's.
+else's. All of it lasts as long as the process does: iOS wakes a suspended app for traffic on the
+link, but one it has ended to free memory is not relaunched for it, and nothing moves on the
+radio until that phone is opened again.
 
 A drop is not a refusal. `ReconnectPolicy` decides what losing a connection means, and the
 only thing that tells a wrong code from a host who walked off is whether anything ever worked.

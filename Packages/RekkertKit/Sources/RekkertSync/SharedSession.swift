@@ -55,9 +55,9 @@ public final class SharedSession {
     private var watching: Task<Void, Never>?
     private var watchingBluetooth: Task<Void, Never>?
     /// How many phones are on the match over Bluetooth. Kept apart from `peers` because the
-    /// same phone is usually on both links and there is nothing on the wire to tell that it is:
-    /// `Wire.hello` carries no sender, so the two transports cannot recognise each other's
-    /// peers. Folding them with `max` undercounts a room where somebody is on one link only,
+    /// same phone is usually on both links and neither transport can tell that it is: a hello
+    /// names its sender for the pair's sake, but the links count connections, not devices.
+    /// Folding them with `max` undercounts a room where somebody is on one link only,
     /// which is better than telling four people there are eight of them.
     private var bluetoothPeers = 0
     /// Kept so sharing can be stood back up after the app has been put down. The code is

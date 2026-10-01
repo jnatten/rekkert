@@ -10,9 +10,8 @@ private nonisolated enum Key {
     static let revision = "revision"
 }
 
-/// The only nonisolated type in the app. Delegate callbacks arrive on WCSession's private
-/// non-main serial queue, so `[String: Any]` is narrowed to `Data` right here, before
-/// anything crosses an isolation boundary.
+/// Delegate callbacks arrive on WCSession's private non-main serial queue, so `[String: Any]`
+/// is narrowed to `Data` right here, before anything crosses an isolation boundary.
 nonisolated private final class WCShim: NSObject, WCSessionDelegate, @unchecked Sendable {
     private let onPacket: @Sendable (InboundPacket) -> Void
     private let onReachability: @Sendable (Bool) -> Void
