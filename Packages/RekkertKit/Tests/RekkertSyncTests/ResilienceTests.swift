@@ -309,13 +309,15 @@ struct RetirementTests {
     }
 }
 
-/// A link whose reachability the test flips, and whose answers take a moment.
+/// A link whose reachability the test flips, and which holds every question until the test
+/// lets it be answered — so how many rounds ran is a matter of order, not of timing.
 private final class FlappingTransport: PeerTransport, @unchecked Sendable {
     let inbound = AsyncStream<InboundPacket> { _ in }
     let reachability: AsyncStream<Bool>
     private let flips: AsyncStream<Bool>.Continuation
     private let lock = NSLock()
     private var _hellos = 0
+    private var held: [CheckedContinuation<Void, Never>] = []
     var hellos: Int { lock.withLock { _hellos } }
 
     init() {
@@ -324,14 +326,23 @@ private final class FlappingTransport: PeerTransport, @unchecked Sendable {
         flips = continuation
     }
 
-    func flip() { flips.yield(true) }
+    func flip(_ reachable: Bool = true) { flips.yield(reachable) }
+
+    /// Answers everything asked so far.
+    func release() {
+        let waiting = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
+            defer { held = [] }
+            return held
+        }
+        for continuation in waiting { continuation.resume() }
+    }
 
     var isReachable: Bool { true }
     func activate() {}
 
     func sendLive(_ payload: Data) async -> Data? {
         if case .hello? = try? Wire.decode(payload) { lock.withLock { _hellos += 1 } }
-        try? await Task.sleep(for: .milliseconds(100))
+        await withCheckedContinuation { continuation in lock.withLock { held.append(continuation) } }
         return nil
     }
 
@@ -345,18 +356,30 @@ struct FlappingLinkTests {
     /// Every child of the fan-out says so when it changes, and the radio on every proof. A whole
     /// round of anti-entropy for each one waited on the slowest peer every time, and said the
     /// presets and the rest again every time.
+    ///
+    /// The store's own timeout is pushed out of the way: the round has to stay open until the
+    /// test lets it close, or the count would depend on how fast this machine is.
     @Test func aBurstOfReconnectsIsOneRoundAndOneMore() async throws {
         let transport = FlappingTransport()
-        let store = MatchStore(device: DeviceID(), transport: transport, snapshotInterval: 0, retryInterval: .seconds(60))
+        let store = MatchStore(
+            device: DeviceID(), transport: transport, snapshotInterval: 0,
+            sendTimeout: .seconds(60), retryInterval: .seconds(60)
+        )
         let task = Task { await store.run() }
         defer { task.cancel() }
         await eventually { transport.hellos == 1 }
 
         for _ in 0 ..< 10 { transport.flip() }
-        await eventually { transport.hellos >= 2 }
-        await quietPeriod()
+        // Last in line, so the store reading it says every flip before it has been taken in
+        // while the first round is still waiting for its answer.
+        transport.flip(false)
+        await eventually { !store.isReachable }
+        transport.release()
+
+        await eventually { transport.hellos == 2 }
+        transport.release()
         await quietPeriod()
 
-        #expect(transport.hellos <= 3, "one round for the first, one more for the rest")
+        #expect(transport.hellos == 2, "one round for the first, one more for the rest")
     }
 }
