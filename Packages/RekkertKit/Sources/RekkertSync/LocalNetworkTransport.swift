@@ -484,7 +484,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             return true
         }
         guard isNew else { return connection.cancel() }
-        if share != nil { giveUpOnDial(token, link) }
+        giveUpUnlessReady(token, link)
 
         connection.stateUpdateHandler = { [weak self] state in
             guard let self else { return }
@@ -549,8 +549,10 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
 
     /// An `NWConnection` to an endpoint that is no longer there sits in `.waiting` rather than
     /// failing, and `redial` will not dial while any link is on the books — so one of these
-    /// would quietly block every future attempt for the rest of the match.
-    private func giveUpOnDial(_ token: ObjectIdentifier, _ link: Link) {
+    /// would quietly block every future attempt for the rest of the match. One taken in that
+    /// never finishes its handshake sits in `.preparing` the same way, and a host has no other
+    /// reason ever to hang up on it.
+    private func giveUpUnlessReady(_ token: ObjectIdentifier, _ link: Link) {
         let deadline = DispatchWorkItem { [weak self] in
             guard let self, self.lock.withLock({ !link.isReady }) else { return }
             self.close(token, refusable: false)
