@@ -274,7 +274,12 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     /// standing, so a dial that misses is still read as a host in a pocket.
     public func resumeJoining(code: SessionCode) {
         sweepDeadLinks()
-        lock.withLock { intent = .joining(code) }
+        // A fresh look, as for hosting: a share refused before the app was put down, or before
+        // the radio found the match, is dialled again rather than skipped for the rest of it.
+        lock.withLock {
+            intent = .joining(code)
+            refused = []
+        }
         if browser.current.map({ $0.state != .ready }) ?? true {
             standUpBrowser(code: code)
         }
