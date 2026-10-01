@@ -91,6 +91,8 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         let chunks: [Data]
         var sent = 0
         let expires: DispatchTime?
+        /// The question this is, when it is one.
+        let correlation: UInt32?
     }
 
     private let packets: AsyncStream<InboundPacket>.Continuation
@@ -106,6 +108,8 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     private var serverInbox: CBCharacteristic?
     private var peers: [ObjectIdentifier: Peer] = [:]
     private var waiting: [UInt32: ResumeOnce] = [:]
+    /// Questions whose last chunk went out, so one dropped unsent does not count against the peer.
+    private var askedWhole: Set<UInt32> = []
     private var nextCorrelation: UInt32 = 1
     private var intent: Intent = .none
     /// Hosts that turned out to be somebody else's court. A scan reports each peripheral once,
@@ -199,6 +203,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             serverInbox = nil
             peers = [:]
             waiting = [:]
+            askedWhole = []
             intent = .none
             rejected = []
             hasProven = false
@@ -279,9 +284,10 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
                 once.resume(nil)
             }
         }
+        let wentOut = lock.withLock { askedWhole.remove(correlation) != nil }
         if reply != nil {
             lock.withLock { peer.health.answered() }
-        } else if lock.withLock({ peer.backlog.isEmpty }) {
+        } else if wentOut, lock.withLock({ peer.backlog.isEmpty }) {
             missed(peer)
         }
         return reply
@@ -319,7 +325,10 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         // that overtook an earlier one on its way into the backlog would be refused as seen.
         let queued = lock.withLock { () -> Bool in
             guard let sealed = peer.seal.seal(frame) else { return false }
-            peer.backlog.append(Outgoing(chunks: Chunking.split(sealed, mtu: mtu), expires: expires))
+            peer.backlog.append(Outgoing(
+                chunks: Chunking.split(sealed, mtu: mtu), expires: expires,
+                correlation: frame.kind == .request ? frame.correlation : nil
+            ))
             return true
         }
         guard queued else { return }
@@ -332,7 +341,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     /// The proof, which is sealed already.
     private func enqueue(_ sealed: Data, to peer: Peer) {
         let mtu = mtu(for: peer)
-        lock.withLock { peer.backlog.append(Outgoing(chunks: Chunking.split(sealed, mtu: mtu), expires: nil)) }
+        lock.withLock { peer.backlog.append(Outgoing(chunks: Chunking.split(sealed, mtu: mtu), expires: nil, correlation: nil)) }
         queue.async { [weak self] in self?.drain(peer) }
     }
 
@@ -371,7 +380,9 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         lock.withLock {
             guard !peer.backlog.isEmpty else { return }
             peer.backlog[0].sent += 1
-            if peer.backlog[0].sent == peer.backlog[0].chunks.count { peer.backlog.removeFirst() }
+            guard peer.backlog[0].sent == peer.backlog[0].chunks.count else { return }
+            if let correlation = peer.backlog[0].correlation { askedWhole.insert(correlation) }
+            peer.backlog.removeFirst()
         }
         // A guest may only have one write outstanding, so the acknowledgement is what
         // fetches the next chunk rather than this loop.
@@ -539,6 +550,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             let values = (Array(waiting.values), candidateDeadline, !peers.isEmpty)
             peers = [:]
             waiting = [:]
+            askedWhole = []
             server = nil
             serverInbox = nil
             candidateDeadline = nil
