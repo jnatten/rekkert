@@ -745,3 +745,39 @@ struct PairMemoryTests {
         #expect(phone.state != nil)
     }
 }
+
+@Suite("A Leave the watch has not heard yet")
+@MainActor
+struct UnconfirmedLeaveTests {
+    /// The phone left a match its watch had joined by itself, with the watch out of reach, and
+    /// started one of its own. Starting on nothing forgot the Leave, and the watch coming back
+    /// republished the left match before its queue delivered the Leave — so the phone took that
+    /// match up again on top of the one it had just started.
+    @Test func startingYourOwnMatchKeepsAnUnconfirmedLeave() async throws {
+        let shared = seeded(DeviceID(), points: 1)
+        let (toPhone, fromWatch) = LoopbackTransport.pair()
+        let links = FanOutTransport()
+        links.attach(fromWatch, as: .pairedDevice)
+        let phone = MatchStore(
+            device: DeviceID(), transport: links,
+            session: ActiveSession(log: shared, pairedRole: .guest), snapshotInterval: 0
+        )
+        let running = Task { await phone.run() }
+        defer { running.cancel() }
+        #expect(!phone.canEndSession, "the match the watch joined, followed from the watch")
+
+        phone.leaveSharedSession()
+        phone.startNewSession()
+        phone.configure(counting)
+        let own = phone.log.sessionID
+
+        toPhone.queue(try Wire.snapshot(shared).encoded())
+        await quietPeriod()
+        #expect(phone.log.sessionID == own, "the match left is not taken back on top of the new one")
+
+        toPhone.queue(try Wire.left(sessionID: shared.sessionID).encoded())
+        await quietPeriod()
+        #expect(phone.log.sessionID == own)
+        #expect(phone.state != nil)
+    }
+}

@@ -591,9 +591,12 @@ public final class MatchStore {
         if leaving {
             leftSessionID = log.sessionID
             tellThePairItLeft(log.sessionID)
-        } else {
+        } else if !log.isEmpty {
+            // Only over a match this end ends. Started on nothing, a Leave the pair has not
+            // heard yet still stands: its republish of that match would land on top of this one.
             retire(log.sessionID)
             leftSessionID = nil
+            counterpartLeftSessionID = nil
         }
         clearSession()
         if role == .guest {
@@ -614,7 +617,6 @@ public final class MatchStore {
         lastResult = nil
         resultRewind = nil
         isJoining = false
-        counterpartLeftSessionID = nil
     }
 
     /// A session is retired where it ends, and stays retired, so a counterpart that has not
