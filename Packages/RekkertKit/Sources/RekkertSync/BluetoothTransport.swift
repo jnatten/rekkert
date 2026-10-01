@@ -129,6 +129,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     }
 
     private let replyTimeout: DispatchTimeInterval
+    private let replySeconds: Int
     /// How long a host that passed the greeting has to prove it holds the key.
     private let proofTimeout: DispatchTimeInterval
     /// How long a host that has only been found has to get as far as the greeting.
@@ -141,6 +142,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
 
     public init(replyTimeout: Int = 4, proofTimeout: Int = 10, candidateTimeout: Int = 15) {
         self.replyTimeout = .seconds(replyTimeout)
+        replySeconds = replyTimeout
         self.proofTimeout = .seconds(proofTimeout)
         self.candidateTimeout = .seconds(candidateTimeout)
 
@@ -312,7 +314,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
 
     private func send(_ frame: Frame, to peer: Peer) {
         let mtu = mtu(for: peer)
-        let expires: DispatchTime? = frame.kind == .oneway ? nil : .now() + replyTimeout
+        let expires = LinkReplies.patience(for: frame.kind, replyTimeout: replySeconds).map { DispatchTime.now() + .seconds($0) }
         // Sealed and queued under the one lock: frames are numbered as they are sealed, and one
         // that overtook an earlier one on its way into the backlog would be refused as seen.
         let queued = lock.withLock { () -> Bool in

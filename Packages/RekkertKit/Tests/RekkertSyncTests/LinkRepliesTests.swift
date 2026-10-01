@@ -19,6 +19,15 @@ struct LinkRepliesTests {
         #expect(!LinkReplies.isWorthHandingOn(late: hello))
         #expect(!LinkReplies.isWorthHandingOn(late: Data("rubbish".utf8)))
     }
+
+    /// A question nobody waits for any more is dropped unsent. An answer is handed on late all
+    /// the same, so it is worth sending long after the asker gave up waiting for it.
+    @Test func anAnswerOutlivesTheWaitForItsQuestion() throws {
+        #expect(LinkReplies.patience(for: .oneway, replyTimeout: 4) == nil)
+        #expect(LinkReplies.patience(for: .request, replyTimeout: 4) == 4)
+        let answer = try #require(LinkReplies.patience(for: .reply, replyTimeout: 4))
+        #expect(answer > 4)
+    }
 }
 
 @Suite("Whether a peer is still there")

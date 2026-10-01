@@ -12,6 +12,19 @@ nonisolated enum LinkReplies {
         if case .hello = wire { return false }
         return true
     }
+
+    /// How long a frame waits for its turn on the link before it is dropped unsent, in seconds.
+    /// A question nobody waits for any more is not worth asking. An answer is still true after
+    /// the asker gave up waiting — it is handed on late above — and over Bluetooth the one to a
+    /// hello, everything the asker was missing, sits behind whatever big frame was already going
+    /// out. Nothing for a oneway, which nobody waits for.
+    static func patience(for kind: Frame.Kind, replyTimeout seconds: Int) -> Int? {
+        switch kind {
+        case .oneway: nil
+        case .request: seconds
+        case .reply: seconds * 8
+        }
+    }
 }
 
 /// Whether a peer that is still connected is still answering.
