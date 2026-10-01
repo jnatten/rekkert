@@ -822,7 +822,13 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
 
         lock.withLock { isRedialling = false }
         let peer = Peer(seal: LinkSeal(role: .guest, code: code, share: greeting.share))
-        lock.withLock { peers[ObjectIdentifier(peripheral)] = peer }
+        // Proved afresh on a greeting read again — the host's service back after its radio went
+        // off and on — so one that was counted as there is not, until it is.
+        let wasReady = lock.withLock { () -> Bool in
+            defer { peers[ObjectIdentifier(peripheral)] = peer }
+            return peers[ObjectIdentifier(peripheral)]?.isReady == true
+        }
+        if wasReady { reachabilityUpdates.yield(isReachable) }
         // Nothing left to look for. The connection carries its own reconnect from here — the
         // request handed to `connect` outlives the link — and a scan left running is a radio
         // kept awake for the length of a match.
