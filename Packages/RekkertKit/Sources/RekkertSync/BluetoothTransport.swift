@@ -112,10 +112,11 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     /// so one of these checked first would otherwise be checked again and again while the
     /// right one, found in the meantime, was dropped for being second.
     private var rejected: Set<UUID> = []
-    /// Hosts that proved themselves during this join. Hung up on or gone quiet, each is still the
-    /// right host: looked for wherever it has gone, and never written off for being slow to prove
-    /// itself again.
-    private var proven: Set<UUID> = []
+    /// Whether a host has proved itself during this join. Hung up on or gone quiet, it is still
+    /// the right host: looked for wherever it has gone, and never written off for being slow to
+    /// prove itself again. Not kept per peripheral: an iPhone's address moves on, and the same
+    /// host found again under another identifier is the same host.
+    private var hasProven = false
     /// When the host being dialled is let go of, unless it has proved itself by then.
     private var candidateDeadline: DispatchWorkItem?
     /// A host this was on has gone, and is being dialled again as well as looked for afresh.
@@ -198,7 +199,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             waiting = [:]
             intent = .none
             rejected = []
-            proven = []
+            hasProven = false
             return values
         }
         deadline?.cancel()
@@ -481,7 +482,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             // The host, proven: from here a drop is a reconnect, which waits as long as it takes.
             if peer.central == nil {
                 let deadline = lock.withLock { () -> DispatchWorkItem? in
-                    if let server, peers[ObjectIdentifier(server)] === peer { proven.insert(server.identifier) }
+                    if let server, peers[ObjectIdentifier(server)] === peer { hasProven = true }
                     return candidateDeadline
                 }
                 deadline?.cancel()
@@ -540,7 +541,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             serverInbox = nil
             candidateDeadline = nil
             rejected = []
-            proven = []
+            hasProven = false
             isRedialling = false
             return values
         }
@@ -723,7 +724,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
         // Proven at any point in this join, rather than ready now: one hung up on for not answering
         // is not ready any more, one whose service went has been forgotten already, and either is
         // just as likely to have moved.
-        let wasProven = lock.withLock { proven.contains(peripheral.identifier) }
+        let wasProven = lock.withLock { hasProven }
         forget(ObjectIdentifier(peripheral))
         let reconnects = lock.withLock { () -> Bool in
             guard server === peripheral else { return false }
@@ -848,7 +849,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
             let (unproven, manager, provedBefore) = self.lock.withLock { () -> (CBPeripheral?, CBCentralManager?, Bool) in
                 guard self.peers[token] === peer, !peer.isReady,
                       let server = self.server, ObjectIdentifier(server) == token else { return (nil, nil, false) }
-                return (server, self.centralManager, self.proven.contains(server.identifier))
+                return (server, self.centralManager, self.hasProven)
             }
             guard let unproven else { return }
             if provedBefore {
