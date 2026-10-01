@@ -308,3 +308,55 @@ struct RetirementTests {
         #expect(points(watch) == BySide(a: 2, b: 0))
     }
 }
+
+/// A link whose reachability the test flips, and whose answers take a moment.
+private final class FlappingTransport: PeerTransport, @unchecked Sendable {
+    let inbound = AsyncStream<InboundPacket> { _ in }
+    let reachability: AsyncStream<Bool>
+    private let flips: AsyncStream<Bool>.Continuation
+    private let lock = NSLock()
+    private var _hellos = 0
+    var hellos: Int { lock.withLock { _hellos } }
+
+    init() {
+        var continuation: AsyncStream<Bool>.Continuation!
+        reachability = AsyncStream { continuation = $0 }
+        flips = continuation
+    }
+
+    func flip() { flips.yield(true) }
+
+    var isReachable: Bool { true }
+    func activate() {}
+
+    func sendLive(_ payload: Data) async -> Data? {
+        if case .hello? = try? Wire.decode(payload) { lock.withLock { _hellos += 1 } }
+        try? await Task.sleep(for: .milliseconds(100))
+        return nil
+    }
+
+    func publishSnapshot(_ payload: Data) {}
+    func queue(_ payload: Data) {}
+}
+
+@Suite("A link that keeps coming back")
+@MainActor
+struct FlappingLinkTests {
+    /// Every child of the fan-out says so when it changes, and the radio on every proof. A whole
+    /// round of anti-entropy for each one waited on the slowest peer every time, and said the
+    /// presets and the rest again every time.
+    @Test func aBurstOfReconnectsIsOneRoundAndOneMore() async throws {
+        let transport = FlappingTransport()
+        let store = MatchStore(device: DeviceID(), transport: transport, snapshotInterval: 0, retryInterval: .seconds(60))
+        let task = Task { await store.run() }
+        defer { task.cancel() }
+        await eventually { transport.hellos == 1 }
+
+        for _ in 0 ..< 10 { transport.flip() }
+        await eventually { transport.hellos >= 2 }
+        await quietPeriod()
+        await quietPeriod()
+
+        #expect(transport.hellos <= 3, "one round for the first, one more for the rest")
+    }
+}

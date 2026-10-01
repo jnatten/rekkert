@@ -77,6 +77,8 @@ public final class MatchStore {
     private let store: SessionStore?
     private var lastSnapshotPublished = Date.distantPast
     private var isFlushing = false
+    private var isSynchronising = false
+    private var synchroniseAgain = false
     private var retryPatience = 1
     private static let maximumRetryPatience = 8
     private var snapshotPending = false
@@ -814,7 +816,7 @@ public final class MatchStore {
         async let packets: Void = consumeInbound()
         async let reachability: Void = consumeReachability()
         async let retries: Void = retryUndelivered()
-        async let initial: Void = synchronise()
+        async let initial: Void = synchroniseOnce()
         _ = await (packets, reachability, retries, initial)
     }
 
@@ -861,8 +863,21 @@ public final class MatchStore {
             isReachable = reachable
             isPairReachable = transport.isPairReachable
             retryPatience = 1
-            if reachable { await synchronise() }
+            if reachable { Task { await synchroniseOnce() } }
         }
+    }
+
+    /// One round at a time, and one more after it for whatever came in meanwhile. The fan-out
+    /// says so on every child's change and the radio on every proof, and a round for each one
+    /// waited on the slowest peer every time, lagging this loop and saying everything again.
+    private func synchroniseOnce() async {
+        guard !isSynchronising else { return synchroniseAgain = true }
+        isSynchronising = true
+        repeat {
+            synchroniseAgain = false
+            await synchronise()
+        } while synchroniseAgain
+        isSynchronising = false
     }
 
     /// Anti-entropy. Cheap enough to call on activation, on reachability changes and
