@@ -62,8 +62,9 @@ public final class MatchStore {
     /// two apart is the whole of "did somebody else score that".
     public let device: DeviceID
     /// The other half of this pair — a phone's own watch, or a watch's own phone — learnt from
-    /// its hello. Live state rather than stored: it costs one exchange to relearn, and a
-    /// remembered id for a watch somebody has since unpaired would be worse than not knowing.
+    /// its hello and kept across launches. The first packets after a cold start come off the
+    /// pair's persisted channels, before any hello, and "is this the pair's own match" has to be
+    /// answered on them. A stale id matches events nobody is making, and the next hello replaces it.
     @ObservationIgnored private var pairedDevice: DeviceID?
 
     /// Whether that point was put in by one of these two devices rather than by somebody else.
@@ -144,6 +145,7 @@ public final class MatchStore {
         self.guestOf = session?.guestOf
         self.leftSessionID = session?.leftSessionID
         self.counterpartLeftSessionID = session?.counterpartLeftSessionID
+        self.pairedDevice = session?.pairedDevice
         self.device = device
         self.transport = transport
         self.store = store
@@ -1024,7 +1026,10 @@ public final class MatchStore {
         case .hello(let sessionID, let vector, let sender):
             // Only the pair's: a stranger's phone is somebody else by definition, and on a
             // watch every packet arrives through its own phone anyway.
-            if packet.isFromPairedDevice, let sender, sender != device { pairedDevice = sender }
+            if packet.isFromPairedDevice, let sender, sender != device, sender != pairedDevice {
+                pairedDevice = sender
+                persist()
+            }
             // The pair coming back is what these are said again for. Every other phone's hello
             // repeated them to this one's own watch, and onto its queue whenever it was slow.
             if packet.isFromPairedDevice {
@@ -1699,7 +1704,8 @@ public final class MatchStore {
         try? store?.save(ActiveSession(
             log: log, outbox: outbox, retired: retired, discarded: discarded, role: role,
             pairedRole: pairedRole, guestOf: guestOf,
-            leftSessionID: leftSessionID, counterpartLeftSessionID: counterpartLeftSessionID
+            leftSessionID: leftSessionID, counterpartLeftSessionID: counterpartLeftSessionID,
+            pairedDevice: pairedDevice
         ))
     }
 }

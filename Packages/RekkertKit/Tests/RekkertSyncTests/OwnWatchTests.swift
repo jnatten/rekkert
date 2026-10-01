@@ -651,3 +651,97 @@ struct LogGapTests {
         #expect(guest.log.coverage[hostDevice] == 2, "still short of the gap until the answer comes")
     }
 }
+
+@Suite("Knowing the pair across a relaunch")
+@MainActor
+struct PairMemoryTests {
+    /// The first packets after a cold launch come off the watch's persisted channels, before the
+    /// watch has said hello. Judged on them without the watch's id, the host's next match — only
+    /// the host had scored on it — read as the watch's own, and the phone stepped off onto it as
+    /// a match of its own, with the whistle.
+    @Test func aRelaunchedGuestTellsTheHostsMatchFromItsWatchsBeforeTheHello() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "rekkert-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = SessionStore(directory: directory)
+        let hostDevice = DeviceID(), watchDevice = DeviceID()
+
+        // A guest between the host's matches, which heard its watch say hello before the relaunch.
+        let (toPhone, fromWatch) = LoopbackTransport.pair()
+        let links = FanOutTransport()
+        links.attach(fromWatch, as: .pairedDevice)
+        let before = MatchStore(
+            device: DeviceID(), transport: links, store: persistence,
+            session: ActiveSession(log: MatchLog(), role: .guest), snapshotInterval: 0
+        )
+        let earlier = Task { await before.run() }
+        toPhone.queue(try Wire.hello(sessionID: UUID(), vector: VersionVector(), from: watchDevice).encoded())
+        await eventually { before.isOurs(watchDevice) }
+        earlier.cancel()
+
+        let (toAgain, fromWatchAgain) = LoopbackTransport.pair()
+        let linksAgain = FanOutTransport()
+        linksAgain.attach(fromWatchAgain, as: .pairedDevice)
+        let again = MatchStore(
+            device: before.device, transport: linksAgain, store: persistence,
+            session: try persistence.loadActive(), snapshotInterval: 0
+        )
+        var letGo = false
+        again.onLeft = { letGo = true }
+        let running = Task { await again.run() }
+        defer { running.cancel() }
+        #expect(again.isOurs(watchDevice), "the watch is still known")
+
+        toAgain.queue(try Wire.snapshot(seeded(hostDevice, points: 1)).encoded())
+        await eventually { again.state != nil }
+
+        #expect(again.role == .guest, "the host's next match, handed on by the watch")
+        #expect(!again.canEndSession)
+        #expect(!letGo)
+    }
+
+    /// The same packet, and the watch really did start it: the phone steps off the shared match
+    /// onto its watch's, as it always has.
+    @Test func aRelaunchedGuestStillFollowsItsWatchOntoAMatchOfItsOwn() async throws {
+        let watchDevice = DeviceID()
+        let (toPhone, fromWatch) = LoopbackTransport.pair()
+        let links = FanOutTransport()
+        links.attach(fromWatch, as: .pairedDevice)
+        let phone = MatchStore(
+            device: DeviceID(), transport: links,
+            session: ActiveSession(log: MatchLog(), role: .guest, pairedDevice: watchDevice), snapshotInterval: 0
+        )
+        var letGo = false
+        phone.onLeft = { letGo = true }
+        let running = Task { await phone.run() }
+        defer { running.cancel() }
+
+        toPhone.queue(try Wire.snapshot(seeded(watchDevice, points: 1)).encoded())
+        await eventually { phone.state != nil }
+
+        #expect(phone.role == .solo, "the watch's own match is the pair's own")
+        #expect(phone.canEndSession)
+        #expect(letGo)
+    }
+
+    /// A queued Leave from a watch that misread the role lands at launch too, before the hello.
+    /// On the phone's own match it is a mistake to put right, not a match to drop.
+    @Test func aQueuedLeaveOnThePhonesOwnMatchIsStillNotLeavingItAfterARelaunch() async throws {
+        let own = DeviceID(), watchDevice = DeviceID()
+        let (toPhone, fromWatch) = LoopbackTransport.pair()
+        let links = FanOutTransport()
+        links.attach(fromWatch, as: .pairedDevice)
+        let phone = MatchStore(
+            device: own, transport: links,
+            session: ActiveSession(log: seeded(own, points: 1), pairedDevice: watchDevice), snapshotInterval: 0
+        )
+        let running = Task { await phone.run() }
+        defer { running.cancel() }
+        let match = phone.log.sessionID
+
+        toPhone.queue(try Wire.left(sessionID: match).encoded())
+        await quietPeriod()
+
+        #expect(phone.log.sessionID == match, "the phone keeps its own match")
+        #expect(phone.state != nil)
+    }
+}

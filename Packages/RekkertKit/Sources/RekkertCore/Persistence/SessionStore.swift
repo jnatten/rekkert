@@ -23,6 +23,10 @@ public struct ActiveSession: Codable, Sendable, Hashable {
     /// time it wakes — so they have to outlive the app.
     public var leftSessionID: UUID?
     public var counterpartLeftSessionID: UUID?
+    /// The other half of the pair, as its hello named it. The first packets after a cold start
+    /// come off the pair's persisted channels before any hello, and whether a match is the
+    /// pair's own has to be answered on them.
+    public var pairedDevice: DeviceID?
 
     public init(
         log: MatchLog,
@@ -33,7 +37,8 @@ public struct ActiveSession: Codable, Sendable, Hashable {
         pairedRole: SessionRole = .solo,
         guestOf: UUID? = nil,
         leftSessionID: UUID? = nil,
-        counterpartLeftSessionID: UUID? = nil
+        counterpartLeftSessionID: UUID? = nil,
+        pairedDevice: DeviceID? = nil
     ) {
         self.log = log
         self.outbox = outbox
@@ -44,9 +49,11 @@ public struct ActiveSession: Codable, Sendable, Hashable {
         self.guestOf = guestOf
         self.leftSessionID = leftSessionID
         self.counterpartLeftSessionID = counterpartLeftSessionID
+        self.pairedDevice = pairedDevice
     }
 
-    private enum CodingKeys: String, CodingKey { case log, outbox, retired, discarded, role, pairedRole, guestOf, leftSessionID, counterpartLeftSessionID
+    private enum CodingKeys: String, CodingKey {
+        case log, outbox, retired, discarded, role, pairedRole, guestOf, leftSessionID, counterpartLeftSessionID, pairedDevice
     }
 
     public init(from decoder: any Decoder) throws {
@@ -60,6 +67,7 @@ public struct ActiveSession: Codable, Sendable, Hashable {
         guestOf = try container.decodeIfPresent(UUID.self, forKey: .guestOf)
         leftSessionID = try container.decodeIfPresent(UUID.self, forKey: .leftSessionID)
         counterpartLeftSessionID = try container.decodeIfPresent(UUID.self, forKey: .counterpartLeftSessionID)
+        pairedDevice = try container.decodeIfPresent(DeviceID.self, forKey: .pairedDevice)
     }
 }
 
