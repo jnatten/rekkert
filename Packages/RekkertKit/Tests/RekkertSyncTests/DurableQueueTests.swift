@@ -174,8 +174,16 @@ struct DurableQueueTests {
         host.setScoreboardMirrored(true)
         let task = Task { await host.run() }
         defer { task.cancel() }
-        await quietPeriod()
-        let before = (watch.sent("presets"), watch.sent("display"), watch.sent("role"))
+        // Until starting up has said all it says: the rounds it runs fire their shares a moment
+        // after they end, and a fixed wait for them was a guess about the slowest machine.
+        var before = (watch.sent("presets"), watch.sent("display"), watch.sent("role"))
+        var quiet = 0
+        while quiet < 2 {
+            await quietPeriod()
+            let now = (watch.sent("presets"), watch.sent("display"), watch.sent("role"))
+            quiet = now == before ? quiet + 1 : 0
+            before = now
+        }
 
         for _ in 0 ..< 10 {
             _ = await guestEnd.sendLive(try Wire.hello(sessionID: host.log.sessionID, vector: VersionVector(), from: DeviceID()).encoded())
