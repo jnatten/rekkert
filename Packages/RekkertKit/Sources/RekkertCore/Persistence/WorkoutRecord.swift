@@ -105,6 +105,12 @@ public struct WorkoutRecord: Codable, Sendable, Hashable, Identifiable {
         return activeEnergyKilocalories + basalEnergyKilocalories
     }
 
+    /// The zones the workout was scored against, put back together from the edges kept with
+    /// each one. Nil where none were kept.
+    public var heartRateZones: HeartRateZones? {
+        HeartRateZones(boundaries: heartRateZoneTimes.compactMap(\.lowerBound))
+    }
+
     /// Whether a finished session was played while this workout was running.
     ///
     /// Worked out from the two clocks rather than from a key stored on either side: a

@@ -606,9 +606,12 @@ final class AppModel {
         return sessionStore?.series(workoutID)
     }
 
-    /// How the heart went while a match was played, from whichever workout was running then.
-    func series(covering record: HistoryRecord) -> WorkoutSeries? {
-        workouts.lazy.filter { $0.covers(record) }.compactMap { self.series($0.id) }.first
+    /// How the heart went while a match was played, from whichever workout was running then,
+    /// and the zones that workout was scored against.
+    func series(covering record: HistoryRecord) -> (series: WorkoutSeries, zones: HeartRateZones?)? {
+        workouts.lazy.filter { $0.covers(record) }.compactMap { workout in
+            self.series(workout.id).map { ($0, workout.heartRateZones) }
+        }.first
     }
 
     /// Asked on every redraw of the start screen purely to decide whether a row is there, so

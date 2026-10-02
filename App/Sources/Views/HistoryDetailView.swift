@@ -32,6 +32,7 @@ private struct RecordDetail: View {
 
     @State private var timeline: MatchTimeline?
     @State private var series: WorkoutSeries?
+    @State private var zones: HeartRateZones?
     @State private var confirmingResume = false
     @State private var startingAnother = false
     @State private var editingNames = false
@@ -80,7 +81,7 @@ private struct RecordDetail: View {
             }
 
             if let timeline {
-                MatchTimelineSection(record: record, timeline: timeline, series: series)
+                MatchTimelineSection(record: record, timeline: timeline, series: series, zones: zones)
             }
 
             if case .tournament(let tournament) = record.state {
@@ -104,7 +105,9 @@ private struct RecordDetail: View {
         // every frame, and these are files.
         .task(id: record.id) {
             timeline = model.timeline(record.id)
-            series = model.series(covering: record)
+            let covering = model.series(covering: record)
+            series = covering?.series
+            zones = covering?.zones
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

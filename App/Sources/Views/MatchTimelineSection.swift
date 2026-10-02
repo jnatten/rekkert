@@ -9,12 +9,13 @@ struct MatchTimelineSection: View {
     let record: HistoryRecord
     let timeline: MatchTimeline
     let series: WorkoutSeries?
+    let zones: HeartRateZones?
 
     var body: some View {
         if case .tournament(let tournament) = record.state {
-            if let series { TournamentHeart(tournament: tournament, timeline: timeline, series: series) }
+            if let series { TournamentHeart(tournament: tournament, timeline: timeline, series: series, zones: zones) }
         } else {
-            PointByPoint(record: record, timeline: timeline, series: series)
+            PointByPoint(record: record, timeline: timeline, series: series, zones: zones)
         }
     }
 }
@@ -26,6 +27,7 @@ private struct PointByPoint: View {
     let record: HistoryRecord
     let timeline: MatchTimeline
     let series: WorkoutSeries?
+    let zones: HeartRateZones?
 
     @State private var round = 0
     @State private var selected: Date?
@@ -127,7 +129,8 @@ private struct PointByPoint: View {
 
     private func momentum(_ domain: ClosedRange<Date>) -> some View {
         let steps = [(at: domain.lowerBound, lead: 0)] + leads
-        let reach = max(2, steps.map { abs($0.lead) }.max() ?? 0)
+        let step = max(1, ((steps.map { abs($0.lead) }.max() ?? 0) + 1) / 2)
+        let reach = 2 * step
         let sets = entries.filter { if case .set = $0.ended { true } else if case .match = $0.ended { true } else { false } }
         let games = entries.filter { if case .game = $0.ended { true } else { false } }
 
@@ -168,11 +171,20 @@ private struct PointByPoint: View {
         }
         .chartXScale(domain: domain)
         .chartYScale(domain: -Double(reach) ... Double(reach))
-        .chartYAxis(.hidden)
+        .chartYAxis {
+            AxisMarks(position: .leading, values: [-reach, -step, 0, step, reach].map(Double.init)) { value in
+                AxisGridLine()
+                AxisTick()
+                AxisValueLabel { if let lead = value.as(Double.self) { GutterLabel(text: "\(Int(abs(lead)))") } }
+            }
+        }
         .chartXAxis(heart.isEmpty ? .automatic : .hidden)
         .chartXSelection(value: $selected)
-        .overlay(alignment: .topLeading) { sideLabel(.a) }
-        .overlay(alignment: .bottomLeading) { sideLabel(.b) }
+        .chartPlotStyle { plot in
+            plot
+                .overlay(alignment: .topLeading) { sideLabel(.a) }
+                .overlay(alignment: .bottomLeading) { sideLabel(.b) }
+        }
         .frame(height: 150)
         .padding(.top, 8)
         .accessibilityLabel("Who was ahead")
@@ -185,14 +197,16 @@ private struct PointByPoint: View {
             Text("\(names[side]) ahead")
         }
         .font(.caption2)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(Color.secondary)
     }
 
     // MARK: Heart rate
 
     private func heartRate(_ domain: ClosedRange<Date>) -> some View {
         let held = (series?.pauses ?? []).filter { $0.end > domain.lowerBound && $0.start < domain.upperBound }
+        let scale = heartRateScale(heart.map(\.bpm))
         return Chart {
+            ZoneBands(zones: zones, time: domain, scale: scale)
             ForEach(Array(held.enumerated()), id: \.offset) { _, pause in
                 RectangleMark(xStart: .value("Time", max(pause.start, domain.lowerBound)), xEnd: .value("Time", min(pause.end, domain.upperBound)))
                     .foregroundStyle(Color.secondary.opacity(0.15))
@@ -208,8 +222,14 @@ private struct PointByPoint: View {
             }
         }
         .chartXScale(domain: domain)
-        .chartYScale(domain: .automatic(includesZero: false))
-        .chartYAxis { AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) }
+        .chartYScale(domain: scale)
+        .chartYAxis {
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
+                AxisGridLine()
+                AxisTick()
+                AxisValueLabel { if let bpm = value.as(Double.self) { GutterLabel(text: "\(Int(bpm))") } }
+            }
+        }
         .chartXAxis { AxisMarks(preset: .aligned, values: .automatic(desiredCount: 4)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour().minute()) } }
         .chartXSelection(value: $selected)
         .frame(height: 110)
@@ -236,6 +256,45 @@ private struct PointByPoint: View {
 
     private var countsBreaks: Bool {
         if case .pointCount = record.state { false } else { true }
+    }
+}
+
+/// Every y-axis label as wide as the widest heart rate, so the two charts reserve the same
+/// room for them and their plots start at the same moment.
+private struct GutterLabel: View {
+    let text: String
+
+    var body: some View {
+        Text("000").hidden().overlay(alignment: .trailing) { Text(text) }
+            .monospacedDigit()
+    }
+}
+
+private func heartRateScale(_ readings: [Int]) -> ClosedRange<Double> {
+    let low = Double(readings.min() ?? 60), high = Double(readings.max() ?? 180)
+    return ((low - 5) / 10).rounded(.down) * 10 ... ((high + 5) / 10).rounded(.up) * 10
+}
+
+private struct ZoneBands: ChartContent {
+    let zones: HeartRateZones?
+    let time: ClosedRange<Date>
+    let scale: ClosedRange<Double>
+
+    var body: some ChartContent {
+        if let zones {
+            ForEach(1 ... zones.count, id: \.self) { number in
+                let floor = max(zones.lowerBound(of: number) ?? scale.lowerBound, scale.lowerBound)
+                let ceiling = min(zones.lowerBound(of: number + 1) ?? scale.upperBound, scale.upperBound)
+                if floor < ceiling {
+                    RectangleMark(
+                        xStart: .value("Time", time.lowerBound), xEnd: .value("Time", time.upperBound),
+                        yStart: .value("Heart rate", floor), yEnd: .value("Heart rate", ceiling)
+                    )
+                    .foregroundStyle(HeartRateZoneStyle.color(number, of: zones.count).opacity(0.15))
+                    .accessibilityHidden(true)
+                }
+            }
+        }
     }
 }
 
@@ -288,6 +347,7 @@ private struct TournamentHeart: View {
     let tournament: Tournament
     let timeline: MatchTimeline
     let series: WorkoutSeries
+    let zones: HeartRateZones?
 
     private struct Span: Identifiable {
         var id: Int
@@ -323,8 +383,10 @@ private struct TournamentHeart: View {
                 return (at, bpm)
             }
             if !heart.isEmpty {
+                let scale = heartRateScale(heart.map(\.bpm))
                 Section("Heart rate") {
                     Chart {
+                        ZoneBands(zones: zones, time: domain, scale: scale)
                         ForEach(spans) { span in
                             RectangleMark(xStart: .value("Time", span.start), xEnd: .value("Time", span.end))
                                 .foregroundStyle(Color.secondary.opacity(span.id.isMultiple(of: 2) ? 0.14 : 0.06))
@@ -340,7 +402,7 @@ private struct TournamentHeart: View {
                         }
                     }
                     .chartXScale(domain: domain)
-                    .chartYScale(domain: .automatic(includesZero: false))
+                    .chartYScale(domain: scale)
                     .chartYAxis { AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) }
                     .chartXAxis { AxisMarks(preset: .aligned, values: .automatic(desiredCount: 4)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour().minute()) } }
                     .frame(height: 140)

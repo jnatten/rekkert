@@ -157,6 +157,22 @@ struct WorkoutRecordTests {
         #expect(filed.heartRateZoneTimes[2].upperBound == nil)
     }
 
+    @Test func theZonesAreRebuiltFromTheEdgesKeptWithThem() {
+        let start = Date(timeIntervalSince1970: 768_000_000)
+        let scored = WorkoutRecord(
+            id: UUID(), startedAt: start, endedAt: start.addingTimeInterval(3_600),
+            duration: 3_600,
+            heartRateZoneTimes: [
+                zoneTime,
+                HeartRateZoneTime(zone: 2, lowerBound: 134, upperBound: 145, duration: 900),
+                HeartRateZoneTime(zone: 3, lowerBound: 146, upperBound: nil, duration: 300),
+            ]
+        )
+
+        #expect(scored.heartRateZones?.boundaries == [134, 146])
+        #expect(workout(from: start, to: start.addingTimeInterval(3_600)).heartRateZones == nil)
+    }
+
     private var zoneTime: HeartRateZoneTime {
         HeartRateZoneTime(zone: 1, lowerBound: nil, upperBound: 133, duration: 1_200)
     }
