@@ -62,7 +62,7 @@ struct BoardCourtsView: View {
     /// The column count that leaves each card the most room at the shape a card reads best.
     static func columns(for count: Int, in size: CGSize, spacing: CGFloat) -> Int {
         guard count > 1 else { return 1 }
-        let aspect: CGFloat = 1.5
+        let aspect: CGFloat = 2
         func fit(_ columns: Int) -> CGFloat {
             let rows = (count + columns - 1) / columns
             let width = (size.width - spacing * CGFloat(columns - 1)) / CGFloat(columns)
@@ -81,10 +81,11 @@ private struct BoardCourtCard: View {
     let unit: CGFloat
 
     private var headerHeight: CGFloat { min(size.height * 0.16, 64 * unit) }
-    private var rowHeight: CGFloat { max(0, (size.height - headerHeight - gap * 3) / 2) }
     private var gap: CGFloat { max(6, size.height * 0.025) }
-    private var nameSize: CGFloat { min(rowHeight * 0.26, size.width * 0.075) }
-    private var pointsSize: CGFloat { min(rowHeight * 0.66, size.width * 0.2) }
+    private var halfWidth: CGFloat { max(0, (size.width - gap * 3) / 2) }
+    private var halfHeight: CGFloat { max(0, size.height - headerHeight - gap * 3) }
+    private var nameSize: CGFloat { min(halfHeight * 0.14, halfWidth * 0.1) }
+    private var pointsSize: CGFloat { min(halfHeight * 0.5, halfWidth * 0.42) }
 
     var body: some View {
         VStack(spacing: gap) {
@@ -104,47 +105,51 @@ private struct BoardCourtCard: View {
             .lineLimit(1)
             .frame(height: headerHeight)
 
-            ForEach([leftSide, leftSide.other], id: \.self) { side in
-                row(side)
+            HStack(spacing: gap) {
+                ForEach([leftSide, leftSide.other], id: \.self) { side in
+                    half(side)
+                }
             }
         }
         .padding(gap)
         .background(.white.opacity(0.08), in: .rect(cornerRadius: 28 * unit, style: .continuous))
     }
 
-    private func row(_ side: TeamSide) -> some View {
+    private func half(_ side: TeamSide) -> some View {
         let team = court.sides[side]
 
-        return HStack(spacing: 12 * unit) {
-            VStack(alignment: .leading, spacing: nameSize * 0.15) {
-                ForEach(Array(team.players.enumerated()), id: \.offset) { _, player in
-                    HStack(spacing: nameSize * 0.3) {
-                        Text(player.name)
-                            .fontWeight(player.isServing ? .heavy : .semibold)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.5)
-                        if player.isServing {
-                            Image(systemName: "tennisball.fill")
-                                .font(.system(size: nameSize * 0.7))
-                        }
+        return VStack(spacing: nameSize * 0.15) {
+            ForEach(Array(team.players.enumerated()), id: \.offset) { _, player in
+                HStack(spacing: nameSize * 0.3) {
+                    Text(player.name)
+                        .fontWeight(player.isServing ? .heavy : .semibold)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                    if player.isServing {
+                        Image(systemName: "tennisball.fill")
+                            .font(.system(size: nameSize * 0.7))
                     }
                 }
             }
             .font(.system(size: nameSize, design: .rounded))
 
-            Spacer(minLength: 8 * unit)
+            Spacer(minLength: 0)
 
-            if team.isWinner {
-                Image(systemName: "checkmark")
-                    .font(.system(size: pointsSize * 0.4, weight: .heavy))
+            HStack(spacing: 12 * unit) {
+                if team.isWinner {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: pointsSize * 0.4, weight: .heavy))
+                }
+                Text(team.points)
+                    .font(.system(size: pointsSize, weight: .heavy, design: .rounded))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .contentTransition(.numericText())
             }
-            Text(team.points)
-                .font(.system(size: pointsSize, weight: .heavy, design: .rounded))
-                .monospacedDigit()
-                .lineLimit(1)
-                .contentTransition(.numericText())
+
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 20 * unit)
+        .padding(16 * unit)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.color(side), in: .rect(cornerRadius: 20 * unit, style: .continuous))
         .animation(.snappy, value: team)
