@@ -74,11 +74,13 @@ struct BoardCourtsView: View {
 }
 
 private struct BoardCourtCard: View {
-    @Environment(\.teamPalette) private var palette
+    @Environment(\.teamPalette) private var base
     let court: TVBoard.Court
     let leftSide: TeamSide
     let size: CGSize
     let unit: CGFloat
+
+    private var palette: TeamPalette { base.court(court.id) }
 
     private var headerHeight: CGFloat { min(size.height * 0.16, 64 * unit) }
     private var gap: CGFloat { max(6, size.height * 0.025) }
@@ -92,7 +94,6 @@ private struct BoardCourtCard: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(court.label ?? "")
                     .font(.system(size: headerHeight * 0.6, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color.court(court.id))
                 Spacer(minLength: 8)
                 if let status = court.status {
                     Text(status)
@@ -113,7 +114,7 @@ private struct BoardCourtCard: View {
             }
         }
         .padding(gap)
-        .background(Color.court(court.id).opacity(0.2), in: .rect(cornerRadius: 28 * unit, style: .continuous))
+        .background(.white.opacity(0.08), in: .rect(cornerRadius: 28 * unit, style: .continuous))
     }
 
     private func half(_ side: TeamSide) -> some View {

@@ -160,20 +160,21 @@ struct CourtsSummary: View {
     }
 
     private func courtRow(_ board: LiveScore.Board) -> some View {
-        HStack(spacing: 8) {
+        let palette = score.palette.court(board.court ?? 0)
+        return HStack(spacing: 8) {
             Text(board.label ?? "")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(width: 52, alignment: .leading)
             Text(board.names[score.order[0]])
-                .foregroundStyle(score.palette.color(score.order[0]))
+                .foregroundStyle(palette.color(score.order[0]))
                 .frame(maxWidth: .infinity, alignment: .trailing)
             Text(score.pair(board.points))
                 .fontWeight(.bold)
                 .monospacedDigit()
                 .fixedSize()
             Text(board.names[score.order[1]])
-                .foregroundStyle(score.palette.color(score.order[1]))
+                .foregroundStyle(palette.color(score.order[1]))
                 .frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "checkmark")
                 .font(.caption.weight(.bold))

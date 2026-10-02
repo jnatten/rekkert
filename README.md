@@ -72,7 +72,9 @@ A picked sit-out counts like any other, so whoever it spared is next in line.
 On the phone, the court list is the main tournament screen: every court with its score,
 plus standings and round history. Scores can be tapped in point by point, typed, nudged
 with a stepper, or picked from a list of results — in "total points played" mode both
-halves always add up to the target, so one tap settles a court.
+halves always add up to the target, so one tap settles a court. Each court has a pair of
+team colours of its own — court 1 blue and orange, court 2 purple and green, and so on —
+the same on the phone, the watch, the TV and the Lock Screen.
 
 Players who have played before are remembered and offered back as one-tap chips and as
 suggestions above the keyboard while typing; Return moves to the next name. Chevrons move

@@ -184,12 +184,12 @@ private struct RecordDetail: View {
                             .foregroundStyle(.secondary)
                         ForEach(TeamSide.allCases, id: \.self) { side in
                             HStack {
-                                Circle().fill(palette.color(side)).frame(width: 8, height: 8)
+                                Circle().fill(palette.court(match.courtIndex).color(side)).frame(width: 8, height: 8)
                                 Text(names(match, side, in: tournament)).lineLimit(1)
                                 Spacer()
                                 Text("\(match.state.points[side])")
                                     .font(.body.bold().monospacedDigit())
-                                    .foregroundStyle(palette.color(side))
+                                    .foregroundStyle(palette.court(match.courtIndex).color(side))
                             }
                         }
                     }

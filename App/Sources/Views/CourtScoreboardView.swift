@@ -4,9 +4,11 @@ import SwiftUI
 struct CourtScoreboardView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.teamPalette) private var palette
+    @Environment(\.teamPalette) private var base
     let round: Int
     let court: Int
+
+    private var palette: TeamPalette { base.court(court) }
 
     /// What the text fields hold while they are being typed into. Committed on submit or
     /// when focus leaves, so a three-digit typo does not become three synced events.
@@ -38,6 +40,7 @@ struct CourtScoreboardView: View {
             }
             .navigationTitle("Round \(round + 1) · Court \(court + 1)")
             .navigationBarTitleDisplayMode(.inline)
+            .environment(\.teamPalette, palette)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     MatchOptionsMenu(round: round, court: court)

@@ -314,9 +314,11 @@ struct CourtRef: Identifiable, Hashable {
 }
 
 private struct CourtRow: View {
-    @Environment(\.teamPalette) private var palette
+    @Environment(\.teamPalette) private var base
     let tournament: Tournament
     let match: CourtMatch
+
+    private var palette: TeamPalette { base.court(match.courtIndex) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {

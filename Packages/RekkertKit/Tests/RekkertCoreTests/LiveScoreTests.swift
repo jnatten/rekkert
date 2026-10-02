@@ -89,6 +89,7 @@ struct LiveScoreTests {
         #expect(score.detail == "Round 1")
         #expect(score.clockStart == noon, "the round is live while a court still is")
         #expect(score.boards.map(\.label) == ["Court 1", "Court 2"])
+        #expect(score.boards.map(\.court) == [0, 1])
         #expect(score.boards.map(\.isDone) == [true, false])
         #expect(score.boards[0].points == BySide(a: "16", b: "0"))
         #expect(score.leaders == Leaderboard.standings(for: tournament).prefix(3).map {

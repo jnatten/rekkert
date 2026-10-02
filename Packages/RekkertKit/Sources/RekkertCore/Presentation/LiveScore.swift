@@ -5,6 +5,8 @@ import Foundation
 public struct LiveScore: Codable, Sendable, Hashable {
     public struct Board: Codable, Sendable, Hashable {
         public var label: String?
+        /// Optional so a Live Activity's content from before courts had colours still reads.
+        public var court: Int?
         public var names: BySide<String>
         public var points: BySide<String>
         public var games: BySide<Int>?
@@ -16,6 +18,7 @@ public struct LiveScore: Codable, Sendable, Hashable {
 
         public init(
             label: String? = nil,
+            court: Int? = nil,
             names: BySide<String>,
             points: BySide<String>,
             games: BySide<Int>? = nil,
@@ -26,6 +29,7 @@ public struct LiveScore: Codable, Sendable, Hashable {
             winner: TeamSide? = nil
         ) {
             self.label = label
+            self.court = court
             self.names = names
             self.points = points
             self.games = games
@@ -39,6 +43,7 @@ public struct LiveScore: Codable, Sendable, Hashable {
         init(_ snapshot: ScoreboardSnapshot) {
             self.init(
                 label: snapshot.courtLabel,
+                court: snapshot.courtIndex,
                 names: snapshot.teamNames,
                 points: snapshot.primary,
                 games: snapshot.games,
