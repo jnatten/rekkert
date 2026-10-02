@@ -195,9 +195,12 @@ struct WatchCourtPage: View {
         ScrollView {
             VStack(spacing: 8) {
                 if let label = snapshot.courtLabel {
-                    Text(label)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 4) {
+                        CourtSwatch(index: snapshot.courtIndex, size: 8)
+                        Text(label)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 courtControls(snapshot)
                 correction(snapshot)

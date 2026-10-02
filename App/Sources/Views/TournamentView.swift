@@ -321,6 +321,7 @@ private struct CourtRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
+                CourtSwatch(index: match.courtIndex, size: 12)
                 Text("Court \(match.courtIndex + 1)").font(.headline)
                 Spacer()
                 if match.isConfirmed {

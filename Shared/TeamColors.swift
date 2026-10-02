@@ -8,6 +8,24 @@ extension Color {
     static func team(_ side: TeamSide) -> Color {
         side == .a ? .teamA : .teamB
     }
+
+    /// From the index alone, so every device agrees. No blue or orange: those are the teams'.
+    static func court(_ index: Int) -> Color {
+        courtColors[index % courtColors.count]
+    }
+
+    private static let courtColors: [Color] = [.green, .purple, .yellow, .pink, .teal, .red, .indigo, .brown]
+}
+
+struct CourtSwatch: View {
+    let index: Int
+    var size: CGFloat = 10
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: size * 0.25)
+            .fill(Color.court(index))
+            .frame(width: size, height: size)
+    }
 }
 
 /// Which of the two colours each side is drawn in. Read from the environment rather than

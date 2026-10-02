@@ -51,7 +51,10 @@ struct ScoreboardView<Badge: View>: View {
         if !compact {
             VStack(spacing: 2) {
                 if let label = snapshot.courtLabel {
-                    Text(label).font(.subheadline.weight(.semibold))
+                    HStack(spacing: 6) {
+                        CourtSwatch(index: snapshot.courtIndex)
+                        Text(label).font(.subheadline.weight(.semibold))
+                    }
                 }
                 HStack(spacing: 6) {
                     Text(notice ?? snapshot.detail)
@@ -66,6 +69,9 @@ struct ScoreboardView<Badge: View>: View {
             .padding(.vertical, 6)
         } else {
             HStack(spacing: 4) {
+                if snapshot.courtLabel != nil {
+                    CourtSwatch(index: snapshot.courtIndex, size: 8)
+                }
                 badge()
                 Text(notice ?? snapshot.detail)
                     .foregroundStyle(notice != nil ? Color.yellow : snapshot.isSuddenDeath ? .orange : .secondary)
