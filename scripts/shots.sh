@@ -33,6 +33,8 @@ done
 # "Join a match" sits below the fold now that there are six of them.
 PHONE_NAME=${REKKERT_SHOTS_PHONE:-"iPhone 17 Pro Max"}
 WATCH_NAME=${REKKERT_SHOTS_WATCH:-"Apple Watch Ultra 3 (49mm)"}
+# The app runs on iPad, and App Store Connect will not take a version without the 13" set.
+IPAD_NAME=${REKKERT_SHOTS_IPAD:-"iPad Pro 13-inch (M5)"}
 
 DD=.build/shots
 RAW=.build/shots/raw
@@ -64,6 +66,7 @@ raise SystemExit("no available simulator named %r" % name)
 # existing — and the pixel size of these is the whole point of them.
 PHONE=$(udid_for "$PHONE_NAME")
 WATCH=$(udid_for "$WATCH_NAME")
+IPAD=$(udid_for "$IPAD_NAME")
 
 if [ "$BUILD" = 1 ]; then
   echo "==> tuist generate"
@@ -83,9 +86,10 @@ fi
 test -d "$IOS_APP" || { echo "FAIL: no iOS app at $IOS_APP — drop --no-build"; exit 1; }
 test -d "$WATCH_APP" || { echo "FAIL: no watch app at $WATCH_APP — drop --no-build"; exit 1; }
 
-echo "==> Boot $PHONE_NAME and $WATCH_NAME"
+echo "==> Boot $PHONE_NAME, $WATCH_NAME and $IPAD_NAME"
 xcrun simctl bootstatus "$PHONE" -b >/dev/null
 xcrun simctl bootstatus "$WATCH" -b >/dev/null
+xcrun simctl bootstatus "$IPAD" -b >/dev/null
 
 # Every shot in the set is dark, and the phone gets the status bar Apple uses in
 # its own marketing. watchOS has no status bar to override, so it keeps the clock
@@ -94,6 +98,10 @@ xcrun simctl ui "$PHONE" appearance dark >/dev/null
 xcrun simctl status_bar "$PHONE" override \
   --time "09:41" --dataNetwork wifi --wifiMode active --wifiBars 3 \
   --cellularMode active --cellularBars 4 --batteryState charging --batteryLevel 100
+xcrun simctl ui "$IPAD" appearance dark >/dev/null
+xcrun simctl status_bar "$IPAD" override \
+  --time "09:41" --dataNetwork wifi --wifiMode active --wifiBars 3 \
+  --batteryState charging --batteryLevel 100
 
 mkdir -p "$RAW"
 
@@ -121,18 +129,56 @@ shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/americano.png" -rekkert-demo americano
 # The rounds list rather than the scoreboard: three rounds with three different
 # partnerships in them is what a friendly is, and a scoreboard cannot show that.
 shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/friendly.png" -rekkert-demo friendly -rekkert-demo-friendly-rounds 3 -rekkert-demo-rounds-sheet
+if [ "$DO_STORE" = 1 ]; then
+  shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/match-portrait.png" "${SCORE[@]}" -rekkert-demo-workout
+  # A round that has been played rather than the one just drawn, which is all zeros.
+  shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/americano-round.png" -rekkert-demo americano -rekkert-demo-rounds -rekkert-demo-browse-round 1
+  shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/winner.png" -rekkert-demo winnercourt
+  shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/history.png" -rekkert-demo-workouts -rekkert-demo-history 0
+  shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/player.png" -rekkert-demo-players Jonas
+  shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/workout.png" -rekkert-demo-workouts 0
+fi
 # Landscape last: the simulator stays turned until something turns it back.
 shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/match.png" "${SCORE[@]}" -rekkert-demo-landscape
+if [ "$DO_STORE" = 1 ]; then
+  shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/fullscreen.png" "${SCORE[@]}" -rekkert-demo-fullscreen -rekkert-demo-landscape
+  shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/board.png" -rekkert-demo americano -rekkert-demo-courts 4 -rekkert-demo-rounds -rekkert-demo-board -rekkert-demo-landscape
+fi
 
 echo "==> Apple Watch"
 shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch.png" "${SCORE[@]}"
 shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-controls.png" "${SCORE[@]}" -rekkert-demo-watch-page controls
-# The workout, counting and held. Only the counting one is shipped; the held one and the
-# menu stay raw, because a stopped clock and an open menu need a sentence to explain and
-# neither the page nor the listing has one to spare.
+# The workout, counting and held. Only the counting one is shipped; the held one and its
+# menu stay raw, because a stopped clock needs a sentence to explain and neither the page
+# nor the listing has one to spare.
 shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-workout.png" "${SCORE[@]}" -rekkert-demo-workout -rekkert-demo-watch-page workout
 shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-workout-paused.png" "${SCORE[@]}" -rekkert-demo-workout-paused -rekkert-demo-watch-page workout
 shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-workout-menu.png" "${SCORE[@]}" -rekkert-demo-workout-paused -rekkert-demo-watch-page menu
+if [ "$DO_STORE" = 1 ]; then
+  shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-menu.png" "${SCORE[@]}" -rekkert-demo-workout -rekkert-demo-watch-page menu
+  shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-tournament.png" -rekkert-demo americano -rekkert-demo-points 11
+  shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-standings.png" -rekkert-demo americano -rekkert-demo-rounds -rekkert-demo-watch-page standings
+  shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-friendly.png" -rekkert-demo friendly -rekkert-demo-points 9
+  shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-presets.png" -rekkert-demo-presets -rekkert-demo-watch-page presets
+  shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-idle.png"
+  shoot "$WATCH" "$WATCH_APP" "$WATCH_ID" "$RAW/watch-result.png" "${SCORE[@]}" -rekkert-demo-finished
+
+  echo "==> iPad"
+  # A freshly booted iPad takes longer to draw its first launch than the shutter waits,
+  # so the first shot would come out black without one to throw away.
+  shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-warmup.png"
+  shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-match.png" "${SCORE[@]}" -rekkert-demo-workout
+  shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-home.png" -rekkert-demo-presets
+  shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-americano.png" -rekkert-demo americano -rekkert-demo-rounds -rekkert-demo-browse-round 1
+  shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-friendly.png" -rekkert-demo friendly -rekkert-demo-friendly-rounds 3 -rekkert-demo-rounds-sheet
+  shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-winner.png" -rekkert-demo winnercourt
+  shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-history.png" -rekkert-demo-workouts -rekkert-demo-history 0
+  shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-player.png" -rekkert-demo-players Jonas
+  shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-workout.png" -rekkert-demo-workouts 0
+  # Upright: an iPad app that multitasks is not allowed to turn itself, so the landscape
+  # flag does nothing here — and the full-screen score is left out for the same reason.
+  shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-board.png" -rekkert-demo americano -rekkert-demo-courts 4 -rekkert-demo-rounds -rekkert-demo-board
+fi
 
 if [ "$DO_DOCS" = 1 ]; then
   echo "==> docs/images"
@@ -168,15 +214,39 @@ if [ "$DO_STORE" = 1 ]; then
   echo "==> $STORE"
   # One flat folder per locale is deliver's own layout: it reads the device from each
   # image's pixel size, so the names only decide the order they appear in the listing.
+  # Two digits, so the tenth sorts after the ninth rather than after the first. Ten each is
+  # all App Store Connect takes.
   rm -rf "$STORE"
   mkdir -p "$STORE"
-  cp "$RAW/home.png" "$STORE/iphone-1-home.png"
-  cp "$RAW/americano.png" "$STORE/iphone-2-americano.png"
-  cp "$RAW/friendly.png" "$STORE/iphone-3-friendly.png"
-  cp "$RAW/match.png" "$STORE/iphone-4-match.png"
-  cp "$RAW/watch.png" "$STORE/watch-1-scoreboard.png"
-  cp "$RAW/watch-controls.png" "$STORE/watch-2-controls.png"
-  cp "$RAW/watch-workout.png" "$STORE/watch-3-workout.png"
+  cp "$RAW/match-portrait.png" "$STORE/iphone-01-match.png"
+  cp "$RAW/home.png" "$STORE/iphone-02-home.png"
+  cp "$RAW/americano-round.png" "$STORE/iphone-03-americano.png"
+  cp "$RAW/friendly.png" "$STORE/iphone-04-friendly.png"
+  cp "$RAW/winner.png" "$STORE/iphone-05-winner-court.png"
+  cp "$RAW/history.png" "$STORE/iphone-06-history.png"
+  cp "$RAW/player.png" "$STORE/iphone-07-player.png"
+  cp "$RAW/workout.png" "$STORE/iphone-08-workout.png"
+  cp "$RAW/fullscreen.png" "$STORE/iphone-09-fullscreen.png"
+  cp "$RAW/board.png" "$STORE/iphone-10-tv.png"
+  cp "$RAW/ipad-match.png" "$STORE/ipad-01-match.png"
+  cp "$RAW/ipad-home.png" "$STORE/ipad-02-home.png"
+  cp "$RAW/ipad-americano.png" "$STORE/ipad-03-americano.png"
+  cp "$RAW/ipad-friendly.png" "$STORE/ipad-04-friendly.png"
+  cp "$RAW/ipad-winner.png" "$STORE/ipad-05-winner-court.png"
+  cp "$RAW/ipad-history.png" "$STORE/ipad-06-history.png"
+  cp "$RAW/ipad-player.png" "$STORE/ipad-07-player.png"
+  cp "$RAW/ipad-workout.png" "$STORE/ipad-08-workout.png"
+  cp "$RAW/ipad-board.png" "$STORE/ipad-09-tv.png"
+  cp "$RAW/watch.png" "$STORE/watch-01-scoreboard.png"
+  cp "$RAW/watch-controls.png" "$STORE/watch-02-controls.png"
+  cp "$RAW/watch-workout.png" "$STORE/watch-03-workout.png"
+  cp "$RAW/watch-tournament.png" "$STORE/watch-04-tournament.png"
+  cp "$RAW/watch-standings.png" "$STORE/watch-05-standings.png"
+  cp "$RAW/watch-friendly.png" "$STORE/watch-06-friendly.png"
+  cp "$RAW/watch-menu.png" "$STORE/watch-07-menu.png"
+  cp "$RAW/watch-presets.png" "$STORE/watch-08-presets.png"
+  cp "$RAW/watch-idle.png" "$STORE/watch-09-start.png"
+  cp "$RAW/watch-result.png" "$STORE/watch-10-result.png"
   # App Store Connect rejects an upload whose pixel size is not one it lists for the
   # device, and it is the only place that knows the current list — so print what came
   # out rather than assert anything about it.
