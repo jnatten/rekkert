@@ -113,7 +113,9 @@ struct FullscreenScoreView: View {
                 // Leaves room for the controls, which sit along the bottom.
                 Color.clear.frame(height: insets.bottom + 44)
             }
-            .padding(.horizontal, 8)
+            // The number fills whatever width it is given, so a fixed margin left the two
+            // scores reading as one on an upright screen: 40 40 became 4040.
+            .padding(.horizontal, max(8, size.width * 0.05))
         }
         .animation(.snappy, value: snapshot.serving)
         .animation(.snappy, value: snapshot.servingCourt)
