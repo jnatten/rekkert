@@ -136,6 +136,7 @@ caps = {
     "name.txt": 30,
     "subtitle.txt": 30,
     "copyright.txt": 200,
+    "notes.txt": 4000,
 }
 over = []
 for path in sorted(pathlib.Path(os.environ["META_DIR"]).rglob("*.txt")):
@@ -172,9 +173,18 @@ print(json.dumps({
     skip_shots=false
     find "$shots" -name '*.png' | sort | sed 's/^/  /'
   fi
+  # deliver deletes the review attachment on every metadata upload it is not handed one for.
+  attachment=()
   if [ "$UP_META" = 1 ]; then
     skip_meta=false
     find "$meta" -name '*.txt' | sort | sed 's/^/  /'
+    review_attachment=$(find fastlane -maxdepth 1 -name 'review_attachment.*' | head -1)
+    if [ -n "$review_attachment" ]; then
+      attachment=(--app_review_attachment_file "$review_attachment")
+      echo "  $review_attachment"
+    else
+      echo "  (no fastlane/review_attachment.*, so any attachment App Review had is removed)"
+    fi
   fi
 
   # --force skips the HTML summary deliver would otherwise stop and ask you to confirm.
@@ -189,6 +199,7 @@ print(json.dumps({
     --skip_screenshots "$skip_shots" \
     --overwrite_screenshots true \
     --precheck_include_in_app_purchases false \
+    ${attachment[@]+"${attachment[@]}"} \
     --force true
   echo "==> Uploaded, onto the version you are preparing."
   exit 0

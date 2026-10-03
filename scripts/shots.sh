@@ -167,14 +167,14 @@ if [ "$DO_STORE" = 1 ]; then
   # A freshly booted iPad takes longer to draw its first launch than the shutter waits,
   # so the first shot would come out black without one to throw away.
   shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-warmup.png"
-  shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-match.png" "${SCORE[@]}" -rekkert-demo-workout
+  # No workouts: an iPad cannot pair a watch, so it never has one to show.
+  shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-match.png" "${SCORE[@]}"
   shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-home.png" -rekkert-demo-presets
   shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-americano.png" -rekkert-demo americano -rekkert-demo-rounds -rekkert-demo-browse-round 1
   shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-friendly.png" -rekkert-demo friendly -rekkert-demo-friendly-rounds 3 -rekkert-demo-rounds-sheet
   shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-winner.png" -rekkert-demo winnercourt
-  shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-history.png" -rekkert-demo-workouts -rekkert-demo-history 0
+  shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-history.png" -rekkert-demo-timeline -rekkert-demo-history 0
   shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-player.png" -rekkert-demo-players Jonas
-  shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-workout.png" -rekkert-demo-workouts 0
   # Upright: an iPad app that multitasks is not allowed to turn itself, so the landscape
   # flag would do nothing here.
   shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-fullscreen.png" "${SCORE[@]}" -rekkert-demo-fullscreen
@@ -236,9 +236,8 @@ if [ "$DO_STORE" = 1 ]; then
   cp "$RAW/ipad-winner.png" "$STORE/ipad-05-winner-court.png"
   cp "$RAW/ipad-history.png" "$STORE/ipad-06-history.png"
   cp "$RAW/ipad-player.png" "$STORE/ipad-07-player.png"
-  cp "$RAW/ipad-workout.png" "$STORE/ipad-08-workout.png"
-  cp "$RAW/ipad-fullscreen.png" "$STORE/ipad-09-fullscreen.png"
-  cp "$RAW/ipad-board.png" "$STORE/ipad-10-tv.png"
+  cp "$RAW/ipad-fullscreen.png" "$STORE/ipad-08-fullscreen.png"
+  cp "$RAW/ipad-board.png" "$STORE/ipad-09-tv.png"
   cp "$RAW/watch.png" "$STORE/watch-01-scoreboard.png"
   cp "$RAW/watch-controls.png" "$STORE/watch-02-controls.png"
   cp "$RAW/watch-workout.png" "$STORE/watch-03-workout.png"

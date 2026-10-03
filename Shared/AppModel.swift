@@ -348,6 +348,11 @@ final class AppModel {
                 heartRateAverage: 126, heartRateMaximum: 166
             ))
         }
+        if arguments.contains("-rekkert-demo-timeline"),
+           let (record, timeline) = Self.demoMatch(from: Date().addingTimeInterval(-6_600)) {
+            try? sessionStore?.archive(record)
+            try? sessionStore?.archive(timeline, for: record.id)
+        }
         // Not behind `#if os(watchOS)`: the phone is only ever told about a workout by a real
         // watch, so without this its badge and its rows cannot be put in front of `simctl`.
         if arguments.contains("-rekkert-demo-workout") { workout.pretendRunning() }

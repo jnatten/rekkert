@@ -682,19 +682,30 @@ sent by hand.
 
 ## The App Store listing
 
-The description, promotional text, keywords, copyright and privacy URL live in
-`fastlane/metadata/`, one plain file per field, and are the source of truth rather than the
-web form:
+The listing text lives in `fastlane/metadata/`, one plain file per field, and is the source
+of truth rather than the web form:
 
-    fastlane/metadata/copyright.txt          # not localised, so it sits at the top
+    fastlane/metadata/copyright.txt          # not localised, so these sit at the top
+    fastlane/metadata/primary_category.txt
+    fastlane/metadata/secondary_category.txt
+    fastlane/metadata/en-US/name.txt
+    fastlane/metadata/en-US/subtitle.txt
     fastlane/metadata/en-US/description.txt
     fastlane/metadata/en-US/keywords.txt
     fastlane/metadata/en-US/promotional_text.txt
     fastlane/metadata/en-US/privacy_url.txt
+    fastlane/metadata/en-US/support_url.txt
+    fastlane/metadata/en-US/marketing_url.txt
+    fastlane/metadata/review_information/notes.txt   # what App Review reads first
 
-`deliver` reads a fixed set of names, and the ones not here yet are `release_notes.txt`
-(What's New, per version), `name.txt`, `subtitle.txt`, `support_url.txt` and
-`marketing_url.txt`. Add a file and it starts being uploaded.
+`deliver` reads a fixed set of names, and the one not here yet is `release_notes.txt`
+(What's New, per version, which the first version does not have). Add a file and it starts
+being uploaded. The review contact is left to the web form, so the phone number stays out
+of a public repository.
+
+A video or file for App Review goes in `fastlane/review_attachment.<ext>`, which is
+gitignored. `deliver` removes the attachment on every metadata upload it is not handed one
+for, so without that file a `--metadata` run takes away one attached in the web form.
 
 ```sh
 ./scripts/release.sh --metadata                  # text only
@@ -711,7 +722,13 @@ as files: a missing one is skipped, and so is an empty one, so a field is cleare
 web UI and never by emptying a file here. Anything over Apple's character limit is caught
 before the upload rather than after the round trip.
 
-The shots come from an iPhone 17 Pro Max and an Apple Watch Ultra 3; set
-`REKKERT_SHOTS_PHONE` or `REKKERT_SHOTS_WATCH` to shoot a listing slot of another size.
+The shots come from an iPhone 17 Pro Max, an iPad Pro 13-inch and an Apple Watch Ultra 3;
+set `REKKERT_SHOTS_PHONE`, `REKKERT_SHOTS_IPAD` or `REKKERT_SHOTS_WATCH` to shoot a listing
+slot of another size. The iPad's set has no workouts in it: an iPad cannot pair a watch, so
+the app never shows one there.
 App Store Connect is the only thing that knows which pixel sizes it accepts this month, so
 the script prints what it made rather than claiming the sizes are right.
+
+Some of what a submission needs is set once in App Store Connect and has no file here:
+price and availability, the App Privacy answers (Data Not Collected, as the privacy
+manifests say), the content rights question, the age rating and the review contact.

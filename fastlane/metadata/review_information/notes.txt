@@ -1,0 +1,26 @@
+Rekkert keeps the score for padel and tennis on iPhone, iPad and Apple Watch. There is no account, no sign-in and no server, so there is nothing to log in to and everything works offline.
+
+GETTING STARTED
+On the start screen, pick one of the six modes (Match, Points, Winner court, Friendly, Americano, Mexicano) and tap Start. Tap either half of the board to give that side a point, and the curved arrow at the top right to take one back. Sharing, the TV board and workouts are in the "..." menu next to it.
+
+APPLE WATCH
+The watch app is embedded in the iPhone app and installs on the paired watch. A match started on either device shows up on the other, and a point scored on either one is scored on both.
+
+WORKOUTS (HEALTHKIT)
+A workout only starts when the user taps Start workout, either on the watch or in the "..." menu on the iPhone. The iPhone hands the start to the watch with HKHealthStore.startWatchApp. The watch records the session with HKWorkoutSession as an indoor tennis workout, the closest activity type Health has to padel, and saves it to Health. While the workout runs, the watch reads heart rate and energy. To show heart-rate zones it also reads the user's date of birth and latest resting heart rate. When the workout ends, the watch sends its summary to the paired iPhone over WatchConnectivity, and the iPhone lists it under Workouts. Nothing is detected automatically, and no health data leaves the user's own iPhone and watch.
+Workouts need a paired Apple Watch, so the control is hidden on iPad and on an iPhone without one.
+
+SHARING A MATCH (LOCAL NETWORK AND BLUETOOTH BACKGROUND MODES)
+In a match, open the "..." menu and tap Share this match. The phone shows a six-digit code. On a second iPhone or iPad, tap Join a match on the start screen and enter the code. Both devices then show and score the same match.
+The devices connect directly, with no server. They use Bonjour over the local network, secured with TLS using a pre-shared key derived from the code, and Bluetooth LE at the same time, with frames sealed using a key derived from the same code.
+The app requests the bluetooth-central and bluetooth-peripheral background modes for this feature only. iOS suspends the local-network connection as soon as the app leaves the screen, and players lock their phones and put them in a bag during a match. Bluetooth keeps the score in step on every phone until they look again. The host advertises and the guests scan, and only while a match is shared. Stop sharing, or ending the match, stops both. The app does not ask for Bluetooth or local network permission until the user shares or joins a match.
+Testing this needs two devices with Rekkert installed.
+
+ON A TV
+In a match, "..." > Show on a TV (also the AirPlay button at the top left on iPad) explains how to use AirPlay screen mirroring to an Apple TV, or an HDMI adapter. The TV then gets a scoreboard of its own, and the phone carries on scoring.
+
+LIVE ACTIVITY
+While a match is on, the score appears on the Lock Screen and in the Dynamic Island (Settings > Score on the Lock Screen). The app updates it locally, with no push server.
+
+ENCRYPTION
+The app only uses cryptography from Apple's own frameworks: TLS from Network.framework, and HKDF and ChaChaPoly from CryptoKit. It uses them only to keep a shared match private to the devices that have its code.

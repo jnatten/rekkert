@@ -1,1 +1,1 @@
-padel,tennis,score,tracking,racket,sport,workout,fitness
+padel,tennis,score,scoreboard,scorekeeper,americano,mexicano,tournament,umpire,racket,match,workout
