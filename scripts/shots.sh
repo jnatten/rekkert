@@ -176,7 +176,8 @@ if [ "$DO_STORE" = 1 ]; then
   shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-player.png" -rekkert-demo-players Jonas
   shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-workout.png" -rekkert-demo-workouts 0
   # Upright: an iPad app that multitasks is not allowed to turn itself, so the landscape
-  # flag does nothing here — and the full-screen score is left out for the same reason.
+  # flag would do nothing here.
+  shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-fullscreen.png" "${SCORE[@]}" -rekkert-demo-fullscreen
   shoot "$IPAD" "$IOS_APP" "$IOS_ID" "$RAW/ipad-board.png" -rekkert-demo americano -rekkert-demo-courts 4 -rekkert-demo-rounds -rekkert-demo-board
 fi
 
@@ -236,7 +237,8 @@ if [ "$DO_STORE" = 1 ]; then
   cp "$RAW/ipad-history.png" "$STORE/ipad-06-history.png"
   cp "$RAW/ipad-player.png" "$STORE/ipad-07-player.png"
   cp "$RAW/ipad-workout.png" "$STORE/ipad-08-workout.png"
-  cp "$RAW/ipad-board.png" "$STORE/ipad-09-tv.png"
+  cp "$RAW/ipad-fullscreen.png" "$STORE/ipad-09-fullscreen.png"
+  cp "$RAW/ipad-board.png" "$STORE/ipad-10-tv.png"
   cp "$RAW/watch.png" "$STORE/watch-01-scoreboard.png"
   cp "$RAW/watch-controls.png" "$STORE/watch-02-controls.png"
   cp "$RAW/watch-workout.png" "$STORE/watch-03-workout.png"
