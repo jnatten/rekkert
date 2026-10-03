@@ -28,9 +28,9 @@ struct WatchRootView: View {
                 // A workout does not need a match around it, and somebody who started one
                 // with nothing on still wants somewhere to watch it.
                 TabView(selection: $selection) {
+                    workoutPage
                     WatchIdleView().tag(0)
                     WatchPresetsView().tag(presetsTag)
-                    workoutPage
                 }
                 .tabViewStyle(.page)
                 // A selection left on the menu would land on a page that is not here.
@@ -42,8 +42,8 @@ struct WatchRootView: View {
 
         case .traditional, .winnerCourt, .pointCount:
             TabView(selection: $selection) {
-                WatchCourtPage(court: 0, onShowWorkout: showWorkout).tag(0)
                 workoutPage
+                WatchCourtPage(court: 0, onShowWorkout: showWorkout).tag(0)
                 WatchMenuView().tag(menuTag)
             }
             .tabViewStyle(.page)
@@ -53,8 +53,8 @@ struct WatchRootView: View {
         // the page, or a tap after round 1 lands on round 1.
         case .friendly(let session):
             TabView(selection: $selection) {
-                WatchCourtPage(round: session.currentIndex, court: 0, onShowWorkout: showWorkout).tag(0)
                 workoutPage
+                WatchCourtPage(round: session.currentIndex, court: 0, onShowWorkout: showWorkout).tag(0)
                 WatchMenuView().tag(menuTag)
             }
             .tabViewStyle(.page)
@@ -63,6 +63,7 @@ struct WatchRootView: View {
         case .tournament(let tournament):
             if let round = tournament.currentRound {
                 TabView(selection: $selection) {
+                    workoutPage
                     ForEach(round.matches) { match in
                         WatchCourtPage(
                             round: round.index,
@@ -72,7 +73,6 @@ struct WatchRootView: View {
                         .tag(match.courtIndex)
                     }
                     WatchStandingsView(tournament: tournament).tag(standingsTag)
-                    workoutPage
                     WatchMenuView().tag(menuTag)
                 }
                 .tabViewStyle(.page)
@@ -88,7 +88,7 @@ struct WatchRootView: View {
         }
     }
 
-    /// Last but one, just before the menu: a swipe from the score on the days there is one
+    /// First, to the left of the score: one swipe from the court on the days there is one,
     /// and never in the way on the days there is not.
     @ViewBuilder
     private var workoutPage: some View {
