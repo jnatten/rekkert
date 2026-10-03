@@ -84,7 +84,7 @@ private struct PointByPoint: View {
             } header: {
                 Text("Timeline")
             } footer: {
-                if series == nil {
+                if series == nil, AppModel.canPairWatch {
                     Text("Start a workout on your watch before you play, and the heart rate goes here too.")
                 }
             }

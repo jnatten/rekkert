@@ -305,7 +305,9 @@ struct NewSessionView: View {
             Text(editing == nil ? "Save as preset" : "Name")
         } footer: {
             if editing != nil {
-                Text("Changes reach your Apple Watch too.")
+                if AppModel.canPairWatch { Text("Changes reach your Apple Watch too.") }
+            } else if !AppModel.canPairWatch {
+                Text(trimmedPresetName.isEmpty ? "Name this setup to save it." : "“\(presetName)” will be saved.")
             } else {
                 Text(trimmedPresetName.isEmpty
                      ? "Name this setup to save it. Saved presets can be started from your Apple Watch without reaching for the phone."

@@ -55,7 +55,9 @@ struct HomeView: View {
                     } footer: {
                         Text(editMode.isEditing
                              ? "Drag to reorder. Tap one to change it."
-                             : "Saved setups, ready on your Apple Watch in the same order. Press and hold one to edit or rename it.")
+                             : AppModel.canPairWatch
+                             ? "Saved setups, ready on your Apple Watch in the same order. Press and hold one to edit or rename it."
+                             : "Saved setups. Press and hold one to edit or rename it.")
                     }
                 }
 

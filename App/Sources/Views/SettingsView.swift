@@ -48,31 +48,33 @@ struct SettingsView: View {
                 Text("Reads every point out loud, server first: \"thirty, fifteen\", \"deuce\", \"game\". The phone does the talking; the watch stays quiet.")
             }
 
-            Section {
-                Picker(selection: hapticMode) {
-                    ForEach(HapticMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                } label: {
-                    Label("Buzz on a point", systemImage: "hand.tap")
-                }
-                if model.store.haptics.mode != .off {
-                    Toggle("Only when someone else scores", isOn: onlyOthers)
-                    Picker("Strength", selection: hapticStrength) {
-                        ForEach(HapticStrength.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            if AppModel.canPairWatch {
+                Section {
+                    Picker(selection: hapticMode) {
+                        ForEach(HapticMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                    } label: {
+                        Label("Buzz on a point", systemImage: "hand.tap")
                     }
-                    .pickerStyle(.segmented)
+                    if model.store.haptics.mode != .off {
+                        Toggle("Only when someone else scores", isOn: onlyOthers)
+                        Picker("Strength", selection: hapticStrength) {
+                            ForEach(HapticStrength.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                } footer: {
+                    Text(hapticFooter)
                 }
-            } footer: {
-                Text(hapticFooter)
-            }
 
-            Section {
-                Toggle(isOn: tapAnywhere) {
-                    Label("Tap anywhere to score", systemImage: "applewatch")
+                Section {
+                    Toggle(isOn: tapAnywhere) {
+                        Label("Tap anywhere to score", systemImage: "applewatch")
+                    }
+                } header: {
+                    Text("Watch")
+                } footer: {
+                    Text("Takes the undo button off the watch and makes its whole score screen the target: tap once for your point, twice for theirs, and hold to take the last one back. The phone's board stays as it is.")
                 }
-            } header: {
-                Text("Watch")
-            } footer: {
-                Text("Takes the undo button off the watch and makes its whole score screen the target: tap once for your point, twice for theirs, and hold to take the last one back. The phone's board stays as it is.")
             }
 
             Section {} footer: {

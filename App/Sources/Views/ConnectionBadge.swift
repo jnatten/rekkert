@@ -1,6 +1,12 @@
 import RekkertCore
 import RekkertSync
 import SwiftUI
+import WatchConnectivity
+
+extension AppModel {
+    /// False on iPad, which cannot pair an Apple Watch.
+    static let canPairWatch = WCSession.isSupported()
+}
 
 /// Whether this phone's own watch is keeping up.
 struct ConnectionBadge: View {
@@ -8,11 +14,13 @@ struct ConnectionBadge: View {
 
     var body: some View {
         // The pair's link alone: any link at all is also every other phone on a shared match.
-        Image(systemName: model.store.isPairReachable
-              ? "applewatch.radiowaves.left.and.right"
-              : "applewatch.slash")
-            .foregroundStyle(model.store.isPairReachable ? .green : .secondary)
-            .accessibilityLabel(model.store.isPairReachable ? "Watch connected" : "Watch not reachable")
+        if AppModel.canPairWatch {
+            Image(systemName: model.store.isPairReachable
+                  ? "applewatch.radiowaves.left.and.right"
+                  : "applewatch.slash")
+                .foregroundStyle(model.store.isPairReachable ? .green : .secondary)
+                .accessibilityLabel(model.store.isPairReachable ? "Watch connected" : "Watch not reachable")
+        }
     }
 }
 
