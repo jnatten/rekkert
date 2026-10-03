@@ -58,4 +58,4 @@ Nothing is detected: no workout starts, and nothing is recorded, unless you pres
 
 PRIVACY
 
-No account, no server, no tracking, no ads. Your matches stay on your own devices and go no further than the phones you hand the code to. Workouts are saved to Apple Health, and your heart rate never leaves your watch.
+No account, no server, no tracking, no ads. Your matches stay on your own devices and go no further than the phones you hand the code to. Workouts are saved to Apple Health.
