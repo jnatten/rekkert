@@ -1,9 +1,11 @@
 import RekkertCore
 import SwiftUI
+import WatchKit
 
 struct WatchRootView: View {
     @Environment(AppModel.self) private var model
     @State private var selection = 0
+    @State private var askingToStartWorkout = false
 
     var body: some View {
         content
@@ -16,6 +18,22 @@ struct WatchRootView: View {
             // The presets page is only in the idle deck, so starting one from it would leave
             // the match opening on a page it does not have.
             .onChange(of: model.store.state == nil) { selection = 0 }
+            // Delayed so the join sheet that may have brought the match has gone.
+            .task(id: model.follower.isAskingToStart) {
+                guard model.follower.isAskingToStart else {
+                    askingToStartWorkout = false
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(600))
+                askingToStartWorkout = model.follower.isAskingToStart
+            }
+            .alert("Start a workout?", isPresented: $askingToStartWorkout) {
+                Button("Start") {
+                    WKInterfaceDevice.current().play(.start)
+                    model.follower.answerStart(true)
+                }
+                Button("Not now", role: .cancel) { model.follower.answerStart(false) }
+            }
     }
 
     @ViewBuilder
@@ -129,6 +147,9 @@ struct WatchIdleView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 8) {
+                // A match called off has no result screen to show it on.
+                WatchWorkoutFollowCard()
+
                 connection
 
                 Button("Quick match", systemImage: "bolt") {

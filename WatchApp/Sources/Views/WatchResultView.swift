@@ -46,6 +46,8 @@ struct WatchResultView: View {
                         .multilineTextAlignment(.center)
                 }
 
+                WatchWorkoutFollowCard()
+
                 Button("Done") { model.store.acknowledgeResult() }
                     .buttonStyle(.borderedProminent)
                     .tint(tint)
@@ -63,7 +65,7 @@ struct WatchResultView: View {
                 // Only when one is actually running. Without it, finishing a match strands
                 // a live workout on a screen with no way to end it, and the watch goes in a
                 // bag still recording.
-                if model.workout.isTracking {
+                if model.workout.isTracking, !model.follower.isAskingToStop {
                     WatchWorkoutButton(isMenuRow: false)
                 }
 

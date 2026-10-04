@@ -168,6 +168,14 @@ struct MatchResultView: View {
                 .font(.callout)
             }
 
+            if model.workout.isTracking {
+                Button("Stop workout", systemImage: "stop.circle") {
+                    model.workout.stop()
+                }
+                .font(.callout)
+                .tint(.pink)
+            }
+
             if model.keepsFinishedSessions {
                 Text(model.store.resultRewind == nil
                      ? "Saved to History."

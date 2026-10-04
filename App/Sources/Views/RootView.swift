@@ -4,6 +4,7 @@ import UIKit
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @State private var askingToStartWorkout = false
 
     var body: some View {
         Group {
@@ -111,6 +112,22 @@ struct RootView: View {
             Button("OK") { model.store.acknowledgeReplacedSession() }
         } message: {
             Text("“\(model.store.replacedSessionTitle ?? "")” was started earlier elsewhere and has been saved to History.")
+        }
+        // Delayed so the sheet the match was started or joined from has gone; an alert put up
+        // under it never shows.
+        .task(id: model.follower.isAskingToStart) {
+            guard model.follower.isAskingToStart else {
+                askingToStartWorkout = false
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(600))
+            askingToStartWorkout = model.follower.isAskingToStart
+        }
+        .alert("Start a workout?", isPresented: $askingToStartWorkout) {
+            Button("Start workout") { model.follower.answerStart(true) }
+            Button("Not now", role: .cancel) { model.follower.answerStart(false) }
+        } message: {
+            Text("It runs on your watch while you play.")
         }
     }
 }

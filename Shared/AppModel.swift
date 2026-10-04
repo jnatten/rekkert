@@ -30,7 +30,8 @@ final class AppModel {
     #endif
     /// The workout, which only the watch can actually hold — the phone's counterpart is a
     /// remote control with the same shape, so the scoreboards can be written once.
-    let workout = WorkoutController()
+    let workout: WorkoutController
+    let follower: WorkoutFollower
     /// Driven from the match menu and presented at the root, so every scoreboard has it.
     var showingShareCode = false
     /// Joining is reachable from the start screen and from a match already in progress —
@@ -63,6 +64,9 @@ final class AppModel {
             keepsHistory: AppModel.keepsHistory
         )
         self.store = store
+        let workout = WorkoutController()
+        self.workout = workout
+        follower = WorkoutFollower(workout: workout, cues: { [store] in store.haptics })
         let sharing = SharedSession(store: store, link: localNetwork, bluetooth: bluetooth)
         self.sharing = sharing
         #if os(watchOS)
@@ -102,9 +106,13 @@ final class AppModel {
         // A workout is between this device and the one in the same pocket. `MatchStore`
         // carries the messages and holds no opinion about them; the controller has the
         // opinions and cannot reach a transport.
-        workout.publish = { [store] signal in store.send(signal) }
+        workout.publish = { [store, follower] signal in
+            store.send(signal)
+            follower.heard(signal)
+        }
         store.onWorkout = { [weak self] signal in
             self?.workout.heard(signal)
+            self?.follower.heard(signal)
             // What the phone has filed changed, and the lists showing it read through this.
             switch signal {
             case .finished, .series: self?.revision += 1
@@ -132,7 +140,9 @@ final class AppModel {
         haptics.me = { [store] in store.me }
         haptics.isOurs = { [store] author in store.isOurs(author) }
         store.onPoint = { [haptics] point in haptics.heard(point) }
+        standIn.onJoined = { [follower] session in follower.heard(.began(session)) }
         #endif
+        store.onMatch = { [follower] moment in follower.heard(moment) }
         #if os(watchOS)
         // A session outlives the process that started it, so coming back to a stopped-looking
         // button while Health is still recording would be a lie.
@@ -364,6 +374,21 @@ final class AppModel {
             let named = index + 1 < arguments.count ? HapticMode(rawValue: arguments[index + 1]) : nil
             store.setHaptics(mode: named ?? .byTeam)
         }
+        // `-rekkert-demo-workout-follow ask|automatic|start:ask,end:automatic`
+        if let index = arguments.firstIndex(of: "-rekkert-demo-workout-follow"), index + 1 < arguments.count {
+            var start = WorkoutCue(rawValue: arguments[index + 1])
+            var end = start
+            for part in arguments[index + 1].split(separator: ",") {
+                let named = part.split(separator: ":").map(String.init)
+                guard named.count == 2, let cue = WorkoutCue(rawValue: named[1]) else { continue }
+                if named[0] == "start" { start = cue }
+                if named[0] == "end" { end = cue }
+            }
+            #if os(iOS)
+            workout.pretendsAvailable = true
+            #endif
+            store.setHaptics(workoutOnMatchStart: start ?? .off, workoutOnMatchEnd: end ?? .off)
+        }
         if arguments.contains("-rekkert-demo-roster") {
             remember(players: ["Jonas", "Ada", "Kim", "Sam", "Bjørn", "Ola", "Siri", "Tor", "Håkon"])
             remember(players: ["Jonas", "Ada", "Kim"])
@@ -554,7 +579,11 @@ final class AppModel {
         Task { [store] in await store.synchronise() }
         #if os(watchOS)
         workout.recover()
+        // A start sent from the phone reaches the watch in the background, where Health
+        // cannot prompt, so the question is put while the app is in front.
+        if store.haptics.workoutOnMatchStart != .off { workout.prepare() }
         #endif
+        follower.tick()
         #if !os(watchOS)
         // Coming back to the front is when somebody has just been off downloading a voice.
         announcer.refreshVoices()

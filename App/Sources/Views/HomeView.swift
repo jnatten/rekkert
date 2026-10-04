@@ -135,7 +135,7 @@ struct HomeView: View {
                     } header: {
                         Text("Workout")
                     } footer: {
-                        Text(model.workout.failure ?? "Records your heart rate and energy on your Apple Watch and saves it to Health as tennis, the nearest thing Health has to padel. It runs on its own: start it when you walk on, stop it when you walk off, and play as many matches in between as you like.")
+                        Text(model.workout.failure ?? "Records your heart rate and energy on your Apple Watch and saves it to Health as tennis, the nearest thing Health has to padel. It runs on its own: start it when you walk on, stop it when you walk off, and play as many matches in between as you like. Settings can have it start and stop with the match instead.")
                     }
                 }
 

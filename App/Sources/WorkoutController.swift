@@ -33,8 +33,16 @@ final class WorkoutController {
     /// There has to be a wrist for any of this to mean anything. Without one the control is
     /// not shown at all, rather than shown and then doing nothing when pressed.
     var isAvailable: Bool {
+        #if DEBUG
+        if pretendsAvailable { return true }
+        #endif
         guard HKHealthStore.isHealthDataAvailable(), WCSession.isSupported() else { return false }
         return WCSession.default.isPaired && WCSession.default.isWatchAppInstalled
+    }
+
+    func prepare() {
+        guard isAvailable else { return }
+        Task { try? await health.requestAuthorization(toShare: [HKQuantityType.workoutType()], read: []) }
     }
 
     func start() {
@@ -105,6 +113,8 @@ final class WorkoutController {
     func acknowledgeFailure() { failure = nil }
 
     #if DEBUG
+    @ObservationIgnored var pretendsAvailable = false
+
     /// `-rekkert-demo-workout` dresses the screen as though the watch had one running. This
     /// end of it is only ever told by a real watch, so without this the badge and the row are
     /// unreachable from `simctl`.

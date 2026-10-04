@@ -75,6 +75,25 @@ struct SettingsView: View {
                 } footer: {
                     Text("Takes the undo button off the watch and makes its whole score screen the target: tap once for your point, twice for theirs, and hold to take the last one back. The phone's board stays as it is.")
                 }
+
+                if model.workout.isAvailable {
+                    Section {
+                        Picker(selection: workoutOnMatchStart) {
+                            ForEach(WorkoutCue.allCases, id: \.self) { Text($0.startTitle).tag($0) }
+                        } label: {
+                            Label("When a match starts", systemImage: "figure.tennis")
+                        }
+                        Picker(selection: workoutOnMatchEnd) {
+                            ForEach(WorkoutCue.allCases, id: \.self) { Text($0.endTitle).tag($0) }
+                        } label: {
+                            Label("When a match ends", systemImage: "flag.checkered")
+                        }
+                    } header: {
+                        Text("Workout on your watch")
+                    } footer: {
+                        Text(workoutFooter)
+                    }
+                }
             }
 
             Section {} footer: {
@@ -112,6 +131,40 @@ struct SettingsView: View {
             get: { model.store.haptics.tapAnywhere },
             set: { model.store.setHaptics(tapAnywhere: $0) }
         )
+    }
+
+    private var workoutOnMatchStart: Binding<WorkoutCue> {
+        Binding(
+            get: { model.store.haptics.workoutOnMatchStart },
+            set: {
+                model.store.setHaptics(workoutOnMatchStart: $0)
+                if $0 != .off { model.workout.prepare() }
+            }
+        )
+    }
+
+    private var workoutOnMatchEnd: Binding<WorkoutCue> {
+        Binding(
+            get: { model.store.haptics.workoutOnMatchEnd },
+            set: { model.store.setHaptics(workoutOnMatchEnd: $0) }
+        )
+    }
+
+    private var workoutFooter: String {
+        let start: String? = switch model.store.haptics.workoutOnMatchStart {
+        case .off: nil
+        case .ask: "Starting or joining a match asks whether to start a workout on your watch."
+        case .automatic: "Starting or joining a match starts a workout on your watch."
+        }
+        let end: String? = switch model.store.haptics.workoutOnMatchEnd {
+        case .off: nil
+        case .ask: "When a match ends, the watch taps your wrist and asks whether to stop the workout."
+        case .automatic: "When a match ends, the watch stops the workout a minute later, unless another match starts or you keep it going."
+        }
+        guard start != nil || end != nil else {
+            return "A workout can start when you start or join a match, and stop when it ends, or Rekkert can ask you first. Nothing happens to a workout unless you choose it here."
+        }
+        return [start, end].compactMap(\.self).joined(separator: " ")
     }
 
     private var liveScoreFooter: String {

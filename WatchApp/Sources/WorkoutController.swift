@@ -7,8 +7,9 @@ import Synchronization
 /// The workout, which only the watch can hold: it is the device with the sensors, and the
 /// system allows exactly one session across every app on the wrist.
 ///
-/// Deliberately knows nothing about matches. It is started and stopped by hand, survives a
-/// match ending, and a match neither starts nor stops it. What it gives back in exchange for
+/// Deliberately knows nothing about matches. It is started and stopped by hand, or by
+/// `WorkoutFollower` for somebody who asked in Settings for it to follow the match, and left
+/// alone it survives a match ending. What it gives back in exchange for
 /// running is the thing the scoreboard actually wants: the watch stays frontmost, so a
 /// lowered wrist comes back to the score rather than to the clock.
 ///
@@ -58,6 +59,9 @@ final class WorkoutController {
     /// Held strongly: HealthKit's delegate references are weak, and a relay that is only a
     /// local would be collected and the workout would run blind.
     @ObservationIgnored private var relay: Relay?
+    /// The wrist and the phone can both ask for a start at once, and a second session on top
+    /// of the first fails as somebody else's workout.
+    @ObservationIgnored private var isStarting = false
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
@@ -105,12 +109,14 @@ final class WorkoutController {
     // MARK: - Starting and stopping
 
     /// Asks for Health access on the first press rather than at launch. Somebody who never
-    /// touches the button is never asked, which is what makes the feature optional in the
-    /// only sense that counts.
+    /// touches the button, and never sets a match to start one, is never asked, which is
+    /// what makes the feature optional in the only sense that counts.
     func start() {
-        guard isAvailable, !isTracking else { return }
+        guard isAvailable, !isTracking, !isStarting else { return }
         failure = nil
+        isStarting = true
         Task {
+            defer { isStarting = false }
             do {
                 try await health.requestAuthorization(toShare: Self.shared, read: Self.read)
                 try begin()
@@ -118,6 +124,11 @@ final class WorkoutController {
                 stopped(with: error)
             }
         }
+    }
+
+    func prepare() {
+        guard isAvailable else { return }
+        Task { try? await health.requestAuthorization(toShare: Self.shared, read: Self.read) }
     }
 
     func stop() {
