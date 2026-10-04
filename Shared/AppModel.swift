@@ -273,7 +273,7 @@ final class AppModel {
     /// The wrist has typed a code, or given up on one. Doing the thing is this end's job.
     private func joinFromWatch(_ signal: SharingSignal) {
         switch signal {
-        case .join(let code): sharing.join(code)
+        case .join(let code): sharing.join(code, forTheWatch: true)
         case .cancel: sharing.cancelJoiningFromTheWatch()
         // Said by this end, not heard by it.
         case .state, .standby: break

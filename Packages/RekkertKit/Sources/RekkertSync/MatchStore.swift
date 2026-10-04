@@ -49,6 +49,9 @@ public final class MatchStore {
     /// of this device's own is started, and before, when its watch stepped off, so nothing said
     /// on the way off reaches the host.
     @ObservationIgnored public var onLeft: (() -> Void)?
+    @ObservationIgnored public var onMatch: ((MatchMoment) -> Void)?
+    /// So a farewell landing on an empty board ends nothing.
+    @ObservationIgnored private var sessionInPlay: UUID?
     /// The last thing this device said about its own workout, so a reconnect can say it
     /// again. The whole signal rather than the moment it started: a held clock carries the
     /// reading it stopped at, and repeating that later is still the truth. Live state,
@@ -102,6 +105,8 @@ public final class MatchStore {
     /// back in.
     public private(set) var isJoining = false
     private var joinRefuses: UUID?
+    /// Asked for on the wrist and only carried out here, so it began on the watch.
+    private var joiningForThePair = false
     /// The logs the last few sessions ended on, by session id. The outbox is cleared with
     /// the session, so this is the only copy of the point that ended a match once it has
     /// been filed — and the thing to hand a counterpart that was out of reach for it.
@@ -161,6 +166,7 @@ public final class MatchStore {
         self.display = store?.loadDisplay() ?? DisplayPreferences()
         self.haptics = store?.loadHaptics() ?? HapticPreferences()
         self.state = SessionReducer.state(of: self.log)
+        self.sessionInPlay = state == nil ? nil : log.sessionID
     }
 
     // MARK: - Local mutations
@@ -171,6 +177,7 @@ public final class MatchStore {
         if log.isEmpty, role == .guest || isJoining { startNewSession() }
         resetDisplayForNewMatch()
         record(.configure(setup, at: Date()))
+        announceBegan()
     }
     public func tap(round: Int = 0, court: Int = 0, team: TeamSide) {
         record(.point(round: round, court: court, team: team))
@@ -330,8 +337,9 @@ public final class MatchStore {
     ///
     /// `steppingOff` when this device is on somebody's match, or hosting one, and was given a
     /// different code: whatever that match still sends is not the answer to this join.
-    public func beginJoining(steppingOff: Bool = false) {
+    public func beginJoining(steppingOff: Bool = false, forThePair: Bool = false) {
         isJoining = true
+        joiningForThePair = forThePair
         joinRefuses = steppingOff && !log.isEmpty ? log.sessionID : nil
         // Say hello straight away rather than waiting to be spoken to. The counterpart
         // answers a session id it does not recognise with its own, which is exactly the
@@ -342,6 +350,7 @@ public final class MatchStore {
     public func cancelJoining() {
         isJoining = false
         joinRefuses = nil
+        joiningForThePair = false
     }
 
     private func tellThePairItLeft(_ session: UUID) {
@@ -377,6 +386,7 @@ public final class MatchStore {
     /// other half of the pair only ever hears of it from the leaver, and has to be free to
     /// follow the same phone back in.
     private func dropSession() {
+        let dropped = sessionInPlay
         if keepsHistory, log.hasProgress, let state = SessionReducer.state(of: log) {
             file(state, from: log)
         }
@@ -394,6 +404,7 @@ public final class MatchStore {
         transport.publishSnapshot(encode(.snapshot(log)))
         transport.forgetSnapshot()
         shareRole()
+        if let dropped { onMatch?(.ended(dropped)) }
     }
 
     /// The live copy is encoded as it goes out, so one that runs late says the role as it is
@@ -451,6 +462,7 @@ public final class MatchStore {
             try? store?.save(carry: TimelineCarry(sessionID: log.sessionID, reason: .resumed, timeline: timeline))
         }
         record(.restore(resumable.restarted(at: Date())))
+        announceBegan()
     }
 
     /// Flips which way round the phone's scoreboard reads, from either device. Sends the
@@ -625,6 +637,7 @@ public final class MatchStore {
         lastResult = nil
         resultRewind = nil
         isJoining = false
+        joiningForThePair = false
     }
 
     /// A session is retired where it ends, and stays retired, so a counterpart that has not
@@ -1247,6 +1260,7 @@ public final class MatchStore {
                         tellThePairItLeft(steppedOff)
                     }
                     persist()
+                    announceJoined()
                 }
             } else if incoming.sessionID == leftSessionID, !isThePairsOwnFromThePair(incoming, packet) {
                 // Stepped off this one on purpose. Whoever is still on it is not being
@@ -1278,6 +1292,8 @@ public final class MatchStore {
                 } else {
                     publishSnapshot(force: true)
                     if role == .guest, packet.isFromPairedDevice, !isJoining { offerOurSession(live: true) }
+                    // The host's next match on a code kept all evening.
+                    if role == .guest, !packet.isFromPairedDevice, incoming.takesBack == nil { announceBegan() }
                 }
             } else if incoming.sessionID == log.sessionID {
                 arrive(on: incoming.sessionID, from: packet)
@@ -1353,6 +1369,7 @@ public final class MatchStore {
         forgetLeaving(sessionID)
         persist()
         shareRole()
+        announceJoined()
     }
 
     /// Walked back in by code, so whatever said this match was left no longer does.
@@ -1723,8 +1740,25 @@ public final class MatchStore {
             lastResult = nil
             resultRewind = nil
         }
-        if concludeIfFinished() { return }
+        let wasInPlay = sessionInPlay
+        if concludeIfFinished() {
+            sessionInPlay = nil
+            if let wasInPlay, wasInPlay == concludedSessionID { onMatch?(.ended(wasInPlay)) }
+            return
+        }
+        sessionInPlay = state == nil ? nil : log.sessionID
+        if let sessionInPlay, sessionInPlay != wasInPlay { onMatch?(.inPlay(sessionInPlay)) }
         persist()
+    }
+
+    private func announceBegan() {
+        guard let sessionInPlay, sessionInPlay == log.sessionID else { return }
+        onMatch?(.began(sessionInPlay))
+    }
+
+    private func announceJoined() {
+        if !joiningForThePair { announceBegan() }
+        joiningForThePair = false
     }
 
     private func persist() {

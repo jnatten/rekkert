@@ -206,6 +206,59 @@ struct WatchStandInTests {
         #expect(!court.heardOnThePhone.contains(.cancel), "the phone is left on the host")
     }
 
+    @Test func aJoinOnItsOwnRadioIsSaidOnceTheHostsMatchIsOnTheWrist() async throws {
+        let court = Court()
+        court.phoneGoesAway()
+        var joined: [UUID] = []
+        court.standIn.onJoined = { joined.append($0) }
+        let tasks = court.run()
+        defer { tasks.forEach { $0.cancel() } }
+
+        court.standIn.join(code)
+        await eventually { !joined.isEmpty }
+        try await Task.sleep(for: .milliseconds(200))
+
+        #expect(joined == [court.host.log.sessionID], "once, however many times it looks")
+    }
+
+    @Test func aJoinThePhoneCarriedOutIsSaidOnTheWrist() async throws {
+        var timing = quick
+        timing.phoneWait = .seconds(30)
+        let court = Court(timing: timing)
+        var joined: [UUID] = []
+        court.standIn.onJoined = { joined.append($0) }
+        var begunOnThePhone: [UUID] = []
+        court.phone.onMatch = { if case .began(let id) = $0 { begunOnThePhone.append(id) } }
+        let tasks = court.run()
+        defer { tasks.forEach { $0.cancel() } }
+        await eventually { court.watch.isPairReachable }
+
+        court.standIn.join(code)
+        await eventually { court.heardOnThePhone == [.join(code)] }
+        court.phone.beginJoining(forThePair: true)
+        await eventually { !joined.isEmpty }
+        try await Task.sleep(for: .milliseconds(200))
+
+        #expect(joined == [court.host.log.sessionID])
+        #expect(begunOnThePhone.isEmpty, "the phone only carried it out")
+    }
+
+    @Test func aJoinCalledOffSaysNothingOfAMatchThatTurnsUpLater() async throws {
+        let court = Court()
+        var joined: [UUID] = []
+        court.standIn.onJoined = { joined.append($0) }
+        let tasks = court.run()
+        defer { tasks.forEach { $0.cancel() } }
+        await eventually { court.watch.isPairReachable }
+
+        court.standIn.join(code)
+        court.standIn.cancel()
+        await court.phoneJoins()
+        try await Task.sleep(for: .milliseconds(200))
+
+        #expect(joined.isEmpty, "the phone joined on its own")
+    }
+
     @Test func aNewCodeTypedWhileOnTheHostsRadioIsTheOneDialled() async throws {
         let court = Court()
         court.phoneGoesAway()

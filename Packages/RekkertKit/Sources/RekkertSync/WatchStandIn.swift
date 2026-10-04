@@ -66,6 +66,10 @@ nonisolated enum StandInPolicy {
 @Observable
 public final class WatchStandIn {
     public private(set) var joining: SharingState = .off
+    /// Once per code typed here, when the host's match is on the wrist — not on landing, since
+    /// the phone can be through to a host with nothing on yet.
+    @ObservationIgnored public var onJoined: ((UUID) -> Void)?
+    @ObservationIgnored private var owesJoined = false
 
     @ObservationIgnored private let store: MatchStore
     @ObservationIgnored private let sharing: SharedSession
@@ -119,6 +123,7 @@ public final class WatchStandIn {
         phoneHasJoined = false
         phoneStandby = nil
         sessionAtJoin = store.log.sessionID
+        owesJoined = true
         // A link held for the last match would stop the new code being dialled, and would go
         // on feeding the old match in over the one the phone is fetching.
         if sharing.isSharing { sharing.standDown() }
@@ -148,6 +153,7 @@ public final class WatchStandIn {
         }
         pending = nil
         joining = .off
+        owesJoined = false
     }
 
     /// The join screen went away. A join that has landed is left alone, whatever the phone has
@@ -232,6 +238,7 @@ public final class WatchStandIn {
             sharing.cancelJoining()
             pending = nil
             joining = .failed(failure)
+            owesJoined = false
         case .lookOnTheWrist:
             Task { [store] in await store.send(.cancel) }
             lookOnTheWrist()
@@ -239,11 +246,17 @@ public final class WatchStandIn {
             sharing.cancelJoining()
             pending = nil
             joining = .failed(.notFound)
+            owesJoined = false
         case .standIn:
             sharing.standIn()
         case .standDown:
             sharing.standDown()
             store.followPairedDevice()
+        }
+
+        if owesJoined, joining == .joined, isHandedTheHostsMatch {
+            owesJoined = false
+            onJoined?(store.log.sessionID)
         }
     }
 

@@ -217,13 +217,14 @@ public final class SharedSession {
         }
     }
 
-    public func join(_ code: SessionCode) {
+    /// `forTheWatch` when the code was typed on the wrist and this phone only carries it out.
+    public func join(_ code: SessionCode, forTheWatch: Bool = false) {
         // A new code is another match only while the old one can still be heard. With nothing on
         // it in reach, it is as likely to be this match shared again after the host relaunched.
         let steppingOff = hosted != nil || (wanted != nil && wanted != code && reachablePeers > 0)
         // Joining somebody else's match is the end of hosting this one.
         if hosted != nil { stop() }
-        store.beginJoining(steppingOff: steppingOff)
+        store.beginJoining(steppingOff: steppingOff, forThePair: forTheWatch)
         dial(code)
     }
 
