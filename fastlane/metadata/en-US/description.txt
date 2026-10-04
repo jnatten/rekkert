@@ -54,7 +54,7 @@ Press Start workout, on your watch or your phone, and the session is recorded to
 
 Rekkert lists them, with how long you played, the energy, the heart rate, and the matches you scored under each.
 
-Nothing is detected: no workout starts, and nothing is recorded, unless you press the button.
+Or have Settings start and stop it with your matches, or ask you first. Nothing is detected from your movement.
 
 PRIVACY
 

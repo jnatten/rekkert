@@ -288,9 +288,9 @@ of this where the code is read out from a wrist.
 ## Workouts
 
 The watch can record a workout while you play. It is a button — on the watch's menu page,
-on its idle screen, and in the iPhone's main menu — and it has nothing to do with matches:
-it never starts itself, it survives a match ending, and you can play none, one or six of
-them while it runs.
+on its idle screen, and in the iPhone's main menu — and unless Settings says otherwise it
+has nothing to do with matches: it never starts itself, it survives a match ending, and you
+can play none, one or six of them while it runs.
 
 It is saved to Health as tennis, indoors. Health has no padel, and tennis is the nearest
 thing in the list with an energy model calibrated for it. Indoors is chosen rather than
@@ -309,6 +309,29 @@ answers. Health leaves a held stretch out of the duration it saves, so the clock
 watch and the workout in Health are the same number and always were. While it is held the
 heart on the scoreboard becomes a still grey pause mark, because a pause you have
 forgotten about quietly eats a match.
+
+It can follow the match instead, for somebody who asks. Settings has two pickers under
+*Workout on your watch*, one for when a match starts and one for when it ends, each with Do
+nothing, Ask me, or the thing itself. Both are off until changed, and they travel to the
+watch with the buzz settings.
+
+- **A start** is acted on by the device the match was started, resumed or joined on. The
+  phone goes through `startWatchApp`, as its own Start button does. A join typed on the wrist
+  belongs to the wrist even when the phone carries it out. The host's next match on a code
+  kept all evening is a start for its guest. Rounds, the watch following its phone's match,
+  and a result taken back are not starts.
+- **An ending** is the watch's alone. It holds the workout, and the workout keeps it running,
+  so it hears the match end wherever the last point went on. Won, finished, called off, ended
+  by the host and stepped off all count; a match replaced by a newer one does not.
+- **An automatic stop waits a minute**, with a countdown and Keep going on the watch's result
+  screen. Another match starting, or the final point taken back, calls it off, so three
+  matches back to back stay one workout.
+- **Health is asked up front.** Choosing a start asks for access on the phone, and the watch
+  asks the next time it is opened: a start sent from the phone reaches a watch in a pocket,
+  where no prompt can be shown.
+
+The moments come out of `MatchStore.onMatch`, and the whole decision is `WorkoutFollow`, a
+value with the clock passed in, so every turn of it is tested rather than tried.
 
 The watch keeps no history of its own, so when the workout ends the summary travels to the
 phone on the same durable queue the outbox uses, and the phone files it under `workouts/`.
@@ -332,8 +355,8 @@ workout rather than inside it. Both reach that one phone and no other:
 your saved setups, so adding a `Wire` case carrying anything personal is a compile error
 rather than a leak.
 
-None of it is required. Never press the button and the app is what it was: no prompt, no
-Workouts row, no Health access of any kind.
+None of it is required. Never press the button, leave both pickers on Do nothing, and the
+app is what it was: no prompt, no Workouts row, no Health access of any kind.
 
 ## The timeline
 
