@@ -18,6 +18,8 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
     /// Drops the watch's undo button and makes its whole score page the target: one tap for
     /// your point, two for theirs, and a long press to take the last one back.
     public var tapAnywhere: Bool
+    public var workoutOnMatchStart: WorkoutCue
+    public var workoutOnMatchEnd: WorkoutCue
     /// Who the wearer is in a tournament, so only their own court buzzes and their team
     /// follows them through the draw. Kept with the session it was chosen in, so it never
     /// carries into the next one.
@@ -32,13 +34,15 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
     /// is added.
     private(set) var schema: Int
 
-    private static let currentSchema = 1
+    private static let currentSchema = 2
 
     public init(
         mode: HapticMode = .off,
         onlyWhenSomeoneElseScores: Bool = true,
         strength: HapticStrength = .medium,
         tapAnywhere: Bool = false,
+        workoutOnMatchStart: WorkoutCue = .off,
+        workoutOnMatchEnd: WorkoutCue = .off,
         me: Me? = nil,
         revision: UInt64 = 0,
         updatedAt: Date = .distantPast
@@ -47,6 +51,8 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
         self.onlyWhenSomeoneElseScores = onlyWhenSomeoneElseScores
         self.strength = strength
         self.tapAnywhere = tapAnywhere
+        self.workoutOnMatchStart = workoutOnMatchStart
+        self.workoutOnMatchEnd = workoutOnMatchEnd
         self.me = me
         self.revision = revision
         self.updatedAt = updatedAt
@@ -65,6 +71,8 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
         onlyWhenSomeoneElseScores: Bool? = nil,
         strength: HapticStrength? = nil,
         tapAnywhere: Bool? = nil,
+        workoutOnMatchStart: WorkoutCue? = nil,
+        workoutOnMatchEnd: WorkoutCue? = nil,
         at date: Date = Date()
     ) -> HapticPreferences {
         HapticPreferences(
@@ -72,6 +80,8 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
             onlyWhenSomeoneElseScores: onlyWhenSomeoneElseScores ?? self.onlyWhenSomeoneElseScores,
             strength: strength ?? self.strength,
             tapAnywhere: tapAnywhere ?? self.tapAnywhere,
+            workoutOnMatchStart: workoutOnMatchStart ?? self.workoutOnMatchStart,
+            workoutOnMatchEnd: workoutOnMatchEnd ?? self.workoutOnMatchEnd,
             me: me,
             revision: revision + 1,
             updatedAt: date
@@ -106,7 +116,8 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case mode, onlyWhenSomeoneElseScores, strength, tapAnywhere, me, revision, updatedAt, schema
+        case mode, onlyWhenSomeoneElseScores, strength, tapAnywhere, workoutOnMatchStart, workoutOnMatchEnd
+        case me, revision, updatedAt, schema
     }
 
     /// Hand-rolled so a file written before any one of these existed still reads. A decoder
@@ -119,11 +130,17 @@ public struct HapticPreferences: Codable, Sendable, Hashable {
             .decodeIfPresent(Bool.self, forKey: .onlyWhenSomeoneElseScores) ?? true
         strength = try container.decodeIfPresent(HapticStrength.self, forKey: .strength) ?? .medium
         tapAnywhere = try container.decodeIfPresent(Bool.self, forKey: .tapAnywhere) ?? false
+        // A cue from a later build must not take the rest of the preferences down with it.
+        workoutOnMatchStart = (try? container.decodeIfPresent(WorkoutCue.self, forKey: .workoutOnMatchStart)) ?? .off
+        workoutOnMatchEnd = (try? container.decodeIfPresent(WorkoutCue.self, forKey: .workoutOnMatchEnd)) ?? .off
         me = try container.decodeIfPresent(Me.self, forKey: .me)
         revision = try container.decodeIfPresent(UInt64.self, forKey: .revision) ?? 0
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? .distantPast
-        schema = try container.decodeIfPresent(Int.self, forKey: .schema)
+        let saved = try container.decodeIfPresent(Int.self, forKey: .schema)
             ?? (container.contains(.tapAnywhere) ? 1 : 0)
+        // An older build saves a newer copy's schema without the fields it does not know, so
+        // the schema is capped at what is actually here.
+        schema = min(saved, container.contains(.workoutOnMatchStart) ? Self.currentSchema : 1)
     }
 }
 
@@ -163,6 +180,28 @@ public enum HapticMode: String, Codable, Sendable, Hashable, CaseIterable {
         case .off: "The watch stays still."
         case .everyPoint: "One tap whenever a point goes on."
         case .byTeam: "One tap for your point, two for theirs."
+        }
+    }
+}
+
+public enum WorkoutCue: String, Codable, Sendable, Hashable, CaseIterable {
+    case off
+    case ask
+    case automatic
+
+    public var startTitle: String {
+        switch self {
+        case .off: "Do nothing"
+        case .ask: "Ask me"
+        case .automatic: "Start workout"
+        }
+    }
+
+    public var endTitle: String {
+        switch self {
+        case .off: "Do nothing"
+        case .ask: "Ask me"
+        case .automatic: "Stop workout"
         }
     }
 }

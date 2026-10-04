@@ -114,6 +114,8 @@ struct HapticTests {
         #expect(decoded.strength == .medium)
         #expect(decoded.onlyWhenSomeoneElseScores)
         #expect(decoded.tapAnywhere == false, "and the watch still scores with its buttons")
+        #expect(decoded.workoutOnMatchStart == .off, "and no workout starts that nobody asked for")
+        #expect(decoded.workoutOnMatchEnd == .off)
         #expect(decoded.revision == 3)
     }
 
@@ -177,6 +179,50 @@ struct HapticTests {
         #expect(watch.adopting(phone).tapAnywhere, "the watch takes the one that carries it")
         #expect(phone.adopting(watch).tapAnywhere, "and the phone keeps it")
         #expect(watch.adopting(phone).mode == .byTeam)
+    }
+
+    @Test func theWorkoutCuesLeaveTheOtherSettingsAlone() throws {
+        let me = Me(session: UUID(), player: PlayerID())
+        let before = HapticPreferences().setting(mode: .byTeam, tapAnywhere: true).choosing(me: me)
+        let after = before.setting(workoutOnMatchStart: .ask, workoutOnMatchEnd: .automatic)
+
+        #expect(after.workoutOnMatchStart == .ask)
+        #expect(after.workoutOnMatchEnd == .automatic)
+        #expect(after.mode == .byTeam)
+        #expect(after.tapAnywhere)
+        #expect(after.me == me)
+        #expect(after.revision == before.revision + 1)
+        #expect(after.setting(mode: .off).workoutOnMatchEnd == .automatic, "and later changes keep them")
+
+        let decoded = try JSONCoding.decoder.decode(
+            HapticPreferences.self, from: JSONCoding.encoder.encode(after)
+        )
+        #expect(decoded == after)
+    }
+
+    /// An older watch keeps the schema number it was handed and drops the cues.
+    @Test func aCopySavedByABuildThatPredatesTheWorkoutCuesGivesWay() throws {
+        let set = HapticPreferences().setting(tapAnywhere: true).setting(workoutOnMatchStart: .automatic)
+        let full = try JSONSerialization.jsonObject(with: JSONCoding.encoder.encode(set)) as! [String: Any]
+        let phone = try decode(full)
+        let watch = try decode(full.filter { !$0.key.hasPrefix("workout") })
+        #expect(watch.workoutOnMatchStart == .off)
+        #expect(watch.revision == phone.revision)
+
+        #expect(watch.adopting(phone).workoutOnMatchStart == .automatic, "the watch takes the one that carries it")
+        #expect(phone.adopting(watch).workoutOnMatchStart == .automatic, "and the phone keeps it")
+        #expect(watch.adopting(phone).tapAnywhere)
+    }
+
+    @Test func aCueFromALaterBuildIsDroppedOnItsOwn() throws {
+        let set = HapticPreferences().setting(mode: .byTeam, workoutOnMatchEnd: .ask)
+        var json = try JSONSerialization.jsonObject(with: JSONCoding.encoder.encode(set)) as! [String: Any]
+        json["workoutOnMatchStart"] = "whenTheBallIsHit"
+        let decoded = try decode(json)
+
+        #expect(decoded.workoutOnMatchStart == .off)
+        #expect(decoded.workoutOnMatchEnd == .ask, "the one this build knows survives")
+        #expect(decoded.mode == .byTeam, "and so does the buzz")
     }
 
     private func decode(_ json: [String: Any]) throws -> HapticPreferences {

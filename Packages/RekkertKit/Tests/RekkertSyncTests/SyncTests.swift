@@ -640,6 +640,25 @@ struct SyncTests {
         #expect(pair.watch.haptics.tapAnywhere == false, "and goes back to the buttons")
     }
 
+    @Test func theWorkoutCuesAreSetOnThePhoneAndReachTheWatch() async throws {
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        await quietPeriod()
+
+        pair.phone.setHaptics(tapAnywhere: true)
+        pair.phone.setHaptics(workoutOnMatchStart: .ask, workoutOnMatchEnd: .automatic)
+        await eventually { pair.watch.haptics.workoutOnMatchEnd == .automatic }
+        #expect(pair.watch.haptics.workoutOnMatchStart == .ask)
+        #expect(pair.watch.haptics.workoutOnMatchEnd == .automatic, "the watch is the one that stops it")
+        #expect(pair.watch.haptics.tapAnywhere, "and keeps what it was given before")
+
+        pair.phone.setHaptics(workoutOnMatchEnd: .off)
+        await eventually { pair.watch.haptics.workoutOnMatchEnd == .off }
+        #expect(pair.watch.haptics.workoutOnMatchEnd == .off)
+        #expect(pair.watch.haptics.workoutOnMatchStart == .ask)
+    }
+
     @Test func aRepeatedBuzzInstructionDoesNotUndoItself() async throws {
         let pair = Pair()
         let tasks = pair.run()

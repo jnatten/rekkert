@@ -482,18 +482,24 @@ public final class MatchStore {
         mode: HapticMode? = nil,
         onlyWhenSomeoneElseScores: Bool? = nil,
         strength: HapticStrength? = nil,
-        tapAnywhere: Bool? = nil
+        tapAnywhere: Bool? = nil,
+        workoutOnMatchStart: WorkoutCue? = nil,
+        workoutOnMatchEnd: WorkoutCue? = nil
     ) {
         let next = haptics.setting(
             mode: mode,
             onlyWhenSomeoneElseScores: onlyWhenSomeoneElseScores,
             strength: strength,
-            tapAnywhere: tapAnywhere
+            tapAnywhere: tapAnywhere,
+            workoutOnMatchStart: workoutOnMatchStart,
+            workoutOnMatchEnd: workoutOnMatchEnd
         )
         guard next.mode != haptics.mode
             || next.onlyWhenSomeoneElseScores != haptics.onlyWhenSomeoneElseScores
             || next.strength != haptics.strength
             || next.tapAnywhere != haptics.tapAnywhere
+            || next.workoutOnMatchStart != haptics.workoutOnMatchStart
+            || next.workoutOnMatchEnd != haptics.workoutOnMatchEnd
         else { return }
         apply(next, publish: true)
     }
