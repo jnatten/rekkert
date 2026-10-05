@@ -5,7 +5,8 @@ import UIKit
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @State private var askingToStartWorkout = false
-    /// A code that arrived as a link, for the join sheet to send as it opens.
+    /// A code that arrived as a link, for the join sheet to send as it opens — or to show
+    /// first, when joining it would take this phone off a shared match.
     @State private var linkedCode: SessionCode?
 
     var body: some View {

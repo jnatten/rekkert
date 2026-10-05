@@ -217,11 +217,20 @@ public final class SharedSession {
         }
     }
 
+    /// Whether joining `code` takes this device off a shared match it is on now: the one it
+    /// hosts, or the one it follows while something on it can still be heard. A new code is
+    /// another match only while the old one is in reach. With nothing on it, it is as likely
+    /// to be this match shared again after the host relaunched.
+    ///
+    /// Public so a code that arrived whole, from a link or the camera, can be shown and left
+    /// to a tap rather than sent straight on: for a host, joining is the end of sharing.
+    public func joiningStepsOff(_ code: SessionCode) -> Bool {
+        hosted != nil || (wanted != nil && wanted != code && reachablePeers > 0)
+    }
+
     /// `forTheWatch` when the code was typed on the wrist and this phone only carries it out.
     public func join(_ code: SessionCode, forTheWatch: Bool = false) {
-        // A new code is another match only while the old one can still be heard. With nothing on
-        // it in reach, it is as likely to be this match shared again after the host relaunched.
-        let steppingOff = hosted != nil || (wanted != nil && wanted != code && reachablePeers > 0)
+        let steppingOff = joiningStepsOff(code)
         // Joining somebody else's match is the end of hosting this one.
         if hosted != nil { stop() }
         store.beginJoining(steppingOff: steppingOff, forThePair: forTheWatch)

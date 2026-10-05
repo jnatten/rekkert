@@ -43,14 +43,17 @@ struct JoinMatchSheet: View {
             }
             // Keyed so a link opened while this is already up still lands here.
             .task(id: prefilled) {
-                typed = SessionCode.grouped(prefilled)
-                if submitsImmediately { submit() } else { typing = true }
+                if submitsImmediately, let code = SessionCode(prefilled) {
+                    receive(code)
+                } else {
+                    typed = SessionCode.grouped(prefilled)
+                    typing = true
+                }
             }
             .navigationDestination(isPresented: $scanning) {
                 CodeScannerView { code in
                     scanning = false
-                    typed = code.description
-                    submit()
+                    receive(code)
                 }
             }
             .onChange(of: model.store.isJoining) { _, joining in
@@ -73,6 +76,12 @@ struct JoinMatchSheet: View {
 
     private var entry: some View {
         Form {
+            if let cost {
+                Section {
+                    Label(cost, systemImage: "exclamationmark.triangle")
+                }
+            }
+
             if DataScannerViewController.isSupported {
                 Section {
                     Button("Scan the host's code", systemImage: "qrcode.viewfinder") {
@@ -104,10 +113,34 @@ struct JoinMatchSheet: View {
             }
 
             Section {
-                Button("Join", action: submit)
+                Button(joinTitle, role: stepsOff ? .destructive : nil, action: submit)
                     .disabled(SessionCode(typed) == nil)
             }
         }
+    }
+
+    /// Whether the code in the field would take this phone off a shared match it is on.
+    private var stepsOff: Bool {
+        SessionCode(typed).map(model.sharing.joiningStepsOff) ?? false
+    }
+
+    /// What joining the code in the field costs, when it costs a match. For a host that is
+    /// the sharing, and everybody on it; for a guest, the match being followed.
+    private var cost: String? {
+        guard stepsOff else { return nil }
+        guard model.store.role == .host else {
+            return "You are following a shared match. Joining another one leaves it."
+        }
+        switch model.sharing.reachablePeers {
+        case 0: return "You are sharing this match. Joining another one stops that."
+        case 1: return "You are sharing this match with 1 phone. Joining another one stops that for them."
+        case let count: return "You are sharing this match with \(count) phones. Joining another one stops that for all of them."
+        }
+    }
+
+    private var joinTitle: String {
+        guard stepsOff else { return "Join" }
+        return model.store.role == .host ? "Stop sharing and join" : "Leave and join"
     }
 
     private func waiting(_ title: String) -> some View {
@@ -138,6 +171,14 @@ struct JoinMatchSheet: View {
                 }
             }
         }
+    }
+
+    /// A code that came in whole, from a link or the camera, rather than being typed. Sent on
+    /// unless joining it would take this phone off a shared match: then it is shown with what
+    /// that costs, and the tap is left to whoever is holding the phone.
+    private func receive(_ code: SessionCode) {
+        typed = code.description
+        if model.sharing.joiningStepsOff(code) { typing = false } else { submit() }
     }
 
     private func submit() {

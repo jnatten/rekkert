@@ -87,6 +87,24 @@ struct SharedSessionTests {
         #expect(sharing.isSharing, "it counts as sharing while it is looking")
     }
 
+    /// A code that arrives whole, from a link or the camera, goes straight through — except on a
+    /// host, where joining is the end of sharing. The screens ask before they send one.
+    @Test func aHostIsToldThatJoiningEndsItsSharing() throws {
+        let (sharing, store) = make()
+        let other = try #require(SessionCode("730264"))
+        #expect(sharing.joiningStepsOff(other) == false, "nothing on, nothing to step off")
+
+        store.configure(setup)
+        #expect(sharing.joiningStepsOff(other) == false, "a match of your own is filed away, not stepped off")
+
+        sharing.host()
+        #expect(sharing.joiningStepsOff(other))
+        #expect(sharing.joiningStepsOff(try #require(sharing.code)), "its own code included")
+
+        sharing.stop()
+        #expect(sharing.joiningStepsOff(other) == false)
+    }
+
     /// Leaving is not the same as ending: the match goes on without this phone.
     @Test func leavingASharedMatchStepsOffItRatherThanEndingIt() throws {
         let (sharing, store) = make()

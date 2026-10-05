@@ -120,6 +120,7 @@ struct NewCodeTests {
         let scoredMeanwhile = Set(court.guest.log.events.keys.filter { $0.device == court.guest.device })
 
         let second = try #require(SessionCode("730264"))
+        #expect(court.sharing.joiningStepsOff(second) == false, "nothing in reach: this may be the same match again")
         court.radio.host(on: second)
         court.hostEnd.setReachable(true)
         court.sharing.join(second)
@@ -139,7 +140,10 @@ struct NewCodeTests {
         defer { court.sharing.close(); court.tasks.forEach { $0.cancel() } }
         #expect(court.sharing.reachablePeers == 1)
 
-        court.sharing.join(try #require(SessionCode("730264")))
+        let second = try #require(SessionCode("730264"))
+        #expect(court.sharing.joiningStepsOff(second), "and is told so before it does")
+        #expect(court.sharing.joiningStepsOff(first) == false, "the code it is already on is not another match")
+        court.sharing.join(second)
         court.hostEnd.queue(try Wire.snapshot(court.host.log).encoded())
         await quietPeriod()
 
