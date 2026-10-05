@@ -1,0 +1,13 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["P5N937CG63.dev.natten.rekkert"],
+        "components": [
+          { "/": "/join", "comment": "A shared match. The code is in the fragment." },
+          { "/": "/join/", "comment": "The same, with a trailing slash." }
+        ]
+      }
+    ]
+  }
+}

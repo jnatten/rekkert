@@ -113,3 +113,30 @@ extension SessionCode: Codable {
         try container.encode(letters)
     }
 }
+
+/// The code in a fragment rather than a path or a query, so a phone without Rekkert that
+/// opens the link never sends it to the website.
+extension SessionCode {
+    public static let linkHost = "rekkert.natten.dev"
+    public static let linkPath = "/join"
+
+    public var joinLink: URL {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = Self.linkHost
+        components.path = Self.linkPath
+        components.fragment = letters
+        return components.url!
+    }
+
+    public init?(joinLink url: URL) {
+        guard
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+            components.scheme?.lowercased() == "https",
+            components.host?.lowercased() == Self.linkHost,
+            components.path == Self.linkPath || components.path == Self.linkPath + "/",
+            let fragment = components.fragment
+        else { return nil }
+        self.init(fragment)
+    }
+}

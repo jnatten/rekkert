@@ -71,6 +71,12 @@ echo "==> Assert a TV gets the board rather than a copy of the phone"
 check_ios '"UIWindowSceneSessionRoleExternalDisplayNonInteractive"'
 check_ios '"UISceneDelegateClassName" => "Rekkert.BoardSceneDelegate"'
 
+echo "==> Assert a scanned code opens the app"
+# Without the domain the QR code in the share sheet opens the website instead of the app.
+plutil -p Derived/Entitlements/Rekkert.entitlements | grep -q '"applinks:rekkert.natten.dev"' \
+  || { echo "FAIL: no associated domain in Rekkert.entitlements"; exit 1; }
+echo "  ok: applinks:rekkert.natten.dev in Rekkert.entitlements"
+
 echo "==> Assert the watch app carries the same version as the iPhone app"
 # The watch app used to generate its own plist and so could not drift. Now that it is
 # written out, a forgotten $(MARKETING_VERSION) pins it at 1.0 (1) — which App Store Connect

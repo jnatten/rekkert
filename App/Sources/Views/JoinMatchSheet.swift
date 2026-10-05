@@ -39,10 +39,10 @@ struct JoinMatchSheet: View {
                     }
                 }
             }
-            .task {
+            // Keyed so a link opened while this is already up still lands here.
+            .task(id: prefilled) {
                 typed = SessionCode.grouped(prefilled)
-                typing = true
-                if submitsImmediately { submit() }
+                if submitsImmediately { submit() } else { typing = true }
             }
             .onChange(of: model.store.isJoining) { _, joining in
                 // Keyed on the join concluding rather than on the role changing, which it

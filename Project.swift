@@ -102,7 +102,11 @@ let project = Project(
             ]),
             sources: ["App/Sources/**", "Shared/**", "Widgets/Shared/**"],
             resources: ["App/Resources/**"],
-            entitlements: .dictionary(["com.apple.developer.healthkit": true]),
+            // The join link in the share sheet's QR code opens the app rather than the website.
+            entitlements: .dictionary([
+                "com.apple.developer.healthkit": true,
+                "com.apple.developer.associated-domains": ["applinks:rekkert.natten.dev"],
+            ]),
             scripts: [commitStamp],
             dependencies: [
                 .package(product: "RekkertCore"),

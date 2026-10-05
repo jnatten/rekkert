@@ -9,43 +9,47 @@ struct ShareCodeSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 22) {
-                if let code = model.sharing.code {
-                    Text(code.description)
-                        .font(.system(size: 46, weight: .semibold, design: .monospaced))
-                        .minimumScaleFactor(0.5)
-                        .lineLimit(1)
-                        .textSelection(.enabled)
-                        .padding(.top, 24)
-                }
+            ScrollView {
+                VStack(spacing: 22) {
+                    if let code = model.sharing.code {
+                        JoinQRCode(code: code)
+                            .padding(.top, 12)
 
-                Text("Read this out. Anyone at the court can type it in to follow the match and score it.")
-                    .font(.callout)
+                        Text(code.description)
+                            .font(.system(size: 46, weight: .semibold, design: .monospaced))
+                            .minimumScaleFactor(0.5)
+                            .lineLimit(1)
+                            .textSelection(.enabled)
+                    }
+
+                    Text("Let them scan this with their camera, or read the code out. Anyone at the court can join to follow the match and score it.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+
+                    Label(joinedDescription, systemImage: "person.2.fill")
+                        .font(.headline)
+                        .foregroundStyle(model.sharing.reachablePeers > 0 ? Color.accentColor : .secondary)
+
+                    VStack(spacing: 6) {
+                        Text("Only you can finish this match.")
+                        Text("Keep this phone nearby. The score keeps up over Bluetooth even when your phone is locked or in a bag, and the screen will not sleep while you are sharing.")
+                    }
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-
-                Label(joinedDescription, systemImage: "person.2.fill")
-                    .font(.headline)
-                    .foregroundStyle(model.sharing.reachablePeers > 0 ? Color.accentColor : .secondary)
-
-                VStack(spacing: 6) {
-                    Text("Only you can finish this match.")
-                    Text("Keep this phone nearby. The score keeps up over Bluetooth even when your phone is locked or in a bag, and the screen will not sleep while you are sharing.")
                 }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-
-                Spacer()
-
+                .padding()
+            }
+            .safeAreaBar(edge: .bottom) {
                 Button("Stop sharing", role: .destructive) {
                     model.sharing.stop()
                     dismiss()
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
+                .padding(.bottom)
             }
-            .padding()
             .navigationTitle("Share this match")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

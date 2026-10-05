@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Join a match · Rekkert</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f4f4f6;
+    --text: #17171a;
+    --muted: #5f5f6b;
+    --rule: #e2e2e8;
+    --accent: #2160e6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #101013;
+      --surface: #1a1a1f;
+      --text: #ececf1;
+      --muted: #a0a0ad;
+      --rule: #2b2b33;
+      --accent: #4a96ff;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #101013;
+    --surface: #1a1a1f;
+    --text: #ececf1;
+    --muted: #a0a0ad;
+    --rule: #2b2b33;
+    --accent: #4a96ff;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 0 16px 96px;
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  main { max-width: 32rem; margin: 0 auto; text-align: center; }
+
+  header { padding: 80px 0 32px; }
+  h1 {
+    font-size: 2.4rem;
+    line-height: 1.05;
+    letter-spacing: -0.035em;
+    margin: 0 0 12px;
+  }
+  .tagline { font-size: 1.15rem; color: var(--muted); margin: 0; }
+
+  .code {
+    background: var(--surface);
+    border-radius: 14px;
+    padding: 20px 24px;
+    margin: 0 0 32px;
+    font: 600 2.8rem/1.1 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    letter-spacing: 0.04em;
+  }
+
+  p { margin: 0 0 16px; }
+  .muted { color: var(--muted); }
+  [hidden] { display: none; }
+
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+  footer {
+    margin-top: 56px;
+    padding-top: 20px;
+    border-top: 1px solid var(--rule);
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>Join a match</h1>
+  <p class="tagline">Somebody at your court is sharing their match in Rekkert.</p>
+</header>
+
+<section id="found" hidden>
+  <div class="code" id="code"></div>
+  <p>Open Rekkert on your iPhone, tap <strong>Join a match</strong> and type this code. The phone sharing the match needs to be nearby with Rekkert open.</p>
+  <p class="muted">With Rekkert installed, scanning the host's code with your camera opens the match straight away.</p>
+</section>
+
+<section id="missing">
+  <p>There is no match code in this link.</p>
+  <p class="muted">Ask whoever is sharing the match to show you their code again, or to read it out.</p>
+</section>
+
+<footer>
+  <a href="/">About Rekkert</a> · <a href="/privacy/">Privacy policy</a>
+</footer>
+
+</main>
+<script>
+  // The same folding the app does, so a code read out as "oh" still shows as a zero.
+  const digits = location.hash.slice(1).toUpperCase()
+    .replace(/[-\s]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
+  if (/^\d{6}$/.test(digits)) {
+    document.getElementById("code").textContent = digits.slice(0, 3) + "-" + digits.slice(3);
+    document.getElementById("found").hidden = false;
+    document.getElementById("missing").hidden = true;
+  }
+</script>
+</body>
+</html>

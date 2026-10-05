@@ -5,6 +5,8 @@ import UIKit
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @State private var askingToStartWorkout = false
+    /// A code that arrived as a link, for the join sheet to send as it opens.
+    @State private var linkedCode: SessionCode?
 
     var body: some View {
         Group {
@@ -50,16 +52,13 @@ struct RootView: View {
         .sheet(isPresented: Binding(
             get: { model.showingJoin },
             set: { model.showingJoin = $0 }
-        )) {
-            #if DEBUG
+        ), onDismiss: { linkedCode = nil }) {
             JoinMatchSheet(
-                prefilled: DemoLaunch.joinCode ?? "",
-                submitsImmediately: DemoLaunch.joinCode != nil
+                prefilled: linkedCode?.letters ?? "",
+                submitsImmediately: linkedCode != nil
             )
-            #else
-            JoinMatchSheet()
-            #endif
         }
+        .onOpenURL(perform: open)
         .onChange(of: model.sharing.isSharing, initial: true) { _, sharing in
             // Sharing stops the moment the system suspends the app, so a host whose screen
             // times out quietly drops everybody. Telling people to keep the phone awake was
@@ -74,7 +73,7 @@ struct RootView: View {
             #if DEBUG
             // Here rather than on the start screen: a device that already has a match never
             // shows that screen, and joining from one is exactly the case worth exercising.
-            if DemoLaunch.joinCode != nil { model.showingJoin = true }
+            if let code = DemoLaunch.joinCode.flatMap(SessionCode.init) { open(code.joinLink) }
             if DemoLaunch.board { model.showingBoard = true }
             if DemoLaunch.tvGuide { model.showingTVGuide = true }
             if DemoLaunch.tvShot { BoardCapture.start() }
@@ -129,5 +128,26 @@ struct RootView: View {
         } message: {
             Text("It runs on your watch while you play.")
         }
+    }
+
+    private func open(_ url: URL) {
+        guard let code = SessionCode(joinLink: url) else { return }
+        // Joining would end the sharing this code belongs to.
+        if model.sharing.code == code {
+            if !model.showingShareCode { present { model.showingShareCode = true } }
+            return
+        }
+        linkedCode = code
+        if !model.showingJoin { present { model.showingJoin = true } }
+    }
+
+    /// A sheet from here cannot go up over one that is already showing, wherever that one
+    /// came from, so whatever is up is put away first.
+    private func present(_ show: @escaping () -> Void) {
+        guard
+            let root = UIApplication.shared.phoneScene?.keyWindow?.rootViewController,
+            root.presentedViewController != nil
+        else { return show() }
+        root.dismiss(animated: true) { Task { show() } }
     }
 }
