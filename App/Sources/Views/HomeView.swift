@@ -85,7 +85,7 @@ struct HomeView: View {
                         Label {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Join a match").foregroundStyle(.primary)
-                                Text("Type the code the host reads out")
+                                Text("Scan or type the host's code")
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                         } icon: {

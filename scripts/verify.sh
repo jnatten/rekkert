@@ -71,8 +71,10 @@ echo "==> Assert a TV gets the board rather than a copy of the phone"
 check_ios '"UIWindowSceneSessionRoleExternalDisplayNonInteractive"'
 check_ios '"UISceneDelegateClassName" => "Rekkert.BoardSceneDelegate"'
 
-echo "==> Assert a scanned code opens the app"
-# Without the domain the QR code in the share sheet opens the website instead of the app.
+echo "==> Assert a scanned code opens the app and the app may scan one"
+# Without the domain the QR code in the share sheet opens the website instead of the app, and
+# without the camera key the join sheet's scan button crashes the app.
+check_ios 'NSCameraUsageDescription'
 plutil -p Derived/Entitlements/Rekkert.entitlements | grep -q '"applinks:rekkert.natten.dev"' \
   || { echo "FAIL: no associated domain in Rekkert.entitlements"; exit 1; }
 echo "  ok: applinks:rekkert.natten.dev in Rekkert.entitlements"

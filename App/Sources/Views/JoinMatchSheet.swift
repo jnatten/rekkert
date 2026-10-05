@@ -1,6 +1,7 @@
 import RekkertCore
 import RekkertSync
 import SwiftUI
+import VisionKit
 
 /// Type the code the host read out.
 struct JoinMatchSheet: View {
@@ -14,6 +15,7 @@ struct JoinMatchSheet: View {
     /// Whether this sheet has sent a code. A guest whose host shared the match again on a new
     /// code opens it while still looking for the old one, and was shown that search, not a field.
     @State private var submitted = false
+    @State private var scanning = false
     @FocusState private var typing: Bool
 
     var body: some View {
@@ -44,6 +46,13 @@ struct JoinMatchSheet: View {
                 typed = SessionCode.grouped(prefilled)
                 if submitsImmediately { submit() } else { typing = true }
             }
+            .navigationDestination(isPresented: $scanning) {
+                CodeScannerView { code in
+                    scanning = false
+                    typed = code.description
+                    submit()
+                }
+            }
             .onChange(of: model.store.isJoining) { _, joining in
                 // Keyed on the join concluding rather than on the role changing, which it
                 // does not for a guest walking back in. The scoreboard is already behind this.
@@ -64,6 +73,15 @@ struct JoinMatchSheet: View {
 
     private var entry: some View {
         Form {
+            if DataScannerViewController.isSupported {
+                Section {
+                    Button("Scan the host's code", systemImage: "qrcode.viewfinder") {
+                        typing = false
+                        scanning = true
+                    }
+                }
+            }
+
             Section {
                 TextField("···-···", text: $typed)
                     .font(.system(.largeTitle, design: .monospaced))

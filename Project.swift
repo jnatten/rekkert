@@ -71,6 +71,10 @@ let project = Project(
                 "UIBackgroundModes": ["bluetooth-central", "bluetooth-peripheral"],
                 "NSBluetoothAlwaysUsageDescription":
                     "Rekkert keeps the score in step with the other phones at your court, even while your phone is locked in a bag.",
+                // Only for the Scan button on the join sheet. The system camera opens the same link
+                // without the app asking for anything.
+                "NSCameraUsageDescription":
+                    "Rekkert reads the code on the host's screen to join their match. Nothing the camera sees is kept or sent.",
                 // Declared up front so App Store Connect stops asking on every upload. The
                 // only cryptography here is Apple's own — TLS from Security.framework, and
                 // HKDF and ChaChaPoly from CryptoKit — which is exempt.
