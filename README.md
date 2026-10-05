@@ -262,6 +262,28 @@ copy on the other device.
 On Home, press and hold a preset to change its setup or rename it, or tap Edit to drag
 them into order. The watch lists them in the same order, and a new one goes on top.
 
+## Joining with the camera
+
+The share sheet shows the code twice: as six digits to read out, and as a QR code holding
+`https://rekkert.natten.dev/join#482915`. The Camera, the Code Scanner in Control Center and
+**Scan the host's code** on the join sheet all open Rekkert on it and join without typing. A
+host opening their own link gets the share sheet back instead, since joining would end the
+sharing. Any other link on a phone that is hosting, or following a match still in reach, fills
+the join sheet in but does not send it: joining would stop the sharing for everyone on it, or
+leave the match being followed, and a link is too easy to tap for that to happen unasked. The
+sheet says what it costs and the button says what it does, and typing a code there asks the
+same question.
+
+It is a universal link. `docs/.well-known/apple-app-site-association` gives `/join` to the app,
+and `docs/.nojekyll` stops GitHub Pages leaving the `.well-known` folder out. Apple fetches that
+file through its own CDN, so a change to it takes hours to reach phones. A phone without Rekkert
+opens `docs/join/index.html` instead, which shows the code and what to do with it. The code is in
+the fragment, which a browser never sends, so the website never sees it and there is still no
+server that knows a match exists.
+
+The camera is asked for only once the scan button is tapped, and only a Rekkert join link in front
+of it does anything. The watch has no camera, and a wrist joins by typing as before.
+
 ## Joining from the wrist
 
 Most people at a shared match only ever join one. They host nothing, set nothing up, and
@@ -603,7 +625,7 @@ Two booted iPhone simulators share the Mac's network stack, so Bonjour between t
       -rekkert-share-join 730264 -rekkert-demo-late-tap 14
 
 `-rekkert-share-host CODE` pins the code instead of drawing one, `-rekkert-share-join CODE`
-opens the join sheet with it filled in and submits, and `-rekkert-demo-late-tap N` scores a
+opens the code's join link as a scanned QR code would, which fills in the join sheet and submits, and `-rekkert-demo-late-tap N` scores a
 point after N seconds — which is how a *live* update gets verified between two simulators
 that nothing can tap.
 

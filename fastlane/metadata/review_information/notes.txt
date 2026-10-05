@@ -12,6 +12,7 @@ Workouts need a paired Apple Watch, so the control is hidden on iPad and on an i
 
 SHARING A MATCH (LOCAL NETWORK AND BLUETOOTH BACKGROUND MODES)
 In a match, open the "..." menu and tap Share this match. The phone shows a six-digit code. On a second iPhone or iPad, tap Join a match on the start screen and enter the code. Both devices then show and score the same match.
+The share screen also shows the code as a QR code. Scanning it with the Camera app opens Rekkert and joins without typing, and so does Scan the host's code on the Join a match screen. That button is the only use of the camera, and nothing it sees is kept or sent.
 The devices connect directly, with no server. They use Bonjour over the local network, secured with TLS using a pre-shared key derived from the code, and Bluetooth LE at the same time, with frames sealed using a key derived from the same code.
 The app requests the bluetooth-central and bluetooth-peripheral background modes for this feature only. iOS suspends the local-network connection as soon as the app leaves the screen, and players lock their phones and put them in a bag during a match. Bluetooth keeps the score in step on every phone until they look again. The host advertises and the guests scan, and only while a match is shared. Stop sharing, or ending the match, stops both. The app does not ask for Bluetooth or local network permission until the user shares or joins a match.
 Testing this needs two devices with Rekkert installed.

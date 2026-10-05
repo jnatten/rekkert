@@ -91,7 +91,7 @@
 
 <header>
   <h1>Privacy Policy</h1>
-  <p class="dateline">Rekkert for iPhone, iPad and Apple Watch · Last updated 4 October 2026</p>
+  <p class="dateline">Rekkert for iPhone, iPad and Apple Watch · Last updated 5 October 2026</p>
 </header>
 
 <div class="lede">
@@ -123,9 +123,11 @@
 
 <p><strong>Your workouts, to Apple Health and to your own iPhone.</strong> A workout you start is recorded by the watch and saved into Health on that watch, and Apple's own sync puts it on your iPhone with the rest of your health data. Rekkert sends the summary — the times, how long it ran, the energy, your average and highest heart rate — to that same paired iPhone, so it can list it, and then how your heart rate and energy went over the workout, so it can show what each match you played cost. It goes over the private link the score already uses, and over nothing else: it is never offered to the other phones at your court, even while you are sharing a match with them. The live heart rate stays on the watch and is never sent at all; what is sent is read back out of Health once the workout has ended. To place your heart rate in zones, the watch may also read your date of birth and your most recent resting heart rate from Health when a workout starts. Neither is kept or sent anywhere; only the zone boundaries worked out from them go to your iPhone with the summary.</p>
 
-<p><strong>Other phones at your court, but only if you share a match.</strong> When you choose to share, Rekkert announces itself on the local network you are on and over Bluetooth, and accepts phones that have the short code you read out. If your iPhone is out of reach, your Apple Watch can join with the same code over Bluetooth on its own. Whoever joins receives the match itself — the score, the names, the format — so that everyone can follow and score the same game.</p>
+<p><strong>Other phones at your court, but only if you share a match.</strong> When you choose to share, Rekkert announces itself on the local network you are on and over Bluetooth, and accepts phones that have the short code you read out or let them scan. If your iPhone is out of reach, your Apple Watch can join with the same code over Bluetooth on its own. Whoever joins receives the match itself — the score, the names, the format — so that everyone can follow and score the same game.</p>
 
 <p>That traffic goes straight from one device to another, over the local network or Bluetooth. It does not pass through a server, and both connections are encrypted, with the key derived from the code you read out. Rekkert never sees any of it, because there is no "Rekkert" for it to reach.</p>
+
+<p>The code they scan is a link to this website with the code after a <code>#</code>. On a phone with Rekkert the link opens the app. On one without, it opens a page here that shows the code, and the browser never sends the part after the <code>#</code>, so the website never learns it.</p>
 
 <p>If you never share a match, nothing ever leaves your phone and watch at all.</p>
 
@@ -135,7 +137,8 @@
   <li>No analytics, crash reporting or usage measurement</li>
   <li>No advertising, and no tracking for advertising or any other purpose</li>
   <li>No third-party SDKs — the app is built entirely from Apple's frameworks and our own code</li>
-  <li>No location, contacts, photos, microphone or camera access — a workout is recorded as indoor precisely so that no location is ever asked for</li>
+  <li>No location, contacts, photos or microphone access — a workout is recorded as indoor precisely so that no location is ever asked for</li>
+  <li>No camera except while you scan a host's code to join their match. It is read on your phone for that code and nothing else, and nothing the camera sees is kept or sent</li>
   <li>No reading of your Health data beyond your workouts — while one is running, and once more when it ends — and none at all unless one is started</li>
   <li>No workout unless you ask for it — nothing is detected from your movement. A workout starts when you press Start workout, or with a match if you turned that on in Settings, and doing neither means Rekkert never asks Health for anything</li>
   <li>No accounts, sign-in, email address or anything else identifying you</li>

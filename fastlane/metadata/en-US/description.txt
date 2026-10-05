@@ -28,7 +28,7 @@ The watch shows one court at a time. Swipe between them and score any of them. E
 
 SHARE THE MATCH WITH THE COURT
 
-Read out a six character code and the other phones at the court follow the same match and score it too. Phone to phone over the local network. No account, no server, nothing to sign up for.
+Read out a six digit code, or let them scan it, and the other phones at the court follow the same match and score it too. Phone to phone over the local network. No account, no server, nothing to sign up for.
 
 MADE FOR THE SIDE OF A COURT
 
