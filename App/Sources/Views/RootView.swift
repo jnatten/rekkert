@@ -60,6 +60,10 @@ struct RootView: View {
             )
         }
         .onOpenURL(perform: open)
+        // A link from the Camera arrives as a browsing activity, which `onOpenURL` never sees.
+        .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+            if let url = activity.webpageURL { open(url) }
+        }
         .onChange(of: model.sharing.isSharing, initial: true) { _, sharing in
             // Sharing stops the moment the system suspends the app, so a host whose screen
             // times out quietly drops everybody. Telling people to keep the phone awake was
