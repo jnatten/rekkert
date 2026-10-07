@@ -41,31 +41,31 @@ struct JoinMatchSheet: View {
                     }
                 }
             }
-            // Keyed so a link opened while this is already up still lands here.
-            .task(id: prefilled) {
-                if submitsImmediately, let code = SessionCode(prefilled) {
-                    receive(code)
-                } else {
-                    typed = SessionCode.grouped(prefilled)
-                    typing = true
-                }
-            }
             .navigationDestination(isPresented: $scanning) {
                 CodeScannerView { code in
                     scanning = false
                     receive(code)
                 }
             }
-            .onChange(of: model.store.isJoining) { _, joining in
-                // Keyed on the join concluding rather than on the role changing, which it
-                // does not for a guest walking back in. The scoreboard is already behind this.
-                if !joining, model.store.role == .guest, !hasFailed { dismiss() }
+        }
+        // Keyed so a link opened while this is already up still lands here.
+        .task(id: prefilled) {
+            if submitsImmediately, let code = SessionCode(prefilled) {
+                receive(code)
+            } else {
+                typed = SessionCode.grouped(prefilled)
+                typing = true
             }
-            .onDisappear {
-                // Swiped away mid-search: a search left running would conclude with nobody
-                // watching, or make a phone that goes on to share a guest of its own guests.
-                if submitted, model.store.isJoining { model.sharing.cancelJoining() }
-            }
+        }
+        .onChange(of: model.store.isJoining) { _, joining in
+            // Keyed on the join concluding rather than on the role changing, which it
+            // does not for a guest walking back in. The scoreboard is already behind this.
+            if !joining, model.store.role == .guest, !hasFailed { dismiss() }
+        }
+        .onDisappear {
+            // Swiped away mid-search: a search left running would conclude with nobody
+            // watching, or make a phone that goes on to share a guest of its own guests.
+            if submitted, model.store.isJoining { model.sharing.cancelJoining() }
         }
     }
 
