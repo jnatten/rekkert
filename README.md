@@ -259,8 +259,8 @@ Presets are edited on the phone and read on both, so the whole library travels t
 and the newer copy wins. That is what keeps a deletion from being resurrected by a stale
 copy on the other device.
 
-On Home, press and hold a preset to change its setup or rename it, or tap Edit to drag
-them into order. The watch lists them in the same order, and a new one goes on top.
+On Home, press and hold a preset to change its setup or rename it, or tap the pencil to
+drag them into order. The watch lists them in the same order, and a new one goes on top.
 
 ## Joining with the camera
 
@@ -507,6 +507,10 @@ A shared match ends only on the host's side. The reducer would apply a Finish fr
 so a host takes back any that reaches it from a phone other than itself or its own watch — an
 older build that let a guest end it, say — and a guest whose copy that Finish ended is put
 back on the match by it. A guest's own watch ending its copy alone ends nothing of the host's.
+
+Between the host's matches a guest stays on the code, and the host's next match opens on it by
+itself. Home shows the sharing glyph in its corner as a match screen does, so that is never a
+surprise, and tapping it there is the way off.
 
 An event of a kind this build cannot read — recorded by a newer one — changes nothing here,
 is kept in its place in the log and passed on unchanged, so a newer phone on the match never

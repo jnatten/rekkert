@@ -52,7 +52,23 @@ struct SharingBadge: View {
 
     var body: some View {
         if model.sharing.isSharing {
-            if isHosting || model.sharing.isReconnecting {
+            if !isHosting, model.store.state == nil {
+                // Home, between the host's matches: there is no End here to leave from.
+                Menu {
+                    Section(description) {
+                        if model.sharing.isReconnecting {
+                            Button("Enter a new code") { model.showingJoin = true }
+                        }
+                        Button("Leave", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                            model.sharing.stop()
+                        }
+                    }
+                } label: {
+                    glyph
+                }
+                .tint(tint)
+                .accessibilityLabel(description)
+            } else if isHosting || model.sharing.isReconnecting {
                 Button {
                     // A guest has no code to read out. Lost, it may have a new one to type in.
                     if isHosting { model.showingShareCode = true } else { model.showingJoin = true }

@@ -384,13 +384,14 @@ public enum HelpCatalog {
                     "Edit…",
                     symbol: "slider.horizontal.3",
                     also: ["pencil"],
-                    what: "Press and hold a preset to change it or rename it. Edit sorts them.",
+                    what: "Press and hold a preset to change or rename it. The pencil sorts them.",
                     example: "Mia joined the group. Add her to the preset."
                 ),
                 HelpItem(
                     "Join a match",
                     symbol: "person.2.wave.2",
-                    what: "Type or scan the code of a match someone is sharing.",
+                    also: ["person.2.fill"],
+                    what: "Scan or type a shared match's code. The icon top left shows you're on one.",
                     example: "The other team is already scoring on their phone."
                 ),
                 HelpItem(

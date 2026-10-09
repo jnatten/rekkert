@@ -175,10 +175,20 @@ struct HomeView: View {
             }
             .navigationTitle("Rekkert")
             .toolbar {
+                ToolbarItemGroup(placement: .topBarLeading) {
+                    ConnectionBadge()
+                    SharingBadge()
+                }
                 if !model.store.presets.isEmpty {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button(editMode.isEditing ? "Done" : "Edit") {
-                            withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        if editMode.isEditing {
+                            Button(role: .confirm) {
+                                withAnimation { editMode = .inactive }
+                            }
+                        } else {
+                            Button("Edit", systemImage: "pencil") {
+                                withAnimation { editMode = .active }
+                            }
                         }
                     }
                 }
