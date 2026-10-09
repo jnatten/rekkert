@@ -1575,8 +1575,12 @@ public final class MatchStore {
     }
 
     private func shareStandbyOnReconnect() {
-        guard let announcedStandby else { return }
-        Task { _ = await sendLive(encode(.sharing(announcedStandby))) }
+        guard announcedStandby != nil else { return }
+        // Read when it goes, not when it was asked for: one said in between would be overtaken.
+        Task {
+            guard let announcedStandby else { return }
+            _ = await sendLive(encode(.sharing(announcedStandby)))
+        }
     }
 
     /// Offered alongside the presets on reconnect. A workout signal is never queued, so a
