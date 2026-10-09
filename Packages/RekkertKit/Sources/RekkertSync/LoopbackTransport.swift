@@ -18,6 +18,7 @@ nonisolated public final class LoopbackTransport: PeerTransport, @unchecked Send
     /// counterpart's app suspended mid-request, which is a timeout rather than an unreachable
     /// peer. The durable queue still gets through, as it would.
     private var swallowing = false
+    private var unanswered = 0
 
     public init(reachable: Bool = true) {
         var packetContinuation: AsyncStream<InboundPacket>.Continuation!
@@ -59,11 +60,24 @@ nonisolated public final class LoopbackTransport: PeerTransport, @unchecked Send
 
     public func activate() {}
 
+    /// Counted under the same lock as `setReachable`, so once a link is cut this only goes down:
+    /// no answer is left to cross the cut once it reads false.
+    public var isAwaitingAnswers: Bool {
+        lock.withLock { unanswered > 0 }
+    }
+
     public func sendLive(_ payload: Data) async -> Data? {
-        guard isReachable, let peer = lock.withLock({ self.peer }) else { return nil }
-        guard !lock.withLock({ swallowing }) else { return nil }
+        let peer = lock.withLock { () -> LoopbackTransport? in
+            guard connected, !dropOutgoing, !swallowing, let peer else { return nil }
+            unanswered += 1
+            return peer
+        }
+        guard let peer else { return nil }
         return await withCheckedContinuation { continuation in
-            let once = SingleResume(continuation)
+            let once = SingleResume(continuation) { [weak self] in
+                guard let self else { return }
+                lock.withLock { unanswered -= 1 }
+            }
             peer.packets.yield(InboundPacket(payload: payload) { once.resume($0) })
         }
     }
@@ -91,9 +105,11 @@ nonisolated public final class LoopbackTransport: PeerTransport, @unchecked Send
 nonisolated private final class SingleResume: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<Data?, Never>?
+    private let onResume: () -> Void
 
-    init(_ continuation: CheckedContinuation<Data?, Never>) {
+    init(_ continuation: CheckedContinuation<Data?, Never>, onResume: @escaping () -> Void = {}) {
         self.continuation = continuation
+        self.onResume = onResume
     }
 
     func resume(_ value: Data?) {
@@ -101,6 +117,8 @@ nonisolated private final class SingleResume: @unchecked Sendable {
         let pending = continuation
         continuation = nil
         lock.unlock()
-        pending?.resume(returning: value)
+        guard let pending else { return }
+        onResume()
+        pending.resume(returning: value)
     }
 }

@@ -246,7 +246,7 @@ struct HangingSendTests {
         store.configure(counting)
         store.tap(team: .a)
 
-        await eventually(within: 2) { !transport.queued.isEmpty }
+        await eventually { !transport.queued.isEmpty }
         #expect(!transport.queued.isEmpty, "the durable queue got it once the live send was given up on")
     }
 
@@ -269,7 +269,7 @@ struct HangingSendTests {
         }
         defer { synchronising.cancel() }
 
-        await eventually(within: 2) { finished }
+        await eventually { finished }
         #expect(finished, "it gave up on the hello rather than waiting for ever")
     }
 }

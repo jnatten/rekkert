@@ -603,10 +603,12 @@ struct RoleTests {
 
         guest.beginJoining()
         await eventually { guest.role == .guest && points(guest) == BySide(a: 1, b: 0) }
-        await drain(guest)
 
         one.setReachable(false)
         two.setReachable(false)
+        // Not `drain`: the guest can ask again while a drain waits, and an answer goes back
+        // across a cut — with the ending in it, if the host has ended by then.
+        await eventually { !two.isAwaitingAnswers }
         host.discardSession()
         await eventually { host.state == nil }
         await quietPeriod()

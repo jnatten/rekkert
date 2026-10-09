@@ -25,6 +25,7 @@ private final class Star {
     /// The host's end of each link, which is the end that decides whether the guest hears
     /// anything: dropping the guest's own end would only stop it talking, not listening.
     private(set) var links: [LoopbackTransport] = []
+    private(set) var guestEnds: [LoopbackTransport] = []
     private let fanOut = FanOutTransport()
     private var tasks: [Task<Void, Never>] = []
 
@@ -43,6 +44,7 @@ private final class Star {
         let guest = MatchStore(device: DeviceID(), transport: guestFanOut, snapshotInterval: 0)
 
         links.append(hostSide)
+        guestEnds.append(guestSide)
         guests.append(guest)
         tasks.append(Task { await guest.run() })
         return guest
@@ -131,9 +133,11 @@ struct StarTests {
 
         star.host.configure(counting)
         await star.ready()
-        await drain(star.guests[1])
 
+        // Both ends: an answer to a question of its own would carry the taps across anyway.
         star.links[1].setReachable(false)
+        star.guestEnds[1].setReachable(false)
+        await eventually { !star.guestEnds[1].isAwaitingAnswers }
         for _ in 0 ..< 3 { star.guests[0].tap(team: .a) }
         // Anchored on the points reaching the host rather than on a stretch of time: it says
         // the three taps have been everywhere they can go while guest 1 is cut off.
@@ -141,6 +145,7 @@ struct StarTests {
         #expect(points(star.guests[1]) == BySide(a: 0, b: 0), "still in the dark")
 
         star.links[1].setReachable(true)
+        star.guestEnds[1].setReachable(true)
         await eventually { points(star.guests[1]) == BySide(a: 3, b: 0) }
         #expect(points(star.guests[1]) == BySide(a: 3, b: 0), "and caught up on its own")
     }
