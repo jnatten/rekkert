@@ -51,6 +51,12 @@ struct RootView: View {
             TVGuideSheet()
         }
         .sheet(isPresented: Binding(
+            get: { model.showingHelp },
+            set: { model.showingHelp = $0 }
+        )) {
+            HelpSheet()
+        }
+        .sheet(isPresented: Binding(
             get: { model.showingJoin },
             set: { model.showingJoin = $0 }
         ), onDismiss: { linkedCode = nil }) {
@@ -81,6 +87,7 @@ struct RootView: View {
             if let code = DemoLaunch.joinCode.flatMap(SessionCode.init) { open(code.joinLink) }
             if DemoLaunch.board { model.showingBoard = true }
             if DemoLaunch.tvGuide { model.showingTVGuide = true }
+            if DemoLaunch.help { model.showingHelp = true }
             if DemoLaunch.tvShot { BoardCapture.start() }
             if DemoLaunch.isLandscape, let scene = UIApplication.shared.phoneScene {
                 scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))

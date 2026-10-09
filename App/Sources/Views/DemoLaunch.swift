@@ -77,6 +77,15 @@ enum DemoLaunch {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-voices")
     }
 
+    /// Opens the help, and with a page id on that page: -rekkert-demo-help watch.score
+    static var help: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-help")
+    }
+
+    static var helpPage: String? {
+        value(for: "-rekkert-demo-help").flatMap { $0.hasPrefix("-") ? nil : $0 }
+    }
+
     /// Opens the settings screen.
     static var openSettings: Bool {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-settings")

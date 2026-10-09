@@ -18,6 +18,7 @@ final class AppModel {
     var isBoardOnTV = false
     var showingBoard = false
     var showingTVGuide = false
+    var showingHelp = false
     #endif
     #if os(watchOS)
     /// Which way this wrist reads the court. Device-local, like the phone's full-screen

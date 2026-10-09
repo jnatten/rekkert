@@ -183,6 +183,11 @@ struct HomeView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    Button("How Rekkert works", systemImage: "questionmark.circle") {
+                        model.showingHelp = true
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("Settings", systemImage: "gearshape") { path.append(.settings) }
                 }
             }

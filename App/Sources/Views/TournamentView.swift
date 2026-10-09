@@ -77,6 +77,9 @@ struct CourtListView: View {
                             }
                             .pickerStyle(.menu)
                         }
+                        Button("How Rekkert works", systemImage: "questionmark.circle") {
+                            model.showingHelp = true
+                        }
                     }
                 }
             }

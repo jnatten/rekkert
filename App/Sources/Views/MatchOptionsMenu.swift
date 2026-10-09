@@ -9,6 +9,7 @@ struct MatchOptionsMenu: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var settling = false
     @State private var showingTV = false
+    @State private var showingHelp = false
     var round = 0
     var court = 0
     /// For the modes that play several rounds and have something to look back at. Here
@@ -84,11 +85,15 @@ struct MatchOptionsMenu: View {
             Button("Swap colours", systemImage: "circle.lefthalf.filled") {
                 model.store.toggleTeamColors()
             }
+            Button("How Rekkert works", systemImage: "questionmark.circle") {
+                showingHelp = true
+            }
         } label: {
             Image(systemName: "ellipsis.circle")
         }
         .accessibilityLabel("Match options")
         .sheet(isPresented: $showingTV) { TVGuideSheet() }
+        .sheet(isPresented: $showingHelp) { HelpSheet() }
         .confirmationDialog(
             "Use this phone's score?",
             isPresented: $settling,
