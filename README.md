@@ -457,6 +457,27 @@ Foundation and therefore runs under `swift test` on macOS in about a second — 
 That matters because WatchConnectivity is only partly usable on the Simulator, so
 convergence has to be provable without it.
 
+## The help screen
+
+**How Rekkert works**, behind the ? on Home and at the foot of a match's options menu, explains
+every mode and every button on the watch and the phone. It never opens by itself: it is there for
+whoever goes looking, a topic at a time, with each control a line long until it is tapped.
+
+What it says lives in `RekkertCore/Help/HelpCatalog.swift`, as data the tests can read; the app
+only draws it. Three things keep it from falling behind the app:
+
+- A new `GameMode` does not compile until it has its `help` and a `HelpSample` to draw its board.
+- `HelpTests` reads every SF Symbol named in `App/`, `WatchApp/` and `Shared/`, and fails on one
+  the help neither explains nor lists in `selfExplanatory` with a reason. A new button is a
+  failing test until it is explained; a symbol the help explains that neither app shows any
+  more fails too.
+- It fails as well on a `##` section of this README, from Modes up to Getting started, that no
+  page names in its `readme`. CI skips a push that only touches Markdown, so a new section is
+  caught by the next push with code in it, or by `swift test` here.
+
+The tests hold each line short — eighty characters for what a control does, a hundred for the
+example — because nobody at the side of a court reads a paragraph.
+
 ## How syncing works
 
 Every score change is an append-only event stamped with `(deviceID, sequence)` and a
@@ -607,7 +628,7 @@ Debug builds accept `-rekkert-demo traditional|winnercourt|friendly|americano|me
 `-rekkert-demo-fullscreen`, `-rekkert-demo-board`, `-rekkert-demo-courts N`, `-rekkert-demo-tv-shot`, `-rekkert-demo-tv-guide`,
 `-rekkert-demo-blackout`, `-rekkert-demo-settings`, `-rekkert-demo-swap-player`,
 `-rekkert-demo-workouts`, `-rekkert-demo-workout`, `-rekkert-demo-workout-paused`,
-`-rekkert-demo-voices` or
+`-rekkert-demo-voices`, `-rekkert-demo-help [page id]` or
 `-rekkert-demo-new <mode>`) as
 launch arguments to put the app into a given state, since `simctl` cannot tap the screen.
 
