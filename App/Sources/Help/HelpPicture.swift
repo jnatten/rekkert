@@ -23,7 +23,8 @@ struct ModeBoardPicture: View {
 struct WatchScorePicture: View {
     @Environment(\.teamPalette) private var palette
     let items: [HelpItem]
-    @Binding var selected: String?
+    let selected: String?
+    let onPick: (String) -> Void
 
     private let snapshot: ScoreboardSnapshot? = {
         var snapshot = HelpSample.goldenPoint.flatMap { ScoreboardSnapshot.make(from: $0) }
@@ -54,7 +55,7 @@ struct WatchScorePicture: View {
             .overlay(alignment: .topTrailing) { pageDots }
             .frame(width: 190, height: 232)
             .clipShape(.rect(cornerRadius: 36))
-            .overlay { Spots(items: items, selected: $selected) }
+            .overlay { Spots(items: items, selected: selected, onPick: onPick) }
             .padding(8)
             .background(.black, in: .rect(cornerRadius: 44))
             .overlay(RoundedRectangle(cornerRadius: 44).stroke(Color(white: 0.4), lineWidth: 3))
@@ -114,7 +115,8 @@ struct WatchScorePicture: View {
 
 struct PhoneScorePicture: View {
     let items: [HelpItem]
-    @Binding var selected: String?
+    let selected: String?
+    let onPick: (String) -> Void
 
     private let snapshot = HelpSample.goldenPoint.flatMap { ScoreboardSnapshot.make(from: $0) }
 
@@ -153,7 +155,7 @@ struct PhoneScorePicture: View {
                 .padding(6)
             }
             .overlay {
-                Spots(items: items, selected: $selected).padding(6)
+                Spots(items: items, selected: selected, onPick: onPick).padding(6)
             }
         }
     }
@@ -207,14 +209,15 @@ private struct ScaledPhoneScreen<Content: View>: View {
 /// in the legend underneath.
 private struct Spots: View {
     let items: [HelpItem]
-    @Binding var selected: String?
+    let selected: String?
+    let onPick: (String) -> Void
 
     var body: some View {
         GeometryReader { geometry in
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 if let spot = item.spot {
                     Button {
-                        withAnimation(.snappy) { selected = selected == item.id ? nil : item.id }
+                        onPick(item.id)
                     } label: {
                         HelpDot(number: index + 1, isSelected: selected == item.id)
                     }

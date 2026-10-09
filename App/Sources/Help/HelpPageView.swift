@@ -1,6 +1,8 @@
 import RekkertCore
 import SwiftUI
 
+/// Drawn as a list, but laid out in a plain stack: a `List` resizes a row in one jump and only
+/// then animates what is inside it, so a row opening shows its lines on top of each other first.
 struct HelpPageView: View {
     let page: HelpPage
     @State private var open: String?
@@ -11,66 +13,97 @@ struct HelpPageView: View {
 
     var body: some View {
         ScrollViewReader { reader in
-            List {
-                switch page.picture {
-                case .board(let mode):
-                    pictureSection { ModeBoardPicture(mode: mode) }
-                    modeSection(mode)
-                case .watchScore:
-                    pictureSection { WatchScorePicture(items: items, selected: $open) }
-                    controls(numbered: true)
-                case .phoneScore:
-                    pictureSection { PhoneScorePicture(items: items, selected: $open) }
-                    controls(numbered: true)
-                case .watchButtons, .phoneButtons:
-                    controls(numbered: false)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(page.whereToFind)
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 16)
+                    switch page.picture {
+                    case .board(let mode):
+                        picture { ModeBoardPicture(mode: mode) }
+                        modeCard(mode)
+                    case .watchScore:
+                        picture {
+                            WatchScorePicture(items: items, selected: open) { pick($0, reader: reader) }
+                        }
+                        controls(numbered: true)
+                    case .phoneScore:
+                        picture {
+                            PhoneScorePicture(items: items, selected: open) { pick($0, reader: reader) }
+                        }
+                        controls(numbered: true)
+                    case .watchButtons, .phoneButtons:
+                        controls(numbered: false)
+                    }
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
-            .listSectionSpacing(.compact)
+            .background(Color(.systemGroupedBackground))
             .navigationTitle(page.title)
             .navigationBarTitleDisplayMode(.inline)
-            .onChange(of: open) { _, id in
-                guard let id else { return }
-                withAnimation { reader.scrollTo(id) }
-            }
         }
     }
 
-    private func pictureSection(@ViewBuilder _ picture: () -> some View) -> some View {
-        Section {
-            picture()
-                .frame(maxWidth: .infinity)
-                .listRowBackground(Color.clear)
-        } header: {
-            Text(page.whereToFind)
+    private func toggle(_ id: String) {
+        withAnimation(.snappy) { open = open == id ? nil : id }
+    }
+
+    private func pick(_ id: String, reader: ScrollViewProxy) {
+        withAnimation(.snappy) {
+            open = open == id ? nil : id
+            if open != nil { reader.scrollTo(id, anchor: .center) }
         }
     }
 
-    private func modeSection(_ mode: GameMode) -> some View {
-        Section {
-            Text(mode.help.pickItWhen).font(.headline)
+    private func picture(@ViewBuilder _ content: () -> some View) -> some View {
+        content()
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+    }
+
+    private func modeCard(_ mode: GameMode) -> some View {
+        card {
+            Text(mode.help.pickItWhen)
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             ForEach(mode.help.points, id: \.self) { point in
-                Text(point).font(.subheadline)
+                Divider().padding(.leading, 16)
+                Text(point)
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
             }
         }
     }
 
     private func controls(numbered: Bool) -> some View {
-        Section {
-            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                Button {
-                    withAnimation(.snappy) { open = open == item.id ? nil : item.id }
-                } label: {
-                    row(item, number: numbered ? index + 1 : nil)
+        VStack(alignment: .leading, spacing: 8) {
+            card {
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    if index > 0 { Divider().padding(.leading, 58) }
+                    Button { toggle(item.id) } label: {
+                        row(item, number: numbered ? index + 1 : nil)
+                    }
+                    .buttonStyle(HelpRowStyle())
+                    .id(item.id)
                 }
-                .buttonStyle(.plain)
-                .id(item.id)
             }
-        } header: {
-            if !numbered { Text(page.whereToFind) }
-        } footer: {
             Text("Tap one for an example.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
         }
+    }
+
+    private func card(@ViewBuilder _ content: () -> some View) -> some View {
+        VStack(spacing: 0) { content() }
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(.rect(cornerRadius: 24))
     }
 
     private func row(_ item: HelpItem, number: Int?) -> some View {
@@ -78,6 +111,7 @@ struct HelpPageView: View {
         return HStack(alignment: .top, spacing: 12) {
             if let number {
                 HelpDot(number: number, isSelected: isOpen)
+                    .frame(width: 30, height: 30)
             } else {
                 ControlIcon(symbol: item.symbol, onWatch: page.chapter == .watch)
             }
@@ -92,30 +126,42 @@ struct HelpPageView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 if isOpen {
-                    Text("e.g. \(item.example)")
-                        .font(.footnote)
-                        .italic()
-                        .padding(.top, 4)
-                    if let only = item.only {
-                        Text(only)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 2)
-                            .background(.quaternary, in: .capsule)
-                            .padding(.top, 2)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("e.g. \(item.example)")
+                            .font(.footnote)
+                            .italic()
+                        if let only = item.only {
+                            Text(only)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(.quaternary, in: .capsule)
+                        }
                     }
+                    .padding(.top, 4)
+                    .transition(.opacity)
                 }
             }
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "chevron.down")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.tertiary)
                 .rotationEffect(.degrees(isOpen ? 180 : 0))
-                .padding(.top, 4)
+                .padding(.top, 8)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
         .contentShape(.rect)
+        .clipped()
         .accessibilityElement(children: .combine)
+    }
+}
+
+private struct HelpRowStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? Color(.systemFill) : .clear)
     }
 }
 
