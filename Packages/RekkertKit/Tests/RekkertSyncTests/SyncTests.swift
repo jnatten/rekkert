@@ -111,14 +111,16 @@ struct SyncTests {
 
         pair.phone.configure(setup)
         await eventually { inStep(pair.phone, pair.watch) }
-        await drain(pair.watch)
 
         pair.phoneLink.setDroppingOutgoing(true)
+        pair.watchLink.setDroppingOutgoing(true)
+        await waitOutAnswers(pair.phoneLink, pair.watchLink)
         for _ in 0 ..< 3 { pair.phone.tap(team: .a) }
         await quietPeriod()
         #expect(points(pair.watch) == BySide(a: 0, b: 0), "watch is still in the dark")
 
         pair.phoneLink.setDroppingOutgoing(false)
+        pair.watchLink.setDroppingOutgoing(false)
         await eventually { points(pair.watch) == BySide(a: 3, b: 0) && pair.phone.state == pair.watch.state }
         #expect(points(pair.watch) == BySide(a: 3, b: 0))
         #expect(pair.phone.state == pair.watch.state)
@@ -728,13 +730,15 @@ struct SyncTests {
         pair.watch.onPoint = { announced.append($0) }
 
         // Scored while nothing is carrying them across, then delivered in one go.
-        await drain(pair.watch)
         pair.phoneLink.setReachable(false)
+        pair.watchLink.setReachable(false)
+        await waitOutAnswers(pair.phoneLink, pair.watchLink)
         for _ in 0 ..< 5 { pair.phone.tap(team: .b) }
         await quietPeriod()
         #expect(announced.isEmpty, "nothing arrived yet")
 
         pair.phoneLink.setReachable(true)
+        pair.watchLink.setReachable(true)
         await pair.phone.synchronise()
         await pair.watch.synchronise()
         await eventually { inStep(pair.phone, pair.watch) }

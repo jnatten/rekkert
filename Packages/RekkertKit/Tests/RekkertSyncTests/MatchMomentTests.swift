@@ -218,8 +218,8 @@ struct MatchMomentTests {
         pair.phone.configure(traditional)
         let match = pair.phone.log.sessionID
         await eventually { inStep(pair.phone, pair.watch) }
-        await drain(pair.phone, pair.watch)
         pair.apart()
+        await waitOutAnswers(pair.phoneLink, pair.watchLink)
 
         pair.phone.finish()
         #expect(pair.onPhone.ended == [match])

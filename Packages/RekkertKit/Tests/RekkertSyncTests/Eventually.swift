@@ -28,16 +28,15 @@ func inStep(_ one: MatchStore, _ other: MatchStore) -> Bool {
         && one.state == other.state
 }
 
-/// Before a link is cut: one more round trip from each store, which comes back only once every
-/// question that store asked before it has been answered.
+/// Once a link is cut: until every question already asked across it has been answered.
 ///
 /// A reply goes back whether or not the link is still up, and the answer to a hello carries the
 /// events the asker is missing. A question asked before the cut and answered after it carries
-/// across exactly what the cut is keeping apart. Each link delivers in order, so this waits out
-/// every such question without guessing how long they take.
+/// across exactly what the cut is keeping apart. Cut first, so nothing new is asked while this
+/// waits, and cut both ends: the one left up goes on asking, and its answers come back too.
 @MainActor
-func drain(_ stores: MatchStore...) async {
-    for store in stores { await store.synchronise() }
+func waitOutAnswers(_ ends: LoopbackTransport...) async {
+    await eventually { ends.allSatisfy { !$0.isAwaitingAnswers } }
 }
 
 /// A fixed stretch of time, for when nothing after it depends on how much got done inside it:

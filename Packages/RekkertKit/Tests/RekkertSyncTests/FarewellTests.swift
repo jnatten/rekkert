@@ -61,9 +61,9 @@ private final class HostAndGuest {
     }
 
     func cut() async {
-        await drain(host, guest)
         hostSide.setReachable(false)
         guestSide.setReachable(false)
+        await waitOutAnswers(hostSide, guestSide)
     }
 
     func reconnect() {

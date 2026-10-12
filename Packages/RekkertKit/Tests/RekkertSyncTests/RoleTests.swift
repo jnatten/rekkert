@@ -477,9 +477,9 @@ struct RoleTests {
 
         host.tap(team: .a)
         await eventually { guest.resultRewind != nil && host.state == nil }
-        await drain(host, guest)
         one.setReachable(false)
         two.setReachable(false)
+        await waitOutAnswers(one, two)
         host.configure(setup)
         guest.undoResult()
         #expect(guest.state != nil, "the guest reopened the match")
@@ -523,10 +523,10 @@ struct RoleTests {
 
         host.tap(team: .a)
         await eventually { guest.resultRewind != nil && host.state == nil }
-        await drain(host, guest)
         #expect(persistence.historyRecord(ended) != nil)
         one.setReachable(false)
         two.setReachable(false)
+        await waitOutAnswers(one, two)
 
         // Given the time to try, so nothing about the match in between is still waiting to go
         // when the host is back.
@@ -606,9 +606,7 @@ struct RoleTests {
 
         one.setReachable(false)
         two.setReachable(false)
-        // Not `drain`: the guest can ask again while a drain waits, and an answer goes back
-        // across a cut — with the ending in it, if the host has ended by then.
-        await eventually { !two.isAwaitingAnswers }
+        await waitOutAnswers(one, two)
         host.discardSession()
         await eventually { host.state == nil }
         await quietPeriod()

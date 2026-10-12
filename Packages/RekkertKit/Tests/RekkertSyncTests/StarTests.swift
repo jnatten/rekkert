@@ -22,10 +22,9 @@ private let counting = SessionSetup.pointCount(
 private final class Star {
     let host: MatchStore
     private(set) var guests: [MatchStore] = []
-    /// The host's end of each link, which is the end that decides whether the guest hears
-    /// anything: dropping the guest's own end would only stop it talking, not listening.
-    private(set) var links: [LoopbackTransport] = []
-    private(set) var guestEnds: [LoopbackTransport] = []
+    /// Each guest's link by both ends. Cut at the host's alone, a guest still talks, and the
+    /// answers to its own questions bring it the host's news all the same.
+    private var links: [(host: LoopbackTransport, guest: LoopbackTransport)] = []
     private let fanOut = FanOutTransport()
     private var tasks: [Task<Void, Never>] = []
 
@@ -43,8 +42,7 @@ private final class Star {
         guestFanOut.attach(guestSide, as: .sharedSession)
         let guest = MatchStore(device: DeviceID(), transport: guestFanOut, snapshotInterval: 0)
 
-        links.append(hostSide)
-        guestEnds.append(guestSide)
+        links.append((hostSide, guestSide))
         guests.append(guest)
         tasks.append(Task { await guest.run() })
         return guest
@@ -56,6 +54,17 @@ private final class Star {
     }
 
     var everyone: [MatchStore] { [host] + guests }
+
+    func cut(_ guest: Int) async {
+        links[guest].host.setReachable(false)
+        links[guest].guest.setReachable(false)
+        await waitOutAnswers(links[guest].host, links[guest].guest)
+    }
+
+    func reconnect(_ guest: Int) {
+        links[guest].host.setReachable(true)
+        links[guest].guest.setReachable(true)
+    }
 
     /// Everyone is holding the host's session. The tests that go on to score need this to
     /// have happened first, and a fixed sleep only guesses that it has — under a loaded
@@ -134,18 +143,14 @@ struct StarTests {
         star.host.configure(counting)
         await star.ready()
 
-        // Both ends: an answer to a question of its own would carry the taps across anyway.
-        star.links[1].setReachable(false)
-        star.guestEnds[1].setReachable(false)
-        await eventually { !star.guestEnds[1].isAwaitingAnswers }
+        await star.cut(1)
         for _ in 0 ..< 3 { star.guests[0].tap(team: .a) }
         // Anchored on the points reaching the host rather than on a stretch of time: it says
         // the three taps have been everywhere they can go while guest 1 is cut off.
         await eventually { points(star.host) == BySide(a: 3, b: 0) }
         #expect(points(star.guests[1]) == BySide(a: 0, b: 0), "still in the dark")
 
-        star.links[1].setReachable(true)
-        star.guestEnds[1].setReachable(true)
+        star.reconnect(1)
         await eventually { points(star.guests[1]) == BySide(a: 3, b: 0) }
         #expect(points(star.guests[1]) == BySide(a: 3, b: 0), "and caught up on its own")
     }
@@ -270,9 +275,8 @@ struct SplitBrainTests {
 
         star.host.configure(counting)
         await star.ready()
-        await drain(star.host, star.guests[0])
 
-        star.links[0].setReachable(false)
+        await star.cut(0)
         for _ in 0 ..< 2 { star.host.tap(team: .a) }
         for _ in 0 ..< 2 { star.guests[0].tap(team: .a) }
         await eventually {
@@ -281,7 +285,7 @@ struct SplitBrainTests {
         #expect(points(star.host) == BySide(a: 2, b: 0), "each of them scoring alone")
         #expect(points(star.guests[0]) == BySide(a: 2, b: 0))
 
-        star.links[0].setReachable(true)
+        star.reconnect(0)
         // Both ends, not just the host: the guest needs the host's two taps back as much as
         // the host needs the guest's, and anchoring on one of them only asks half the question.
         await eventually {
@@ -307,11 +311,11 @@ struct SplitBrainTests {
         await star.ready()
         let session = star.guests[0].log.sessionID
 
-        star.links[0].setReachable(false)
+        await star.cut(0)
         star.guests[0].tap(team: .b)
         star.host.tap(team: .a)
         await quietPeriod()
-        star.links[0].setReachable(true)
+        star.reconnect(0)
         await eventually { points(star.guests[0]) == BySide(a: 1, b: 1) }
 
         #expect(star.guests[0].log.sessionID == session, "the same match it was already on")
@@ -326,11 +330,11 @@ struct SplitBrainTests {
         star.host.configure(counting)
         await star.ready()
 
-        star.links[0].setReachable(false)
+        await star.cut(0)
         star.guests[0].tap(team: .a)
         star.host.tap(team: .b)
         await quietPeriod()
-        star.links[0].setReachable(true)
+        star.reconnect(0)
         await eventually { points(star.guests[0]) == BySide(a: 1, b: 1) }
 
         for store in star.everyone {

@@ -127,9 +127,9 @@ struct OwnWatchTests {
         defer { tasks.forEach { $0.cancel() } }
         pair.phone.beginJoining()
         await eventually { pair.phone.role == .guest && inStep(pair.watch, pair.host) && !pair.watch.canEndSession }
-        await drain(pair.host, pair.phone)
         pair.phoneToHost.setReachable(false)
         pair.hostToPhone.setReachable(false)
+        await waitOutAnswers(pair.phoneToHost, pair.hostToPhone)
 
         pair.phone.tap(team: .a)
         pair.host.undoLast()
@@ -260,10 +260,12 @@ struct OwnWatchTests {
         await eventually { pair.host.log.sessionID == pair.phone.log.sessionID && pair.host.role == .guest }
         #expect(pair.host.role == .guest, "joined the match it was already holding")
         await eventually { inStep(pair.host, pair.phone) }
-        await drain(pair.host)
 
-        // The other phone's app is suspended mid-request: still connected, answering nothing.
+        // The other phone's app is suspended mid-request: still connected, answering nothing,
+        // and asking nothing either.
         pair.phoneToHost.setSwallowing(true)
+        pair.hostToPhone.setSwallowing(true)
+        await waitOutAnswers(pair.phoneToHost, pair.hostToPhone)
         pair.phone.tap(team: .a)
         await eventually { points(pair.watch) == BySide(a: 1, b: 0) }
         await quietPeriod()
@@ -271,6 +273,7 @@ struct OwnWatchTests {
 
         // Back, with nothing on the wire to say so.
         pair.phoneToHost.setSwallowing(false)
+        pair.hostToPhone.setSwallowing(false)
         await eventually { points(pair.host) == BySide(a: 1, b: 0) }
         #expect(points(pair.host) == BySide(a: 1, b: 0), "the outbox kept it for the peer that had not answered")
     }
