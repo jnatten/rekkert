@@ -51,9 +51,27 @@ struct WatchMenuView: View {
                     }
                 }
                 if case .tournament(let tournament)? = model.store.state {
+                    if tournament.isLadder, let round = tournament.currentRound, !round.isCancelled, !round.isEnded {
+                        if let clock = round.clock {
+                            action(clock.isPaused ? "Resume" : "Pause", systemImage: clock.isPaused ? "play.fill" : "pause.fill") {
+                                WKInterfaceDevice.current().play(.click)
+                                if clock.isPaused { model.store.resumeRound() } else { model.store.pauseRound() }
+                            }
+                            action("Add 2 min", systemImage: "plus.circle") {
+                                WKInterfaceDevice.current().play(.click)
+                                model.store.snoozeRound(minutes: 2)
+                            }
+                        }
+                        if !tournament.isDone(round) {
+                            action("End round", systemImage: "flag.pattern.checkered", tint: .orange) {
+                                confirming = .endRound
+                            }
+                        }
+                    }
                     action("Next round", systemImage: "arrow.right.circle.fill", tint: .blue) {
                         confirming = .nextRound
                     }
+                    .disabled(tournament.isLadder && !tournament.canDrawNextRound)
                     action(
                         "Me: \(model.store.me.flatMap(tournament.player)?.name ?? "Not set")",
                         systemImage: "person.crop.circle"
@@ -179,6 +197,13 @@ struct WatchMenuView: View {
     /// A friendly ends a round rather than a set, and draws rather than finishes — so the
     /// questions the dialog asks are its own.
     private func question(_ pending: Confirmation) -> String {
+        if case .tournament(let tournament)? = model.store.state, tournament.isLadder {
+            switch pending {
+            case .endRound: return "End the round on every court?"
+            case .nextRound: return "Draw the next round?"
+            case .finish, .discard: return pending.question
+            }
+        }
         guard friendlyRound != nil else { return pending.question }
         switch pending {
         case .endRound: return "Stop this round where it stands?"
@@ -239,7 +264,7 @@ struct WatchMenuView: View {
             model.store.endRound()
         case .nextRound:
             WKInterfaceDevice.current().play(.success)
-            if case .tournament(let tournament)? = model.store.state,
+            if case .tournament(let tournament)? = model.store.state, !tournament.isLadder,
                let round = tournament.currentRound {
                 model.store.setRoundConfirmed(round.index, true)
             }

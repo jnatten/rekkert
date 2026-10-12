@@ -253,7 +253,13 @@ struct WatchCourtPage: View {
     }
 
     private func serveSideButton(_ title: String, court: ServeCourt, snapshot: ScoreboardSnapshot) -> some View {
-        Button(title) { model.store.chooseServeSide(court) }
+        Button(title) {
+            if isOneOfSeveralCourts {
+                model.store.chooseServeSide(court, round: round, court: self.court)
+            } else {
+                model.store.chooseServeSide(court)
+            }
+        }
             .font(.system(size: 12))
             .lineLimit(1)
             .minimumScaleFactor(0.7)
@@ -299,7 +305,7 @@ struct WatchCourtPage: View {
     /// Crown-driven correction. watchOS Steppers bind to the Digital Crown when focused.
     @ViewBuilder
     private func correction(_ snapshot: ScoreboardSnapshot) -> some View {
-        if case .tournament? = model.store.state, !snapshot.isLocked {
+        if case .tournament(let tournament)? = model.store.state, !tournament.isLadder, !snapshot.isLocked {
             VStack(spacing: 4) {
                 Text("Fix score").font(.system(size: 11)).foregroundStyle(.secondary)
                 ForEach(layout.order, id: \.self) { side in
@@ -347,7 +353,14 @@ struct WatchStandingsView: View {
                             .frame(width: 16, alignment: .trailing)
                         Text(standing.player.name).font(.footnote).lineLimit(1)
                         Spacer()
-                        Text("\(standing.total)").font(.footnote.bold().monospacedDigit())
+                        if tournament.isLadder {
+                            Text(standing.court.map { "C\($0 + 1)" } ?? "–")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text("\(standing.roundsWon)").font(.footnote.bold().monospacedDigit())
+                        } else {
+                            Text("\(standing.total)").font(.footnote.bold().monospacedDigit())
+                        }
                     }
                 }
             }
