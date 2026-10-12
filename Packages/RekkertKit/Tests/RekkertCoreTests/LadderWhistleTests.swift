@@ -157,6 +157,27 @@ struct LadderWhistleTests {
         #expect(ladder(onPhone)?.rounds[1].matches[0].games?.points == BySide(a: 1, b: 0))
     }
 
+    /// Two points from the watch race the whistle and turn court 1 around: it was A's when
+    /// the phone drew, and B's once they land. The score says so; the drawn round stays put.
+    @Test func aLatePointThatTurnsACourtAroundMovesNobodyAlreadyDrawn() throws {
+        var start = ladderLog()
+        score(&start, court: 0, games(1, .a) + games(1, .b) + [.a])
+        score(&start, court: 1, games(1, .a))
+        var onWatch = start
+        score(&onWatch, court: 0, [.b, .b], from: early)
+        let late = Array(onWatch.ordered.suffix(2))
+
+        var onPhone = start
+        onPhone.blowWhistle(from: phone)
+        onPhone.drawRound(from: phone)
+        #expect(status(onPhone, court: 0)?.winner == .a)
+        let drawn = try #require(ladder(onPhone)?.rounds[1])
+
+        onPhone.merge(late)
+        #expect(status(onPhone, court: 0)?.winner == .b, "the late points won court 1 at the whistle")
+        #expect(ladder(onPhone)?.rounds[1] == drawn)
+    }
+
     @Test func undoOnAnEarlierLadderRoundIsNotOffered() {
         var log = ladderLog()
         score(&log, court: 0, games(1, .a))

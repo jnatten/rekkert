@@ -137,16 +137,16 @@ public enum SessionReducer {
             tournament.rounds[round].isCancelled = isCancelled
             state = .tournament(tournament)
 
-        case .nextRound(let after, let at, let sitOuts):
+        case .nextRound(let after, let at, let sitOuts, let placed):
             switch state {
             case .tournament(let tournament):
                 // A draw that crossed the finish would add a round nobody played to the
                 // standings, and pay its bench for sitting it out.
                 guard !tournament.isFinished else { return }
                 let drawing: Tournament? = if tournament.rounds.count == after + 1 {
-                    try? TournamentEngine.appendingRound(to: tournament, sitOuts: sitOuts)
+                    try? TournamentEngine.appendingRound(to: tournament, sitOuts: sitOuts, placed: placed)
                 } else if let sitOuts, tournament.rounds.count == after + 2, tournament.canRedrawCurrentRound {
-                    try? TournamentEngine.redrawingLastRound(of: tournament, sitOuts: sitOuts)
+                    try? TournamentEngine.redrawingLastRound(of: tournament, sitOuts: sitOuts, placed: placed)
                 } else {
                     nil
                 }

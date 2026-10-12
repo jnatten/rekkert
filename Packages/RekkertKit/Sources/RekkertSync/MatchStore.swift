@@ -235,7 +235,11 @@ public final class MatchStore {
         // -1 when nothing has been drawn yet, so the first round is "the one after none".
         case .tournament(let tournament):
             guard !tournament.isLadder || tournament.canDrawNextRound else { return }
-            record(.nextRound(after: tournament.rounds.count - 1, at: Date()))
+            record(.nextRound(
+                after: tournament.rounds.count - 1,
+                at: Date(),
+                placed: TournamentEngine.ladderPlacement(of: tournament)
+            ))
         case .friendly(let session):
             record(.nextRound(after: session.rounds.count - 1, at: Date()))
         case .traditional, .winnerCourt, .pointCount, .none:
@@ -247,7 +251,12 @@ public final class MatchStore {
     /// only while nothing has been played in it.
     public func redrawRound(sittingOut sitOuts: [PlayerID]) {
         guard case .tournament(let tournament) = state, let last = tournament.rounds.indices.last else { return }
-        record(.nextRound(after: last - 1, at: Date(), sitOuts: sitOuts))
+        record(.nextRound(
+            after: last - 1,
+            at: Date(),
+            sitOuts: sitOuts,
+            placed: TournamentEngine.ladderPlacement(of: tournament, sitOuts: sitOuts, redrawing: true)
+        ))
     }
 
     /// The whistle in winner court, on every court of a ladder, and calling a friendly round

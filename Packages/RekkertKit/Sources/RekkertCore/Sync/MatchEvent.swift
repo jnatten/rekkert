@@ -39,7 +39,13 @@ public enum EventKind: Codable, Sendable, Hashable {
     /// been drawn but nothing has been played in it, which is how the bench is picked by
     /// hand: the round is drawn as always, then drawn again around who is actually there.
     /// Absent from older builds, which drop it and keep the round they drew.
-    case nextRound(after: Int, at: Date? = nil, sitOuts: [PlayerID]? = nil)
+    ///
+    /// `placed` is where a ladder's draw put everybody, as the device that drew it worked it
+    /// out. A ladder round is drawn from how the one before finished, and a point that raced
+    /// the whistle can land before it and change that; carried, the round stays where people
+    /// walked onto it. Absent from the other formats and from draws made before it existed,
+    /// which are worked out here as they always were.
+    case nextRound(after: Int, at: Date? = nil, sitOuts: [PlayerID]? = nil, placed: LadderPlacement? = nil)
     /// A timed ladder round's countdown, paused, resumed or snoozed. The whole clock as the
     /// device that changed it worked it out, so two snoozes at once add their minutes once.
     case setRoundClock(round: Int, clock: RoundClock)
@@ -131,7 +137,7 @@ extension EventKind {
     /// predate `MatchEvent.at`.
     public var payloadDate: Date? {
         switch self {
-        case .configure(_, let at), .endRound(_, let at), .nextRound(_, let at, _): at
+        case .configure(_, let at), .endRound(_, let at), .nextRound(_, let at, _, _): at
         case .point, .setScore, .setFirstServer, .setServeOrder, .chooseServeSide, .setRoundClock,
              .setRoundConfirmed, .setRoundCancelled, .finish, .restore, .undo, .unrecognised: nil
         }

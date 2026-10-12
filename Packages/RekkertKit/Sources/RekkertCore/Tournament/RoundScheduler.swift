@@ -235,13 +235,20 @@ public enum MexicanoScheduler {
 
 public enum TournamentEngine {
     /// `sitOuts` are players picked to sit this round out; whatever of the bench they leave
-    /// open is filled as it always is.
-    public static func appendingRound(to tournament: Tournament, sitOuts: [PlayerID]? = nil) throws -> Tournament {
+    /// open is filled as it always is. `placed` is a ladder round as another device drew it,
+    /// taken as it is when it fits.
+    public static func appendingRound(
+        to tournament: Tournament,
+        sitOuts: [PlayerID]? = nil,
+        placed: LadderPlacement? = nil
+    ) throws -> Tournament {
         var next = tournament
         let round = switch tournament.format {
         case .americano: try AmericanoScheduler.nextRound(for: tournament, sitOuts: sitOuts)
         case .mexicano: try MexicanoScheduler.nextRound(for: tournament, sitOuts: sitOuts)
-        case .winnerCourt: try LadderScheduler.nextRound(for: tournament, sitOuts: sitOuts)
+        case .winnerCourt:
+            try placed.flatMap { LadderScheduler.round(placed: $0, for: tournament) }
+                ?? LadderScheduler.nextRound(for: tournament, sitOuts: sitOuts)
         }
         next.rounds.append(round)
         return next
@@ -249,9 +256,31 @@ public enum TournamentEngine {
 
     /// The last round drawn again from what came before it, around who is sitting it out.
     /// Same index, same seed: picking the bench it already has gives back the same round.
-    public static func redrawingLastRound(of tournament: Tournament, sitOuts: [PlayerID]) throws -> Tournament {
+    public static func redrawingLastRound(
+        of tournament: Tournament,
+        sitOuts: [PlayerID],
+        placed: LadderPlacement? = nil
+    ) throws -> Tournament {
         var base = tournament
         _ = base.rounds.popLast()
-        return try appendingRound(to: base, sitOuts: sitOuts)
+        return try appendingRound(to: base, sitOuts: sitOuts, placed: placed)
+    }
+
+    /// Where a ladder's next round puts everybody, for the draw to carry. Worked out again on
+    /// each device, it would be read off a round that a point racing the whistle may since
+    /// have turned around, moving people already on their courts. `redrawing` draws the round
+    /// in play again around `sitOuts`. Nil for the other formats.
+    public static func ladderPlacement(
+        of tournament: Tournament,
+        sitOuts: [PlayerID]? = nil,
+        redrawing: Bool = false
+    ) -> LadderPlacement? {
+        guard tournament.isLadder else { return nil }
+        let drawn = if redrawing {
+            try? redrawingLastRound(of: tournament, sitOuts: sitOuts ?? [])
+        } else {
+            try? appendingRound(to: tournament, sitOuts: sitOuts)
+        }
+        return drawn?.rounds.last.map(LadderPlacement.init)
     }
 }

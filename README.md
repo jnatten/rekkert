@@ -57,11 +57,12 @@ round is drawn once every court is won. A timed court nobody kept can have its g
 in, and a court nobody scored at all is settled by tapping whoever won its deciding point.
 
 Players over the courts sit out as in Americano, fewest sit-outs first, and come back in on
-the bottom court; a fixed pair sits out together. Each round is drawn from the one before on
-every device, as Americano's is, so the phone and the watch agree on who goes where without
-asking each other. The next round is only offered once every court is settled, but once it
-is drawn it stays: a point that arrives late can change a score, never a round people have
-walked onto. The table is the ladder — the last round's finishing order, court by court and
+the bottom court; a fixed pair sits out together. Each round is drawn from how the one before
+finished by the device that draws it, and the draw carries who it put where, so every other
+device takes it as it is rather than working it out again. The next round is only offered
+once every court is settled, but once it is drawn it stays: a point that arrives late — one
+that raced the whistle, say — can change a score, never a round people have walked onto.
+The table is the ladder — the last round's finishing order, court by court and
 winners above losers, with rounds won and games beside it — and the evening is won by
 whoever won court 1 last.
 

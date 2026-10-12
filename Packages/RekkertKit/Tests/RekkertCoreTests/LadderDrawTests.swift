@@ -159,6 +159,21 @@ struct LadderDrawTests {
         #expect(redrawn.currentRound == t.currentRound)
     }
 
+    @Test func aDrawTakesTheRoundItCarries() throws {
+        let first = try draw(makeLadder(players: 8, courts: 2))
+        let placed = LadderPlacement(try #require(try draw(settle(first, [.b, .b])).currentRound))
+        let here = try TournamentEngine.appendingRound(to: settle(first, [.a, .a]), placed: placed)
+        #expect(LadderPlacement(try #require(here.currentRound)) == placed,
+                "whatever this device makes of the round before")
+    }
+
+    @Test func aCarriedRoundThatDoesNotFitIsDrawnAfresh() throws {
+        let t = settle(try draw(makeLadder(players: 8, courts: 2)), [.a, .b])
+        var placed = try #require(TournamentEngine.ladderPlacement(of: t))
+        placed.courts[0].a[0] = Player(name: "Stranger").id
+        #expect(try TournamentEngine.appendingRound(to: t, placed: placed).currentRound == draw(t).currentRound)
+    }
+
     @Test func aRoundNobodyFinishedMovesEachCourtsHigherPairUp() throws {
         var t = try draw(makeLadder(players: 8, courts: 2))
         t = try draw(t)
@@ -277,6 +292,12 @@ struct LadderCompatibilityTests {
         let round = try JSONDecoder().decode(Round.self, from: Data(json.utf8))
         #expect(!round.isEnded)
         #expect(round.clock == nil)
+    }
+
+    @Test func aDrawCarryingItsRoundTravelsWhole() throws {
+        let t = try draw(makeLadder(players: 10, courts: 2))
+        let kind = EventKind.nextRound(after: 0, placed: TournamentEngine.ladderPlacement(of: t))
+        #expect(try JSONCoding.decoder.decode(EventKind.self, from: JSONCoding.encoder.encode(kind)) == kind)
     }
 
     @Test func ladderRulesMissingAKeyFallBackToTheDefaults() throws {

@@ -1,5 +1,21 @@
 import Foundation
 
+/// Who a ladder draw put where: each court's two sides, court 1 first, and the bench.
+public struct LadderPlacement: Codable, Sendable, Hashable {
+    public var courts: [BySide<[PlayerID]>]
+    public var sitOuts: [PlayerID]
+
+    public init(courts: [BySide<[PlayerID]>], sitOuts: [PlayerID]) {
+        self.courts = courts
+        self.sitOuts = sitOuts
+    }
+
+    public init(_ round: Round) {
+        courts = round.matches.sorted { $0.courtIndex < $1.courtIndex }.map(\.teams)
+        sitOuts = round.sitOuts
+    }
+}
+
 /// Winner court: winners move up a court and losers down, the top court's winners and the
 /// bottom court's losers staying where they are. Whoever comes back from the bench starts at
 /// the bottom.
@@ -40,6 +56,20 @@ public enum LadderScheduler {
         }
         let sitOutPlayers = units.filter { benched.contains($0[0]) }.flatMap(\.self)
         return Round(index: index, matches: matches, sitOuts: sitOutPlayers)
+    }
+
+    /// The round a draw carried, as long as it places this tournament's players, each of them
+    /// once, two a side on as many courts as can be played.
+    static func round(placed placement: LadderPlacement, for tournament: Tournament) -> Round? {
+        let everyone = Set(tournament.players.map(\.id))
+        let placed = placement.courts.flatMap { $0.a + $0.b } + placement.sitOuts
+        guard placement.courts.count == tournament.playableCourts,
+              placement.courts.allSatisfy({ $0.a.count == 2 && $0.b.count == 2 }),
+              placed.count == everyone.count, Set(placed) == everyone else { return nil }
+        let matches = placement.courts.enumerated().map { court, teams in
+            CourtMatch(courtIndex: court, teams: teams, games: TraditionalState())
+        }
+        return Round(index: tournament.rounds.count, matches: matches, sitOuts: placement.sitOuts)
     }
 
     /// Pairs taken from the list two at a time, or everybody on their own.

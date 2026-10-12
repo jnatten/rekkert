@@ -33,7 +33,10 @@ extension MatchLog {
         guard case .tournament(let tournament)? = SessionReducer.state(of: self) else {
             return append(.nextRound(after: -1, at: at), from: device)
         }
-        return append(.nextRound(after: tournament.rounds.count - 1, at: at), from: device)
+        return append(
+            .nextRound(after: tournament.rounds.count - 1, at: at, placed: TournamentEngine.ladderPlacement(of: tournament)),
+            from: device
+        )
     }
 
     /// Mirrors `MatchStore.redrawRound(sittingOut:)`.
@@ -42,7 +45,8 @@ extension MatchLog {
         guard case .tournament(let tournament)? = SessionReducer.state(of: self) else {
             return append(.nextRound(after: -1, sitOuts: sitOuts), from: device)
         }
-        return append(.nextRound(after: tournament.rounds.count - 2, sitOuts: sitOuts), from: device)
+        let placed = TournamentEngine.ladderPlacement(of: tournament, sitOuts: sitOuts, redrawing: true)
+        return append(.nextRound(after: tournament.rounds.count - 2, sitOuts: sitOuts, placed: placed), from: device)
     }
 
     /// Mirrors `MatchStore.nextRound()` for a friendly, which addresses the round on screen

@@ -86,6 +86,24 @@ struct LadderSyncTests {
         ], "court 1's winners stay up with court 2's winners; the losers meet below")
     }
 
+    @Test func theDrawCarriesWhereItPutEverybody() async throws {
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+        await quietPeriod()
+
+        pair.phone.configure(setup())
+        pair.phone.nextRound()
+        await eventually { inStep(pair.phone, pair.watch) }
+
+        let drawn = try #require(ladder(pair.watch)?.currentRound)
+        guard case .nextRound(_, _, _, let placed)? = pair.watch.log.ordered.last?.kind else {
+            Issue.record("the draw is the last thing in the log")
+            return
+        }
+        #expect(placed == LadderPlacement(drawn))
+    }
+
     @Test func aSnoozeOnOneDeviceMovesTheCountdownOnBoth() async throws {
         let pair = Pair()
         let tasks = pair.run()

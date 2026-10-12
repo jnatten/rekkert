@@ -439,6 +439,7 @@ struct SessionReducerTests {
     @Test func aDrawThatPicksNobodyEncodesAsItAlwaysHas() throws {
         let plain = try JSONCoding.encoder.encode(EventKind.nextRound(after: 0))
         #expect(!String(decoding: plain, as: UTF8.self).contains("sitOuts"))
+        #expect(!String(decoding: plain, as: UTF8.self).contains("placed"))
 
         let picked = EventKind.nextRound(after: 0, sitOuts: [Player(name: "P1").id])
         #expect(try JSONCoding.decoder.decode(EventKind.self, from: JSONCoding.encoder.encode(picked)) == picked)
