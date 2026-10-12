@@ -39,6 +39,8 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
     /// time — a board that is over or being looked back at, or a session played before the
     /// clock existed. The date is state; the ticking is the view's business.
     public var clockStart: Date?
+    /// A timed ladder round counts down instead, until the whistle.
+    public var countdown: RoundClock?
     /// How many times the two sides have changed ends. Zero for the modes that have no ends
     /// rule, and for the matches that were not set up to use one.
     ///
@@ -297,6 +299,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             isFinished: status.isFinished,
             winner: status.winner,
             clockStart: isLive ? round.startedAt : nil,
+            countdown: isLive ? round.clock : nil,
             changeovers: engine.changeovers(shown)
         )
     }

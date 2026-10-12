@@ -370,6 +370,9 @@ public enum SessionState: Codable, Sendable, Hashable {
         case .tournament(var tournament):
             guard let index = tournament.rounds.indices.last else { return .tournament(tournament) }
             tournament.rounds[index].startedAt = date
+            if let minutes = tournament.ladder?.roundMinutes {
+                tournament.rounds[index].clock = RoundClock(length: TimeInterval(minutes * 60), runningSince: date)
+            }
             return .tournament(tournament)
         }
     }
@@ -392,7 +395,10 @@ public enum SessionState: Codable, Sendable, Hashable {
             for index in session.rounds.indices { session.rounds[index].startedAt = nil }
             return .friendly(session)
         case .tournament(var tournament):
-            for index in tournament.rounds.indices { tournament.rounds[index].startedAt = nil }
+            for index in tournament.rounds.indices {
+                tournament.rounds[index].startedAt = nil
+                tournament.rounds[index].clock = nil
+            }
             return .tournament(tournament)
         }
     }

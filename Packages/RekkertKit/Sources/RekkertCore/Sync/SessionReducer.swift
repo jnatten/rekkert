@@ -154,6 +154,9 @@ public enum SessionReducer {
                 // Stamped here rather than read back off the log: a second device drawing at
                 // the same moment is turned away by the guard above, and only this knows it.
                 next.rounds[drawn].startedAt = at
+                if let minutes = next.ladder?.roundMinutes {
+                    next.rounds[drawn].clock = RoundClock(length: TimeInterval(minutes * 60), runningSince: at)
+                }
                 state = .tournament(next)
 
             case .friendly(let session):
@@ -170,6 +173,13 @@ public enum SessionReducer {
             case .traditional, .winnerCourt, .pointCount, .none:
                 break
             }
+
+        case .setRoundClock(let round, let clock):
+            guard case .tournament(var tournament) = state, tournament.ladder?.isTimed == true,
+                  !tournament.isFinished, tournament.rounds.count == round + 1,
+                  !tournament.rounds[round].isCancelled, !tournament.rounds[round].isEnded else { return }
+            tournament.rounds[round].clock = clock
+            state = .tournament(tournament)
 
         case .finish:
             switch state {

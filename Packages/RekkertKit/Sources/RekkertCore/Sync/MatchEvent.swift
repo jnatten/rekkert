@@ -40,6 +40,9 @@ public enum EventKind: Codable, Sendable, Hashable {
     /// hand: the round is drawn as always, then drawn again around who is actually there.
     /// Absent from older builds, which drop it and keep the round they drew.
     case nextRound(after: Int, at: Date? = nil, sitOuts: [PlayerID]? = nil)
+    /// A timed ladder round's countdown, paused, resumed or snoozed. The whole clock as the
+    /// device that changed it worked it out, so two snoozes at once add their minutes once.
+    case setRoundClock(round: Int, clock: RoundClock)
     /// Ends the session. `archive` is false when it is being thrown away rather than kept,
     /// and travels with the event so the other device does not file it either.
     case finish(archive: Bool)
@@ -118,7 +121,7 @@ public struct MatchEvent: Codable, Sendable, Hashable, Identifiable {
         case .point, .setScore, .setRoundConfirmed, .setRoundCancelled, .nextRound, .finish, .endRound: true
         // A serve correction is its own undo — swapping again puts it back — and undo
         // should keep meaning "take back the last thing that changed the score".
-        case .configure, .restore, .undo, .chooseServeSide, .setFirstServer, .setServeOrder, .unrecognised: false
+        case .configure, .restore, .undo, .chooseServeSide, .setFirstServer, .setServeOrder, .setRoundClock, .unrecognised: false
         }
     }
 }
@@ -129,7 +132,7 @@ extension EventKind {
     public var payloadDate: Date? {
         switch self {
         case .configure(_, let at), .endRound(_, let at), .nextRound(_, let at, _): at
-        case .point, .setScore, .setFirstServer, .setServeOrder, .chooseServeSide,
+        case .point, .setScore, .setFirstServer, .setServeOrder, .chooseServeSide, .setRoundClock,
              .setRoundConfirmed, .setRoundCancelled, .finish, .restore, .undo, .unrecognised: nil
         }
     }
