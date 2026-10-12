@@ -18,7 +18,8 @@ struct RoundsView: View {
                                         }
                                     }
                                     Spacer()
-                                    Text("\(match.state.points.a)–\(match.state.points.b)")
+                                    let line = tournament.status(of: match, in: round).line
+                                    Text("\(line.a)–\(line.b)")
                                         .font(.headline.monospacedDigit())
                                 }
                                 .foregroundStyle(round.isCancelled ? .secondary : .primary)

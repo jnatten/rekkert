@@ -144,7 +144,7 @@ struct CourtListView: View {
     private func roundSections(_ tournament: Tournament, _ round: Round) -> some View {
         Section {
             ForEach(round.matches) { match in
-                CourtRow(tournament: tournament, match: match)
+                CourtRow(tournament: tournament, round: round, match: match)
                     .opacity(round.isCancelled ? 0.5 : 1)
                     .contentShape(.rect)
                     .onTapGesture {
@@ -239,7 +239,7 @@ struct CourtListView: View {
                         model.store.nextRound()
                         browsing = nil
                     }
-                    .disabled(!allCourtsDone(round, tournament: tournament))
+                    .disabled(!tournament.isDone(round))
 
                     Button("Cancel this round", systemImage: "xmark.circle", role: .destructive) {
                         showingCancel = true
@@ -300,13 +300,8 @@ struct CourtListView: View {
         guard let tournament = TournamentView.tournament(model),
               let round = tournament.currentRound, round.index > 0, !round.isCancelled,
               !round.matches.contains(where: \.isConfirmed),
-              !allCourtsDone(round, tournament: tournament) else { return nil }
+              !tournament.isDone(round) else { return nil }
         return round
-    }
-
-    private func allCourtsDone(_ round: Round, tournament: Tournament) -> Bool {
-        let engine = PointCountEngine(rules: tournament.config.pointRules)
-        return round.matches.allSatisfy { engine.isFinished($0.state) || $0.isConfirmed }
     }
 }
 
@@ -319,8 +314,10 @@ struct CourtRef: Identifiable, Hashable {
 private struct CourtRow: View {
     @Environment(\.teamPalette) private var base
     let tournament: Tournament
+    let round: Round
     let match: CourtMatch
 
+    private var status: CourtStatus { tournament.status(of: match, in: round) }
     private var palette: TeamPalette { base.court(match.courtIndex) }
 
     var body: some View {
@@ -340,7 +337,7 @@ private struct CourtRow: View {
                         .lineLimit(1)
                         .accessibilityLabel(spokenNames(side))
                     Spacer()
-                    Text("\(match.state.points[side])")
+                    Text("\(status.line[side])")
                         .font(.title3.bold().monospacedDigit())
                         .foregroundStyle(palette.color(side))
                 }
@@ -351,9 +348,8 @@ private struct CourtRow: View {
 
     /// Who serves next on this court, or nobody once it is over.
     private var server: PlayerID? {
-        let engine = PointCountEngine(rules: tournament.config.pointRules)
-        guard !match.isConfirmed, !engine.isFinished(match.state) else { return nil }
-        let slot = engine.serve(match.state).slot
+        guard !match.isConfirmed, !status.isFinished else { return nil }
+        let slot = tournament.serve(of: match).slot
         let line = match.teams[slot.team]
         return line.indices.contains(slot.playerIndex) ? line[slot.playerIndex] : nil
     }

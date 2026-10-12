@@ -367,7 +367,8 @@ private struct TournamentHeart: View {
     private func label(for round: Round) -> String {
         guard let me = timeline.me, let match = round.matches.first(where: { $0.side(of: me) != nil }),
               let side = match.side(of: me) else { return "R\(round.index + 1)" }
-        return "R\(round.index + 1) \(match.state.points[side])–\(match.state.points[side.other])"
+        let line = tournament.status(of: match, in: round).line
+        return "R\(round.index + 1) \(line[side])–\(line[side.other])"
     }
 
     private var domain: ClosedRange<Date>? {

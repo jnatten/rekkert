@@ -234,7 +234,7 @@ public enum SessionState: Codable, Sendable, Hashable {
         case .tournament(let tournament):
             tournament.rounds.contains { round in
                 !round.isCancelled
-                    && (round.matches.contains { $0.state.points.total > 0 } || !round.sitOuts.isEmpty)
+                    && (round.matches.contains { tournament.status(of: $0, in: round).wasPlayed } || !round.sitOuts.isEmpty)
             }
         case .pointCount(let session):
             session.score.points.total > 0
@@ -254,7 +254,7 @@ public enum SessionState: Codable, Sendable, Hashable {
         case .tournament(let tournament):
             (round.map { tournament.round(at: $0) } ?? tournament.currentRound)?
                 .matches.first { $0.courtIndex == court }?
-                .state.serveOrder
+                .serveOrder
         }
     }
 
@@ -271,7 +271,7 @@ public enum SessionState: Codable, Sendable, Hashable {
         case .tournament(let tournament):
             (round.map { tournament.round(at: $0) } ?? tournament.currentRound)?
                 .matches.first { $0.courtIndex == court }
-                .map { PointCountEngine(rules: tournament.config.pointRules).serve($0.state) }
+                .map { tournament.serve(of: $0) }
         }
     }
 

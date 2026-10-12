@@ -50,20 +50,19 @@ struct FiledSession: Sendable {
 
         case .tournament(let tournament):
             let named = Self.named(tournament.players)
-            let engine = PointCountEngine(rules: tournament.config.pointRules)
             seats = tournament.players.compactMap { player in named[player.id].map { (.player(player.id), $0) } }
             contests = tournament.rounds.filter { !$0.isCancelled }.flatMap { round in
-                round.matches
-                    .filter { ($0.isConfirmed || engine.isFinished($0.state)) && $0.state.points.total > 0 }
-                    .map { match in
-                        Contest(
-                            sides: match.teams.map { Self.seats($0, named: named) },
-                            winner: match.state.points.leader,
-                            points: match.state.points,
-                            format: tournament.format,
-                            countsHeadToHead: true
-                        )
-                    }
+                round.matches.compactMap { match in
+                    let status = tournament.status(of: match, in: round)
+                    guard (match.isConfirmed || status.isFinished) && status.wasPlayed else { return nil }
+                    return Contest(
+                        sides: match.teams.map { Self.seats($0, named: named) },
+                        winner: status.line.leader,
+                        points: status.line,
+                        format: tournament.format,
+                        countsHeadToHead: true
+                    )
+                }
             }
         }
     }

@@ -150,7 +150,7 @@ public struct Tournament: Codable, Sendable, Hashable {
     /// has been scored or settled in it, so nobody loses anything by it.
     public var canRedrawCurrentRound: Bool {
         guard !isFinished, let round = currentRound, !round.isCancelled else { return false }
-        return round.matches.allSatisfy { $0.state.points.total == 0 && !$0.isConfirmed }
+        return round.matches.allSatisfy { !status(of: $0, in: round).wasPlayed && !$0.isConfirmed }
     }
 }
 

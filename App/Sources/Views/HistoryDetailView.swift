@@ -187,7 +187,7 @@ private struct RecordDetail: View {
                                 Circle().fill(palette.court(match.courtIndex).color(side)).frame(width: 8, height: 8)
                                 Text(names(match, side, in: tournament)).lineLimit(1)
                                 Spacer()
-                                Text("\(match.state.points[side])")
+                                Text("\(tournament.status(of: match, in: round).line[side])")
                                     .font(.body.bold().monospacedDigit())
                                     .foregroundStyle(palette.court(match.courtIndex).color(side))
                             }
