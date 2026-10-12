@@ -1587,8 +1587,11 @@ public final class MatchStore {
     /// phone that has just come back has to be told again — and one that heard "running" and
     /// missed the ending has to be corrected, or its glyph stays on over nothing.
     private func shareWorkoutOnReconnect() {
-        guard let announcedWorkout else { return }
-        Task { _ = await sendLive(encode(.workout(announcedWorkout))) }
+        guard announcedWorkout != nil else { return }
+        Task {
+            guard let announcedWorkout else { return }
+            _ = await sendLive(encode(.workout(announcedWorkout)))
+        }
     }
 
     private func sharePresets() {
