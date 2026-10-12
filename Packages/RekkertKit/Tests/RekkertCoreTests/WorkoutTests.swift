@@ -135,6 +135,45 @@ struct WorkoutRecordTests {
         #expect(record.duration == 3_600)
     }
 
+    @Test func aWorkoutWrittenBeforeEffortExistedStillDecodes() throws {
+        let start = Date(timeIntervalSince1970: 768_000_000)
+        let current = WorkoutRecord(
+            id: UUID(), startedAt: start, endedAt: start.addingTimeInterval(3_600),
+            duration: 3_600, effort: 7
+        )
+        var fields = try #require(
+            JSONSerialization.jsonObject(with: JSONCoding.encoder.encode(current)) as? [String: Any]
+        )
+        #expect(fields.removeValue(forKey: "effort") != nil)
+        let legacy = try JSONSerialization.data(withJSONObject: fields)
+
+        let record = try JSONCoding.decoder.decode(WorkoutRecord.self, from: legacy)
+
+        #expect(record.effort == nil)
+        #expect(record.duration == 3_600)
+    }
+
+    @Test func anEffortSurvivesTheFilingCabinet() throws {
+        let store = store()
+        let start = Date(timeIntervalSince1970: 768_000_000)
+        var original = workout(from: start, to: start.addingTimeInterval(3_600))
+        original.effort = 9
+        try store.archive(original)
+
+        #expect(store.workout(original.id) == original)
+        #expect(try store.workouts().first?.effort == 9)
+    }
+
+    @Test func anEffortFallsInTheWorkoutAppsBands() {
+        let bands = WorkoutEffort.range.map(WorkoutEffort.init(score:))
+        #expect(bands == [
+            .easy, .easy, .easy,
+            .moderate, .moderate, .moderate,
+            .hard, .hard,
+            .allOut, .allOut,
+        ])
+    }
+
     @Test func zoneTimesSurviveTheRoundTripAndTheFilingCabinet() throws {
         let store = store()
         let start = Date(timeIntervalSince1970: 768_000_000)

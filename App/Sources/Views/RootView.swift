@@ -5,6 +5,7 @@ import UIKit
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @State private var askingToStartWorkout = false
+    @State private var askingForEffort: EffortQuestion?
     /// A code that arrived as a link, for the join sheet to send as it opens — or to show
     /// first, when joining it would take this phone off a shared match.
     @State private var linkedCode: SessionCode?
@@ -139,6 +140,21 @@ struct RootView: View {
             Button("Not now", role: .cancel) { model.follower.answerStart(false) }
         } message: {
             Text("It runs on your watch while you play.")
+        }
+        .task(id: model.workout.askingForEffort) {
+            guard model.workout.askingForEffort != nil else {
+                askingForEffort = nil
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(600))
+            askingForEffort = model.workout.askingForEffort
+        }
+        .sheet(item: $askingForEffort, onDismiss: { model.workout.skipEffort() }) { question in
+            EffortSheet(
+                question: question,
+                onRate: { model.rateWorkout(question.id, effort: $0) },
+                onSkip: { model.workout.skipEffort() }
+            )
         }
     }
 

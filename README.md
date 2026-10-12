@@ -369,6 +369,16 @@ after the match it covers has already been filed — so starting the workout hal
 the first game still gathers that game up, and a match spanning two workouts shows under
 both.
 
+When a workout ends, the watch asks how hard it was, on the same 1–10 scale the Workout app
+uses: Easy, Moderate, Hard, All Out. Turn the crown or tap the bar. The phone asks as well if
+the app is open when the workout ends. Answering or skipping on one device puts the question
+away on the other, and the workout's page on the phone has an Effort row for rating it later
+or changing the answer. Health only takes the rating as a sample related to the workout, so
+the watch, which holds the workout and the Health access, is the one that writes it. A rating
+given on the phone is filed there at once and sent to the watch on the durable queue, and
+reaches Health whenever the watch app next hears it. Health makes no estimate of its own for
+another app's workout, so there is no suggested value to start from.
+
 The live heart rate never goes on the wire: it stays on the wrist that read it. What does go,
 once a workout has ended, is the summary, and after it — read back out of Health rather than
 kept as it came in, so a relaunch mid-workout loses none of it — how the heart rate and the
@@ -633,7 +643,7 @@ Debug builds accept `-rekkert-demo traditional|winnercourt|friendly|americano|me
 `-rekkert-demo-watch-page menu|standings|controls`, `-rekkert-demo-watch-join CODE`,
 `-rekkert-demo-fullscreen`, `-rekkert-demo-board`, `-rekkert-demo-courts N`, `-rekkert-demo-tv-shot`, `-rekkert-demo-tv-guide`,
 `-rekkert-demo-blackout`, `-rekkert-demo-settings`, `-rekkert-demo-swap-player`,
-`-rekkert-demo-workouts`, `-rekkert-demo-workout`, `-rekkert-demo-workout-paused`,
+`-rekkert-demo-workouts`, `-rekkert-demo-workout`, `-rekkert-demo-workout-paused`, `-rekkert-demo-effort`,
 `-rekkert-demo-voices`, `-rekkert-demo-help [page id]` or
 `-rekkert-demo-new <mode>`) as
 launch arguments to put the app into a given state, since `simctl` cannot tap the screen.

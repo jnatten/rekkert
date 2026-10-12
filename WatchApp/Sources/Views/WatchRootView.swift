@@ -34,6 +34,12 @@ struct WatchRootView: View {
                 }
                 Button("Not now", role: .cancel) { model.follower.answerStart(false) }
             }
+            .sheet(item: Binding(
+                get: { model.workout.askingForEffort },
+                set: { if $0 == nil { model.workout.skipEffort() } }
+            )) { _ in
+                WatchEffortSheet()
+            }
     }
 
     @ViewBuilder

@@ -44,6 +44,7 @@ enum WorkoutFormat {
         if matches > 0 { parts.append(matches == 1 ? "1 match" : "\(matches) matches") }
         if let burned = workout.activeEnergyKilocalories { parts.append(energy(burned)) }
         if let average = workout.heartRateAverage { parts.append("avg \(beats(average))") }
+        if let effort = workout.effort { parts.append(WorkoutEffort(score: effort).title) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }

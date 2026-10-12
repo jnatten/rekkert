@@ -50,6 +50,8 @@ public struct WorkoutRecord: Codable, Sendable, Hashable, Identifiable {
     /// Time in each heart rate zone, lowest first, as Health worked it out. Empty on a watch
     /// too old to be asked and on every record written before this existed.
     public var heartRateZoneTimes: [HeartRateZoneTime]
+    /// How hard it felt, 1 to 10, as rated once it ended. Nil until somebody rates it.
+    public var effort: Int?
 
     public init(
         id: UUID,
@@ -60,7 +62,8 @@ public struct WorkoutRecord: Codable, Sendable, Hashable, Identifiable {
         basalEnergyKilocalories: Double? = nil,
         heartRateAverage: Double? = nil,
         heartRateMaximum: Double? = nil,
-        heartRateZoneTimes: [HeartRateZoneTime] = []
+        heartRateZoneTimes: [HeartRateZoneTime] = [],
+        effort: Int? = nil
     ) {
         self.id = id
         self.startedAt = startedAt
@@ -71,12 +74,13 @@ public struct WorkoutRecord: Codable, Sendable, Hashable, Identifiable {
         self.heartRateAverage = heartRateAverage
         self.heartRateMaximum = heartRateMaximum
         self.heartRateZoneTimes = heartRateZoneTimes
+        self.effort = effort
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, startedAt, endedAt, duration
         case activeEnergyKilocalories, basalEnergyKilocalories, heartRateAverage, heartRateMaximum
-        case heartRateZoneTimes
+        case heartRateZoneTimes, effort
     }
 
     /// Hand-rolled from the first day rather than the second. `HistoryRecord` was written
@@ -96,6 +100,7 @@ public struct WorkoutRecord: Codable, Sendable, Hashable, Identifiable {
         heartRateZoneTimes = try container.decodeIfPresent(
             [HeartRateZoneTime].self, forKey: .heartRateZoneTimes
         ) ?? []
+        effort = try container.decodeIfPresent(Int.self, forKey: .effort)
     }
 
     /// What Health calls total calories. Only when both halves are there: active alone is

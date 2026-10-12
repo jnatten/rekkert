@@ -49,6 +49,8 @@ final class WorkoutController {
     /// Set when a start went nowhere, so the button that was pressed can say so and then
     /// forget about it. Never a dialog, and never anything at all when no workout is running.
     private(set) var failure: String?
+    /// The workout that just ended, until it has been rated or the question waved off.
+    private(set) var askingForEffort: EffortQuestion?
 
     /// Hands a finished workout, or a change of state, to the phone. Set by `AppModel`.
     @ObservationIgnored var publish: ((WorkoutSignal) -> Void)?
@@ -62,6 +64,10 @@ final class WorkoutController {
     /// The wrist and the phone can both ask for a start at once, and a second session on top
     /// of the first fails as somebody else's workout.
     @ObservationIgnored private var isStarting = false
+    @ObservationIgnored private var lastWorkout: HKWorkout?
+    /// Live and queued copies of one rating both arrive, and two writes racing would both
+    /// find nothing to replace and leave two ratings on the workout.
+    @ObservationIgnored private var written: [UUID: Int] = [:]
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
@@ -85,6 +91,7 @@ final class WorkoutController {
             HKQuantityType.workoutType(),
             HKQuantityType(.activeEnergyBurned),
             HKQuantityType(.basalEnergyBurned),
+            HKQuantityType(.workoutEffortScore),
         ]
     }
 
@@ -103,6 +110,8 @@ final class WorkoutController {
             HKQuantityType(.basalEnergyBurned),
             HKQuantityType(.restingHeartRate),
             HKCharacteristicType(.dateOfBirth),
+            HKQuantityType.workoutType(),
+            HKQuantityType(.workoutEffortScore),
         ]
     }
 
@@ -187,8 +196,73 @@ final class WorkoutController {
         case .stop: stop()
         case .pause: pause()
         case .resume: resume()
+        case .rated(let id, let effort):
+            if askingForEffort?.id == id { askingForEffort = nil }
+            Task { await write(effort, to: id) }
+        case .skipped(let id):
+            if askingForEffort?.id == id { askingForEffort = nil }
         case .running, .paused, .idle, .finished, .series: break
         }
+    }
+
+    // MARK: - Effort
+
+    func rate(_ effort: Int) {
+        guard let question = askingForEffort else { return }
+        askingForEffort = nil
+        publish?(.rated(workoutID: question.id, effort: effort))
+        Task { await write(effort, to: question.id) }
+    }
+
+    func skipEffort() {
+        guard let question = askingForEffort else { return }
+        askingForEffort = nil
+        publish?(.skipped(workoutID: question.id))
+    }
+
+    /// Replaces rather than adds: a second rating from this app would leave Health holding
+    /// two answers to one question.
+    private func write(_ effort: Int, to id: UUID) async {
+        guard WorkoutEffort.range.contains(effort), written[id] != effort else { return }
+        written[id] = effort
+        guard let workout = await workout(id) else {
+            written[id] = nil
+            return
+        }
+        let type = HKQuantityType(.workoutEffortScore)
+        let earlier = HKSampleQueryDescriptor(
+            predicates: [.quantitySample(
+                type: type,
+                predicate: HKQuery.predicateForWorkoutEffortSamplesRelated(workout: workout, activity: nil)
+            )],
+            sortDescriptors: []
+        )
+        let ours = ((try? await earlier.result(for: health)) ?? [])
+            .filter { $0.sourceRevision.source == .default() }
+        if !ours.isEmpty { try? await health.delete(ours) }
+        let sample = HKQuantitySample(
+            type: type,
+            quantity: HKQuantity(unit: .appleEffortScore(), doubleValue: Double(effort)),
+            start: workout.startDate,
+            end: workout.endDate
+        )
+        do {
+            try await health.relateWorkoutEffortSample(sample, with: workout, activity: nil)
+        } catch {
+            written[id] = nil
+        }
+    }
+
+    /// The one just finished is still in hand; a rating from the phone that reaches a
+    /// relaunched watch has to look it up.
+    private func workout(_ id: UUID) async -> HKWorkout? {
+        if let lastWorkout, lastWorkout.uuid == id { return lastWorkout }
+        let descriptor = HKSampleQueryDescriptor(
+            predicates: [.workout(HKQuery.predicateForObject(with: id))],
+            sortDescriptors: [],
+            limit: 1
+        )
+        return try? await descriptor.result(for: health).first
     }
 
     private func begin() throws {
@@ -314,6 +388,7 @@ final class WorkoutController {
     }
 
     private func adopted(startedAt: Date, elapsed: TimeInterval, paused: Bool) {
+        askingForEffort = nil
         isTracking = true
         isPaused = paused
         self.startedAt = startedAt
@@ -388,6 +463,10 @@ final class WorkoutController {
         }
         clear()
         publish?(.idle)
+        if let workout {
+            lastWorkout = workout
+            askingForEffort = EffortQuestion(id: workout.uuid, startedAt: workout.startDate)
+        }
     }
 
     /// Read back out of Health rather than kept as it came in: a relaunch mid-workout
@@ -525,6 +604,10 @@ final class WorkoutController {
             HeartRateZoneTime(zone: 4, lowerBound: 158, upperBound: 169, duration: 108),
             HeartRateZoneTime(zone: 5, lowerBound: 170, upperBound: nil, duration: 12),
         ]
+    }
+
+    func pretendFinished(_ question: EffortQuestion) {
+        askingForEffort = question
     }
     #endif
 

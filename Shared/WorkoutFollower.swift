@@ -44,7 +44,7 @@ final class WorkoutFollower {
         switch signal {
         case .running, .paused: follow.tracking(true)
         case .idle: follow.tracking(false)
-        case .stop, .pause, .resume, .finished, .series: return
+        case .stop, .pause, .resume, .finished, .series, .rated, .skipped: return
         }
         schedule()
     }

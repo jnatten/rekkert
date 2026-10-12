@@ -116,8 +116,8 @@ final class AppModel {
             self?.follower.heard(signal)
             // What the phone has filed changed, and the lists showing it read through this.
             switch signal {
-            case .finished, .series: self?.revision += 1
-            case .stop, .pause, .resume, .running, .paused, .idle: break
+            case .finished, .series, .rated: self?.revision += 1
+            case .stop, .pause, .resume, .running, .paused, .idle, .skipped: break
             }
         }
         // Joining, which the phone does whenever it can. The wrist asks and is told how it
@@ -368,6 +368,14 @@ final class AppModel {
         // watch, so without this its badge and its rows cannot be put in front of `simctl`.
         if arguments.contains("-rekkert-demo-workout") { workout.pretendRunning() }
         if arguments.contains("-rekkert-demo-workout-paused") { workout.pretendRunning(paused: true) }
+        if arguments.contains("-rekkert-demo-effort") {
+            let newest = workouts.first
+            workout.pretendFinished(EffortQuestion(
+                id: newest?.id ?? UUID(),
+                startedAt: newest?.startedAt ?? Date().addingTimeInterval(-5_400),
+                effort: newest?.effort
+            ))
+        }
         // `-rekkert-demo-buzz [everyPoint|byTeam]` turns the wrist on, which is the only way
         // to photograph the rows that come with it — simctl cannot work a picker. Out here
         // with the other standalone flags, since the settings screen needs no match behind it.
@@ -631,6 +639,11 @@ final class AppModel {
         return sessionStore?.historyRecord(id)
     }
 
+    func workoutRecord(_ id: UUID) -> WorkoutRecord? {
+        _ = revision
+        return sessionStore?.workout(id)
+    }
+
     func timeline(_ id: UUID) -> MatchTimeline? {
         _ = revision
         return sessionStore?.timeline(id)
@@ -655,6 +668,19 @@ final class AppModel {
         _ = revision
         return sessionStore?.hasWorkouts() ?? false
     }
+
+    #if !os(watchOS)
+    /// Filed here as well as sent, because the store only files what reaches it from the
+    /// watch. The watch is the one that puts it in Health.
+    func rateWorkout(_ id: UUID, effort: Int) {
+        if var record = sessionStore?.workout(id) {
+            record.effort = effort
+            try? sessionStore?.archive(record)
+            revision += 1
+        }
+        workout.rate(effort, for: id)
+    }
+    #endif
 
     func deleteWorkout(_ id: UUID) {
         try? sessionStore?.deleteWorkout(id)

@@ -43,6 +43,11 @@ public enum WorkoutSignal: Codable, Sendable, Hashable {
     /// after it ended. Its own message rather than part of `finished`, which goes the moment
     /// the workout ends and must not wait on a query.
     case series(WorkoutSeries)
+    /// Either way: how hard a finished one felt, 1 to 10. The watch puts it in Health, the
+    /// phone files it with the record, and both stop asking.
+    case rated(workoutID: UUID, effort: Int)
+    /// Either way: the question was waved off. Both stop asking, and nothing is written.
+    case skipped(workoutID: UUID)
 }
 
 /// What a phone and its own watch say to each other about joining somebody else's match.

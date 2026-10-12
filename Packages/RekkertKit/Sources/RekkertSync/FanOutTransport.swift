@@ -216,9 +216,9 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
     static func keepsOverDelay(_ wire: Wire) -> Bool {
         switch wire {
         case .events, .snapshot, .retired, .left, .role, .presets, .display, .haptics, .displaced: true
-        case .workout(.finished), .workout(.series): true
+        case .workout(.finished), .workout(.series), .workout(.rated): true
         case .workout(.stop), .workout(.pause), .workout(.resume), .workout(.running),
-             .workout(.paused), .workout(.idle): false
+             .workout(.paused), .workout(.idle), .workout(.skipped): false
         case .hello, .sharing: false
         }
     }

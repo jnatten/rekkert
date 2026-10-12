@@ -1192,9 +1192,18 @@ public final class MatchStore {
             // disk. Everything else is somebody's live state, and belongs to whoever asked.
             if keepsHistory {
                 switch signal {
-                case .finished(let record): try? store?.archive(record)
+                case .finished(var record):
+                    // The queued copy lands after the live one, and may land after a rating
+                    // given on this phone that the watch has no way of repeating.
+                    if record.effort == nil { record.effort = store?.workout(record.id)?.effort }
+                    try? store?.archive(record)
                 case .series(let series): try? store?.archive(series)
-                case .stop, .pause, .resume, .running, .paused, .idle: break
+                case .rated(let id, let effort):
+                    if var record = store?.workout(id) {
+                        record.effort = effort
+                        try? store?.archive(record)
+                    }
+                case .stop, .pause, .resume, .running, .paused, .idle, .skipped: break
                 }
             }
             onWorkout?(signal)
@@ -1543,7 +1552,7 @@ public final class MatchStore {
             announcedWorkout = signal
         // A request is not a state. Saying one again on reconnect would ask a second time
         // for something already done.
-        case .stop, .pause, .resume, .finished, .series:
+        case .stop, .pause, .resume, .finished, .series, .rated, .skipped:
             break
         }
         let payload = encode(.workout(signal))
@@ -1551,8 +1560,8 @@ public final class MatchStore {
         // minutes late and end a workout started since; `.running` would switch a glyph back
         // on with nothing behind it. Only a finished workout is a fact worth keeping.
         switch signal {
-        case .finished, .series: transport.queue(payload)
-        case .stop, .pause, .resume, .running, .paused, .idle: break
+        case .finished, .series, .rated: transport.queue(payload)
+        case .stop, .pause, .resume, .running, .paused, .idle, .skipped: break
         }
         Task { _ = await sendLive(payload) }
     }

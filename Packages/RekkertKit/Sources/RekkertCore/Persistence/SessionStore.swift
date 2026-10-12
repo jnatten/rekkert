@@ -319,6 +319,12 @@ public struct SessionStore: Sendable {
             .sorted { $0.startedAt > $1.startedAt }
     }
 
+    public func workout(_ id: UUID) -> WorkoutRecord? {
+        guard let data = try? Data(contentsOf: workoutsDirectory.appending(path: "\(id.uuidString).json"))
+        else { return nil }
+        return try? decoder.decode(WorkoutRecord.self, from: data)
+    }
+
     public func deleteWorkout(_ id: UUID) throws {
         try? FileManager.default.removeItem(at: workoutsDirectory.appending(path: "\(id.uuidString).json"))
         try? FileManager.default.removeItem(at: seriesDirectory.appending(path: "\(id.uuidString).json"))

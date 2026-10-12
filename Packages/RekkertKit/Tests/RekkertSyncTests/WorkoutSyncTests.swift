@@ -12,6 +12,7 @@ private final class RecordingTransport: PeerTransport, @unchecked Sendable {
     private let packets: AsyncStream<InboundPacket>.Continuation
     private let lock = NSLock()
     private var sent: [Wire] = []
+    private var held: [Wire] = []
 
     init() {
         var continuation: AsyncStream<InboundPacket>.Continuation!
@@ -24,6 +25,10 @@ private final class RecordingTransport: PeerTransport, @unchecked Sendable {
 
     var workouts: [WorkoutSignal] {
         carried.compactMap { if case .workout(let signal) = $0 { signal } else { nil } }
+    }
+
+    var queuedWorkouts: [WorkoutSignal] {
+        lock.withLock { held }.compactMap { if case .workout(let signal) = $0 { signal } else { nil } }
     }
 
     /// Puts a packet in as though the peer had sent it, which is how a reconnect gets staged.
@@ -40,7 +45,11 @@ private final class RecordingTransport: PeerTransport, @unchecked Sendable {
         return nil
     }
 
-    func queue(_ payload: Data) { record(payload) }
+    func queue(_ payload: Data) {
+        record(payload)
+        guard let wire = try? Wire.decode(payload) else { return }
+        lock.withLock { held.append(wire) }
+    }
     func publishSnapshot(_ payload: Data) { record(payload) }
 
     private func record(_ payload: Data) {
@@ -104,6 +113,8 @@ struct WorkoutSyncTests {
                 heartRate: [120, nil], heartRateMax: [131, nil], activeEnergy: [1.4, 0]
             )
         ),
+        .rated(workoutID: UUID(), effort: 7),
+        .skipped(workoutID: UUID()),
     ]
 
     /// What a version skew rests on: a signal the counterpart has never heard of throws on
@@ -202,6 +213,87 @@ struct WorkoutSyncTests {
         await eventually { !seen.isEmpty }
         #expect(seen == [.stop])
         #expect(try store.workouts().isEmpty)
+    }
+
+    /// A rating given on the phone has to reach a watch that has gone back to sleep, since
+    /// only the watch can put it in Health. A skip is only worth anything while somebody is
+    /// still being asked.
+    @Test func aRatingIsQueuedAndASkipIsNot() async {
+        let links = FanOutTransport()
+        let paired = RecordingTransport()
+        links.attach(paired, as: .pairedDevice)
+        let store = MatchStore(device: DeviceID(), transport: links, snapshotInterval: 0)
+        let rated = WorkoutSignal.rated(workoutID: record.id, effort: 7)
+        let skipped = WorkoutSignal.skipped(workoutID: record.id)
+
+        store.send(rated)
+        store.send(skipped)
+        await eventually { paired.workouts.contains(rated) && paired.workouts.contains(skipped) }
+
+        #expect(paired.queuedWorkouts.contains(rated))
+        #expect(!paired.queuedWorkouts.contains(skipped))
+    }
+
+    @Test func aRatingIsFiledWithItsWorkout() async throws {
+        let (watch, phone) = LoopbackTransport.pair()
+        let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        let store = SessionStore(directory: directory)
+        let receiving = MatchStore(device: DeviceID(), transport: phone, store: store, snapshotInterval: 0)
+        let task = Task { await receiving.run() }
+        defer { task.cancel() }
+
+        watch.setReachable(false)
+        let sending = MatchStore(device: DeviceID(), transport: watch, snapshotInterval: 0)
+        sending.send(.finished(record))
+        sending.send(.rated(workoutID: record.id, effort: 8))
+
+        await eventually { store.workout(record.id)?.effort == 8 }
+        var rated = record
+        rated.effort = 8
+        #expect(try store.workouts() == [rated])
+    }
+
+    /// Rated on the phone, which files it there and then, and the watch's queued copy of the
+    /// summary turning up afterwards with no rating in it.
+    @Test func aLateSummaryKeepsTheRatingAlreadyFiled() async throws {
+        let (watch, phone) = LoopbackTransport.pair()
+        let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        let store = SessionStore(directory: directory)
+        var rated = record
+        rated.effort = 6
+        try store.archive(rated)
+        let receiving = MatchStore(device: DeviceID(), transport: phone, store: store, snapshotInterval: 0)
+        var seen: [WorkoutSignal] = []
+        receiving.onWorkout = { seen.append($0) }
+        let task = Task { await receiving.run() }
+        defer { task.cancel() }
+
+        watch.setReachable(false)
+        MatchStore(device: DeviceID(), transport: watch, snapshotInterval: 0).send(.finished(record))
+
+        await eventually { !seen.isEmpty }
+        #expect(store.workout(record.id)?.effort == 6)
+    }
+
+    @Test func aRatingIsNotRepeatedOnReconnect() async {
+        let links = FanOutTransport()
+        let paired = RecordingTransport()
+        links.attach(paired, as: .pairedDevice)
+        let store = MatchStore(device: DeviceID(), transport: links, snapshotInterval: 0)
+        let task = Task { await store.run() }
+        defer { task.cancel() }
+
+        let rated = WorkoutSignal.rated(workoutID: record.id, effort: 7)
+        store.send(.idle)
+        store.send(rated)
+        store.send(.skipped(workoutID: record.id))
+        await eventually { paired.workouts.count >= 3 }
+
+        let announced = paired.workouts.count
+        paired.deliver(.hello(sessionID: UUID(), vector: VersionVector()))
+        await eventually { paired.workouts.count > announced }
+
+        #expect(paired.workouts.last == .idle)
     }
 
     /// A phone coming back mid-pause has to be told it is a pause. It may never have heard

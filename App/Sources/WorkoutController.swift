@@ -2,6 +2,7 @@ import Foundation
 import HealthKit
 import Observation
 import RekkertCore
+import UIKit
 import WatchConnectivity
 
 /// The phone's end of the workout. It cannot hold one — the sensors and the single session
@@ -25,10 +26,15 @@ final class WorkoutController {
     /// for both devices rather than twice around an `#if`.
     let heartRate: Double? = nil
     private(set) var failure: String?
+    /// Only put while the phone is in hand: a summary that reaches a phone in a pocket, or
+    /// one queued from a session long since played, is no moment to ask.
+    private(set) var askingForEffort: EffortQuestion?
 
     @ObservationIgnored var publish: ((WorkoutSignal) -> Void)?
 
     @ObservationIgnored private let health = HKHealthStore()
+    /// A summary arrives live and again off the queue, and the second must not ask again.
+    @ObservationIgnored private var asked: Set<UUID> = []
 
     /// There has to be a wrist for any of this to mean anything. Without one the control is
     /// not shown at all, rather than shown and then doing nothing when pressed.
@@ -99,15 +105,42 @@ final class WorkoutController {
             isPaused = true
             startedAt = since
             failure = nil
-        case .idle, .finished:
+        case .idle:
             isTracking = false
             isPaused = false
             startedAt = nil
+        case .finished(let record):
+            isTracking = false
+            isPaused = false
+            startedAt = nil
+            if record.effort == nil,
+               UIApplication.shared.applicationState == .active,
+               record.endedAt.timeIntervalSinceNow > -Self.askingWindow,
+               asked.insert(record.id).inserted {
+                askingForEffort = EffortQuestion(id: record.id, startedAt: record.startedAt)
+            }
+        case .rated(let id, _), .skipped(let id):
+            asked.insert(id)
+            if askingForEffort?.id == id { askingForEffort = nil }
         // Arrives after `finished`, and may land after the next workout has started: it
         // says nothing about whether one is running now.
         case .stop, .pause, .resume, .series:
             break
         }
+    }
+
+    private static let askingWindow: TimeInterval = 15 * 60
+
+    func rate(_ effort: Int, for id: UUID) {
+        asked.insert(id)
+        if askingForEffort?.id == id { askingForEffort = nil }
+        publish?(.rated(workoutID: id, effort: effort))
+    }
+
+    func skipEffort() {
+        guard let question = askingForEffort else { return }
+        askingForEffort = nil
+        publish?(.skipped(workoutID: question.id))
     }
 
     func acknowledgeFailure() { failure = nil }
@@ -122,6 +155,10 @@ final class WorkoutController {
         isTracking = true
         isPaused = paused
         startedAt = Date().addingTimeInterval(-1_847)
+    }
+
+    func pretendFinished(_ question: EffortQuestion) {
+        askingForEffort = question
     }
     #endif
 }

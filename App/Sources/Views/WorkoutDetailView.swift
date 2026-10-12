@@ -5,11 +5,20 @@ import SwiftUI
 /// while it did.
 struct WorkoutDetailView: View {
     @Environment(AppModel.self) private var model
-    let workout: WorkoutRecord
+    private let filed: WorkoutRecord
+
+    init(workout: WorkoutRecord) {
+        filed = workout
+    }
+
+    /// Read again rather than kept as it was handed over, so a rating shows the moment it is
+    /// filed.
+    private var workout: WorkoutRecord { model.workoutRecord(filed.id) ?? filed }
 
     private var matches: [HistoryRecord] { model.matches(during: workout) }
 
     @State private var efforts: [UUID: WorkoutSeries.Effort] = [:]
+    @State private var rating: EffortQuestion?
 
     var body: some View {
         List {
@@ -28,6 +37,7 @@ struct WorkoutDetailView: View {
                 if let maximum = workout.heartRateMaximum {
                     LabeledContent("Highest heart rate", value: WorkoutFormat.beats(maximum))
                 }
+                effort
                 LabeledContent("Saved as", value: "Tennis, indoor")
             }
 
@@ -68,6 +78,35 @@ struct WorkoutDetailView: View {
         .navigationTitle(workout.startedAt.formatted(.dateTime.weekday(.abbreviated).day().month()))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: workout.id) { efforts = measure() }
+        .sheet(item: $rating) { question in
+            EffortSheet(
+                question: question,
+                onRate: { score in
+                    model.rateWorkout(question.id, effort: score)
+                    rating = nil
+                },
+                onSkip: { rating = nil }
+            )
+        }
+    }
+
+    private var effort: some View {
+        Button {
+            rating = EffortQuestion(id: workout.id, startedAt: workout.startedAt, effort: workout.effort)
+        } label: {
+            LabeledContent {
+                if let score = workout.effort {
+                    Text(WorkoutEffortStyle.label(score))
+                        .foregroundStyle(WorkoutEffortStyle.color(score))
+                } else {
+                    Text("Add")
+                        .foregroundStyle(Color.accentColor)
+                }
+            } label: {
+                Text("Effort")
+                    .foregroundStyle(Color.primary)
+            }
+        }
     }
 
     /// What each match cost, from the stretch of the workout it was played in: its first
