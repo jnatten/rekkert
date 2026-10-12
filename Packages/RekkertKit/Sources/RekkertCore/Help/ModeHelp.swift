@@ -12,7 +12,7 @@ extension GameMode {
                 points: [
                     "At 40–40: advantage, a golden point or star point, chosen when you set it up.",
                     "The badge by the score shows who serves and from which half.",
-                    "Sets to win, tiebreaks and a super tiebreak decider are all settings.",
+                    "Singles or doubles, sets to win, tiebreaks and a super tiebreak decider are all settings.",
                 ]
             )
         case .pointCount:

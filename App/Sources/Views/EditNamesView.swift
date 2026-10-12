@@ -22,6 +22,7 @@ struct EditNamesView: View {
             _players = State(initialValue: players)
         case .sides(let event, let teams):
             _eventName = State(initialValue: event)
+            _singles = State(initialValue: teams.a.isSingles || teams.b.isSingles)
             // Padded to two: a side set up without its line-up filled in still gets two slots
             // to type into, and the slots stay where they are because the serve badge picks
             // the server out of this list by position.
@@ -34,6 +35,7 @@ struct EditNamesView: View {
     @State private var eventName = ""
     @State private var players: [Player] = []
     @State private var teams = BySide(both: TeamInfo(name: "", players: ["", ""]))
+    @State private var singles = false
     @State private var note = ""
     @FocusState private var focused: Field?
 
@@ -132,15 +134,41 @@ struct EditNamesView: View {
             teamRows(.a)
             teamRows(.b)
         } header: {
-            Text("Teams")
+            Text(singles ? "Players" : "Teams")
         }
     }
 
     private var teamTitle: String {
-        record.state.renamed(.sides(event: "", teams: teams)).title
+        record.state.renamed(.sides(event: "", teams: editedTeams)).title
     }
 
+    /// A singles side is renamed by its player, so the name and the line-up move together. A
+    /// blank field leaves the side alone, as a blank does everywhere else here.
+    private var editedTeams: BySide<TeamInfo> {
+        guard singles else { return teams }
+        return teams.map { team in
+            let name = team.players[0].trimmingCharacters(in: .whitespacesAndNewlines)
+            return name.isEmpty ? TeamInfo(name: team.name) : .singles(name)
+        }
+    }
+
+    @ViewBuilder
     private func teamRows(_ side: TeamSide) -> some View {
+        if singles {
+            HStack {
+                Circle().fill(palette.color(side)).frame(width: 10, height: 10)
+                TextField(teams[side].name, text: teamPlayer(side, 0))
+                    .focused($focused, equals: .teamPlayer(side, 0))
+                    .submitLabel(side == .b ? .done : .next)
+                    .onSubmit { advanceFromTeamPlayer(side, 0) }
+            }
+            .textInputAutocapitalization(.words)
+        } else {
+            doublesRows(side)
+        }
+    }
+
+    private func doublesRows(_ side: TeamSide) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Circle().fill(palette.color(side)).frame(width: 10, height: 10)
@@ -169,7 +197,9 @@ struct EditNamesView: View {
     }
 
     private func advanceFromTeamPlayer(_ side: TeamSide, _ index: Int) {
-        if index == 0 {
+        if singles {
+            focused = side == .a ? .teamPlayer(.b, 0) : nil
+        } else if index == 0 {
             focused = .teamPlayer(side, 1)
         } else if side == .a {
             focused = .teamName(.b)
@@ -195,7 +225,7 @@ struct EditNamesView: View {
     private func save() {
         let names: SessionNames = switch record.state.names {
         case .group: .group(event: eventName, players: players)
-        case .sides: .sides(event: eventName, teams: teams)
+        case .sides: .sides(event: eventName, teams: editedTeams)
         }
         model.update(record.renamed(names).noted(note))
         dismiss()

@@ -11,6 +11,14 @@ public struct TeamInfo: Codable, Sendable, Hashable {
 
     public static let home = TeamInfo(name: "Us")
     public static let away = TeamInfo(name: "Them")
+
+    /// A side of one, called by its player — how a singles match is set up, and the shape a
+    /// friendly round packages its singles in.
+    public static func singles(_ player: String) -> TeamInfo {
+        TeamInfo(name: player, players: [player])
+    }
+
+    public var isSingles: Bool { players.count == 1 && players[0] == name }
 }
 
 public enum SessionSetup: Codable, Sendable, Hashable {

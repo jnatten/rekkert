@@ -23,7 +23,9 @@ you will actually see them. It sits below your own score and above theirs, match
 court in front of you where their end is the far one. It follows the receivers' choice on a
 golden or star point rather than just alternating. When the players are named, the server's
 name sits beside the badge, and the four take their turns in the usual order — one from each
-side, so partners never serve back to back.
+side, so partners never serve back to back. Set up as singles, each side is one player and is
+called by their name, so History lists the match as "Ada vs Bob" and the one player serves
+every game their side does.
 
 **Winner court** — you play games on a court until the organiser blows the whistle, then
 move up or down. A round is a set with no end: games just accumulate. The whistle banks

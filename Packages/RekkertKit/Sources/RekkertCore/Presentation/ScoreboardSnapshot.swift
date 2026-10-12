@@ -83,7 +83,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             detail: detail(for: session, engine: engine),
             serving: score.isFinished ? nil : serve.slot.team,
             servingCourt: score.isFinished ? nil : serve.court,
-            servingPlayer: name(session.teams[serve.slot.team].players, at: serve.slot.playerIndex),
+            servingPlayer: server(session.teams[serve.slot.team], at: serve.slot.playerIndex),
             canSwapServingPlayer: !score.isFinished && hasTwoNamed(session.teams[serve.slot.team].players),
             isSuddenDeath: engine.isSuddenDeathPoint(score),
             suddenDeathCourt: score.suddenDeathCourt,
@@ -170,7 +170,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
                 : "Round \(session.roundNumber)",
             serving: session.isFinished ? nil : serve.slot.team,
             servingCourt: session.isFinished ? nil : serve.court,
-            servingPlayer: name(session.teams[serve.slot.team].players, at: serve.slot.playerIndex),
+            servingPlayer: server(session.teams[serve.slot.team], at: serve.slot.playerIndex),
             canSwapServingPlayer: !session.isFinished && hasTwoNamed(session.teams[serve.slot.team].players),
             isSuddenDeath: engine.isSuddenDeathPoint(score),
             suddenDeathCourt: score.suddenDeathCourt,
@@ -198,7 +198,7 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             detail: detail(for: session, names: names),
             serving: session.isFinished ? nil : serve.slot.team,
             servingCourt: session.isFinished ? nil : serve.court,
-            servingPlayer: name(session.teams[serve.slot.team].players, at: serve.slot.playerIndex),
+            servingPlayer: server(session.teams[serve.slot.team], at: serve.slot.playerIndex),
             canSwapServingPlayer: !session.isFinished && hasTwoNamed(session.teams[serve.slot.team].players),
             isSuddenDeath: false,
             suddenDeathCourt: nil,
@@ -279,6 +279,12 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
     private static func name(_ players: [String], at index: Int) -> String? {
         guard let name = players[safe: index], !name.isEmpty else { return nil }
         return name
+    }
+
+    /// The rotation asks a singles side for a partner it has not got, so its one player
+    /// serves every time.
+    private static func server(_ team: TeamInfo, at index: Int) -> String? {
+        name(team.players, at: index) ?? (team.isSingles ? team.players.first : nil)
     }
 
     private static func named(_ players: [String]) -> [String] {

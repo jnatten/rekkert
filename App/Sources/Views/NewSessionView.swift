@@ -54,13 +54,15 @@ struct NewSessionView: View {
         func slots(_ players: [String]) -> [String] {
             players + Array(repeating: "", count: max(0, 2 - players.count))
         }
-        _teamA = State(initialValue: teams.a.name)
-        _teamB = State(initialValue: teams.b.name)
+        _singles = State(initialValue: teams.a.isSingles || teams.b.isSingles)
+        _teamA = State(initialValue: teams.a.isSingles ? TeamInfo.home.name : teams.a.name)
+        _teamB = State(initialValue: teams.b.isSingles ? TeamInfo.away.name : teams.b.name)
         _playersA = State(initialValue: slots(teams.a.players))
         _playersB = State(initialValue: slots(teams.b.players))
     }
 
     @State private var rules = TraditionalRules()
+    @State private var singles = false
     @State private var teamA = "Us"
     @State private var teamB = "Them"
     @State private var playersA = ["", ""]
@@ -206,19 +208,42 @@ struct NewSessionView: View {
         .textInputAutocapitalization(.words)
     }
 
+    private func singlesRow(player: Binding<[String]>, side: TeamSide) -> some View {
+        HStack {
+            Circle().fill(palette.color(side)).frame(width: 10, height: 10)
+            TextField("Player \(side == .a ? 1 : 2)", text: player[0])
+                .focused($focused, equals: .teamPlayer(side, 0))
+                .submitLabel(side == .b ? .done : .next)
+                .onSubmit { advanceFromTeamPlayer(side, 0) }
+        }
+        .textInputAutocapitalization(.words)
+    }
+
     private var teamsSection: some View {
         Section {
-            teamRows(name: $teamA, players: $playersA, side: .a)
-            teamRows(name: $teamB, players: $playersB, side: .b)
+            Picker("Format", selection: $singles) {
+                Text("Doubles").tag(false)
+                Text("Singles").tag(true)
+            }
+            .pickerStyle(.segmented)
+            if singles {
+                singlesRow(player: $playersA, side: .a)
+                singlesRow(player: $playersB, side: .b)
+            } else {
+                teamRows(name: $teamA, players: $playersA, side: .a)
+                teamRows(name: $teamB, players: $playersB, side: .b)
+            }
         } header: {
-            Text("Teams")
+            Text(singles ? "Players" : "Teams")
         } footer: {
-            Text("Player 1 serves first for their side.")
+            Text(singles ? "Player 1 serves first." : "Player 1 serves first for their side.")
         }
     }
 
     private func advanceFromTeamPlayer(_ side: TeamSide, _ index: Int) {
-        if index == 0 {
+        if singles {
+            focused = side == .a ? .teamPlayer(.b, 0) : nil
+        } else if index == 0 {
             focused = .teamPlayer(side, 1)
         } else if side == .a {
             focused = .teamName(.b)
@@ -586,7 +611,7 @@ struct NewSessionView: View {
             guard let player = players.first(where: { $0.id == id }) else { return [] }
             return model.roster.suggestions(matching: player.name, excluding: players.map(\.name), limit: 8)
         case .teamPlayer(let side, let index):
-            let entered = playersA + playersB
+            let entered = singles ? [playersA[0], playersB[0]] : playersA + playersB
             let typed = (side == .a ? playersA : playersB)[index]
             return model.roster.suggestions(matching: typed, excluding: entered.filter { $0 != typed }, limit: 8)
         }
@@ -638,10 +663,19 @@ struct NewSessionView: View {
     }
 
     private var teams: BySide<TeamInfo> {
-        BySide(
+        if singles {
+            return BySide(a: solo(playersA[0], else: teamA), b: solo(playersB[0], else: teamB))
+        }
+        return BySide(
             a: TeamInfo(name: teamA, players: lineUp(playersA)),
             b: TeamInfo(name: teamB, players: lineUp(playersB))
         )
+    }
+
+    /// A singles side is called by its player, and left blank it keeps the side's own name.
+    private func solo(_ entered: String, else teamName: String) -> TeamInfo {
+        let name = entered.trimmingCharacters(in: .whitespaces)
+        return name.isEmpty ? TeamInfo(name: teamName) : .singles(name)
     }
 
     /// Kept where they were typed: the rotation picks the server out of this list by position,
@@ -716,6 +750,6 @@ struct NewSessionView: View {
     }
 
     private var namedTeamPlayers: [String] {
-        (playersA + playersB).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        (teams.a.players + teams.b.players).filter { !$0.isEmpty }
     }
 }

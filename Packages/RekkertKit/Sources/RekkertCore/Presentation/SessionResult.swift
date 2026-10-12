@@ -109,7 +109,7 @@ public struct SessionResult: Sendable, Hashable {
         }
         let won = score.setsWon
         return SessionResult(
-            headline: "\(session.teams[winner].name) win",
+            headline: wins(session.teams[winner]),
             score: sets.joined(separator: "  "),
             detail: "\(won[winner]) \(plural(won[winner], "set")) to \(won[winner.other])",
             outcome: .won,
@@ -145,7 +145,7 @@ public struct SessionResult: Sendable, Hashable {
             )
         }
         return SessionResult(
-            headline: "\(session.teams[winner].name) win",
+            headline: wins(session.teams[winner]),
             score: score,
             detail: "by \(points.lead(winner))",
             outcome: .won,
@@ -181,7 +181,7 @@ public struct SessionResult: Sendable, Hashable {
             )
         }
         return SessionResult(
-            headline: "\(session.teams[winner].name) win",
+            headline: wins(session.teams[winner]),
             score: "\(rounds.a)–\(rounds.b)",
             detail: detail,
             outcome: .won,
@@ -305,6 +305,10 @@ public struct SessionResult: Sendable, Hashable {
             winningSide: nil,
             placings: placings
         )
+    }
+
+    private static func wins(_ team: TeamInfo) -> String {
+        team.isSingles ? "\(team.name) wins" : "\(team.name) win"
     }
 
     private static func plural(_ count: Int, _ singular: String) -> String {
