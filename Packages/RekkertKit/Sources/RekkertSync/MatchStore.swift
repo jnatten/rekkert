@@ -1186,7 +1186,7 @@ public final class MatchStore {
             if merged != haptics { apply(merged, publish: false) }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
-        case .workout(let signal):
+        case .workout(var signal):
             // A finished workout is filed here because the watch that recorded it keeps no
             // history. Under its own id, so at-least-once delivery lands as exactly-once on
             // disk. Everything else is somebody's live state, and belongs to whoever asked.
@@ -1194,9 +1194,11 @@ public final class MatchStore {
                 switch signal {
                 case .finished(var record):
                     // The queued copy lands after the live one, and may land after a rating
-                    // given on this phone that the watch has no way of repeating.
+                    // given on this phone that the watch has no way of repeating. Passed on
+                    // as filed, so nothing asks for a rating it already has.
                     if record.effort == nil { record.effort = store?.workout(record.id)?.effort }
                     try? store?.archive(record)
+                    signal = .finished(record)
                 case .series(let series): try? store?.archive(series)
                 case .rated(let id, let effort):
                     if var record = store?.workout(id) {
@@ -1558,7 +1560,8 @@ public final class MatchStore {
         let payload = encode(.workout(signal))
         // A statement about right now goes live only. Queued, `.stop` would land twenty
         // minutes late and end a workout started since; `.running` would switch a glyph back
-        // on with nothing behind it. Only a finished workout is a fact worth keeping.
+        // on with nothing behind it. Only a finished workout, and how hard it was, is a fact
+        // worth keeping.
         switch signal {
         case .finished, .series, .rated: transport.queue(payload)
         case .stop, .pause, .resume, .running, .paused, .idle, .skipped: break

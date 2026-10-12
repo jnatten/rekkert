@@ -5,15 +5,7 @@ import SwiftUI
 /// while it did.
 struct WorkoutDetailView: View {
     @Environment(AppModel.self) private var model
-    private let filed: WorkoutRecord
-
-    init(workout: WorkoutRecord) {
-        filed = workout
-    }
-
-    /// Read again rather than kept as it was handed over, so a rating shows the moment it is
-    /// filed.
-    private var workout: WorkoutRecord { model.workoutRecord(filed.id) ?? filed }
+    let workout: WorkoutRecord
 
     private var matches: [HistoryRecord] { model.matches(during: workout) }
 
@@ -90,21 +82,36 @@ struct WorkoutDetailView: View {
         }
     }
 
+    /// Only the watch can put a rating in Health, and it keeps only the last week or so of
+    /// it. A few days leaves room for a watch that is asleep when the rating is sent.
+    private static let ratable: TimeInterval = 5 * 24 * 60 * 60
+
+    /// Read again rather than taken from the record handed over, so a rating shows the
+    /// moment it is filed.
+    @ViewBuilder
     private var effort: some View {
-        Button {
-            rating = EffortQuestion(id: workout.id, startedAt: workout.startedAt, effort: workout.effort)
-        } label: {
-            LabeledContent {
-                if let score = workout.effort {
-                    Text(WorkoutEffortStyle.label(score))
-                        .foregroundStyle(WorkoutEffortStyle.color(score))
-                } else {
-                    Text("Add")
-                        .foregroundStyle(Color.accentColor)
-                }
+        let score = (model.workoutRecord(workout.id) ?? workout).effort
+        if workout.endedAt.timeIntervalSinceNow > -Self.ratable {
+            Button {
+                rating = EffortQuestion(id: workout.id, startedAt: workout.startedAt, effort: score)
             } label: {
-                Text("Effort")
-                    .foregroundStyle(Color.primary)
+                LabeledContent {
+                    if let score {
+                        Text(WorkoutEffortStyle.label(score))
+                            .foregroundStyle(WorkoutEffortStyle.color(score))
+                    } else {
+                        Text("Add")
+                            .foregroundStyle(Color.accentColor)
+                    }
+                } label: {
+                    Text("Effort")
+                        .foregroundStyle(Color.primary)
+                }
+            }
+        } else if let score {
+            LabeledContent("Effort") {
+                Text(WorkoutEffortStyle.label(score))
+                    .foregroundStyle(WorkoutEffortStyle.color(score))
             }
         }
     }

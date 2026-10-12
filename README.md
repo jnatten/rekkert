@@ -376,8 +376,12 @@ away on the other, and the workout's page on the phone has an Effort row for rat
 or changing the answer. Health only takes the rating as a sample related to the workout, so
 the watch, which holds the workout and the Health access, is the one that writes it. A rating
 given on the phone is filed there at once and sent to the watch on the durable queue, and
-reaches Health whenever the watch app next hears it. Health makes no estimate of its own for
-another app's workout, so there is no suggested value to start from.
+reaches Health whenever the watch app next hears it — or, if the watch was locked then or had
+not yet been asked for access to the score, the next time the app is opened on it. The watch
+keeps only the last week or so of Health, and a workout it no longer has cannot take a
+rating, so the phone offers the row for five days after a workout and shows any rating
+read-only after that. Health makes no estimate of its own for another app's workout, so
+there is no suggested value to start from.
 
 The live heart rate never goes on the wire: it stays on the wrist that read it. What does go,
 once a workout has ended, is the summary, and after it — read back out of Health rather than

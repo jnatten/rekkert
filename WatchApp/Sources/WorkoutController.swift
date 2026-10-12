@@ -65,9 +65,19 @@ final class WorkoutController {
     /// of the first fails as somebody else's workout.
     @ObservationIgnored private var isStarting = false
     @ObservationIgnored private var lastWorkout: HKWorkout?
-    /// Live and queued copies of one rating both arrive, and two writes racing would both
-    /// find nothing to replace and leave two ratings on the workout.
+    /// Live and queued copies of one rating both arrive, and the second has nothing to do.
     @ObservationIgnored private var written: [UUID: Int] = [:]
+    @ObservationIgnored private var writing: [UUID: Task<Void, Never>] = [:]
+    /// Ratings still to go into Health, by workout, kept across launches: one can arrive
+    /// with the watch locked, or before it has been asked for access to the score.
+    @ObservationIgnored private var waiting = WorkoutController.waitingOnDisk {
+        didSet { UserDefaults.standard.set(waiting, forKey: Self.waitingKey) }
+    }
+
+    private static let waitingKey = "workoutEffortsWaiting"
+    private static var waitingOnDisk: [String: Int] {
+        UserDefaults.standard.dictionary(forKey: waitingKey) as? [String: Int] ?? [:]
+    }
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
@@ -198,7 +208,7 @@ final class WorkoutController {
         case .resume: resume()
         case .rated(let id, let effort):
             if askingForEffort?.id == id { askingForEffort = nil }
-            Task { await write(effort, to: id) }
+            save(effort, to: id)
         case .skipped(let id):
             if askingForEffort?.id == id { askingForEffort = nil }
         case .running, .paused, .idle, .finished, .series: break
@@ -211,7 +221,7 @@ final class WorkoutController {
         guard let question = askingForEffort else { return }
         askingForEffort = nil
         publish?(.rated(workoutID: question.id, effort: effort))
-        Task { await write(effort, to: question.id) }
+        save(effort, to: question.id)
     }
 
     func skipEffort() {
@@ -220,15 +230,59 @@ final class WorkoutController {
         publish?(.skipped(workoutID: question.id))
     }
 
-    /// Replaces rather than adds: a second rating from this app would leave Health holding
-    /// two answers to one question.
-    private func write(_ effort: Int, to id: UUID) async {
-        guard WorkoutEffort.range.contains(effort), written[id] != effort else { return }
-        written[id] = effort
-        guard let workout = await workout(id) else {
-            written[id] = nil
+    /// Ratings that could not go in when they arrived. With the app in front Health can ask
+    /// for the access, which a watch updated since its last workout has never been asked for.
+    func writeWaitingRatings() {
+        guard isAvailable, !waiting.isEmpty else { return }
+        Task {
+            try? await health.requestAuthorization(toShare: Self.shared, read: Self.read)
+            for id in waiting.keys.compactMap(UUID.init(uuidString:)) { enqueue(id) }
+        }
+    }
+
+    private func save(_ effort: Int, to id: UUID) {
+        guard WorkoutEffort.range.contains(effort) else { return }
+        waiting[id.uuidString] = effort
+        enqueue(id)
+    }
+
+    /// One at a time for each workout, behind whatever is already going in: two in flight
+    /// would both find nothing of ours to replace and leave two answers on it.
+    private func enqueue(_ id: UUID) {
+        let earlier = writing[id]
+        writing[id] = Task {
+            await earlier?.value
+            await writeWaiting(id)
+        }
+    }
+
+    /// The newest rating waiting for this workout, whichever copy of whichever rating asked.
+    private func writeWaiting(_ id: UUID) async {
+        guard let effort = waiting[id.uuidString] else { return }
+        switch health.authorizationStatus(for: HKQuantityType(.workoutEffortScore)) {
+        case .sharingAuthorized: break
+        case .notDetermined: return
+        default:
+            waiting[id.uuidString] = nil
             return
         }
+        do {
+            if written[id] != effort, let workout = try await workout(id) {
+                try await write(effort, to: workout)
+                written[id] = effort
+            }
+        } catch let error as HKError where error.code == .errorDatabaseInaccessible {
+            // Locked, off the wrist. Tried again when the app is next in front.
+            return
+        } catch {}
+        // Written, or never going to be: gone from Health on this watch, which keeps only
+        // the last stretch of it.
+        if waiting[id.uuidString] == effort { waiting[id.uuidString] = nil }
+    }
+
+    /// Replaces rather than adds: a second rating from this app would leave Health holding
+    /// two answers to one question.
+    private func write(_ effort: Int, to workout: HKWorkout) async throws {
         let type = HKQuantityType(.workoutEffortScore)
         let earlier = HKSampleQueryDescriptor(
             predicates: [.quantitySample(
@@ -237,32 +291,28 @@ final class WorkoutController {
             )],
             sortDescriptors: []
         )
-        let ours = ((try? await earlier.result(for: health)) ?? [])
+        let ours = try await earlier.result(for: health)
             .filter { $0.sourceRevision.source == .default() }
-        if !ours.isEmpty { try? await health.delete(ours) }
+        if !ours.isEmpty { try await health.delete(ours) }
         let sample = HKQuantitySample(
             type: type,
             quantity: HKQuantity(unit: .appleEffortScore(), doubleValue: Double(effort)),
             start: workout.startDate,
             end: workout.endDate
         )
-        do {
-            try await health.relateWorkoutEffortSample(sample, with: workout, activity: nil)
-        } catch {
-            written[id] = nil
-        }
+        try await health.relateWorkoutEffortSample(sample, with: workout, activity: nil)
     }
 
     /// The one just finished is still in hand; a rating from the phone that reaches a
     /// relaunched watch has to look it up.
-    private func workout(_ id: UUID) async -> HKWorkout? {
+    private func workout(_ id: UUID) async throws -> HKWorkout? {
         if let lastWorkout, lastWorkout.uuid == id { return lastWorkout }
         let descriptor = HKSampleQueryDescriptor(
             predicates: [.workout(HKQuery.predicateForObject(with: id))],
             sortDescriptors: [],
             limit: 1
         )
-        return try? await descriptor.result(for: health).first
+        return try await descriptor.result(for: health).first
     }
 
     private func begin() throws {

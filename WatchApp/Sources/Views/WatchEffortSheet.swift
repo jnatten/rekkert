@@ -24,9 +24,10 @@ struct WatchEffortSheet: View {
             .padding(.horizontal, 4)
             .padding(.bottom, 4)
             .focusable()
+            // From zero, where it rests until turned, so nothing is picked before it is.
             .digitalCrownRotation(
                 $crown,
-                from: Double(WorkoutEffort.range.lowerBound),
+                from: 0,
                 through: Double(WorkoutEffort.range.upperBound),
                 by: 1,
                 sensitivity: .low,

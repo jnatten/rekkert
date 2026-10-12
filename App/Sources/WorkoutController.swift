@@ -100,11 +100,13 @@ final class WorkoutController {
             isPaused = false
             startedAt = since
             failure = nil
+            askingForEffort = nil
         case .paused(let since, _):
             isTracking = true
             isPaused = true
             startedAt = since
             failure = nil
+            askingForEffort = nil
         case .idle:
             isTracking = false
             isPaused = false

@@ -254,7 +254,8 @@ struct WorkoutSyncTests {
     }
 
     /// Rated on the phone, which files it there and then, and the watch's queued copy of the
-    /// summary turning up afterwards with no rating in it.
+    /// summary turning up afterwards with no rating in it. Handed on with the rating, too,
+    /// so a phone relaunched since does not ask again.
     @Test func aLateSummaryKeepsTheRatingAlreadyFiled() async throws {
         let (watch, phone) = LoopbackTransport.pair()
         let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
@@ -273,6 +274,7 @@ struct WorkoutSyncTests {
 
         await eventually { !seen.isEmpty }
         #expect(store.workout(record.id)?.effort == 6)
+        #expect(seen.first == .finished(rated))
     }
 
     @Test func aRatingIsNotRepeatedOnReconnect() async {

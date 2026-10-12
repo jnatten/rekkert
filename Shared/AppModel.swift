@@ -591,6 +591,7 @@ final class AppModel {
         // A start sent from the phone reaches the watch in the background, where Health
         // cannot prompt, so the question is put while the app is in front.
         if store.haptics.workoutOnMatchStart != .off { workout.prepare() }
+        workout.writeWaitingRatings()
         #endif
         follower.tick()
         #if !os(watchOS)

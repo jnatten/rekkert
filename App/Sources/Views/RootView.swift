@@ -141,12 +141,16 @@ struct RootView: View {
         } message: {
             Text("It runs on your watch while you play.")
         }
+        // Held back for as long as anything else is up, since a sheet cannot go over another:
+        // the board or the code being shown can stay up long after the match has ended.
         .task(id: model.workout.askingForEffort) {
             guard model.workout.askingForEffort != nil else {
                 askingForEffort = nil
                 return
             }
-            try? await Task.sleep(for: .milliseconds(600))
+            repeat {
+                try? await Task.sleep(for: .milliseconds(600))
+            } while !Task.isCancelled && isPresenting
             askingForEffort = model.workout.askingForEffort
         }
         .sheet(item: $askingForEffort, onDismiss: { model.workout.skipEffort() }) { question in
@@ -167,6 +171,10 @@ struct RootView: View {
         }
         linkedCode = code
         if !model.showingJoin { present { model.showingJoin = true } }
+    }
+
+    private var isPresenting: Bool {
+        UIApplication.shared.phoneScene?.keyWindow?.rootViewController?.presentedViewController != nil
     }
 
     /// A sheet from here cannot go up over one that is already showing, wherever that one
