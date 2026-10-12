@@ -28,12 +28,42 @@ called by their name, so History lists the match as "Ada vs Bob" and the one pla
 every game their side does.
 
 **Winner court** — you play games on a court until the organiser blows the whistle, then
-move up or down. A round is a set with no end: games just accumulate. The whistle banks
+move up or down. It comes two ways, picked when you set it up: **Our court** and **All
+courts**.
+
+On *Our court* a round is a set with no end: games just accumulate. The whistle banks
 them and the next round starts at nil-nil. Scoring is 15/30/40 with the same deuce options
 as a match. The app tracks only your own side of it — the round number and the games each
 side won — so there are no courts, partners or standings to keep up to date. The whistle
 usually interrupts a game, so the one in progress goes to whoever is ahead in it; level and
 it is discarded.
+
+*All courts* runs the whole evening. Every court is on the screen, court 1 at the top, and
+when a round ends its winners go up a court and its losers down, court 1's winners and the
+bottom court's losers staying where they are. Pairs can stay together all evening, taken
+from the list two at a time, or be split after every round so that the two who just won
+together face each other on the court above. The first round is placed as listed or
+shuffled.
+
+A round is timed or a match. Timed, it counts down from twelve minutes, or whatever you set,
+while every court plays games on the 40–40 rule of your choice, golden point unless you
+change it. The countdown can be paused, and more time added at any point, even once it has
+run out. When it runs out every watch buzzes, the phone says "Time" if the announcer is on,
+and a notification goes off on a phone in a pocket or a lowered wrist — but nothing ends
+until the organiser blows the whistle. Then the game in progress on each court goes to
+whoever leads it, and a court still level on games plays one deciding point, its receivers
+picking the side. As a match, each court plays sets on the ordinary rules, and the next
+round is drawn once every court is won. A timed court nobody kept can have its games typed
+in, and a court nobody scored at all is settled by tapping whoever won its deciding point.
+
+Players over the courts sit out as in Americano, fewest sit-outs first, and come back in on
+the bottom court; a fixed pair sits out together. Each round is drawn from the one before on
+every device, as Americano's is, so the phone and the watch agree on who goes where without
+asking each other. The next round is only offered once every court is settled, but once it
+is drawn it stays: a point that arrives late can change a score, never a round people have
+walked onto. The table is the ladder — the last round's finishing order, court by court and
+winners above losers, with rounds won and games beside it — and the evening is won by
+whoever won court 1 last.
 
 **Friendly** — you put in the names and play real matches, redrawing the partnerships after
 every one of them. A round is a match on the ordinary rules — sets to win, games per set,
@@ -120,12 +150,14 @@ for Americano and Mexicano, the points they average a round and their share of t
 played. Every match they were in is listed underneath, a tap away from the match itself.
 
 A game counts once, whatever mode it came from: a match somebody won, a Points round that
-reached its target (level is a draw), every round on a winner court up to the last whistle,
+reached its target (level is a draw), every round on a winner court up to the last whistle, every settled court on a ladder,
 every friendly round somebody won, and every americano court played out or confirmed. A match
 called off without a winner, a friendly round stopped where it stood and a court left part-way
 when a tournament was saved count for nobody. Rounds on the bench are left out of the points,
-and so is what they were worth. Winner court counts for the record and the partners but not
-head-to-head, since the other side of the net changed at every whistle. A session picked up
+and so is what they were worth. Winner court on Our court counts for the record and the
+partners but not head-to-head, since the other side of the net changed at every whistle; on
+All courts the app knows who was across the net, so it counts for all three, though in games
+rather than points. A session picked up
 again from History is counted once, not once per copy.
 
 The calendar button at the top picks which stretch of the history is added up, and the
@@ -161,8 +193,10 @@ Beside the line above the score, the board says how long it has been going. In t
 that play in rounds it times the round — the americano round, the friendly, the stretch
 between two whistles on a winner court — and starts again at nil when the next one is
 drawn. Match and Points have no rounds to time, so theirs runs the length of the session.
-It only counts; there is no round length to set and nothing happens when it reaches a
-number.
+It only counts, except on a winner-court ladder played in timed rounds: there it counts the
+round down instead, and past the end counts the time over, in orange. Pausing, resuming and
+adding time travel like a point does, as the whole clock rather than the change to it, so
+two people adding two minutes at the same moment add two minutes.
 
 The moment a round started travels with the round, so the phone, the watch and a guest's
 phone all count from the same one — a guest joining halfway through picks the round up
@@ -214,9 +248,10 @@ where the bar has no room for it.
 A match, a points round, a winner court and a friendly are two halves in the team colours:
 the team's name, everyone on it by name with the one to serve picked out, the score as large
 as the half allows, and the games of each set underneath. A friendly adds its table down the
-side and who is sitting out, and between rounds who plays next. An americano or mexicano
-puts every court of the round up at once — both pairs, the score and who serves — with the
-table beside them and the bench along the bottom. The table shows as many rows as fit. Above
+side and who is sitting out, and between rounds who plays next. An americano, a mexicano or
+a winner-court ladder puts every court of the round up at once — both pairs, the score and
+who serves, and a ladder's games and countdown — with the table beside them and the bench
+along the bottom. The table shows as many rows as fit. Above
 it all is the round and its clock. With nothing on the TV says so, and a session that has
 just finished leaves its result up.
 
@@ -638,8 +673,8 @@ xcrun simctl pair <watch udid> <phone udid>
 xcrun simctl boot <pair udid>
 ```
 
-Debug builds accept `-rekkert-demo traditional|winnercourt|friendly|americano|mexicano` (plus
-`-rekkert-demo-points N`, `-rekkert-demo-deuce`, `-rekkert-demo-rounds`,
+Debug builds accept `-rekkert-demo traditional|winnercourt|friendly|americano|mexicano|ladder` (plus
+`-rekkert-demo-minutes N`, `-rekkert-demo-split`, `-rekkert-demo-points N`, `-rekkert-demo-deuce`, `-rekkert-demo-rounds`,
 `-rekkert-demo-friendly-rounds N`, `-rekkert-demo-friendly-players N`,
 `-rekkert-demo-rounds-sheet`,
 `-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N`, `-rekkert-demo-sit-outs [name]`,
