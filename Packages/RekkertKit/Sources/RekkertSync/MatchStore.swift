@@ -234,6 +234,7 @@ public final class MatchStore {
         switch state {
         // -1 when nothing has been drawn yet, so the first round is "the one after none".
         case .tournament(let tournament):
+            guard !tournament.isLadder || tournament.canDrawNextRound else { return }
             record(.nextRound(after: tournament.rounds.count - 1, at: Date()))
         case .friendly(let session):
             record(.nextRound(after: session.rounds.count - 1, at: Date()))
@@ -249,16 +250,35 @@ public final class MatchStore {
         record(.nextRound(after: last - 1, at: Date(), sitOuts: sitOuts))
     }
 
-    /// The whistle in winner court, and calling a friendly round off where it stands.
+    /// The whistle in winner court, on every court of a ladder, and calling a friendly round
+    /// off where it stands.
     public func endRound() {
         switch state {
         case .winnerCourt(let session):
             record(.endRound(round: session.completedRounds.count, at: Date()))
         case .friendly(let session):
             record(.endRound(round: session.currentIndex, at: Date()))
+        case .tournament(let tournament) where tournament.isLadder:
+            record(.endRound(round: tournament.rounds.count - 1, at: Date()))
         case .traditional, .tournament, .pointCount, .none:
             break
         }
+    }
+
+    public func pauseRound() { changeRoundClock { $0.pausing(at: $1) } }
+
+    public func resumeRound() { changeRoundClock { $0.resuming(at: $1) } }
+
+    public func snoozeRound(minutes: Int) {
+        changeRoundClock { $0.snoozing(by: TimeInterval(minutes * 60), at: $1) }
+    }
+
+    private func changeRoundClock(_ change: (RoundClock, Date) -> RoundClock) {
+        guard case .tournament(let tournament) = state, let round = tournament.currentRound,
+              let clock = round.clock, !round.isEnded, !round.isCancelled else { return }
+        let next = change(clock, Date())
+        guard next != clock else { return }
+        record(.setRoundClock(round: round.index, clock: next))
     }
     /// Ends the session and keeps it in history if anything was played.
     public func finish() {
