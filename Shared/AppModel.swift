@@ -298,7 +298,7 @@ final class AppModel {
     #endif
 
     #if DEBUG
-    /// `-rekkert-demo traditional|americano|mexicano` seeds a session at launch. simctl
+    /// `-rekkert-demo traditional|americano|mexicano|ladder` seeds a session at launch. simctl
     /// cannot tap, so this is how the watch/phone sync path gets verified headlessly.
     private func seedDemoIfRequested() {
         let arguments = ProcessInfo.processInfo.arguments
@@ -491,6 +491,33 @@ final class AppModel {
                 }
             }
 
+        case "ladder":
+            // `-rekkert-demo-minutes 1` makes a round short enough to watch run out, and
+            // `-rekkert-demo-split` splits the pairs after every round.
+            let courts = max(2, demoCourtCount(arguments))
+            store.configure(.tournament(Tournament(
+                id: TournamentID(UUID(uuidString: "00000000-0000-0000-0000-0000000000D0")!),
+                name: "Thursday",
+                format: .winnerCourt,
+                players: Self.demoNames.prefix(courts * 4).map { Player(name: $0) },
+                config: TournamentConfig(courtCount: courts, ladder: LadderRules(
+                    roundMinutes: demoMinutes(arguments),
+                    partners: arguments.contains("-rekkert-demo-split") ? .split : .fixed,
+                    start: .asListed
+                ))
+            )))
+            store.nextRound()
+            // One round played and whistled, so the second has people moved up and down.
+            for court in 0 ..< courts {
+                let winner: TeamSide = court.isMultiple(of: 2) ? .b : .a
+                for game in 0 ..< 5 {
+                    for _ in 0 ..< 4 { store.tap(round: 0, court: court, team: game < 3 ? winner : winner.other) }
+                }
+            }
+            store.endRound()
+            store.nextRound()
+            for _ in 0 ..< 6 { store.tap(round: 1, court: 0, team: .a) }
+
         case let format:
             // `-rekkert-demo-courts 8` fills eight courts, which is how the TV's grid gets
             // photographed at its fullest.
@@ -576,6 +603,13 @@ final class AppModel {
               index + 1 < arguments.count,
               let count = Int(arguments[index + 1]) else { return 2 }
         return min(max(count, 1), 8)
+    }
+
+    private func demoMinutes(_ arguments: [String]) -> Int {
+        guard let index = arguments.firstIndex(of: "-rekkert-demo-minutes"),
+              index + 1 < arguments.count,
+              let minutes = Int(arguments[index + 1]) else { return LadderRules.defaultRoundMinutes }
+        return max(1, minutes)
     }
 
     private func friendlyPlayerCount(_ arguments: [String]) -> Int {
