@@ -19,8 +19,9 @@ public enum EventKind: Codable, Sendable, Hashable {
     /// that one stays so logs written before it still replay.
     case setServeOrder(round: Int, court: Int, order: ServeOrder)
     /// On a golden/star sudden-death point the receiving team picks which side it is
-    /// served to.
-    case chooseServeSide(ServeCourt)
+    /// served to. `round` and `court` name a tournament court; absent from older builds,
+    /// which had no tournament court to choose on.
+    case chooseServeSide(ServeCourt, round: Int? = nil, court: Int? = nil)
     case setRoundConfirmed(round: Int, isConfirmed: Bool)
     /// Calls a tournament round off so it counts for nobody. Only the last round can be,
     /// so a cancel that arrives after the next draw cannot void what that draw was built on.

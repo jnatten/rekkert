@@ -22,14 +22,31 @@ public enum SessionReducer {
                 match.state = engine.scoringPoint(team, in: match.state)
             } traditional: { session in
                 session.score = session.engine.scoringPoint(team, in: session.score)
+            } ladder: { rules, status, isEnded, match in
+                // After the whistle the only point left to play is the one that settles a
+                // court still level.
+                if isEnded {
+                    if status.awaitsDecider { match.decider = team }
+                } else {
+                    match.games = TraditionalEngine(rules: rules.scoring).scoringPoint(team, in: match.games ?? TraditionalState())
+                }
             }
 
         case .setScore(let round, let court, let points):
             mutateCourt(round: round, court: court, in: &state) { engine, match in
                 match.state = engine.settingScore(points, in: match.state)
-            } traditional: { _ in }
+            } traditional: { _ in } ladder: { rules, _, _, match in
+                guard rules.isTimed else { return }
+                var games = match.games ?? TraditionalState()
+                games.games = BySide(a: max(0, points.a), b: max(0, points.b))
+                games.points = BySide(both: 0)
+                games.deuceCount = 0
+                games.suddenDeathCourt = nil
+                match.games = games
+                match.decider = nil
+            }
 
-        case .chooseServeSide(let court):
+        case .chooseServeSide(let court, let round, let index):
             switch state {
             case .traditional(var session):
                 session.score.suddenDeathCourt = court
@@ -38,13 +55,20 @@ public enum SessionReducer {
                 session.score.suddenDeathCourt = court
                 state = .winnerCourt(session)
             case .friendly(var session):
-                // The event names no round, so a late one lands on whichever is current.
+                // An event from before rounds were named lands on whichever is current.
                 // Benign: the choice is wiped by the next point and only read at a
                 // sudden-death point in the first place.
-                guard let index = session.rounds.indices.last else { break }
-                session.rounds[index].score.suddenDeathCourt = court
+                guard let at = round ?? session.rounds.indices.last, session.rounds.indices.contains(at) else { break }
+                session.rounds[at].score.suddenDeathCourt = court
                 state = .friendly(session)
-            case .tournament, .pointCount, .none:
+            case .tournament(var tournament):
+                guard tournament.isLadder, let at = round ?? tournament.rounds.indices.last,
+                      tournament.rounds.indices.contains(at),
+                      let match = tournament.rounds[at].matches.firstIndex(where: { $0.courtIndex == index ?? 0 }),
+                      tournament.rounds[at].matches[match].games != nil else { break }
+                tournament.rounds[at].matches[match].games?.suddenDeathCourt = court
+                state = .tournament(tournament)
+            case .pointCount, .none:
                 break
             }
 
@@ -78,6 +102,8 @@ public enum SessionReducer {
                 match.state.firstServerIndex = index
             } traditional: { session in
                 session.score.firstServerIndex = index
+            } ladder: { _, _, _, match in
+                match.games?.firstServerIndex = index
             }
 
         case .setServeOrder(let round, let court, let order):
@@ -85,6 +111,8 @@ public enum SessionReducer {
                 match.state.serveOrder = order
             } traditional: { session in
                 session.score.serveOrder = order
+            } ladder: { _, _, _, match in
+                match.serveOrder = order
             }
 
         case .setRoundConfirmed(let round, let isConfirmed):
@@ -222,7 +250,8 @@ public enum SessionReducer {
         court: Int,
         in state: inout SessionState?,
         tournament change: (PointCountEngine, inout CourtMatch) -> Void,
-        traditional: (inout TraditionalSession) -> Void
+        traditional: (inout TraditionalSession) -> Void,
+        ladder: (LadderRules, CourtStatus, _ isEnded: Bool, inout CourtMatch) -> Void
     ) {
         // Nothing lands on a session somebody ended. A match played to its end already turns
         // points away by itself; one called off part way has to be told.
@@ -261,8 +290,13 @@ public enum SessionReducer {
                   let index = current.rounds[round].matches.firstIndex(where: { $0.courtIndex == court }),
                   !current.rounds[round].matches[index].isConfirmed
             else { return }
-            let engine = PointCountEngine(rules: current.config.pointRules)
-            change(engine, &current.rounds[round].matches[index])
+            if let rules = current.ladder {
+                let played = current.rounds[round]
+                let status = current.status(of: played.matches[index], in: played)
+                ladder(rules, status, played.isEnded, &current.rounds[round].matches[index])
+            } else {
+                change(current.pointEngine, &current.rounds[round].matches[index])
+            }
             state = .tournament(current)
 
         case .none:

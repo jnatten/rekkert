@@ -221,6 +221,9 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
         guard let round = index.map({ tournament.round(at: $0) }) ?? tournament.currentRound,
               let match = round.matches.first(where: { $0.courtIndex == court })
         else { return nil }
+        if let engine = tournament.gameEngine {
+            return ladderCourt(tournament, round: round, match: match, engine: engine)
+        }
 
         let engine = PointCountEngine(rules: tournament.config.pointRules)
         let serve = engine.serve(match.state)
@@ -255,6 +258,63 @@ public struct ScoreboardSnapshot: Sendable, Hashable {
             // The clock belongs to the round, so every court in it reads the same one.
             clockStart: isLive ? round.startedAt : nil
         )
+    }
+
+    /// After the whistle the board shows the round as it was closed: the game in progress
+    /// handed to whoever led it.
+    private static func ladderCourt(_ tournament: Tournament, round: Round, match: CourtMatch, engine: TraditionalEngine) -> ScoreboardSnapshot {
+        let games = match.games ?? TraditionalState()
+        let shown = round.isEnded ? engine.endingRound(games) : games
+        let status = tournament.status(of: match, in: round)
+        let serve = engine.serve(shown)
+        let players = match.teams.map { team in team.compactMap { tournament.player($0)?.name } }
+        let names = players.map { $0.joined(separator: " & ") }
+        let servingSide = match.teams[serve.slot.team]
+        let isLocked = match.isConfirmed || round.isCancelled || status.isFinished
+        let isLive = !isLocked && !round.isEnded
+        let points = match.decider.map { decider in
+            BySide(a: PointDisplay.count(decider == .a ? 1 : 0), b: .count(decider == .b ? 1 : 0))
+        } ?? engine.pointDisplay(shown)
+
+        return ScoreboardSnapshot(
+            kind: .tournament,
+            courtIndex: match.courtIndex,
+            courtLabel: "Court \(match.courtIndex + 1)",
+            teamNames: names,
+            players: players,
+            points: points,
+            games: shown.games,
+            completedSets: shown.completedSets,
+            detail: ladderDetail(round: round, status: status, score: shown, engine: engine, names: names),
+            serving: isLocked ? nil : serve.slot.team,
+            servingCourt: isLocked ? nil : status.awaitsDecider ? games.suddenDeathCourt ?? serve.court : serve.court,
+            servingPlayer: servingSide[safe: serve.slot.playerIndex].flatMap { tournament.player($0) }?.name,
+            canSwapServingPlayer: !isLocked && servingSide.count >= 2
+                && servingSide.allSatisfy { tournament.player($0) != nil },
+            isSuddenDeath: status.awaitsDecider || (isLive && engine.isSuddenDeathPoint(games)),
+            suddenDeathCourt: games.suddenDeathCourt,
+            isLocked: isLocked,
+            isFinished: status.isFinished,
+            winner: status.winner,
+            clockStart: isLive ? round.startedAt : nil,
+            changeovers: engine.changeovers(shown)
+        )
+    }
+
+    private static func ladderDetail(round: Round, status: CourtStatus, score: TraditionalState, engine: TraditionalEngine, names: BySide<String>) -> String {
+        let number = "Round \(round.index + 1)"
+        if let winner = status.winner { return "\(number) · \(names[winner]) won" }
+        if status.awaitsDecider { return "\(number) · deciding point" }
+        if case .tiebreak(let target) = engine.phase(score) {
+            return engine.isDecidingSet(score) && target != engine.rules.tiebreakPoints
+                ? "\(number) · super tiebreak to \(target)"
+                : "\(number) · tiebreak to \(target)"
+        }
+        if engine.isSuddenDeathPoint(score) { return "\(number) · sudden death" }
+        if engine.rules.setsToWin > 1, engine.rules.setsToWin < .max {
+            return "\(number) · set \(score.completedSets.count + 1)"
+        }
+        return number
     }
 
     private static func detail(for session: TraditionalSession, engine: TraditionalEngine) -> String {

@@ -187,7 +187,9 @@ public final class MatchStore {
         record(.setScore(round: round, court: court, points: points))
     }
 
-    public func chooseServeSide(_ court: ServeCourt) { record(.chooseServeSide(court)) }
+    public func chooseServeSide(_ side: ServeCourt, round: Int? = nil, court: Int? = nil) {
+        record(.chooseServeSide(side, round: round, court: court))
+    }
 
     /// Hands service to the other team, each side keeping its own first server. Sending the
     /// resulting order rather than "swap" means two devices correcting it together agree.
