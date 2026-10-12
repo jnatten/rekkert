@@ -33,6 +33,7 @@ final class AppModel {
     /// remote control with the same shape, so the scoreboards can be written once.
     let workout: WorkoutController
     let follower: WorkoutFollower
+    let roundAlarm = RoundAlarmFollower()
     /// Driven from the match menu and presented at the root, so every scoreboard has it.
     var showingShareCode = false
     /// Joining is reachable from the start screen and from a match already in progress —
@@ -144,6 +145,10 @@ final class AppModel {
         standIn.onJoined = { [follower] session in follower.heard(.began(session)) }
         #endif
         store.onMatch = { [follower] moment in follower.heard(moment) }
+        #if !os(watchOS)
+        roundAlarm.onRing = { [announcer] in announcer.callTime() }
+        #endif
+        roundAlarm.follow(store)
         #if os(watchOS)
         // A session outlives the process that started it, so coming back to a stopped-looking
         // button while Health is still recording would be a lie.

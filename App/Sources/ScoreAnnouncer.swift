@@ -98,6 +98,11 @@ final class ScoreAnnouncer {
         speak(call)
     }
 
+    func callTime() {
+        guard isEnabled else { return }
+        speak(ScoreCall(phrases: ["Time"]))
+    }
+
     func forget() {
         lastSeen.removeAll()
         synthesiser.stopSpeaking(at: .immediate)

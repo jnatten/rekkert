@@ -156,6 +156,8 @@ struct CourtListView: View {
                     .font(.title2.bold())
                 if clock.isPaused {
                     Text("Paused").font(.subheadline).foregroundStyle(.secondary)
+                } else if model.roundAlarm.timeIsUp {
+                    Text("Time").font(.subheadline.bold()).foregroundStyle(.orange)
                 }
                 Spacer()
                 Group {
