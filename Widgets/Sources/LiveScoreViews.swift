@@ -12,6 +12,44 @@ extension LiveScore {
     func pair<Value>(_ value: BySide<Value>) -> String {
         "\(value[order[0]])–\(value[order[1]])"
     }
+
+    /// The points on a court, or the games on a ladder court, where they are what moves people.
+    func line(_ board: Board) -> String {
+        guard let games = board.games else { return pair(board.points) }
+        if games.total == 0, let last = board.sets.last { return pair(last.games) }
+        return pair(games)
+    }
+}
+
+/// A timed round's countdown, which stops at nought: past the end the board says the rest.
+struct LiveCountdown: View {
+    let clock: RoundClock
+
+    var body: some View {
+        if let endsAt = clock.endsAt {
+            Text(timerInterval: min(Date(), endsAt) ... endsAt, countsDown: true)
+                .monospacedDigit()
+        } else {
+            Text(Duration.seconds(max(0, clock.remaining(at: .now))), format: .time(pattern: .minuteSecond))
+                .monospacedDigit()
+        }
+    }
+}
+
+/// The countdown when the round has one, otherwise the clock, each given a width to lay out by.
+struct SizedLiveTiming: View {
+    let score: LiveScore
+
+    var body: some View {
+        if let countdown = score.countdown {
+            Text(verbatim: "00:00")
+                .monospacedDigit()
+                .hidden()
+                .overlay(alignment: .trailing) { LiveCountdown(clock: countdown) }
+        } else if let start = score.clockStart {
+            SizedLiveClock(start: start)
+        }
+    }
 }
 
 /// Counted by the system, so it keeps going between updates. Clamped to now for the same
@@ -62,9 +100,9 @@ struct LiveHeader: View {
             Text(score.detail)
                 .foregroundStyle(score.isSuddenDeath ? Color.orange : .secondary)
                 .lineLimit(1)
-            if let start = score.clockStart {
+            if score.countdown != nil || score.clockStart != nil {
                 Text(verbatim: "·").foregroundStyle(.secondary)
-                SizedLiveClock(start: start).foregroundStyle(.secondary)
+                SizedLiveTiming(score: score).foregroundStyle(.secondary)
             }
         }
         .font(.subheadline)
@@ -169,7 +207,7 @@ struct CourtsSummary: View {
             Text(board.names[score.order[0]])
                 .foregroundStyle(palette.color(score.order[0]))
                 .frame(maxWidth: .infinity, alignment: .trailing)
-            Text(score.pair(board.points))
+            Text(score.line(board))
                 .fontWeight(.bold)
                 .monospacedDigit()
                 .fixedSize()
@@ -187,7 +225,7 @@ struct CourtsSummary: View {
     private func chip(_ board: LiveScore.Board, number: Int) -> some View {
         HStack(spacing: 4) {
             Text("\(number)").foregroundStyle(.secondary)
-            Text(score.pair(board.points)).fontWeight(.semibold)
+            Text(score.line(board)).fontWeight(.semibold)
             if board.isDone {
                 Image(systemName: "checkmark").font(.caption2.weight(.bold))
             }
@@ -223,9 +261,7 @@ struct LiveScoreSmall: View {
             HStack(spacing: 4) {
                 Text(score.isTournament ? score.title : score.detail).lineLimit(1)
                 Spacer(minLength: 2)
-                if let start = score.clockStart {
-                    SizedLiveClock(start: start)
-                }
+                SizedLiveTiming(score: score)
             }
             .font(.caption2)
             .foregroundStyle(.secondary)
@@ -233,7 +269,7 @@ struct LiveScoreSmall: View {
             if let result = score.result {
                 Text(result).font(.headline).lineLimit(2).minimumScaleFactor(0.6)
             } else if score.isTournament {
-                Text(score.boards.map { score.pair($0.points) }.joined(separator: "  "))
+                Text(score.boards.map { score.line($0) }.joined(separator: "  "))
                     .font(.headline.monospacedDigit())
                     .lineLimit(2)
                     .minimumScaleFactor(0.6)

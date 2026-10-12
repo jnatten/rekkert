@@ -636,7 +636,7 @@ public enum HelpCatalog {
             chapter: .phone,
             title: "A tournament",
             symbol: "list.number",
-            whereToFind: "Americano and Mexicano",
+            whereToFind: "Americano, Mexicano, and Winner court on All courts",
             picture: .phoneButtons,
             items: [
                 HelpItem(
@@ -675,6 +675,28 @@ public enum HelpCatalog {
                     what: "Which player you are, for your watch.",
                     example: "Your watch opens on your court every round.",
                     needsWatch: true
+                ),
+                HelpItem(
+                    "Countdown",
+                    symbol: "timer",
+                    what: "A timed round counts down. Pause holds it on every device.",
+                    example: "A ball over the fence: pause, fetch it, carry on.",
+                    only: "Winner court"
+                ),
+                HelpItem(
+                    "Add time",
+                    symbol: "plus.circle",
+                    what: "More minutes on the round, even once it has run out.",
+                    example: "Court 3 started late: give everyone two more minutes.",
+                    only: "Winner court"
+                ),
+                HelpItem(
+                    "Up or down",
+                    symbol: "arrow.up",
+                    also: ["arrow.down"],
+                    what: "Once a court is settled, which way each side goes next round.",
+                    example: "An arrow up: next round you play a court higher.",
+                    only: "Winner court"
                 ),
             ]
         ),

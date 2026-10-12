@@ -149,6 +149,13 @@ private struct BoardCourtCard: View {
                     .contentTransition(.numericText())
             }
 
+            if let games = team.games {
+                Text((team.sets + [games]).map(String.init).joined(separator: "  "))
+                    .font(.system(size: pointsSize * 0.35, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .opacity(0.8)
+            }
+
             Spacer(minLength: 0)
         }
         .padding(16 * unit)

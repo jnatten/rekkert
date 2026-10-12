@@ -49,7 +49,8 @@ struct SitOutPickerView: View {
         let tallies = Dictionary(uniqueKeysWithValues: Leaderboard.standings(for: before).map { ($0.player.id, $0.sitOuts) })
         let lastBench = Set(before.rounds.last { !$0.isCancelled }?.sitOuts ?? [])
         let hasHistory = before.rounds.contains { !$0.isCancelled }
-        let isFull = chosen.count >= tournament.benchSize
+        let size = unitSize(tournament)
+        let isFull = chosen.count + size > tournament.benchSize
 
         Section {
             ForEach(tournament.players) { player in
@@ -80,7 +81,7 @@ struct SitOutPickerView: View {
                     }
                     .contentShape(.rect)
                 }
-                .disabled(isFull && !isChosen && tournament.benchSize > 1)
+                .disabled(isFull && !isChosen && tournament.benchSize > size)
             }
         } header: {
             Text("Round \(round.index + 1)")
@@ -128,14 +129,26 @@ struct SitOutPickerView: View {
         return parts.joined(separator: " · ")
     }
 
+    /// A fixed pair on a ladder sits out together, so a tap picks both of them.
     private func toggle(_ id: PlayerID, in tournament: Tournament) {
+        let unit = unit(of: id, in: tournament)
         if chosen.contains(id) {
-            chosen.remove(id)
-        } else if chosen.count < tournament.benchSize {
-            chosen.insert(id)
-        } else if tournament.benchSize == 1 {
-            chosen = [id]
+            chosen.subtract(unit)
+        } else if chosen.count + unit.count <= tournament.benchSize {
+            chosen.formUnion(unit)
+        } else if tournament.benchSize == unit.count {
+            chosen = Set(unit)
         }
+    }
+
+    private func unitSize(_ tournament: Tournament) -> Int {
+        tournament.ladder?.partners == .fixed ? 2 : 1
+    }
+
+    private func unit(of id: PlayerID, in tournament: Tournament) -> [PlayerID] {
+        guard unitSize(tournament) == 2, let index = tournament.players.firstIndex(where: { $0.id == id }) else { return [id] }
+        let first = index - index % 2
+        return tournament.players[first ..< min(first + 2, tournament.players.count)].map(\.id)
     }
 
     /// The tournament as it stood before the round in play was drawn, which is what the

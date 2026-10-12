@@ -9,7 +9,7 @@ struct StandingsView: View {
             Group {
                 if let tournament = TournamentView.tournament(model) {
                     List(Array(Leaderboard.standings(for: tournament).enumerated()), id: \.element.id) { index, standing in
-                        StandingRow(rank: index + 1, standing: standing)
+                        StandingRow(rank: index + 1, standing: standing, isLadder: tournament.isLadder)
                     }
                 } else {
                     ContentUnavailableView("No tournament", systemImage: "list.number")
@@ -23,6 +23,7 @@ struct StandingsView: View {
 struct StandingRow: View {
     let rank: Int
     let standing: Standing
+    var isLadder = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -40,12 +41,17 @@ struct StandingRow: View {
 
             Spacer()
 
-            Text("\(standing.total)")
+            Text("\(isLadder ? standing.roundsWon : standing.total)")
                 .font(.title3.bold().monospacedDigit())
         }
     }
 
     private var subtitle: String {
+        if isLadder {
+            var parts = [standing.court.map { "Court \($0 + 1)" } ?? "Sat out", "\(standing.roundsWon) of \(standing.roundsPlayed) won"]
+            parts.append(standing.differential >= 0 ? "+\(standing.differential)" : "\(standing.differential)")
+            return parts.joined(separator: " · ")
+        }
         var parts = ["\(standing.roundsPlayed) played"]
         if standing.sitOuts > 0 { parts.append("\(standing.sitOuts) sat out (+\(standing.compensation))") }
         parts.append(standing.differential >= 0 ? "+\(standing.differential)" : "\(standing.differential)")

@@ -127,10 +127,7 @@ private struct RecordDetail: View {
         // when it scrolls out of a lazy List, and then never opens.
         .sheet(isPresented: $startingAnother) {
             if let tournament {
-                NewSessionView(
-                    mode: tournament.format == .americano ? .americano : .mexicano,
-                    from: tournament
-                )
+                NewSessionView(mode: GameMode(tournament.format), from: tournament)
             }
         }
         .confirmationDialog(

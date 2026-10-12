@@ -27,7 +27,11 @@ struct CourtScoreboardView: View {
                             onTap: { model.store.tap(round: round, court: court, team: $0) },
                             onUndo: { model.store.undoLast(round: round, court: court) }
                         )
-                        entry(snapshot)
+                        if let tournament, tournament.isLadder {
+                            ladderEntry(snapshot, tournament: tournament)
+                        } else {
+                            entry(snapshot)
+                        }
                     }
                     .ignoresSafeArea(edges: .bottom)
                 } else {
@@ -75,9 +79,70 @@ struct CourtScoreboardView: View {
         model.store.state.flatMap { ScoreboardSnapshot.make(from: $0, round: round, court: court) }
     }
 
-    private var rules: PointCountRules? {
+    private var tournament: Tournament? {
         guard case .tournament(let tournament)? = model.store.state else { return nil }
+        return tournament
+    }
+
+    private var rules: PointCountRules? {
+        guard let tournament, !tournament.isLadder else { return nil }
         return tournament.config.pointRules
+    }
+
+    // MARK: - Ladder
+
+    /// A timed court's games can be set by hand, for a court nobody kept. A match court is
+    /// only ever scored point by point.
+    @ViewBuilder
+    private func ladderEntry(_ snapshot: ScoreboardSnapshot, tournament: Tournament) -> some View {
+        let status = tournament.status(round: round, court: court)
+        let isTimed = tournament.ladder?.isTimed == true
+        if snapshot.isSuddenDeath, !snapshot.isLocked {
+            suddenDeathBanner(snapshot, deciding: status?.awaitsDecider == true)
+        }
+        if snapshot.isLocked {
+            panel {
+                Label("This court is settled.", systemImage: "lock")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        } else if status?.awaitsDecider != true, isTimed {
+            panel {
+                Text("Games")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                ForEach(TeamSide.allCases, id: \.self) { side in
+                    entryRow(side, snapshot: snapshot)
+                }
+            }
+        }
+    }
+
+    private func panel(@ViewBuilder _ content: () -> some View) -> some View {
+        VStack(spacing: 14, content: content)
+            .padding(.horizontal)
+            .padding(.top, 14)
+            .padding(.bottom, 42)
+            .background(.thinMaterial)
+    }
+
+    private func suddenDeathBanner(_ snapshot: ScoreboardSnapshot, deciding: Bool) -> some View {
+        VStack(spacing: 8) {
+            Text(deciding ? "Deciding point — receivers choose the side" : "Sudden death — receivers choose the side")
+                .font(.footnote.weight(.semibold))
+            Picker("Serve to", selection: Binding(
+                get: { snapshot.suddenDeathCourt ?? .deuce },
+                set: { model.store.chooseServeSide($0, round: round, court: court) }
+            )) {
+                Text("Right (deuce)").tag(ServeCourt.deuce)
+                Text("Left (ad)").tag(ServeCourt.ad)
+            }
+            .pickerStyle(.segmented)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(12)
+        .background(.orange.opacity(0.2))
     }
 
     // MARK: - Entry
@@ -156,7 +221,11 @@ struct CourtScoreboardView: View {
     // MARK: - Draft handling
 
     private var current: BySide<Int> {
-        draft ?? BySide(
+        if let draft { return draft }
+        if let tournament, tournament.isLadder {
+            return tournament.round(at: round)?.matches.first { $0.courtIndex == court }?.games?.games ?? BySide(both: 0)
+        }
+        return BySide(
             a: Int(snapshot?.primary.a ?? "0") ?? 0,
             b: Int(snapshot?.primary.b ?? "0") ?? 0
         )

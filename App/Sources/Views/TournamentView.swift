@@ -25,6 +25,7 @@ struct CourtListView: View {
     @State private var showingEnd = false
     @State private var showingCancel = false
     @State private var choosingSitOuts = false
+    @State private var showingWhistle = false
     /// Which round is on screen. `nil` follows the newest one, so drawing a round moves
     /// the view along with it; browsing back pins it until you return to the end.
     @State private var browsing: Int?
@@ -35,6 +36,10 @@ struct CourtListView: View {
                 if let tournament = TournamentView.tournament(model) {
                     List {
                         if let round = tournament.round(at: viewed(tournament)) {
+                            if round.index == tournament.latestRoundIndex, !round.isEnded, !round.isCancelled,
+                               let clock = round.clock {
+                                countdownSection(clock)
+                            }
                             roundSections(tournament, round)
                         } else {
                             Section {
@@ -121,6 +126,12 @@ struct CourtListView: View {
                     Text("Round \(round.index + 1) isn't finished. Leaving it out means nobody gets points for it, including the players sitting out.")
                 }
             }
+            .confirmationDialog(whistlePrompt, isPresented: $showingWhistle, titleVisibility: .visible) {
+                Button("End round", role: .destructive) { model.store.endRound() }
+                Button("Keep playing", role: .cancel) {}
+            } message: {
+                Text("Every court stops where it stands. The game in progress goes to whoever leads it, and a court still level plays one deciding point.")
+            }
             .confirmationDialog(cancelPrompt, isPresented: $showingCancel, titleVisibility: .visible) {
                 Button("Cancel round", role: .destructive) {
                     if let round = TournamentView.tournament(model)?.currentRound {
@@ -135,6 +146,40 @@ struct CourtListView: View {
     }
 
     // MARK: - Rounds
+
+    private func countdownSection(_ clock: RoundClock) -> some View {
+        Section {
+            HStack(spacing: 12) {
+                Image(systemName: "timer")
+                    .foregroundStyle(.secondary)
+                RoundCountdownText(clock: clock)
+                    .font(.title2.bold())
+                if clock.isPaused {
+                    Text("Paused").font(.subheadline).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Group {
+                    if clock.isPaused {
+                        Button("Resume", systemImage: "play.fill") { model.store.resumeRound() }
+                    } else {
+                        Button("Pause", systemImage: "pause.fill") { model.store.pauseRound() }
+                    }
+                    Menu("Add time", systemImage: "plus.circle") {
+                        ForEach([1, 2, 5], id: \.self) { minutes in
+                            Button("\(minutes) min") { model.store.snoozeRound(minutes: minutes) }
+                        }
+                    }
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .font(.title2)
+            }
+        }
+    }
+
+    private var whistlePrompt: String {
+        "End round \(TournamentView.tournament(model)?.rounds.count ?? 0)?"
+    }
 
     private func viewed(_ tournament: Tournament) -> Int {
         min(browsing ?? tournament.latestRoundIndex, tournament.latestRoundIndex)
@@ -157,6 +202,8 @@ struct CourtListView: View {
         } footer: {
             if round.isCancelled {
                 Text("This round was cancelled. Nothing in it counts.")
+            } else if tournament.isLadder {
+                Text(ladderFooter(tournament, round))
             } else if round.matches.contains(where: \.isConfirmed) {
                 Text("This round is finished. Reopen it to change a score.")
             } else {
@@ -216,7 +263,22 @@ struct CourtListView: View {
         let round = tournament.round(at: index)
 
         Section {
-            if let round {
+            if let round, tournament.isLadder, round.index == tournament.latestRoundIndex, !round.isCancelled {
+                if !round.isEnded, !tournament.isDone(round) {
+                    Button("End round \(round.index + 1)", systemImage: "flag.pattern.checkered") {
+                        showingWhistle = true
+                    }
+                }
+                Button("Draw round \(round.index + 2)", systemImage: "arrow.right.circle.fill") {
+                    model.store.nextRound()
+                    browsing = nil
+                }
+                .disabled(!tournament.canDrawNextRound)
+
+                Button("Cancel this round", systemImage: "xmark.circle", role: .destructive) {
+                    showingCancel = true
+                }
+            } else if let round {
                 if round.isCancelled, round.index == tournament.latestRoundIndex {
                     Button("Draw the next round", systemImage: "arrow.right.circle.fill") {
                         model.store.nextRound()
@@ -268,9 +330,22 @@ struct CourtListView: View {
             if tournament.playableCourts < 1 {
                 Text("A court needs four players — this tournament has \(tournament.players.count).")
             } else if let round, round.index < tournament.latestRoundIndex {
-                Text("You are looking at an earlier round. Later rounds were drawn from the standings as they were, so changing a score here will not re-pair them.")
+                Text(tournament.isLadder
+                     ? "You are looking at an earlier round. The round after it was drawn from how it finished."
+                     : "You are looking at an earlier round. Later rounds were drawn from the standings as they were, so changing a score here will not re-pair them.")
             }
         }
+    }
+
+    private func ladderFooter(_ tournament: Tournament, _ round: Round) -> String {
+        if round.isEnded {
+            return tournament.isDone(round)
+                ? "Every court is settled. Winners go up a court, losers go down."
+                : "Courts still level play one deciding point. Tap the court, then the side that wins it."
+        }
+        return tournament.ladder?.isTimed == true
+            ? "Tap a court to score it point by point, or to set its games."
+            : "Tap a court to score it. The next round is drawn once every court is won."
     }
 
     private var me: Binding<PlayerID?> {
@@ -326,6 +401,9 @@ private struct CourtRow: View {
                 CourtSwatch(index: match.courtIndex, size: 12)
                 Text("Court \(match.courtIndex + 1)").font(.headline)
                 Spacer()
+                if status.awaitsDecider {
+                    Text("Deciding point").font(.caption.weight(.semibold)).foregroundStyle(.orange)
+                }
                 if match.isConfirmed {
                     Image(systemName: "lock.fill").foregroundStyle(.secondary).font(.caption)
                 }
@@ -337,13 +415,47 @@ private struct CourtRow: View {
                         .lineLimit(1)
                         .accessibilityLabel(spokenNames(side))
                     Spacer()
-                    Text("\(status.line[side])")
-                        .font(.title3.bold().monospacedDigit())
-                        .foregroundStyle(palette.color(side))
+                    if let board = ladderBoard {
+                        ladderScore(side, board)
+                    } else {
+                        Text("\(status.line[side])")
+                            .font(.title3.bold().monospacedDigit())
+                            .foregroundStyle(palette.color(side))
+                    }
                 }
             }
         }
         .padding(.vertical, 4)
+    }
+
+    private var ladderBoard: ScoreboardSnapshot? {
+        guard tournament.isLadder else { return nil }
+        return ScoreboardSnapshot.make(from: .tournament(tournament), round: round.index, court: match.courtIndex)
+    }
+
+    /// The games of each set, the last one large, then the point in play — or, once the
+    /// court is settled, which way each side is going.
+    private func ladderScore(_ side: TeamSide, _ board: ScoreboardSnapshot) -> some View {
+        let live = !board.isLocked && !round.isEnded
+        let current = board.games ?? BySide(both: 0)
+        let sets = board.completedSets.map(\.games) + (live && (current.total > 0 || board.completedSets.isEmpty) ? [current] : [])
+        return HStack(spacing: 8) {
+            ForEach(Array(sets.enumerated()), id: \.offset) { index, games in
+                if index == sets.count - 1 {
+                    Text("\(games[side])").font(.title3.bold()).foregroundStyle(palette.color(side))
+                } else {
+                    Text("\(games[side])").foregroundStyle(.secondary)
+                }
+            }
+            if let winner = status.winner {
+                Image(systemName: winner == side ? "arrow.up" : "arrow.down")
+                    .foregroundStyle(winner == side ? palette.color(side) : .secondary)
+                    .accessibilityLabel(winner == side ? "Moves up" : "Moves down")
+            } else if live, !board.points.a.isZero || !board.points.b.isZero {
+                Text(board.primary[side]).font(.callout).foregroundStyle(.secondary)
+            }
+        }
+        .monospacedDigit()
     }
 
     /// Who serves next on this court, or nobody once it is over.

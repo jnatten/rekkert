@@ -89,7 +89,7 @@ private struct PlayerDetail: View {
                 } header: {
                     Text("Head to head")
                 } footer: {
-                    Text("Every game with them on the other side of the net. Winner court is left out: whoever you played changed at every whistle.")
+                    Text("Every game with them on the other side of the net. Winner court on Our court is left out: whoever you played changed at every whistle.")
                 }
             }
 

@@ -59,7 +59,10 @@ struct ScoreboardView<Badge: View>: View {
                 HStack(spacing: 6) {
                     Text(notice ?? snapshot.detail)
                         .foregroundStyle(notice != nil ? Color.yellow : snapshot.isSuddenDeath ? .orange : .secondary)
-                    if let start = snapshot.clockStart {
+                    if let countdown = snapshot.countdown {
+                        Text(verbatim: "·").foregroundStyle(.secondary)
+                        RoundCountdownText(clock: countdown)
+                    } else if let start = snapshot.clockStart {
                         Text(verbatim: "·").foregroundStyle(.secondary)
                         clock(from: start)
                     }
@@ -80,7 +83,9 @@ struct ScoreboardView<Badge: View>: View {
                     .frame(maxWidth: .infinity)
                 // Given its width before the detail is, so it is the sentence that shrinks
                 // to fit rather than the clock losing a digit.
-                if let start = snapshot.clockStart {
+                if let countdown = snapshot.countdown {
+                    RoundCountdownText(clock: countdown).fixedSize()
+                } else if let start = snapshot.clockStart {
                     clock(from: start).fixedSize()
                 }
                 // The far end is where the watch draws the dots for the page below this one,

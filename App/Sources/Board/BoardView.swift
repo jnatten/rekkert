@@ -66,7 +66,14 @@ struct BoardView: View {
                     .foregroundStyle(isSuddenDeath ? Color.orange : .white.opacity(0.75))
                     .lineLimit(1)
             }
-            if let start = board.clockStart {
+            if let countdown = board.countdown {
+                RoundCountdownText(clock: countdown)
+                    .foregroundStyle(.white.opacity(0.75))
+                    .padding(.horizontal, 20 * metrics.unit)
+                    .padding(.vertical, 6 * metrics.unit)
+                    .background(.white.opacity(0.12), in: .capsule)
+                    .fixedSize()
+            } else if let start = board.clockStart {
                 Text(timerInterval: min(start, Date()) ... .distantFuture, countsDown: false)
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(0.75))

@@ -23,6 +23,10 @@ struct NewSessionView: View {
         _players = State(initialValue: played.players.map { Player(name: $0.name) })
         _sessionName = State(initialValue: played.name)
         _config = State(initialValue: played.config)
+        if let ladder = played.ladder {
+            _allCourts = State(initialValue: true)
+            _ladder = State(initialValue: ladder)
+        }
     }
 
     init(editing preset: Preset) {
@@ -43,10 +47,14 @@ struct NewSessionView: View {
             _sessionName = State(initialValue: name)
             _players = State(initialValue: players)
             _rules = State(initialValue: rules)
-        case .tournament(_, let name, let players, let config):
+        case .tournament(let format, let name, let players, let config):
             _sessionName = State(initialValue: name)
             _players = State(initialValue: players)
             _config = State(initialValue: config)
+            if format == .winnerCourt {
+                _allCourts = State(initialValue: true)
+                _ladder = State(initialValue: config.ladder ?? LadderRules())
+            }
         }
     }
 
@@ -70,6 +78,8 @@ struct NewSessionView: View {
 
     @State private var sessionName = ""
     @State private var winnerCourtRules = WinnerCourtRules()
+    @State private var allCourts = false
+    @State private var ladder = LadderRules()
     @State private var pointRules = PointCountRules()
     @State private var presetName = ""
     @State private var config = TournamentConfig()
@@ -156,11 +166,7 @@ struct NewSessionView: View {
     @ViewBuilder
     private var formatSection: some View {
         Section {
-            Stepper("Sets to win: \(rules.setsToWin)", value: $rules.setsToWin, in: 1 ... 5)
-            Stepper("Games per set: \(rules.gamesPerSet)", value: $rules.gamesPerSet, in: 1 ... 9)
-            Toggle("Tiebreak at \(rules.gamesPerSet)–\(rules.gamesPerSet)", isOn: tiebreakBinding)
-            Toggle("Super tiebreak in deciding set", isOn: superTiebreakBinding)
-                .disabled(rules.setsToWin < 2)
+            formatRows($rules)
             Picker("Swap sides", selection: $rules.changeEnds) {
                 ForEach(ChangeEndsRule.allCases, id: \.self) { Text($0.displayName).tag($0) }
             }
@@ -252,17 +258,27 @@ struct NewSessionView: View {
         }
     }
 
-    private var tiebreakBinding: Binding<Bool> {
+    @ViewBuilder
+    private func formatRows(_ rules: Binding<TraditionalRules>) -> some View {
+        let value = rules.wrappedValue
+        Stepper("Sets to win: \(value.setsToWin)", value: rules.setsToWin, in: 1 ... 5)
+        Stepper("Games per set: \(value.gamesPerSet)", value: rules.gamesPerSet, in: 1 ... 9)
+        Toggle("Tiebreak at \(value.gamesPerSet)–\(value.gamesPerSet)", isOn: tiebreakBinding(rules))
+        Toggle("Super tiebreak in deciding set", isOn: superTiebreakBinding(rules))
+            .disabled(value.setsToWin < 2)
+    }
+
+    private func tiebreakBinding(_ rules: Binding<TraditionalRules>) -> Binding<Bool> {
         Binding(
-            get: { rules.tiebreakAtGames != nil },
-            set: { rules.tiebreakAtGames = $0 ? rules.gamesPerSet : nil }
+            get: { rules.wrappedValue.tiebreakAtGames != nil },
+            set: { rules.wrappedValue.tiebreakAtGames = $0 ? rules.wrappedValue.gamesPerSet : nil }
         )
     }
 
-    private var superTiebreakBinding: Binding<Bool> {
+    private func superTiebreakBinding(_ rules: Binding<TraditionalRules>) -> Binding<Bool> {
         Binding(
-            get: { if case .superTiebreak = rules.decidingSet { true } else { false } },
-            set: { rules.decidingSet = $0 ? .standardSuperTiebreak : .normal }
+            get: { if case .superTiebreak = rules.wrappedValue.decidingSet { true } else { false } },
+            set: { rules.wrappedValue.decidingSet = $0 ? .standardSuperTiebreak : .normal }
         )
     }
 
@@ -351,6 +367,8 @@ struct NewSessionView: View {
             .traditional(rules: rules, teams: teams)
         case .pointCount:
             .pointCount(rules: pointRules, teams: teams)
+        case .winnerCourt where allCourts:
+            .tournament(format: .winnerCourt, name: sessionName, players: namedPlayers, config: ladderConfig)
         case .winnerCourt:
             .winnerCourt(rules: winnerCourtRules, teams: teams)
         case .friendly:
@@ -386,6 +404,27 @@ struct NewSessionView: View {
 
     @ViewBuilder
     private var winnerCourtSections: some View {
+        Section {
+            Picker("Courts", selection: $allCourts) {
+                Text("Our court").tag(false)
+                Text("All courts").tag(true)
+            }
+            .pickerStyle(.segmented)
+        } footer: {
+            Text(allCourts
+                 ? "Runs every court: winners move up, losers move down, and the table is kept."
+                 : "Keeps just your side of the net, round after round.")
+        }
+
+        if allCourts {
+            ladderSections
+        } else {
+            ourCourtSections
+        }
+    }
+
+    @ViewBuilder
+    private var ourCourtSections: some View {
         Section("Sport") {
             Picker("Sport", selection: $winnerCourtRules.sport) {
                 ForEach(Sport.allCases, id: \.self) { Text($0.displayName).tag($0) }
@@ -407,6 +446,97 @@ struct NewSessionView: View {
         } footer: {
             Text("Games run on and on; there is no set to win. Blow the whistle to end a round and the games so far are banked, then a new round starts at nil-nil.")
         }
+    }
+
+    @ViewBuilder
+    private var ladderSections: some View {
+        playersSection(footer: ladderFooter, inPairs: ladder.partners == .fixed)
+
+        Section {
+            TextField("Name", text: $sessionName)
+                .focused($focused, equals: .sessionName)
+                .submitLabel(.next)
+                .onSubmit { focused = players.first.map { .player($0.id) } }
+            Stepper("Courts: \(config.courtCount)", value: $config.courtCount, in: 1 ... 8)
+            Picker("Partners", selection: $ladder.partners) {
+                ForEach(LadderPartners.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+            Picker("First round", selection: $ladder.start) {
+                ForEach(LadderStart.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+        } header: {
+            Text("Winner court")
+        } footer: {
+            Text(ladder.partners == .fixed
+                 ? "Pairs are taken from the list two at a time and stay together. Court 1 is the top court."
+                 : "After every round the two pairs on a court are split, so partners who just won together face each other. Court 1 is the top court.")
+        }
+
+        Section("Sport") {
+            Picker("Sport", selection: $ladder.rules.sport) {
+                ForEach(Sport.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+            .pickerStyle(.segmented)
+        }
+
+        Section {
+            Picker("Rounds", selection: timedBinding) {
+                Text("Timed").tag(true)
+                Text("A match").tag(false)
+            }
+            .pickerStyle(.segmented)
+            if let minutes = ladder.roundMinutes {
+                Stepper("Round length: \(minutes) min", value: minutesBinding, in: 1 ... 60)
+            } else {
+                formatRows($ladder.rules)
+            }
+            Picker("At 40–40", selection: $ladder.rules.deuceRule) {
+                ForEach(DeuceRule.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+            Text(deuceExplanation(ladder.rules.deuceRule))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } header: {
+            Text("Scoring")
+        } footer: {
+            Text(ladder.isTimed
+                 ? "Games run until the round is ended. The game cut off goes to whoever leads it, and a court still level plays one deciding point."
+                 : "Every court plays a match, and the next round is drawn once all of them are won.")
+        }
+    }
+
+    private var timedBinding: Binding<Bool> {
+        Binding(
+            get: { ladder.isTimed },
+            set: { ladder.roundMinutes = $0 ? LadderRules.defaultRoundMinutes : nil }
+        )
+    }
+
+    private var minutesBinding: Binding<Int> {
+        Binding(
+            get: { ladder.roundMinutes ?? LadderRules.defaultRoundMinutes },
+            set: { ladder.roundMinutes = $0 }
+        )
+    }
+
+    private var ladderConfig: TournamentConfig {
+        var ladderConfig = config
+        ladderConfig.ladder = ladder
+        return ladderConfig
+    }
+
+    private var ladderFooter: String {
+        let count = namedPlayers.count
+        guard count >= 4 else { return "At least 4 players are needed." }
+        if ladder.partners == .fixed, !count.isMultiple(of: 2) {
+            return "Fixed pairs need an even number of players."
+        }
+        let benched = count - min(config.courtCount, count / 4) * 4
+        guard benched > 0 else { return "Everyone plays every round." }
+        let who = ladder.partners == .fixed
+            ? "\(benched / 2) pair\(benched == 2 ? "" : "s") sit out"
+            : "\(benched) player\(benched == 1 ? "" : "s") sit out"
+        return "\(who) each round, rotating fairly, and come back in on the bottom court."
     }
 
     // MARK: - Friendly
@@ -442,14 +572,21 @@ struct NewSessionView: View {
     // MARK: - Player entry, shared with Tournament
 
     @ViewBuilder
-    private func playersSection(footer: String) -> some View {
+    private func playersSection(footer: String, inPairs: Bool = false) -> some View {
         Section {
             ForEach($players) { $player in
-                TextField("Player name", text: $player.name)
-                    .textInputAutocapitalization(.words)
-                    .focused($focused, equals: .player(player.id))
-                    .submitLabel(.next)
-                    .onSubmit { advanceFromPlayer(player.id) }
+                HStack {
+                    TextField("Player name", text: $player.name)
+                        .textInputAutocapitalization(.words)
+                        .focused($focused, equals: .player(player.id))
+                        .submitLabel(.next)
+                        .onSubmit { advanceFromPlayer(player.id) }
+                    if inPairs, let index = namedPlayers.firstIndex(where: { $0.id == player.id }) {
+                        Text("Pair \(index / 2 + 1)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             .onDelete { players.remove(atOffsets: $0) }
 
@@ -704,6 +841,8 @@ struct NewSessionView: View {
 
     private var canStart: Bool {
         switch mode {
+        case .winnerCourt where allCourts:
+            namedPlayers.count >= 4 && (ladder.partners == .split || namedPlayers.count.isMultiple(of: 2))
         case .traditional, .pointCount, .winnerCourt: true
         case .friendly: namedPlayers.count >= 2
         case .americano, .mexicano: namedPlayers.count >= 4
@@ -721,6 +860,16 @@ struct NewSessionView: View {
         case .pointCount:
             model.remember(players: namedTeamPlayers)
             model.store.configure(.pointCount(rules: pointRules, teams: teams))
+
+        case .winnerCourt where allCourts:
+            model.remember(players: namedPlayers.map(\.name))
+            model.store.configure(.tournament(Tournament(
+                name: sessionName,
+                format: .winnerCourt,
+                players: namedPlayers,
+                config: ladderConfig
+            )))
+            model.store.nextRound()
 
         case .winnerCourt:
             model.remember(players: namedTeamPlayers)

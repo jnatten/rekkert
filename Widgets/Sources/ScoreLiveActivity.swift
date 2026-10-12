@@ -51,6 +51,8 @@ private struct CompactSide: View {
         if score.isTournament {
             if position == 0 {
                 Text(score.round.map { "R\($0)" } ?? "–").fontWeight(.semibold)
+            } else if let countdown = score.countdown {
+                LiveCountdown(clock: countdown).frame(width: 44)
             } else if let start = score.clockStart {
                 LiveClock(start: start).frame(width: 44)
             } else {

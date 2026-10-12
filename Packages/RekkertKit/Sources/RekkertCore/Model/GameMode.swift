@@ -14,12 +14,15 @@ public enum GameMode: String, CaseIterable, Identifiable, Sendable {
         case .pointCount: self = .pointCount
         case .winnerCourt: self = .winnerCourt
         case .friendly: self = .friendly
-        case .tournament(let format, _, _, _):
-            switch format {
-            case .americano: self = .americano
-            case .mexicano: self = .mexicano
-            case .winnerCourt: self = .winnerCourt
-            }
+        case .tournament(let format, _, _, _): self.init(format)
+        }
+    }
+
+    public init(_ format: TournamentFormat) {
+        switch format {
+        case .americano: self = .americano
+        case .mexicano: self = .mexicano
+        case .winnerCourt: self = .winnerCourt
         }
     }
 
