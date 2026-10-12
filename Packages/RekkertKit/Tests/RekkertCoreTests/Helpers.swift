@@ -58,9 +58,13 @@ extension MatchLog {
     /// Mirrors `MatchStore.endRound()`.
     @discardableResult
     mutating func blowWhistle(from device: DeviceID, at: Date? = nil) -> MatchEvent {
-        guard case .winnerCourt(let session)? = SessionReducer.state(of: self) else {
-            return append(.endRound(round: 0, at: at), from: device)
+        switch SessionReducer.state(of: self) {
+        case .winnerCourt(let session)?:
+            append(.endRound(round: session.completedRounds.count, at: at), from: device)
+        case .tournament(let tournament)?:
+            append(.endRound(round: tournament.rounds.count - 1, at: at), from: device)
+        default:
+            append(.endRound(round: 0, at: at), from: device)
         }
-        return append(.endRound(round: session.completedRounds.count, at: at), from: device)
     }
 }

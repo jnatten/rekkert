@@ -149,7 +149,8 @@ public struct MatchLog: Codable, Sendable, Hashable {
     /// The same, for one court: what was scored there, or its round confirmed or called off. On a
     /// court shared between phones, somebody else's court is not this one's to take back.
     public func lastUndoableEvent(round: Int, court: Int) -> MatchEvent? {
-        lastUndoableEvent(where: Self.touching(round: round, court: court))
+        guard !isSettledLadderRound(round) else { return nil }
+        return lastUndoableEvent(where: Self.touching(round: round, court: court))
     }
 
     /// Everything an undo has to take back for the board to move back.
@@ -174,7 +175,15 @@ public struct MatchLog: Codable, Sendable, Hashable {
     }
 
     public func undoTargets(round: Int, court: Int) -> [MatchEvent] {
-        undoTargets(where: Self.touching(round: round, court: court))
+        guard !isSettledLadderRound(round) else { return [] }
+        return undoTargets(where: Self.touching(round: round, court: court))
+    }
+
+    /// A ladder round that has a round after it was what that round was drawn from, and taking
+    /// a point back from under it would move everybody who came up or went down.
+    private func isSettledLadderRound(_ round: Int) -> Bool {
+        guard case .tournament(let tournament)? = SessionReducer.state(of: self), tournament.isLadder else { return false }
+        return round < tournament.rounds.count - 1
     }
 
     private static func touching(round: Int, court: Int) -> (EventKind) -> Bool {

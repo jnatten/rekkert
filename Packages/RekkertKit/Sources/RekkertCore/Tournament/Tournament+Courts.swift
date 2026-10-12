@@ -60,6 +60,14 @@ extension Tournament {
         round.matches.allSatisfy { $0.isConfirmed || status(of: $0, in: round).isFinished }
     }
 
+    /// The draw itself goes ahead whatever the courts say, so that a point arriving late
+    /// cannot take a round away; this is what asks for every court to be settled first.
+    public var canDrawNextRound: Bool {
+        guard !isFinished else { return false }
+        guard let round = currentRound else { return playableCourts >= 1 }
+        return round.isCancelled || isDone(round)
+    }
+
     /// Once the whistle has gone, the game in progress goes to whoever leads it, then the
     /// sets, then the games, and on a court level on all of those the deciding point.
     private static func status(of match: CourtMatch, in round: Round, engine: TraditionalEngine) -> CourtStatus {

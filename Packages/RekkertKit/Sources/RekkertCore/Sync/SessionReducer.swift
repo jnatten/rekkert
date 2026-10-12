@@ -93,7 +93,15 @@ public enum SessionReducer {
                 session.rounds[round].isStopped = true
                 state = .friendly(session)
 
-            case .traditional, .tournament, .pointCount, .none:
+            case .tournament(var tournament):
+                // Every court stops where it stands; a court still level then plays one point.
+                // Only the round in play, and only once, so two whistles close one round.
+                guard tournament.isLadder, !tournament.isFinished, tournament.rounds.count == round + 1,
+                      !tournament.rounds[round].isCancelled, !tournament.rounds[round].isEnded else { return }
+                tournament.rounds[round].isEnded = true
+                state = .tournament(tournament)
+
+            case .traditional, .pointCount, .none:
                 break
             }
 
