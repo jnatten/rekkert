@@ -47,6 +47,7 @@ public struct TVBoard: Sendable, Hashable {
     public var symbol: String
     public var detail: String
     public var clockStart: Date?
+    public var countdown: RoundClock?
     public var content: Content
     public var standings: [SessionResult.Placing]
     public var sittingOut: [String]
@@ -81,15 +82,20 @@ public struct TVBoard: Sendable, Hashable {
                 board.content = .waiting
                 return board
             }
-            let engine = PointCountEngine(rules: tournament.config.pointRules)
+            let engine = tournament.pointEngine
             let boards = round.matches.sorted { $0.courtIndex < $1.courtIndex }.compactMap { match in
                 ScoreboardSnapshot.make(from: state, court: match.courtIndex).map { (match, $0) }
             }
             board.detail = round.isCancelled ? "Round \(round.index + 1) · cancelled" : "Round \(round.index + 1)"
             board.clockStart = boards.lazy.compactMap(\.1.clockStart).first
+            board.countdown = boards.lazy.compactMap(\.1.countdown).first
             board.content = .courts(boards.map { match, snapshot in
                 var court = court(snapshot)
-                if !court.isDone { court.status = "\(engine.pointsRemaining(match.state)) to play" }
+                if tournament.isLadder {
+                    if tournament.status(of: match, in: round).awaitsDecider { court.status = "Deciding point" }
+                } else if !court.isDone {
+                    court.status = "\(engine.pointsRemaining(match.state)) to play"
+                }
                 return court
             })
             board.sittingOut = round.sitOuts.compactMap { tournament.player($0)?.name }
@@ -182,7 +188,7 @@ public struct TVBoard: Sendable, Hashable {
                 id: standing.player.id.raw.uuidString,
                 rank: index + 1,
                 name: standing.player.name,
-                value: "\(standing.total)",
+                value: "\(tournament.isLadder ? standing.roundsWon : standing.total)",
                 detail: standing.differential > 0 ? "+\(standing.differential)" : "\(standing.differential)"
             )
         }

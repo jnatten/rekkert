@@ -112,7 +112,8 @@ public enum ScoreCaller {
     private static func closingSet(_ set: SetResult, _ snapshot: ScoreboardSnapshot) -> [String] {
         guard let winner = set.winner else {
             // Winner court only: the whistle can close a round with the two sides level.
-            return ["Round drawn, \(set.games.a) all"]
+            let drawn = "Round drawn, \(set.games.a) all"
+            return snapshot.isSuddenDeath ? [drawn, "Deciding point"] : [drawn]
         }
         let name = snapshot.teamNames[winner]
         let score = "\(set.games[winner]) to \(set.games[winner.other])"

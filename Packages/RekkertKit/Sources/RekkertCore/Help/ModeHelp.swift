@@ -28,9 +28,9 @@ extension GameMode {
             ModeHelp(
                 pickItWhen: "For club nights where a whistle moves everyone up or down a court.",
                 points: [
-                    "Play games as usual. The whistle ends the round; the next starts at 0–0.",
-                    "The game the whistle cuts off goes to whoever leads it. Level, it's dropped.",
-                    "Only your court is tracked: the rounds, and the games each side won.",
+                    "Our court keeps just your side: games until the whistle, round after round.",
+                    "All courts runs every court: winners move up, losers down, and the table is kept.",
+                    "The game the whistle cuts off goes to its leader. On All courts, level plays a point.",
                 ]
             )
         case .friendly:

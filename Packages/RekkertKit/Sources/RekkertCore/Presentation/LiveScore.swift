@@ -73,6 +73,7 @@ public struct LiveScore: Codable, Sendable, Hashable {
     /// The tournament round, counted from one.
     public var round: Int?
     public var clockStart: Date?
+    public var countdown: RoundClock?
     /// One for the two-team modes; every court of the round for a tournament.
     public var boards: [Board]
     public var leaders: [Leader]
@@ -89,6 +90,7 @@ public struct LiveScore: Codable, Sendable, Hashable {
         detail: String,
         round: Int? = nil,
         clockStart: Date? = nil,
+        countdown: RoundClock? = nil,
         boards: [Board],
         leaders: [Leader] = [],
         leftSide: TeamSide = .a,
@@ -101,6 +103,7 @@ public struct LiveScore: Codable, Sendable, Hashable {
         self.detail = detail
         self.round = round
         self.clockStart = clockStart
+        self.countdown = countdown
         self.boards = boards
         self.leaders = leaders
         self.leftSide = leftSide
@@ -126,7 +129,7 @@ public struct LiveScore: Codable, Sendable, Hashable {
             detail = round.map { "Round \($0)" } ?? "Waiting for the first round"
             leaders = Leaderboard.standings(for: tournament)
                 .prefix(3)
-                .map { Leader(name: $0.player.name, total: $0.total) }
+                .map { Leader(name: $0.player.name, total: tournament.isLadder ? $0.roundsWon : $0.total) }
         } else {
             snapshots = ScoreboardSnapshot.make(from: state).map { [$0] } ?? []
             detail = snapshots.first?.detail ?? ""
@@ -140,6 +143,7 @@ public struct LiveScore: Codable, Sendable, Hashable {
             detail: detail,
             round: round,
             clockStart: snapshots.lazy.compactMap(\.clockStart).first,
+            countdown: snapshots.lazy.compactMap(\.countdown).first,
             boards: snapshots.map(Board.init),
             leaders: leaders,
             leftSide: display.isMirrored != endsSwapped ? .b : .a,
@@ -152,6 +156,7 @@ public struct LiveScore: Codable, Sendable, Hashable {
         let result = SessionResult.make(from: state)
         score.result = result.score.isEmpty ? result.headline : "\(result.headline) · \(result.score)"
         score.clockStart = nil
+        score.countdown = nil
         return score
     }
 }

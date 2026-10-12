@@ -164,7 +164,15 @@ extension MatchTimeline {
         case .tournament(let tournament):
             Dictionary(uniqueKeysWithValues: tournament.rounds.flatMap { round in
                 round.matches.map { match in
-                    (Slot(round: round.index, court: match.courtIndex), Board(points: match.state.points.map(String.init)))
+                    let slot = Slot(round: round.index, court: match.courtIndex)
+                    guard let engine = tournament.gameEngine else {
+                        return (slot, Board(points: match.state.points.map(String.init)))
+                    }
+                    var board = board(match.games ?? TraditionalState(), engine: engine)
+                    if let decider = match.decider {
+                        board.points = BySide(a: decider == .a ? "1" : "0", b: decider == .b ? "1" : "0")
+                    }
+                    return (slot, board)
                 }
             })
         }
@@ -225,7 +233,11 @@ extension MatchTimeline {
         case .traditional(let session): (session.engine, session.score)
         case .winnerCourt(let session): (session.engine, session.score)
         case .friendly(let session): session.round(at: slot.round).map { (session.engine, $0.score) }
-        case .pointCount, .tournament: nil
+        case .tournament(let tournament):
+            tournament.gameEngine.flatMap { engine in
+                tournament.round(at: slot.round)?.matches.first { $0.courtIndex == slot.court }?.games.map { (engine, $0) }
+            }
+        case .pointCount: nil
         }
     }
 
@@ -238,12 +250,12 @@ extension MatchTimeline {
         switch state {
         case .pointCount(let session):
             session.engine.isFinished(session.score) ? Finish(winner: session.engine.winner(session.score)) : nil
-        case .tournament(let tournament):
+        case .tournament(let tournament) where !tournament.isLadder:
             tournament.round(at: slot.round)?.matches.first { $0.courtIndex == slot.court }.flatMap { match in
                 let engine = PointCountEngine(rules: tournament.config.pointRules)
                 return engine.isFinished(match.state) ? Finish(winner: engine.winner(match.state)) : nil
             }
-        case .traditional, .winnerCourt, .friendly:
+        case .traditional, .winnerCourt, .friendly, .tournament:
             nil
         }
     }

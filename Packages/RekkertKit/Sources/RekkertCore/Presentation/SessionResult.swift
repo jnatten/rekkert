@@ -269,6 +269,7 @@ public struct SessionResult: Sendable, Hashable {
     // MARK: - Tournament
 
     private static func tournament(_ tournament: Tournament) -> SessionResult {
+        if tournament.isLadder { return ladder(tournament) }
         let standings = Leaderboard.standings(for: tournament)
         let rounds = tournament.rounds.filter { !$0.isCancelled }.count
         let placings = standings.enumerated().map { index, standing in
@@ -302,6 +303,45 @@ public struct SessionResult: Sendable, Hashable {
             score: "\(top.total)",
             detail: detail,
             outcome: tied.count > 1 ? .drawn : .won,
+            winningSide: nil,
+            placings: placings
+        )
+    }
+
+    /// Won by whoever won court 1 in the last round.
+    private static func ladder(_ tournament: Tournament) -> SessionResult {
+        let standings = Leaderboard.standings(for: tournament)
+        let placings = standings.enumerated().map { index, standing in
+            Placing(
+                id: standing.player.id.raw.uuidString,
+                rank: index + 1,
+                name: standing.player.name,
+                value: "\(standing.roundsWon)",
+                detail: standing.differential > 0 ? "+\(standing.differential)" : "\(standing.differential)"
+            )
+        }
+        let played = tournament.rounds.filter { !$0.isCancelled }
+        let detail = "\(played.count) \(plural(played.count, "round")) · \(tournament.players.count) players"
+
+        guard let last = played.last, let top = last.matches.first(where: { $0.courtIndex == 0 }),
+              let winner = tournament.status(of: top, in: last).winner else {
+            let wasPlayed = played.contains { round in round.matches.contains { tournament.status(of: $0, in: round).wasPlayed } }
+            return SessionResult(
+                headline: "Tournament stopped",
+                score: "",
+                detail: wasPlayed ? detail : "Nothing was played",
+                outcome: .stopped,
+                winningSide: nil,
+                placings: placings
+            )
+        }
+        let names = top.teams[winner].compactMap { tournament.player($0)?.name }
+        let line = tournament.status(of: top, in: last).line
+        return SessionResult(
+            headline: names.count == 1 ? "\(names[0]) wins" : "\(names.joined(separator: " & ")) win",
+            score: "\(line[winner])–\(line[winner.other])",
+            detail: detail,
+            outcome: .won,
             winningSide: nil,
             placings: placings
         )

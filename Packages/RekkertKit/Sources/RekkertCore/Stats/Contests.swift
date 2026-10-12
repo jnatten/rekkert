@@ -57,8 +57,8 @@ struct FiledSession: Sendable {
                     guard (match.isConfirmed || status.isFinished) && status.wasPlayed else { return nil }
                     return Contest(
                         sides: match.teams.map { Self.seats($0, named: named) },
-                        winner: status.line.leader,
-                        points: status.line,
+                        winner: tournament.isLadder ? status.winner : status.line.leader,
+                        points: tournament.isLadder ? nil : status.line,
                         format: tournament.format,
                         countsHeadToHead: true
                     )

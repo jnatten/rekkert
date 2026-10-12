@@ -54,6 +54,13 @@ public enum PresetConfiguration: Codable, Sendable, Hashable {
         }
     }
 
+    private static func length(_ format: TournamentFormat, _ config: TournamentConfig) -> String {
+        guard format == .winnerCourt else { return "to \(config.pointRules.target)" }
+        let ladder = config.ladder ?? LadderRules()
+        if let minutes = ladder.roundMinutes { return "\(minutes) min" }
+        return ladder.rules.setsToWin == 1 ? "first to \(ladder.rules.gamesPerSet)" : "best of \(ladder.rules.setsToWin * 2 - 1)"
+    }
+
     public var summary: String {
         switch self {
         case .traditional(let rules, _):
@@ -63,7 +70,8 @@ public enum PresetConfiguration: Codable, Sendable, Hashable {
         case .pointCount(let rules, _):
             "Points · to \(rules.target)"
         case .tournament(let format, _, let players, let config):
-            "\(format.displayName) · \(players.count) players · \(config.courtCount) court\(config.courtCount == 1 ? "" : "s") · to \(config.pointRules.target)"
+            "\(format.displayName) · \(players.count) players · \(config.courtCount) court\(config.courtCount == 1 ? "" : "s") · "
+                + Self.length(format, config)
         case .friendly(_, let players, let rules):
             "Friendly · \(players.count) players · " + (rules.setsToWin == 1
                 ? "first to \(rules.gamesPerSet)"
