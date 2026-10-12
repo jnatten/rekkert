@@ -301,8 +301,7 @@ public enum SessionState: Codable, Sendable, Hashable {
         case .pointCount: "number"
         case .winnerCourt: "arrow.up.arrow.down"
         case .friendly: "shuffle"
-        case .tournament(let tournament):
-            tournament.format == .americano ? "arrow.triangle.2.circlepath" : "list.number"
+        case .tournament(let tournament): tournament.format.symbol
         }
     }
 

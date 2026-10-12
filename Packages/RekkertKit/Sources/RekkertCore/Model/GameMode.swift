@@ -18,6 +18,7 @@ public enum GameMode: String, CaseIterable, Identifiable, Sendable {
             switch format {
             case .americano: self = .americano
             case .mexicano: self = .mexicano
+            case .winnerCourt: self = .winnerCourt
             }
         }
     }

@@ -11,12 +11,25 @@ public struct CourtMatch: Codable, Sendable, Hashable, Identifiable {
     public var teams: BySide<[PlayerID]>
     public var state: PointCountState
     public var isConfirmed: Bool
+    /// The score on a winner-court ladder, which plays games rather than points.
+    public var games: TraditionalState?
+    /// Who took the one point a court still level at the whistle plays to settle it.
+    public var decider: TeamSide?
 
-    public init(courtIndex: Int, teams: BySide<[PlayerID]>, state: PointCountState = PointCountState(), isConfirmed: Bool = false) {
+    public init(
+        courtIndex: Int,
+        teams: BySide<[PlayerID]>,
+        state: PointCountState = PointCountState(),
+        isConfirmed: Bool = false,
+        games: TraditionalState? = nil,
+        decider: TeamSide? = nil
+    ) {
         self.courtIndex = courtIndex
         self.teams = teams
         self.state = state
         self.isConfirmed = isConfirmed
+        self.games = games
+        self.decider = decider
     }
 
     public func side(of player: PlayerID) -> TeamSide? {
@@ -43,16 +56,29 @@ public struct Round: Codable, Sendable, Hashable, Identifiable {
     /// on a round drawn before the clock existed, and on a draw that is only being previewed.
     public var startedAt: Date?
     public var isCancelled: Bool
+    /// The whistle has gone on a ladder round: no more games, only deciding points.
+    public var isEnded: Bool
+    public var clock: RoundClock?
 
-    public init(index: Int, matches: [CourtMatch], sitOuts: [PlayerID], startedAt: Date? = nil, isCancelled: Bool = false) {
+    public init(
+        index: Int,
+        matches: [CourtMatch],
+        sitOuts: [PlayerID],
+        startedAt: Date? = nil,
+        isCancelled: Bool = false,
+        isEnded: Bool = false,
+        clock: RoundClock? = nil
+    ) {
         self.index = index
         self.matches = matches
         self.sitOuts = sitOuts
         self.startedAt = startedAt
         self.isCancelled = isCancelled
+        self.isEnded = isEnded
+        self.clock = clock
     }
 
-    private enum CodingKeys: String, CodingKey { case index, matches, sitOuts, startedAt, isCancelled }
+    private enum CodingKeys: String, CodingKey { case index, matches, sitOuts, startedAt, isCancelled, isEnded, clock }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -61,6 +87,19 @@ public struct Round: Codable, Sendable, Hashable, Identifiable {
         sitOuts = try container.decode([PlayerID].self, forKey: .sitOuts)
         startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
         isCancelled = try container.decodeIfPresent(Bool.self, forKey: .isCancelled) ?? false
+        isEnded = try container.decodeIfPresent(Bool.self, forKey: .isEnded) ?? false
+        clock = try container.decodeIfPresent(RoundClock.self, forKey: .clock)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(index, forKey: .index)
+        try container.encode(matches, forKey: .matches)
+        try container.encode(sitOuts, forKey: .sitOuts)
+        try container.encodeIfPresent(startedAt, forKey: .startedAt)
+        try container.encode(isCancelled, forKey: .isCancelled)
+        if isEnded { try container.encode(isEnded, forKey: .isEnded) }
+        try container.encodeIfPresent(clock, forKey: .clock)
     }
 }
 
@@ -160,4 +199,6 @@ public enum TournamentError: Error, Sendable, Hashable {
     /// Players picked to sit out who are not all this tournament's, not all different, or
     /// more than the bench holds.
     case invalidSitOuts
+    /// A ladder of fixed pairs with somebody left over.
+    case unpairedPlayer
 }

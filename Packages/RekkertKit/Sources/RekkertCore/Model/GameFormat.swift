@@ -1,11 +1,21 @@
 public enum TournamentFormat: String, Codable, Sendable, Hashable, CaseIterable {
     case americano
     case mexicano
+    case winnerCourt
 
     public var displayName: String {
         switch self {
         case .americano: "Americano"
         case .mexicano: "Mexicano"
+        case .winnerCourt: "Winner court"
+        }
+    }
+
+    public var symbol: String {
+        switch self {
+        case .americano: "arrow.triangle.2.circlepath"
+        case .mexicano: "list.number"
+        case .winnerCourt: "arrow.up.arrow.down"
         }
     }
 }

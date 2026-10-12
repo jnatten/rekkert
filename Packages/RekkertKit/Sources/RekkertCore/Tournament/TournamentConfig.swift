@@ -42,16 +42,19 @@ public struct TournamentConfig: Codable, Sendable, Hashable {
     public var courtCount: Int
     public var sitOutCompensation: SitOutCompensation
     public var mexicanoPairing: MexicanoPairing
+    public var ladder: LadderRules?
 
     public init(
         pointRules: PointCountRules = PointCountRules(),
         courtCount: Int = 1,
         sitOutCompensation: SitOutCompensation = .half,
-        mexicanoPairing: MexicanoPairing = .topWithBottom
+        mexicanoPairing: MexicanoPairing = .topWithBottom,
+        ladder: LadderRules? = nil
     ) {
         self.pointRules = pointRules
         self.courtCount = courtCount
         self.sitOutCompensation = sitOutCompensation
         self.mexicanoPairing = mexicanoPairing
+        self.ladder = ladder
     }
 }

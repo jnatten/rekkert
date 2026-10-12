@@ -50,8 +50,7 @@ public enum PresetConfiguration: Codable, Sendable, Hashable {
         case .winnerCourt: "arrow.up.arrow.down"
         case .pointCount: "number"
         case .friendly: "shuffle"
-        case .tournament(let format, _, _, _):
-            format == .americano ? "arrow.triangle.2.circlepath" : "list.number"
+        case .tournament(let format, _, _, _): format.symbol
         }
     }
 

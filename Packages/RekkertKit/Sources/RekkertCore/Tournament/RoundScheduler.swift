@@ -241,6 +241,7 @@ public enum TournamentEngine {
         let round = switch tournament.format {
         case .americano: try AmericanoScheduler.nextRound(for: tournament, sitOuts: sitOuts)
         case .mexicano: try MexicanoScheduler.nextRound(for: tournament, sitOuts: sitOuts)
+        case .winnerCourt: try LadderScheduler.nextRound(for: tournament, sitOuts: sitOuts)
         }
         next.rounds.append(round)
         return next
