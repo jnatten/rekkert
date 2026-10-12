@@ -247,6 +247,23 @@ struct SessionReducerTests {
         #expect(tournament(onPhone)?.rounds.count == 1, "one press takes the round back")
     }
 
+    /// The same race as a real phone and watch run it: each stamps its own draw with its own
+    /// clock. The draw that stands in once the first is taken back starts the round three
+    /// seconds later, which is still the same round — and one press still has to take it back.
+    @Test func undoAfterTwoStampedDrawsAtOnceTakesBackTheRound() throws {
+        let noon = Date(timeIntervalSince1970: 1_700_000_000)
+        let log = tournamentLog()
+        var onPhone = log
+        var onWatch = log
+        onPhone.drawRound(from: device, at: noon)
+        let fromWatch = onWatch.drawRound(from: later, at: noon.addingTimeInterval(3))
+        onPhone.merge([fromWatch])
+        #expect(tournament(onPhone)?.rounds.count == 2)
+
+        for target in onPhone.undoTargets() { onPhone.append(.undo(target.id), from: device) }
+        #expect(tournament(onPhone)?.rounds.count == 1, "one press takes the round back")
+    }
+
     /// Two courts, one phone each. Undo on court 2's own screen took back court 1's point.
     @Test func undoOnOneCourtLeavesTheOtherCourtAlone() throws {
         var log = tournamentLog()

@@ -375,6 +375,29 @@ public enum SessionState: Codable, Sendable, Hashable {
         }
     }
 
+    /// The same session with every moment the clock reads cleared. Two devices drawing the
+    /// same round, or blowing the same whistle, each stamp it with their own clock, so the one
+    /// that stands in for the other is the same board a few seconds apart.
+    var unstamped: SessionState {
+        switch self {
+        case .traditional(var session):
+            session.startedAt = nil
+            return .traditional(session)
+        case .pointCount(var session):
+            session.startedAt = nil
+            return .pointCount(session)
+        case .winnerCourt(var session):
+            session.roundStartedAt = nil
+            return .winnerCourt(session)
+        case .friendly(var session):
+            for index in session.rounds.indices { session.rounds[index].startedAt = nil }
+            return .friendly(session)
+        case .tournament(var tournament):
+            for index in tournament.rounds.indices { tournament.rounds[index].startedAt = nil }
+            return .tournament(tournament)
+        }
+    }
+
     /// Courts the user can score right now: always one for a traditional match, and one
     /// per filled court in the current tournament round.
     public var courtCount: Int {

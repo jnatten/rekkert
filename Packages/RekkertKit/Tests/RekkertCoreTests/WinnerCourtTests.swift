@@ -37,6 +37,19 @@ struct WinnerCourtTests {
         #expect(session(value)?.completedRounds.isEmpty == true, "one press reopens the round")
     }
 
+    /// The same, with each whistle stamped by its own device's clock, as `MatchStore` does.
+    @Test func undoAfterTwoStampedWhistlesAtOnceReopensTheRound() throws {
+        let noon = Date(timeIntervalSince1970: 1_700_000_000)
+        var value = log()
+        score(&value, [.a, .a, .a, .a])
+        value.append(.endRound(round: 0, at: noon), from: device)
+        value.append(.endRound(round: 0, at: noon.addingTimeInterval(3)), from: DeviceID())
+        #expect(session(value)?.completedRounds.count == 1)
+
+        for target in value.undoTargets() { value.append(.undo(target.id), from: device) }
+        #expect(session(value)?.completedRounds.isEmpty == true, "one press reopens the round")
+    }
+
     @Test func gamesAccumulateWithoutEverCompletingASet() {
         var value = log()
         for _ in 0 ..< 9 { score(&value, [.a, .a, .a, .a]) }

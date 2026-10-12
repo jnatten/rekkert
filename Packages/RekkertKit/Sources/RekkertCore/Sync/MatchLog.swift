@@ -156,16 +156,17 @@ public struct MatchLog: Codable, Sendable, Hashable {
     ///
     /// Usually the one event. But two devices drawing the same round, or blowing the same whistle,
     /// leave two of it in the log, and only the first counts — so taking that one back just lets
-    /// the other count instead. Each one that would stand in is taken back with it.
+    /// the other count instead. Each one that would stand in is taken back with it, whatever
+    /// moment its own device stamped on it.
     public func undoTargets(where touches: (EventKind) -> Bool = { _ in true }) -> [MatchEvent] {
         guard let first = lastUndoableEvent(where: touches) else { return [] }
-        let board = SessionReducer.state(of: self)
+        let board = SessionReducer.state(of: self)?.unstamped
         let scratch = DeviceID()
         var targets = [first]
         var without = self
         while targets.count < 8 {
             without.append(.undo(targets[targets.count - 1].id), from: scratch)
-            guard SessionReducer.state(of: without) == board,
+            guard SessionReducer.state(of: without)?.unstamped == board,
                   let next = without.lastUndoableEvent(where: touches) else { break }
             targets.append(next)
         }
