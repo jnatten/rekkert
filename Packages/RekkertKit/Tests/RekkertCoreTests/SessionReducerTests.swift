@@ -6,11 +6,11 @@ private let device = DeviceID(UUID(uuidString: "CCCCCCCC-0000-0000-0000-00000000
 /// Sorts after `device` wherever the two tie, so what it does at the same moment folds last.
 private let later = DeviceID(UUID(uuidString: "FFFFFFFF-0000-0000-0000-000000000003")!)
 
-private func tournamentLog(players: Int = 8, courts: Int = 2, target: Int = 16) -> MatchLog {
+private func tournamentLog(_ format: TournamentFormat = .americano, players: Int = 8, courts: Int = 2, target: Int = 16) -> MatchLog {
     let tournament = Tournament(
         id: TournamentID(UUID(uuidString: "00000000-0000-0000-0000-0000000000AB")!),
         name: "Thursday",
-        format: .americano,
+        format: format,
         players: (0 ..< players).map { Player(name: "P\($0)") },
         config: TournamentConfig(pointRules: PointCountRules(target: target), courtCount: courts)
     )
@@ -23,6 +23,11 @@ private func tournamentLog(players: Int = 8, courts: Int = 2, target: Int = 16) 
 private func tournament(_ log: MatchLog) -> Tournament? {
     guard case .tournament(let value) = SessionReducer.state(of: log) else { return nil }
     return value
+}
+
+/// `nextRound` as builds from before draws carried their round have it.
+private enum OlderEventKind: Codable, Equatable {
+    case nextRound(after: Int, at: Date? = nil, sitOuts: [PlayerID]? = nil)
 }
 
 @Suite("Session reducer")
@@ -443,6 +448,54 @@ struct SessionReducerTests {
 
         let picked = EventKind.nextRound(after: 0, sitOuts: [Player(name: "P1").id])
         #expect(try JSONCoding.decoder.decode(EventKind.self, from: JSONCoding.encoder.encode(picked)) == picked)
+    }
+
+    @Test func onlyADrawThatReadsTheScoresCarriesItsRound() {
+        #expect(tournament(tournamentLog()).flatMap { TournamentEngine.placement(of: $0) } == nil, "Americano never reads one")
+        #expect(tournament(tournamentLog(.mexicano)).flatMap { TournamentEngine.placement(of: $0) } != nil)
+    }
+
+    @Test func anOlderBuildReadsACarriedDrawAsAPlainOne() throws {
+        let placed = try #require(tournament(tournamentLog(.mexicano)).flatMap { TournamentEngine.placement(of: $0) })
+        let data = try JSONCoding.encoder.encode(EventKind.nextRound(after: 0, placed: placed))
+        #expect(try JSONCoding.decoder.decode(OlderEventKind.self, from: data) == .nextRound(after: 0))
+    }
+
+    /// Two devices take a court's last point at once. The phone counted its own, 9–7, and drew
+    /// from the table that made; the watch's sorts first and makes it 8–8, turning the phone's away.
+    @Test func aMexicanoRoundStaysAsDrawnWhenTheLastPointWasSomebodyElses() throws {
+        var shared = tournamentLog(.mexicano)
+        for team in repeated([.a, .b], 8) { shared.append(.point(round: 0, court: 1, team: team), from: device) }
+        for team in repeated([.a, .b], 7) + [.a] { shared.append(.point(round: 0, court: 0, team: team), from: device) }
+        var onWatch = shared
+        let late = onWatch.append(.point(round: 0, court: 0, team: .b), from: device)
+
+        var onPhone = shared
+        onPhone.append(.point(round: 0, court: 0, team: .a), from: later)
+        onPhone.append(.setRoundConfirmed(round: 0, isConfirmed: true), from: later)
+        onPhone.drawRound(from: later)
+        let drawn = try #require(tournament(onPhone)?.rounds[1])
+
+        onPhone.merge([late])
+        #expect(tournament(onPhone)?.rounds[0].matches[0].state.points == BySide(a: 8, b: 8))
+        #expect(tournament(onPhone)?.rounds[1] == drawn)
+    }
+
+    @Test func aMexicanoRoundStaysAsDrawnWhenACorrectionRacesIt() throws {
+        var shared = tournamentLog(.mexicano)
+        shared.append(.setScore(round: 0, court: 0, points: BySide(a: 9, b: 7)), from: device)
+        shared.append(.setScore(round: 0, court: 1, points: BySide(a: 8, b: 8)), from: device)
+        var onHelper = shared
+        let correction = onHelper.append(.setScore(round: 0, court: 0, points: BySide(a: 7, b: 9)), from: device)
+
+        var onPhone = shared
+        onPhone.append(.setRoundConfirmed(round: 0, isConfirmed: true), from: later)
+        onPhone.drawRound(from: later)
+        let drawn = try #require(tournament(onPhone)?.rounds[1])
+
+        onPhone.merge([correction])
+        #expect(tournament(onPhone)?.rounds[0].matches[0].state.points == BySide(a: 7, b: 9), "the correction stands")
+        #expect(tournament(onPhone)?.rounds[1] == drawn)
     }
 
     @Test func concurrentPointsOnDifferentCourtsBothLand() {

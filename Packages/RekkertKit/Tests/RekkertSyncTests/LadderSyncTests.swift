@@ -101,7 +101,7 @@ struct LadderSyncTests {
             Issue.record("the draw is the last thing in the log")
             return
         }
-        #expect(placed == LadderPlacement(drawn))
+        #expect(placed == RoundPlacement(drawn))
     }
 
     @Test func aSnoozeOnOneDeviceMovesTheCountdownOnBoth() async throws {

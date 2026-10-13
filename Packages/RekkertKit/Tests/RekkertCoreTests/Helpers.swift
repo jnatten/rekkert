@@ -34,7 +34,7 @@ extension MatchLog {
             return append(.nextRound(after: -1, at: at), from: device)
         }
         return append(
-            .nextRound(after: tournament.rounds.count - 1, at: at, placed: TournamentEngine.ladderPlacement(of: tournament)),
+            .nextRound(after: tournament.rounds.count - 1, at: at, placed: TournamentEngine.placement(of: tournament)),
             from: device
         )
     }
@@ -45,7 +45,7 @@ extension MatchLog {
         guard case .tournament(let tournament)? = SessionReducer.state(of: self) else {
             return append(.nextRound(after: -1, sitOuts: sitOuts), from: device)
         }
-        let placed = TournamentEngine.ladderPlacement(of: tournament, sitOuts: sitOuts, redrawing: true)
+        let placed = TournamentEngine.placement(of: tournament, sitOuts: sitOuts, redrawing: true)
         return append(.nextRound(after: tournament.rounds.count - 2, sitOuts: sitOuts, placed: placed), from: device)
     }
 

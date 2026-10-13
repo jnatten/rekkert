@@ -380,6 +380,43 @@ struct SyncTests {
         #expect(pair.phone.state == pair.watch.state)
     }
 
+    /// The phone confirms the round and draws straight after: the round it carries is drawn
+    /// from the table with the confirmed round in it.
+    @Test func aMexicanoDrawCarriesTheRoundTheConfirmedTableMakes() async throws {
+        let tournament = Tournament(
+            name: "Thursday", format: .mexicano,
+            players: (0 ..< 8).map { Player(name: "P\($0)") },
+            config: TournamentConfig(courtCount: 2)
+        )
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+
+        pair.phone.configure(.tournament(tournament))
+        pair.phone.nextRound()
+        pair.phone.setScore(round: 0, court: 0, points: BySide(a: 12, b: 4))
+        pair.phone.setScore(round: 0, court: 1, points: BySide(a: 3, b: 13))
+        guard case .tournament(let unconfirmed) = pair.phone.state else {
+            Issue.record("phone has no tournament")
+            return
+        }
+        pair.phone.setRoundConfirmed(0, true)
+        guard case .tournament(let confirmed) = pair.phone.state else {
+            Issue.record("phone has no tournament")
+            return
+        }
+        let expected = try TournamentEngine.appendingRound(to: confirmed).currentRound.map(RoundPlacement.init)
+        #expect(try TournamentEngine.appendingRound(to: unconfirmed).currentRound.map(RoundPlacement.init) != expected)
+
+        pair.phone.nextRound()
+        await eventually { pair.watch.state != nil && pair.watch.state == pair.phone.state }
+        guard case .nextRound(_, _, _, let placed)? = pair.watch.log.ordered.last?.kind else {
+            Issue.record("the draw is the last thing in the log")
+            return
+        }
+        #expect(placed == expected)
+    }
+
     @Test func aSessionFromAnOlderBuildIsSetAsideRatherThanCrashing() throws {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appending(path: "rekkert-tests-\(UUID().uuidString)")

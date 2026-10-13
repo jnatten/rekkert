@@ -238,7 +238,7 @@ public final class MatchStore {
             record(.nextRound(
                 after: tournament.rounds.count - 1,
                 at: Date(),
-                placed: TournamentEngine.ladderPlacement(of: tournament)
+                placed: TournamentEngine.placement(of: tournament)
             ))
         case .friendly(let session):
             record(.nextRound(after: session.rounds.count - 1, at: Date()))
@@ -255,7 +255,7 @@ public final class MatchStore {
             after: last - 1,
             at: Date(),
             sitOuts: sitOuts,
-            placed: TournamentEngine.ladderPlacement(of: tournament, sitOuts: sitOuts, redrawing: true)
+            placed: TournamentEngine.placement(of: tournament, sitOuts: sitOuts, redrawing: true)
         ))
     }
 
