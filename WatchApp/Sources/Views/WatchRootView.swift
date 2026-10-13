@@ -276,8 +276,10 @@ struct WatchNoRoundView: View {
                     Text("No round drawn yet.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                    Button("Draw round") { model.store.nextRound() }
-                        .buttonStyle(.borderedProminent)
+                    if model.store.canRunRounds {
+                        Button("Draw round") { model.store.nextRound() }
+                            .buttonStyle(.borderedProminent)
+                    }
                 }
             }
             .padding(.horizontal, 4)

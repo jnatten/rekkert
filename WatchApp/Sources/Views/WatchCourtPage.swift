@@ -88,7 +88,7 @@ struct WatchCourtPage: View {
                 snapshot: snapshot,
                 compact: true,
                 layout: layout,
-                takesTaps: !tapsAnywhere,
+                takesTaps: !tapsAnywhere && model.store.canScore,
                 notice: linkNotice,
                 onTap: score,
                 onUndo: undo,
@@ -112,6 +112,7 @@ struct WatchCourtPage: View {
                     serveSideButton("Right", court: .deuce, snapshot: snapshot)
                     serveSideButton("Left", court: .ad, snapshot: snapshot)
                 }
+                .disabled(!model.store.canScore)
             }
         }
         .frame(maxHeight: .infinity)
@@ -224,11 +225,13 @@ struct WatchCourtPage: View {
 
     private func courtControls(_ snapshot: ScoreboardSnapshot) -> some View {
         VStack(spacing: 4) {
-            Button("Swap serve", systemImage: "arrow.left.arrow.right") {
-                WKInterfaceDevice.current().play(.click)
-                model.store.swapServingTeam(round: round, court: court)
+            if model.store.canScore {
+                Button("Swap serve", systemImage: "arrow.left.arrow.right") {
+                    WKInterfaceDevice.current().play(.click)
+                    model.store.swapServingTeam(round: round, court: court)
+                }
             }
-            if snapshot.canSwapServingPlayer {
+            if model.store.canScore, snapshot.canSwapServingPlayer {
                 Button("Swap player", systemImage: "person.2.arrow.trianglehead.counterclockwise") {
                     WKInterfaceDevice.current().play(.click)
                     model.store.swapServingPlayer(round: round, court: court)
@@ -271,6 +274,7 @@ struct WatchCourtPage: View {
     }
 
     private func score(_ side: TeamSide) {
+        guard model.store.canScore else { return }
         // Silent when the buzz is on: it lands a moment later and says more, and a click in
         // front of it is the same news twice.
         if model.haptics.clicksOnTap { WKInterfaceDevice.current().play(.click) }
@@ -305,7 +309,7 @@ struct WatchCourtPage: View {
     /// Crown-driven correction. watchOS Steppers bind to the Digital Crown when focused.
     @ViewBuilder
     private func correction(_ snapshot: ScoreboardSnapshot) -> some View {
-        if case .tournament(let tournament)? = model.store.state, !tournament.isLadder, !snapshot.isLocked {
+        if model.store.canScore, case .tournament(let tournament)? = model.store.state, !tournament.isLadder, !snapshot.isLocked {
             VStack(spacing: 4) {
                 Text("Fix score").font(.system(size: 11)).foregroundStyle(.secondary)
                 ForEach(layout.order, id: \.self) { side in

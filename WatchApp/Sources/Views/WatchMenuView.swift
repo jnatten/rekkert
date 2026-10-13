@@ -45,13 +45,13 @@ struct WatchMenuView: View {
 
                 WatchWorkoutButton()
 
-                if isWinnerCourt {
+                if isWinnerCourt, model.store.canRunRounds {
                     action("End round", systemImage: "flag.pattern.checkered", tint: .orange) {
                         confirming = .endRound
                     }
                 }
                 if case .tournament(let tournament)? = model.store.state {
-                    if tournament.isLadder, let round = tournament.currentRound, !round.isCancelled, !round.isEnded {
+                    if model.store.canRunRounds, tournament.isLadder, let round = tournament.currentRound, !round.isCancelled, !round.isEnded {
                         if let clock = round.clock {
                             action(clock.isPaused ? "Resume" : "Pause", systemImage: clock.isPaused ? "play.fill" : "pause.fill") {
                                 WKInterfaceDevice.current().play(.click)
@@ -68,10 +68,12 @@ struct WatchMenuView: View {
                             }
                         }
                     }
-                    action("Next round", systemImage: "arrow.right.circle.fill", tint: .blue) {
-                        confirming = .nextRound
+                    if model.store.canRunRounds {
+                        action("Next round", systemImage: "arrow.right.circle.fill", tint: .blue) {
+                            confirming = .nextRound
+                        }
+                        .disabled(tournament.isLadder && !tournament.canDrawNextRound)
                     }
-                    .disabled(tournament.isLadder && !tournament.canDrawNextRound)
                     action(
                         "Me: \(model.store.me.flatMap(tournament.player)?.name ?? "Not set")",
                         systemImage: "person.crop.circle"
@@ -88,7 +90,7 @@ struct WatchMenuView: View {
                         }
                     }
                 }
-                if let round = friendlyRound {
+                if model.store.canRunRounds, let round = friendlyRound {
                     // One button, whichever the round is asking for: draw the next one when
                     // this is over, stop this one where it stands while it is not.
                     if round.isFinished {

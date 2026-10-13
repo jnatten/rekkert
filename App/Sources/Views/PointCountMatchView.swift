@@ -17,6 +17,7 @@ struct PointCountMatchView: View {
                         ScoreboardView(
                             snapshot: snapshot,
                             layout: .phone(snapshot, model.store.display),
+                            takesTaps: model.store.canScore,
                             onTap: { model.store.tap(team: $0) },
                             onUndo: { model.store.undoLast() }
                         )

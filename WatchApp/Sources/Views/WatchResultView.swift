@@ -53,7 +53,7 @@ struct WatchResultView: View {
                     .tint(tint)
                     .padding(.top, 4)
 
-                if let rewind = model.store.resultRewind {
+                if let rewind = model.store.resultRewind, model.store.canScore {
                     Button(rewind.undoesAPoint ? "Undo last point" : "Back to it") {
                         WKInterfaceDevice.current().play(.retry)
                         model.store.undoResult()

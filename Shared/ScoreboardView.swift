@@ -139,6 +139,7 @@ extension ScoreboardView where Badge == EmptyView {
         snapshot: ScoreboardSnapshot,
         compact: Bool = false,
         layout: ScoreboardLayout = ScoreboardLayout(isMirrored: false),
+        takesTaps: Bool = true,
         onTap: @escaping (TeamSide) -> Void,
         onUndo: @escaping () -> Void
     ) {
@@ -146,6 +147,7 @@ extension ScoreboardView where Badge == EmptyView {
             snapshot: snapshot,
             compact: compact,
             layout: layout,
+            takesTaps: takesTaps,
             onTap: onTap,
             onUndo: onUndo,
             badge: { EmptyView() }

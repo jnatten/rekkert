@@ -315,16 +315,18 @@ struct FullscreenScoreView: View {
                 .background(panel, in: .rect(cornerRadius: 18, style: .continuous))
             }
 
-            Button {
-                model.store.nextRound()
-                revealControls()
-            } label: {
-                Label("Start round \(round.index + 2)", systemImage: "play.fill")
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, 12)
-                    .background(.white, in: .capsule)
+            if model.store.canRunRounds {
+                Button {
+                    model.store.nextRound()
+                    revealControls()
+                } label: {
+                    Label("Start round \(round.index + 2)", systemImage: "play.fill")
+                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 12)
+                        .background(.white, in: .capsule)
+                }
             }
         }
     }

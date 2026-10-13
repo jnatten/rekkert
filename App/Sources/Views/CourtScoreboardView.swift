@@ -24,13 +24,16 @@ struct CourtScoreboardView: View {
                         ScoreboardView(
                             snapshot: snapshot,
                             layout: .phone(snapshot, model.store.display),
+                            takesTaps: model.store.canScore,
                             onTap: { model.store.tap(round: round, court: court, team: $0) },
                             onUndo: { model.store.undoLast(round: round, court: court) }
                         )
-                        if let tournament, tournament.isLadder {
-                            ladderEntry(snapshot, tournament: tournament)
-                        } else {
-                            entry(snapshot)
+                        if model.store.canScore {
+                            if let tournament, tournament.isLadder {
+                                ladderEntry(snapshot, tournament: tournament)
+                            } else {
+                                entry(snapshot)
+                            }
                         }
                     }
                     .ignoresSafeArea(edges: .bottom)
@@ -141,6 +144,7 @@ struct CourtScoreboardView: View {
                 Text("Left (ad)").tag(ServeCourt.ad)
             }
             .pickerStyle(.segmented)
+            .disabled(!model.store.canScore)
         }
         .frame(maxWidth: .infinity)
         .padding(12)

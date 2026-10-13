@@ -63,10 +63,12 @@ struct MatchOptionsMenu: View {
             Toggle(isOn: $announcer.isEnabled) {
                 Label("Call the score", systemImage: "speaker.wave.2")
             }
-            Button("Swap serving team", systemImage: "arrow.left.arrow.right") {
-                model.store.swapServingTeam(round: round, court: court)
+            if model.store.canScore {
+                Button("Swap serving team", systemImage: "arrow.left.arrow.right") {
+                    model.store.swapServingTeam(round: round, court: court)
+                }
             }
-            if snapshot?.canSwapServingPlayer == true {
+            if model.store.canScore, snapshot?.canSwapServingPlayer == true {
                 Button("Swap serving player", systemImage: "person.2.arrow.trianglehead.counterclockwise") {
                     model.store.swapServingPlayer(round: round, court: court)
                 }
@@ -74,7 +76,7 @@ struct MatchOptionsMenu: View {
             Button("Swap sides", systemImage: "rectangle.2.swap") {
                 model.store.toggleScoreboardMirrored()
             }
-            if let changeEnds = model.store.state?.changeEnds {
+            if model.store.canRunRounds, let changeEnds = model.store.state?.changeEnds {
                 Picker(selection: Binding(get: { changeEnds }, set: { model.store.setChangeEnds($0) })) {
                     ForEach(ChangeEndsRule.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 } label: {

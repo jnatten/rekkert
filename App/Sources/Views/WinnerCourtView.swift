@@ -16,6 +16,7 @@ struct WinnerCourtView: View {
                         ScoreboardView(
                             snapshot: snapshot,
                             layout: .phone(snapshot, model.store.display),
+                            takesTaps: model.store.canScore,
                             onTap: { model.store.tap(team: $0) },
                             onUndo: { model.store.undoLast() }
                         )
@@ -94,15 +95,17 @@ struct WinnerCourtView: View {
 
     private func footer(_ session: WinnerCourtSession) -> some View {
         VStack(spacing: 12) {
-            Button {
-                model.store.endRound()
-            } label: {
-                Label("Whistle — end round \(session.roundNumber)", systemImage: "flag.pattern.checkered")
-                    .frame(maxWidth: .infinity)
+            if model.store.canRunRounds {
+                Button {
+                    model.store.endRound()
+                } label: {
+                    Label("Whistle — end round \(session.roundNumber)", systemImage: "flag.pattern.checkered")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(session.score.games.total == 0 && session.score.points.total == 0)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(session.score.games.total == 0 && session.score.points.total == 0)
 
             tally(session)
         }
@@ -146,6 +149,7 @@ struct WinnerCourtView: View {
                 Text("Left (ad)").tag(ServeCourt.ad)
             }
             .pickerStyle(.segmented)
+            .disabled(!model.store.canScore)
         }
         .frame(maxWidth: .infinity)
         .padding(12)

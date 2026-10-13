@@ -19,6 +19,7 @@ struct FriendlyMatchView: View {
                         ScoreboardView(
                             snapshot: snapshot,
                             layout: .phone(snapshot, model.store.display),
+                            takesTaps: model.store.canScore,
                             // Addressed to the round on screen, so a tap that arrives late
                             // lands where it was aimed rather than on whatever is current.
                             onTap: { model.store.tap(round: session.currentIndex, court: 0, team: $0) },
@@ -36,8 +37,10 @@ struct FriendlyMatchView: View {
                     } description: {
                         Text("The first round was taken back.")
                     } actions: {
-                        Button("Start round 1", systemImage: "play.fill") { model.store.nextRound() }
-                            .buttonStyle(.borderedProminent)
+                        if model.store.canRunRounds {
+                            Button("Start round 1", systemImage: "play.fill") { model.store.nextRound() }
+                                .buttonStyle(.borderedProminent)
+                        }
                     }
                 }
             }
@@ -127,19 +130,22 @@ struct FriendlyMatchView: View {
                 if round.isFinished {
                     upNext(session, after: round)
                 } else {
-                    Button {
-                        model.store.endRound()
-                    } label: {
-                        Label("End round \(round.index + 1) now", systemImage: "flag.pattern.checkered")
-                            .frame(maxWidth: .infinity)
+                    if model.store.canRunRounds {
+                        Button {
+                            model.store.endRound()
+                        } label: {
+                            Label("End round \(round.index + 1) now", systemImage: "flag.pattern.checkered")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                        .disabled(!round.wasPlayed)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .disabled(!round.wasPlayed)
 
                     bench(session, in: round)
                 }
             }
+            .frame(maxWidth: .infinity)
             .padding(.horizontal)
             .padding(.top, 14)
             .padding(.bottom, 34)
@@ -172,14 +178,16 @@ struct FriendlyMatchView: View {
                 }
             }
 
-            Button {
-                model.store.nextRound()
-            } label: {
-                Label("Start round \(round.index + 2)", systemImage: "play.fill")
-                    .frame(maxWidth: .infinity)
+            if model.store.canRunRounds {
+                Button {
+                    model.store.nextRound()
+                } label: {
+                    Label("Start round \(round.index + 2)", systemImage: "play.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
         }
     }
 
@@ -205,6 +213,7 @@ struct FriendlyMatchView: View {
                 Text("Left (ad)").tag(ServeCourt.ad)
             }
             .pickerStyle(.segmented)
+            .disabled(!model.store.canScore)
         }
         .frame(maxWidth: .infinity)
         .padding(12)

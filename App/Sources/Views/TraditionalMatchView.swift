@@ -15,6 +15,7 @@ struct TraditionalMatchView: View {
                         ScoreboardView(
                             snapshot: snapshot,
                             layout: .phone(snapshot, model.store.display),
+                            takesTaps: model.store.canScore,
                             onTap: { model.store.tap(team: $0) },
                             onUndo: { model.store.undoLast() }
                         )
@@ -95,6 +96,7 @@ struct TraditionalMatchView: View {
                 Text("Left (ad)").tag(ServeCourt.ad)
             }
             .pickerStyle(.segmented)
+            .disabled(!model.store.canScore)
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 12)

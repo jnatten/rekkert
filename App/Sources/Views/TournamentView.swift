@@ -160,21 +160,23 @@ struct CourtListView: View {
                     Text("Time").font(.subheadline.bold()).foregroundStyle(.orange)
                 }
                 Spacer()
-                Group {
-                    if clock.isPaused {
-                        Button("Resume", systemImage: "play.fill") { model.store.resumeRound() }
-                    } else {
-                        Button("Pause", systemImage: "pause.fill") { model.store.pauseRound() }
-                    }
-                    Menu("Add time", systemImage: "plus.circle") {
-                        ForEach([1, 2, 5], id: \.self) { minutes in
-                            Button("\(minutes) min") { model.store.snoozeRound(minutes: minutes) }
+                if model.store.canRunRounds {
+                    Group {
+                        if clock.isPaused {
+                            Button("Resume", systemImage: "play.fill") { model.store.resumeRound() }
+                        } else {
+                            Button("Pause", systemImage: "pause.fill") { model.store.pauseRound() }
+                        }
+                        Menu("Add time", systemImage: "plus.circle") {
+                            ForEach([1, 2, 5], id: \.self) { minutes in
+                                Button("\(minutes) min") { model.store.snoozeRound(minutes: minutes) }
+                            }
                         }
                     }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .font(.title2)
                 }
-                .labelStyle(.iconOnly)
-                .buttonStyle(.borderless)
-                .font(.title2)
             }
         }
     }
@@ -208,8 +210,10 @@ struct CourtListView: View {
                 Text(ladderFooter(tournament, round))
             } else if round.matches.contains(where: \.isConfirmed) {
                 Text("This round is finished. Reopen it to change a score.")
-            } else {
+            } else if model.store.canScore {
                 Text("Tap a court to set its score, or open the scoreboard to count point by point.")
+            } else {
+                Text("Tap a court to follow its score.")
             }
         }
 
@@ -217,7 +221,7 @@ struct CourtListView: View {
             Section {
                 Text(round.sitOuts.compactMap { tournament.player($0)?.name }.joined(separator: ", "))
                     .foregroundStyle(.secondary)
-                if round.index == tournament.latestRoundIndex, tournament.canRedrawCurrentRound {
+                if model.store.canRunRounds, round.index == tournament.latestRoundIndex, tournament.canRedrawCurrentRound {
                     Button("Change who sits out", systemImage: "arrow.triangle.2.circlepath") {
                         choosingSitOuts = true
                     }
@@ -225,7 +229,7 @@ struct CourtListView: View {
             } header: {
                 Text("Sitting out")
             } footer: {
-                if round.index == tournament.latestRoundIndex, tournament.canRedrawCurrentRound {
+                if model.store.canRunRounds, round.index == tournament.latestRoundIndex, tournament.canRedrawCurrentRound {
                     Text("Somebody late? Pick who sits out before the first point and the round is drawn again around them.")
                 }
             }
@@ -265,53 +269,59 @@ struct CourtListView: View {
         let round = tournament.round(at: index)
 
         Section {
-            if let round, tournament.isLadder, round.index == tournament.latestRoundIndex, !round.isCancelled {
-                if !round.isEnded, !tournament.isDone(round) {
-                    Button("End round \(round.index + 1)", systemImage: "flag.pattern.checkered") {
-                        showingWhistle = true
+            if model.store.canRunRounds {
+                if let round, tournament.isLadder, round.index == tournament.latestRoundIndex, !round.isCancelled {
+                    if !round.isEnded, !tournament.isDone(round) {
+                        Button("End round \(round.index + 1)", systemImage: "flag.pattern.checkered") {
+                            showingWhistle = true
+                        }
                     }
-                }
-                Button("Draw round \(round.index + 2)", systemImage: "arrow.right.circle.fill") {
-                    model.store.nextRound()
-                    browsing = nil
-                }
-                .disabled(!tournament.canDrawNextRound)
-
-                Button("Cancel this round", systemImage: "xmark.circle", role: .destructive) {
-                    showingCancel = true
-                }
-            } else if let round {
-                if round.isCancelled, round.index == tournament.latestRoundIndex {
-                    Button("Draw the next round", systemImage: "arrow.right.circle.fill") {
+                    Button("Draw round \(round.index + 2)", systemImage: "arrow.right.circle.fill") {
                         model.store.nextRound()
                         browsing = nil
                     }
-                    Button("Restore this round", systemImage: "arrow.uturn.backward.circle") {
-                        model.store.setRoundCancelled(round.index, false)
-                    }
-                } else if round.matches.contains(where: \.isConfirmed), !round.isCancelled {
-                    Button("Reopen this round", systemImage: "lock.open") {
-                        model.store.setRoundConfirmed(round.index, false)
-                    }
-                } else if round.index < tournament.latestRoundIndex {
-                    Button("Back to the current round", systemImage: "forward.end") {
-                        browsing = nil
-                    }
-                } else {
-                    Button("Finish round and draw the next", systemImage: "arrow.right.circle.fill") {
-                        model.store.setRoundConfirmed(round.index, true)
-                        model.store.nextRound()
-                        browsing = nil
-                    }
-                    .disabled(!tournament.isDone(round))
+                    .disabled(!tournament.canDrawNextRound)
 
                     Button("Cancel this round", systemImage: "xmark.circle", role: .destructive) {
                         showingCancel = true
                     }
+                } else if let round {
+                    if round.isCancelled, round.index == tournament.latestRoundIndex {
+                        Button("Draw the next round", systemImage: "arrow.right.circle.fill") {
+                            model.store.nextRound()
+                            browsing = nil
+                        }
+                        Button("Restore this round", systemImage: "arrow.uturn.backward.circle") {
+                            model.store.setRoundCancelled(round.index, false)
+                        }
+                    } else if round.matches.contains(where: \.isConfirmed), !round.isCancelled {
+                        Button("Reopen this round", systemImage: "lock.open") {
+                            model.store.setRoundConfirmed(round.index, false)
+                        }
+                    } else if round.index < tournament.latestRoundIndex {
+                        Button("Back to the current round", systemImage: "forward.end") {
+                            browsing = nil
+                        }
+                    } else {
+                        Button("Finish round and draw the next", systemImage: "arrow.right.circle.fill") {
+                            model.store.setRoundConfirmed(round.index, true)
+                            model.store.nextRound()
+                            browsing = nil
+                        }
+                        .disabled(!tournament.isDone(round))
+
+                        Button("Cancel this round", systemImage: "xmark.circle", role: .destructive) {
+                            showingCancel = true
+                        }
+                    }
+                } else {
+                    Button("Draw the first round", systemImage: "dice") { model.store.nextRound() }
+                        .disabled(tournament.playableCourts < 1)
                 }
-            } else {
-                Button("Draw the first round", systemImage: "dice") { model.store.nextRound() }
-                    .disabled(tournament.playableCourts < 1)
+            } else if let round, round.index < tournament.latestRoundIndex {
+                Button("Back to the current round", systemImage: "forward.end") {
+                    browsing = nil
+                }
             }
 
             if model.store.canEndSession {

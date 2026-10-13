@@ -158,7 +158,7 @@ struct MatchResultView: View {
             .controlSize(.large)
             .tint(tint)
 
-            if let rewind = model.store.resultRewind {
+            if let rewind = model.store.resultRewind, model.store.canScore {
                 Button(
                     rewind.undoesAPoint ? "Undo last point" : "Back to the match",
                     systemImage: "arrow.uturn.backward"
