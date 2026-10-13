@@ -18,7 +18,7 @@ final class RoundAlarmFollower {
     @ObservationIgnored private var timer: Task<Void, Never>?
     @ObservationIgnored private var following: Task<Void, Never>?
     @ObservationIgnored private var notified: RoundAlarm.Bell?
-    @ObservationIgnored private var hasAskedToNotify = false
+    @ObservationIgnored private var asking: Task<Bool, Never>?
 
     private struct Situation: Sendable {
         var session: UUID
@@ -74,25 +74,53 @@ final class RoundAlarmFollower {
     /// away. The phone and the watch name it alike, so a wrist that gets both shows one.
     private func notify(_ bell: RoundAlarm.Bell?) {
         guard bell != notified else { return }
-        let center = UNUserNotificationCenter.current()
-        if let notified { center.removePendingNotificationRequests(withIdentifiers: [Self.identifier(notified)]) }
+        if let notified {
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Self.identifier(notified)])
+        }
         notified = bell
         guard let bell, bell.endsAt > .now else { return }
-
-        if !hasAskedToNotify, !Self.isDemo {
-            hasAskedToNotify = true
-            center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        Task {
+            // Added before the first answer it would be turned away, and by the time there is
+            // one the round may have been snoozed or paused: only the bell still standing goes.
+            guard await mayNotify(), notified == bell, bell.endsAt > .now else { return }
+            try? await UNUserNotificationCenter.current().add(Self.request(for: bell))
         }
+    }
+
+    /// Asked the first time a device sees a timed round. Shared while the question is up, so
+    /// a snooze before the answer waits on the same one.
+    private func mayNotify() async -> Bool {
+        let question = asking ?? Task { await Self.askToNotify() }
+        asking = question
+        let answer = await question.value
+        asking = nil
+        return answer
+    }
+
+    nonisolated private static func askToNotify() async -> Bool {
+        let center = UNUserNotificationCenter.current()
+        switch await center.notificationSettings().authorizationStatus {
+        case .notDetermined:
+            guard !isDemo else { return false }
+            return (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
+        case .denied:
+            return false
+        default:
+            return true
+        }
+    }
+
+    nonisolated private static func request(for bell: RoundAlarm.Bell) -> UNNotificationRequest {
         let content = UNMutableNotificationContent()
         content.title = "Time"
         content.body = "Round \(bell.round + 1) is up. Finish the point, then end the round."
         content.sound = .default
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, bell.endsAt.timeIntervalSinceNow), repeats: false)
-        center.add(UNNotificationRequest(identifier: Self.identifier(bell), content: content, trigger: trigger))
+        return UNNotificationRequest(identifier: identifier(bell), content: content, trigger: trigger)
     }
 
     /// A demo is screenshotted, and a permission prompt over it is nothing simctl can tap away.
-    private static var isDemo: Bool {
+    nonisolated private static var isDemo: Bool {
         #if DEBUG
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo")
         #else
@@ -100,7 +128,7 @@ final class RoundAlarmFollower {
         #endif
     }
 
-    private static func identifier(_ bell: RoundAlarm.Bell) -> String {
+    nonisolated private static func identifier(_ bell: RoundAlarm.Bell) -> String {
         "round-\(bell.session.uuidString)-\(bell.round)"
     }
 }
