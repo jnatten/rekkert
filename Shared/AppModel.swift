@@ -557,10 +557,16 @@ final class AppModel {
         #if os(iOS)
         // `-rekkert-share-host 482915` starts sharing on a pinned code, so two simulators can
         // be pointed at each other from a script.
+        if let index = arguments.firstIndex(of: "-rekkert-share-access"),
+           index + 1 < arguments.count,
+           let access = ShareAccess(rawValue: arguments[index + 1]) {
+            store.setDefaultAccess(access)
+        }
         if let index = arguments.firstIndex(of: "-rekkert-share-host"),
            index + 1 < arguments.count,
            let code = SessionCode(arguments[index + 1]) {
             sharing.host(code: code)
+            if arguments.contains("-rekkert-demo-share-sheet") { showingShareCode = true }
         }
         if arguments.contains("-rekkert-demo-blackout") {
             fullscreen.isBlackout = true

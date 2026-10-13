@@ -749,6 +749,10 @@ match, everybody's `active.json` holding the same events, then the guest killed 
 scores and brought back to catch up from the log. `--no-build` reuses the last build, `--keep`
 leaves the simulators up.
 
+`-rekkert-share-access readOnly|score|full` sets what phones joining the host get,
+`-rekkert-demo-share-sheet` opens the host's share sheet, and `-rekkert-share-as NAME` answers
+the guest's "Who are you?" with that name.
+
 Four things the Simulator cannot show you. The peer-to-peer radio path — there is no AWDL
 interface, so `includePeerToPeer` is quietly a no-op — and the iOS local-network permission
 prompt. And `BluetoothTransport`, which is inert there: the simulator runs no `bluetoothd`, so

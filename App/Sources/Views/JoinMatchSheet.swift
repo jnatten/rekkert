@@ -70,6 +70,9 @@ struct JoinMatchSheet: View {
             // Keyed on the join concluding rather than on the role changing, which it
             // does not for a guest walking back in. The scoreboard is already behind this.
             guard !joining, model.store.role == .guest, !hasFailed else { return }
+            #if DEBUG
+            if let name = DemoLaunch.joinAs { return identify(as: name) }
+            #endif
             let names = model.store.state?.playerNames ?? []
             if let identity = model.store.identity, names.contains(identity) {
                 model.store.identify(as: identity)

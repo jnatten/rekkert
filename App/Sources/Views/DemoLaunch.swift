@@ -115,6 +115,7 @@ enum DemoLaunch {
     /// them two simulators can be driven through the whole flow without a tap.
     static var hostCode: String? { value(for: "-rekkert-share-host") }
     static var joinCode: String? { value(for: "-rekkert-share-join") }
+    static var joinAs: String? { value(for: "-rekkert-share-as") }
 
     static var browseRound: Int? {
         value(for: "-rekkert-demo-browse-round").flatMap(Int.init)
