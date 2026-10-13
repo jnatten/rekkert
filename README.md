@@ -349,6 +349,29 @@ Hosting stays on the phone. A host advertises over Bluetooth, and a watch has no
 advertise anything — `CBPeripheralManager` does not exist on watchOS — so there is no version
 of this where the code is read out from a wrist.
 
+## Who may do what
+
+Whoever joins can score, correct and run the rounds, as they always could. The host can
+narrow that from the share sheet. **New phones join as** sets what a phone gets on arrival —
+*Full access*, *Only score* or *Read-only* — and is remembered for the next time you share.
+Every phone that has joined is listed under it, by the player its owner said they were, and
+each can be given a level of its own or put back on the default.
+
+*Only score* is everything on a court: points, a typed or stepped score, the serve and the
+deciding point's side, and taking those back. Not the whistle, drawing or confirming a round,
+the round clock, who sits out or the change-ends rule; and an Undo that would take back one of
+those is not offered. *Read-only* follows the match and changes nothing. Finishing it stays
+the host's whatever the level, as before. A guest's watch goes by its phone's level.
+
+Joining asks **Who are you?** once the match is on the phone, offering its players and *Just
+watching*; the match menu changes the answer later, and in a tournament it is the same choice
+as who you are playing as. The name is kept for the host's next match on the same code. A
+phone that has not said is listed as Phone 1, Phone 2 and so on.
+
+It is a convention rather than a lock, like the host's sole right to finish: each phone hides
+what it has been told it may not do, and nothing stops a modified one. A phone on an older
+Rekkert never hears the levels, is not listed, and can do what it always could.
+
 ## Workouts
 
 The watch can record a workout while you play. It is a button — on the watch's menu page,

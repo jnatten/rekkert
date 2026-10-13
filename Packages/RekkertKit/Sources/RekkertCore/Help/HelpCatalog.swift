@@ -707,7 +707,7 @@ public enum HelpCatalog {
             symbol: "person.2.wave.2",
             whereToFind: "Match options (•••), or Join a match on Home",
             picture: .phoneButtons,
-            readme: ["Joining with the camera", "Joining from the wrist"],
+            readme: ["Joining with the camera", "Joining from the wrist", "Who may do what"],
             items: [
                 HelpItem(
                     "Share this match",
@@ -731,6 +731,24 @@ public enum HelpCatalog {
                     symbol: "arrow.right.circle",
                     what: "Gets you back on a shared match, or onto its new code.",
                     example: "The host's phone restarted and shows a new code."
+                ),
+                HelpItem(
+                    "New phones join as",
+                    what: "Full access, only score, or read-only, for phones that join.",
+                    example: "Spectators can follow the score without touching it.",
+                    only: "Host only"
+                ),
+                HelpItem(
+                    "A phone's own access",
+                    what: "Each phone on the share sheet can be given a level of its own.",
+                    example: "The captain on court 2 runs the rounds; everybody else scores.",
+                    only: "Host only"
+                ),
+                HelpItem(
+                    "Who are you?",
+                    symbol: "person.crop.circle",
+                    what: "Tells the host which player's phone this is.",
+                    example: "The host sees Ada rather than Phone 2."
                 ),
                 HelpItem(
                     "Use my score everywhere",
