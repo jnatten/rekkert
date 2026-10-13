@@ -80,6 +80,21 @@ struct LadderWhistleTests {
         #expect(status(log, court: 1)?.winner == .b)
     }
 
+    /// The organiser blows the whistle, then goes round asking for the games.
+    @Test func gamesTypedInAfterTheWhistleSettleACourtNobodyKept() {
+        var log = ladderLog()
+        log.blowWhistle(from: phone)
+        #expect(status(log, court: 0)?.awaitsDecider == true)
+
+        log.append(.setScore(round: 0, court: 0, points: BySide(a: 5, b: 0)), from: phone)
+        #expect(status(log, court: 0)?.winner == .a)
+        log.append(.setScore(round: 0, court: 0, points: BySide(a: 5, b: 5)), from: phone)
+        #expect(status(log, court: 0)?.awaitsDecider == true, "level again: back to the deciding point")
+        log.append(.setScore(round: 0, court: 0, points: BySide(a: 5, b: 7)), from: phone)
+        #expect(status(log, court: 0)?.winner == .b)
+        #expect(status(log, court: 0)?.line == BySide(a: 5, b: 7))
+    }
+
     @Test func aMatchRoundWhistledEarlyGoesToWhoeverIsAhead() {
         var log = ladderLog(minutes: nil, rules: TraditionalRules(setsToWin: 2, gamesPerSet: 4, deuceRule: .goldenPoint))
         score(&log, court: 0, games(4, .a) + games(1, .b))

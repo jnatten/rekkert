@@ -91,22 +91,18 @@ struct CourtScoreboardView: View {
 
     // MARK: - Ladder
 
-    /// A timed court's games can be set by hand, for a court nobody kept. A match court is
-    /// only ever scored point by point.
+    /// A timed court's games can be set by hand, for a court nobody kept: after the whistle
+    /// too, settled or not, until the next round is drawn from it. A match court is only ever
+    /// scored point by point.
     @ViewBuilder
     private func ladderEntry(_ snapshot: ScoreboardSnapshot, tournament: Tournament) -> some View {
         let status = tournament.status(round: round, court: court)
-        let isTimed = tournament.ladder?.isTimed == true
+        let canSetGames = tournament.ladder?.isTimed == true && round == tournament.latestRoundIndex
+            && tournament.round(at: round)?.isCancelled == false
         if snapshot.isSuddenDeath, !snapshot.isLocked {
             suddenDeathBanner(snapshot, deciding: status?.awaitsDecider == true)
         }
-        if snapshot.isLocked {
-            panel {
-                Label("This court is settled.", systemImage: "lock")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        } else if status?.awaitsDecider != true, isTimed {
+        if canSetGames {
             panel {
                 Text("Games")
                     .font(.caption)
@@ -115,6 +111,12 @@ struct CourtScoreboardView: View {
                 ForEach(TeamSide.allCases, id: \.self) { side in
                     entryRow(side, snapshot: snapshot)
                 }
+            }
+        } else if snapshot.isLocked {
+            panel {
+                Label("This court is settled.", systemImage: "lock")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -223,7 +225,7 @@ struct CourtScoreboardView: View {
     private var current: BySide<Int> {
         if let draft { return draft }
         if let tournament, tournament.isLadder {
-            return tournament.round(at: round)?.matches.first { $0.courtIndex == court }?.games?.games ?? BySide(both: 0)
+            return tournament.status(round: round, court: court)?.line ?? BySide(both: 0)
         }
         return BySide(
             a: Int(snapshot?.primary.a ?? "0") ?? 0,

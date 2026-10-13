@@ -54,7 +54,8 @@ until the organiser blows the whistle. Then the game in progress on each court g
 whoever leads it, and a court still level on games plays one deciding point, its receivers
 picking the side. As a match, each court plays sets on the ordinary rules, and the next
 round is drawn once every court is won. A timed court nobody kept can have its games typed
-in, and a court nobody scored at all is settled by tapping whoever won its deciding point.
+in, before the whistle or after it, until the next round is drawn; one still level after the
+whistle is settled by tapping whoever won its deciding point.
 
 Players over the courts sit out as in Americano, fewest sit-outs first, and come back in on
 the bottom court; a fixed pair sits out together. Each round is drawn from how the one before

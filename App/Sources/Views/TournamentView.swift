@@ -341,9 +341,12 @@ struct CourtListView: View {
 
     private func ladderFooter(_ tournament: Tournament, _ round: Round) -> String {
         if round.isEnded {
+            let isTimed = tournament.ladder?.isTimed == true
             return tournament.isDone(round)
                 ? "Every court is settled. Winners go up a court, losers go down."
+                    + (isTimed ? " Tap a court to correct its games." : "")
                 : "Courts still level play one deciding point. Tap the court, then the side that wins it."
+                    + (isTimed ? " A court nobody kept can have its games typed in instead." : "")
         }
         return tournament.ladder?.isTimed == true
             ? "Tap a court to score it point by point, or to set its games."
