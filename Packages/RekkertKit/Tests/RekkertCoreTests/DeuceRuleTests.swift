@@ -56,6 +56,7 @@ struct DeuceRuleTests {
         let state = e.play(toDeuce)
         #expect(state.deuceCount == 1)
         #expect(e.isSuddenDeathPoint(state))
+        #expect(e.pointDisplay(state) == BySide(both: .golden))
 
         let won = e.scoringPoint(.b, in: state)
         #expect(won.games.b == 1)
@@ -68,14 +69,17 @@ struct DeuceRuleTests {
 
         #expect(state.deuceCount == 1)
         #expect(!e.isSuddenDeathPoint(state), "first deuce is played with advantage")
+        #expect(e.pointDisplay(state) == BySide(both: .forty))
 
         state = e.play([.a, .b], from: state)
         #expect(state.deuceCount == 2)
         #expect(!e.isSuddenDeathPoint(state), "second deuce is played with advantage")
+        #expect(e.pointDisplay(state) == BySide(both: .forty))
 
         state = e.play([.b, .a], from: state)
         #expect(state.deuceCount == 3)
         #expect(e.isSuddenDeathPoint(state), "third 40-40 is sudden death")
+        #expect(e.pointDisplay(state) == BySide(both: .golden))
 
         let won = e.scoringPoint(.a, in: state)
         #expect(won.games.a == 1)

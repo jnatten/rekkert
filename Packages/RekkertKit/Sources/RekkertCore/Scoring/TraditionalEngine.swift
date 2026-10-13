@@ -42,7 +42,7 @@ public struct TraditionalEngine: Sendable, Hashable {
             return BySide(a: .ladder(state.points.a), b: .ladder(state.points.b))
         }
         guard let leader = state.points.leader else {
-            return BySide(a: .forty, b: .forty)
+            return BySide(both: isSuddenDeathPoint(state) ? .golden : .forty)
         }
         var display = BySide<PointDisplay>(both: .forty)
         display[leader] = .advantage

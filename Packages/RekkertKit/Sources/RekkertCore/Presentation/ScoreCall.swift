@@ -47,7 +47,7 @@ public enum ScoreCaller {
         if serving == .advantage || receiving == .advantage {
             let leader = serving == .advantage ? server : server.other
             phrase = "Advantage \(snapshot.teamNames[leader])"
-        } else if serving == .forty, receiving == .forty {
+        } else if serving == receiving, serving == .forty || serving == .golden {
             phrase = "Deuce"
         } else if serving == receiving {
             phrase = sentence("\(serving.spoken) all")

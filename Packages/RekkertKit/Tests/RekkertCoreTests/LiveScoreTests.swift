@@ -57,7 +57,7 @@ struct LiveScoreTests {
         let state = match(TraditionalRules(deuceRule: .goldenPoint)) { $0.play(repeated([.a, .b], 3)) }
         let board = try #require(LiveScore.make(from: state, display: DisplayPreferences()).boards.first)
         #expect(board.isSuddenDeath)
-        #expect(board.points == BySide(a: "40", b: "40"))
+        #expect(board.points == BySide(a: "G", b: "G"))
     }
 
     @Test func theLeftSideFollowsThePhonesOwnBoard() {

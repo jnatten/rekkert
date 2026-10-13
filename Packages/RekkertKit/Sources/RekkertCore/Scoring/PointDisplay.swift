@@ -4,6 +4,7 @@ public enum PointDisplay: Hashable, Sendable {
     case thirty
     case forty
     case advantage
+    case golden
     case count(Int)
 
     public var text: String {
@@ -13,6 +14,7 @@ public enum PointDisplay: Hashable, Sendable {
         case .thirty: "30"
         case .forty: "40"
         case .advantage: "AD"
+        case .golden: "G"
         case .count(let value): String(value)
         }
     }
@@ -26,6 +28,7 @@ public enum PointDisplay: Hashable, Sendable {
         case .thirty: "thirty"
         case .forty: "forty"
         case .advantage: "advantage"
+        case .golden: "golden point"
         case .count(let value): String(value)
         }
     }
