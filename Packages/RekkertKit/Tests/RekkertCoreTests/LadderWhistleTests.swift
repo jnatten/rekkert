@@ -95,6 +95,20 @@ struct LadderWhistleTests {
         #expect(status(log, court: 0)?.line == BySide(a: 5, b: 7))
     }
 
+    @Test func typingInTheGamesACourtAlreadyShowsLeavesItsDecidingPointAlone() {
+        var log = ladderLog()
+        log.blowWhistle(from: phone)
+        log.append(.chooseServeSide(.ad, round: 0, court: 0), from: phone)
+        log.append(.setScore(round: 0, court: 0, points: BySide(a: 0, b: 0)), from: phone)
+        #expect(board(log, court: 0)?.servingCourt == .ad, "the receivers' pick stands")
+
+        score(&log, court: 0, [.b], from: phone)
+        log.append(.setScore(round: 0, court: 0, points: BySide(a: 0, b: 0)), from: phone)
+        #expect(status(log, court: 0)?.winner == .b)
+        log.append(.setScore(round: 0, court: 0, points: BySide(a: 1, b: 0)), from: phone)
+        #expect(status(log, court: 0)?.winner == .a, "other games still settle it afresh")
+    }
+
     @Test func aMatchRoundWhistledEarlyGoesToWhoeverIsAhead() {
         var log = ladderLog(minutes: nil, rules: TraditionalRules(setsToWin: 2, gamesPerSet: 4, deuceRule: .goldenPoint))
         score(&log, court: 0, games(4, .a) + games(1, .b))

@@ -35,10 +35,13 @@ public enum SessionReducer {
         case .setScore(let round, let court, let points):
             mutateCourt(round: round, court: court, in: &state) { engine, match in
                 match.state = engine.settingScore(points, in: match.state)
-            } traditional: { _ in } ladder: { rules, _, _, match in
-                guard rules.isTimed else { return }
+            } traditional: { _ in } ladder: { rules, status, isEnded, match in
+                let typed = BySide(a: max(0, points.a), b: max(0, points.b))
+                // After the whistle the games already shown, typed in again, keep the deciding
+                // point that settled them.
+                guard rules.isTimed, !(isEnded && status.line == typed) else { return }
                 var games = match.games ?? TraditionalState()
-                games.games = BySide(a: max(0, points.a), b: max(0, points.b))
+                games.games = typed
                 games.points = BySide(both: 0)
                 games.deuceCount = 0
                 games.suddenDeathCourt = nil
