@@ -16,28 +16,37 @@ struct JoinMatchSheet: View {
     /// code opens it while still looking for the old one, and was shown that search, not a field.
     @State private var submitted = false
     @State private var scanning = false
+    @State private var choosingWho = false
     @FocusState private var typing: Bool
 
     var body: some View {
         NavigationStack {
             Group {
-                switch submitted ? model.sharing.phase : .off {
-                case .searching: waiting("Looking for the match…")
-                case .joined: waiting("Joined. Waiting for the match…")
-                case .failed(let failure): trouble(failure)
-                default: entry
+                if choosingWho {
+                    whoAreYou
+                } else {
+                    switch submitted ? model.sharing.phase : .off {
+                    case .searching: waiting("Looking for the match…")
+                    case .joined: waiting("Joined. Waiting for the match…")
+                    case .failed(let failure): trouble(failure)
+                    default: entry
+                    }
                 }
             }
-            .navigationTitle("Join a match")
+            .navigationTitle(choosingWho ? "Who are you?" : "Join a match")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    // Not `stop()`, which for a guest back from a relaunch would leave the
-                    // match it still holds. And only a join sent from here: a guest that opened
-                    // this and thought better of it goes on looking for the host it had.
-                    Button("Cancel") {
-                        if submitted { model.sharing.cancelJoining() }
-                        dismiss()
+                    if choosingWho {
+                        Button("Skip") { dismiss() }
+                    } else {
+                        // Not `stop()`, which for a guest back from a relaunch would leave the
+                        // match it still holds. And only a join sent from here: a guest that opened
+                        // this and thought better of it goes on looking for the host it had.
+                        Button("Cancel") {
+                            if submitted { model.sharing.cancelJoining() }
+                            dismiss()
+                        }
                     }
                 }
             }
@@ -60,13 +69,42 @@ struct JoinMatchSheet: View {
         .onChange(of: model.store.isJoining) { _, joining in
             // Keyed on the join concluding rather than on the role changing, which it
             // does not for a guest walking back in. The scoreboard is already behind this.
-            if !joining, model.store.role == .guest, !hasFailed { dismiss() }
+            guard !joining, model.store.role == .guest, !hasFailed else { return }
+            let names = model.store.state?.playerNames ?? []
+            if let identity = model.store.identity, names.contains(identity) {
+                model.store.identify(as: identity)
+                dismiss()
+            } else if names.isEmpty {
+                dismiss()
+            } else {
+                choosingWho = true
+            }
         }
         .onDisappear {
             // Swiped away mid-search: a search left running would conclude with nobody
             // watching, or make a phone that goes on to share a guest of its own guests.
             if submitted, model.store.isJoining { model.sharing.cancelJoining() }
         }
+    }
+
+    private var whoAreYou: some View {
+        Form {
+            Section {
+                ForEach(model.store.state?.playerNames ?? [], id: \.self) { name in
+                    Button(name) { identify(as: name) }
+                }
+            } footer: {
+                Text("The host sees your name beside your phone, to decide what it may do.")
+            }
+            Section {
+                Button("Just watching") { identify(as: nil) }
+            }
+        }
+    }
+
+    private func identify(as name: String?) {
+        model.store.identify(as: name)
+        dismiss()
     }
 
     private var hasFailed: Bool {

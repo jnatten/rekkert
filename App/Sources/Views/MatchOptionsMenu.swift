@@ -148,5 +148,42 @@ struct SharingMenuItems: View {
                 model.showingJoin = true
             }
         }
+        if model.store.role == .guest {
+            GuestMenuItems()
+        }
+    }
+}
+
+private struct GuestMenuItems: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if let note = model.store.access.guestNote {
+            Text(note)
+        }
+        // A tournament asks who you are playing as already, and that answer is this one.
+        if let names = model.store.state?.playerNames, !names.isEmpty, model.store.state?.isTournament == false {
+            Picker("Who are you?", systemImage: "person.crop.circle", selection: identity) {
+                Text("Just watching").tag(String?.none)
+                ForEach(names, id: \.self) { name in
+                    Text(name).tag(Optional(name))
+                }
+            }
+            .pickerStyle(.menu)
+        }
+    }
+
+    private var identity: Binding<String?> {
+        Binding(get: { model.store.identity }, set: { model.store.identify(as: $0) })
+    }
+}
+
+extension ShareAccess {
+    var guestNote: String? {
+        switch self {
+        case .readOnly: "The host lets you follow the score, not keep it"
+        case .score: "The host lets you keep the score, nothing else"
+        case .full: nil
+        }
     }
 }

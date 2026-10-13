@@ -72,8 +72,8 @@ struct CourtListView: View {
                     Menu("Tournament options", systemImage: "ellipsis.circle") {
                         SharingMenuItems()
                         if let tournament = TournamentView.tournament(model) {
-                            // Only the watch acts on it: your court buzzes, and your team
-                            // follows you through the draw.
+                            // The watch acts on it: your court buzzes, and your team follows you
+                            // through the draw. On somebody else's match it is who the host sees.
                             Picker("I'm playing as", systemImage: "person.crop.circle", selection: me) {
                                 Text("Nobody").tag(PlayerID?.none)
                                 ForEach(tournament.players) { player in
