@@ -48,7 +48,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         /// Somebody else's phone: the match, and nothing personal.
         public static let sharedSession = Scope(isDurable: false) { wire in
             switch wire {
-            case .hello, .events, .snapshot, .retired: true
+            case .hello, .events, .snapshot, .retired, .access, .guestCard: true
             // Saved setups and which side is blue belong to whoever's phone this is. The
             // whistle is between a phone and its own watch, and says nothing to anyone else.
             // Neither does what somebody's heart is doing: a workout is between a wrist and
@@ -215,11 +215,11 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
     /// Whether a live send that missed its moment is still worth delivering late.
     static func keepsOverDelay(_ wire: Wire) -> Bool {
         switch wire {
-        case .events, .snapshot, .retired, .left, .role, .presets, .display, .haptics, .displaced: true
+        case .events, .snapshot, .retired, .left, .role, .presets, .display, .haptics, .displaced, .access: true
         case .workout(.finished), .workout(.series), .workout(.rated): true
         case .workout(.stop), .workout(.pause), .workout(.resume), .workout(.running),
              .workout(.paused), .workout(.idle), .workout(.skipped): false
-        case .hello, .sharing: false
+        case .hello, .sharing, .guestCard: false
         }
     }
 

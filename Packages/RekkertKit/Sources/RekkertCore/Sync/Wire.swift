@@ -149,6 +149,11 @@ public enum Wire: Codable, Sendable, Hashable {
     /// keeps no history, so this is the only way what was played on it reaches one. Absent from
     /// older builds, which cannot read it and drop it.
     case displaced(MatchLog)
+    /// What each phone on the code may do. Host to every guest, and a guest's phone to its own
+    /// watch. Dropped by older builds, which go on allowing everything.
+    case access(ShareAccessTable)
+    /// Guest's phone to host: who it is, so the host can tell the phones on its code apart.
+    case guestCard(GuestCard)
 
     public func encoded() throws -> Data {
         try JSONCoding.encoder.encode(self)

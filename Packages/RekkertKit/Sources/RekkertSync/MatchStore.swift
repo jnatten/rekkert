@@ -31,6 +31,10 @@ public final class MatchStore {
     /// When the watch buzzes for a point. Shared so either device can set it; only the watch
     /// acts on it, having the only wrist between them.
     public private(set) var haptics = HapticPreferences()
+    public private(set) var accessTable: ShareAccessTable?
+    public private(set) var guests: [GuestCard]
+    public private(set) var identity: String?
+    public private(set) var defaultAccess: ShareAccess
     /// One point, just played, on a board that just moved. Everything that is not that is
     /// filtered out here rather than left to the listener — see `announce(_:before:after:)`.
     @ObservationIgnored public var onPoint: ((ScoredPoint) -> Void)?
@@ -153,6 +157,10 @@ public final class MatchStore {
         self.leftSessionID = session?.leftSessionID
         self.counterpartLeftSessionID = session?.counterpartLeftSessionID
         self.pairedDevice = session?.pairedDevice
+        self.accessTable = session?.access
+        self.guests = session?.guests ?? []
+        self.identity = session?.identity
+        self.defaultAccess = store?.loadShareAccess() ?? .full
         self.device = device
         self.transport = transport
         self.store = store
@@ -180,35 +188,38 @@ public final class MatchStore {
         announceBegan()
     }
     public func tap(round: Int = 0, court: Int = 0, team: TeamSide) {
+        guard canScore else { return }
         record(.point(round: round, court: court, team: team))
     }
 
     public func setScore(round: Int = 0, court: Int, points: BySide<Int>) {
+        guard canScore else { return }
         record(.setScore(round: round, court: court, points: points))
     }
 
     public func chooseServeSide(_ side: ServeCourt, round: Int? = nil, court: Int? = nil) {
+        guard canScore else { return }
         record(.chooseServeSide(side, round: round, court: court))
     }
 
     /// Hands service to the other team, each side keeping its own first server. Sending the
     /// resulting order rather than "swap" means two devices correcting it together agree.
     public func swapServingTeam(round: Int = 0, court: Int = 0) {
-        guard let order = state?.serveOrder(round: round, court: court) else { return }
+        guard canScore, let order = state?.serveOrder(round: round, court: court) else { return }
         record(.setServeOrder(round: round, court: court, order: order.swappingTeams()))
     }
 
     /// The other partner on the serving side takes the serve — and, since partners never
     /// serve back to back, every later turn of that side's.
     public func swapServingPlayer(round: Int = 0, court: Int = 0) {
-        guard let order = state?.serveOrder(round: round, court: court),
+        guard canScore, let order = state?.serveOrder(round: round, court: court),
               let serving = state?.serve(round: round, court: court)?.slot.team else { return }
         record(.setServeOrder(round: round, court: court, order: order.swappingPlayers(of: serving)))
     }
 
     /// Recorded rather than sent through `configure`, which would reset the board's flip.
     public func setChangeEnds(_ rule: ChangeEndsRule) {
-        guard let current = state?.changeEnds, current != rule else { return }
+        guard canRunRounds, let current = state?.changeEnds, current != rule else { return }
         switch state {
         case .traditional(var session):
             session.rules.changeEnds = rule
@@ -222,15 +233,18 @@ public final class MatchStore {
     }
 
     public func setRoundConfirmed(_ round: Int, _ isConfirmed: Bool = true) {
+        guard canRunRounds else { return }
         record(.setRoundConfirmed(round: round, isConfirmed: isConfirmed))
     }
 
     public func setRoundCancelled(_ round: Int, _ isCancelled: Bool = true) {
+        guard canRunRounds else { return }
         record(.setRoundCancelled(round: round, isCancelled: isCancelled))
     }
     /// Draws the next round. Addressed to the round on screen now, so two devices tapping
     /// at once still produce one round.
     public func nextRound() {
+        guard canRunRounds else { return }
         switch state {
         // -1 when nothing has been drawn yet, so the first round is "the one after none".
         case .tournament(let tournament):
@@ -250,7 +264,7 @@ public final class MatchStore {
     /// Draws the tournament round in play again with these players sitting it out. Lands
     /// only while nothing has been played in it.
     public func redrawRound(sittingOut sitOuts: [PlayerID]) {
-        guard case .tournament(let tournament) = state, let last = tournament.rounds.indices.last else { return }
+        guard canRunRounds, case .tournament(let tournament) = state, let last = tournament.rounds.indices.last else { return }
         record(.nextRound(
             after: last - 1,
             at: Date(),
@@ -262,6 +276,7 @@ public final class MatchStore {
     /// The whistle in winner court, on every court of a ladder, and calling a friendly round
     /// off where it stands.
     public func endRound() {
+        guard canRunRounds else { return }
         switch state {
         case .winnerCourt(let session):
             record(.endRound(round: session.completedRounds.count, at: Date()))
@@ -283,7 +298,7 @@ public final class MatchStore {
     }
 
     private func changeRoundClock(_ change: (RoundClock, Date) -> RoundClock) {
-        guard case .tournament(let tournament) = state, let round = tournament.currentRound,
+        guard canRunRounds, case .tournament(let tournament) = state, let round = tournament.currentRound,
               let clock = round.clock, !round.isEnded, !round.isCancelled else { return }
         let next = change(clock, Date())
         guard next != clock else { return }
@@ -344,23 +359,116 @@ public final class MatchStore {
         return role == .host
     }
 
+    /// Goes by `canEndSession` rather than the role: a watch following its guest phone is solo.
+    public var access: ShareAccess {
+        guard let accessTable, !canEndSession else { return .full }
+        return accessTable.access(for: [device, pairedDevice])
+    }
+
+    public var canScore: Bool { access.canScore }
+    public var canRunRounds: Bool { access.canRunRounds }
+
     /// Opens this session to other phones. Changes nothing about the session itself — only
     /// what this device is willing to be told about it.
     public func startSharing() {
         guard role != .guest else { return }
+        // Back from a relaunch, the phones on the old code are still somebody: keep what was said.
+        if role != .host || accessTable == nil {
+            accessTable = ShareAccessTable(standard: defaultAccess)
+            guests = []
+        }
         role = .host
         // A search left running underneath would conclude on the first guest to say hello
         // and make this phone a guest on its own match.
         isJoining = false
         persist()
         shareRole()
+        shareAccess()
     }
 
     public func stopSharing() {
         guard role == .host else { return }
         role = .solo
+        forgetSharing()
         persist()
         shareRole()
+    }
+
+    public func setDefaultAccess(_ access: ShareAccess) {
+        if access != defaultAccess {
+            defaultAccess = access
+            try? store?.save(access)
+        }
+        guard role == .host, let accessTable, accessTable.standard != access else { return }
+        self.accessTable = accessTable.with(standard: access)
+        persist()
+        shareAccess()
+    }
+
+    public func setAccess(_ access: ShareAccess?, for guest: DeviceID) {
+        guard role == .host, let accessTable, accessTable.override(for: guest) != access else { return }
+        self.accessTable = accessTable.setting(access, for: guest)
+        persist()
+        shareAccess()
+    }
+
+    public func identify(as name: String?) {
+        if case .tournament(let tournament) = state {
+            setMe(name.flatMap { name in tournament.players.first { $0.name == name }?.id })
+        }
+        rename(name)
+    }
+
+    private func rename(_ name: String?) {
+        guard name != identity else { return }
+        identity = name
+        persist()
+        shareAccess()
+    }
+
+    private func reidentify() {
+        guard let identity, case .tournament(let tournament) = state,
+              let player = tournament.players.first(where: { $0.name == identity }) else { return }
+        setMe(player.id)
+    }
+
+    private func forgetSharing() {
+        guard accessTable != nil || identity != nil || !guests.isEmpty else { return }
+        accessTable = nil
+        guests = []
+        identity = nil
+        persist()
+    }
+
+    private func shareAccess() {
+        switch role {
+        case .host:
+            guard let accessTable else { return }
+            let payload = encode(.access(accessTable))
+            Task { _ = await sendLive(payload) }
+        case .guest:
+            if let accessTable {
+                let payload = encode(.access(accessTable))
+                transport.queue(payload)
+                Task { _ = await sendLive(payload) }
+            }
+            // The host lists phones; a watch's own join is its phone's to speak for.
+            guard keepsHistory, !isJoining else { return }
+            let card = encode(.guestCard(GuestCard(device: device, name: identity)))
+            Task {
+                guard let reply = await sendLive(card), case .access? = try? Wire.decode(reply) else { return }
+                handle(InboundPacket(payload: reply))
+            }
+        case .solo:
+            break
+        }
+    }
+
+    /// The pair's phone may send it before saying it is a guest. Keeping it is harmless, since
+    /// `access` only reads it on somebody else's match.
+    private func takesAccess(from packet: InboundPacket) -> Bool {
+        guard role != .host else { return false }
+        return packet.isFromPairedDevice || (!isJoining && (role == .guest || pairedRole == .guest))
     }
 
     /// Waits to be handed somebody else's session. Until one arrives this device goes on
@@ -427,6 +535,7 @@ public final class MatchStore {
         isJoining = false
         lastResult = nil
         resultRewind = nil
+        forgetSharing()
         refresh()
         // The application context and the fan-out's cache still hold the match just dropped,
         // and would hand it to a counterpart waking up later — after the queued notice has
@@ -556,6 +665,12 @@ public final class MatchStore {
     public func setMe(_ player: PlayerID?) {
         guard player != me else { return }
         apply(haptics.choosing(me: player.map { Me(session: log.sessionID, player: $0) }), publish: true)
+        identifyAsMe()
+    }
+
+    private func identifyAsMe() {
+        guard role == .guest, case .tournament(let tournament) = state else { return }
+        rename(me.flatMap(tournament.player)?.name)
     }
 
     /// A match starts the way everyone reads it — us blue on the left, them orange on the
@@ -595,17 +710,23 @@ public final class MatchStore {
         Task { _ = await sendLive(payload) }
     }
 
-    public var canUndo: Bool { !undoTargets(UndoScope()).isEmpty }
+    public var canUndo: Bool { !permittedUndoTargets(UndoScope()).isEmpty }
 
     public func undoLast() {
-        for target in undoTargets(UndoScope()) { record(.undo(target.id)) }
+        for target in permittedUndoTargets(UndoScope()) { record(.undo(target.id)) }
     }
 
     /// Undo on one court's own screen: the last thing scored there, not on the court next door.
-    public func canUndo(round: Int, court: Int) -> Bool { !undoTargets(UndoScope(round: round, court: court)).isEmpty }
+    public func canUndo(round: Int, court: Int) -> Bool { !permittedUndoTargets(UndoScope(round: round, court: court)).isEmpty }
 
     public func undoLast(round: Int, court: Int) {
-        for target in undoTargets(UndoScope(round: round, court: court)) { record(.undo(target.id)) }
+        for target in permittedUndoTargets(UndoScope(round: round, court: court)) { record(.undo(target.id)) }
+    }
+
+    private func permittedUndoTargets(_ scope: UndoScope) -> [MatchEvent] {
+        let access = access
+        let targets = undoTargets(scope)
+        return targets.allSatisfy { access.mayUndo($0.kind) } ? targets : []
     }
 
     private struct UndoScope: Hashable {
@@ -652,6 +773,7 @@ public final class MatchStore {
         clearSession()
         if role == .guest {
             role = .solo
+            forgetSharing()
             // The watch on this wrist read this phone as a guest, and would go on offering to
             // leave a match that is now this phone's own rather than to end it.
             shareRole()
@@ -757,7 +879,7 @@ public final class MatchStore {
     /// guest: the host, standing on nothing since the ending, takes the reopened match up, and
     /// it is still theirs.
     public func undoResult() {
-        guard let rewind = resultRewind else { return }
+        guard canScore, let rewind = resultRewind else { return }
         let filed = concludedSessionID
         // Not `startNewSession()`: the log is already empty and retired, and a guest taking
         // a result back is not stepping off — the host takes the reopened match up.
@@ -938,6 +1060,7 @@ public final class MatchStore {
         sharePresets()
         shareDisplay()
         shareHaptics()
+        shareAccess()
     }
 
     /// The hello, and whatever it brings back. On its own when a gap has been noticed, which
@@ -1104,6 +1227,7 @@ public final class MatchStore {
                 shareDisplay()
                 shareHaptics()
                 shareRoleOnReconnect()
+                shareAccess()
                 shareWorkoutOnReconnect()
                 shareStandbyOnReconnect()
             }
@@ -1214,7 +1338,10 @@ public final class MatchStore {
 
         case .haptics(let incoming):
             let merged = haptics.adopting(incoming)
-            if merged != haptics { apply(merged, publish: false) }
+            if merged != haptics {
+                apply(merged, publish: false)
+                identifyAsMe()
+            }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
         case .workout(var signal):
@@ -1245,6 +1372,40 @@ public final class MatchStore {
         case .displaced(let lost):
             if packet.isFromPairedDevice { keep(lost, handedOverBy: .displacement) }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+
+        case .access(let incoming):
+            if takesAccess(from: packet), incoming.supersedes(accessTable) {
+                accessTable = incoming
+                persist()
+                if role == .guest, !packet.isFromPairedDevice {
+                    let payload = encode(.access(incoming))
+                    transport.queue(payload)
+                    Task { _ = await sendLive(payload) }
+                }
+            }
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+
+        case .guestCard(let card):
+            guard role == .host, !packet.isFromPairedDevice, card.device != device else {
+                packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+                return
+            }
+            if let index = guests.firstIndex(where: { $0.device == card.device }) {
+                if guests[index] != card {
+                    guests[index] = card
+                    persist()
+                }
+            } else {
+                guests.append(card)
+                persist()
+            }
+            // The reply is the only way to answer one phone alone, and a new one knows nothing yet.
+            if let accessTable, let reply = packet.reply {
+                reply(encode(.access(accessTable)))
+            } else {
+                packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+                shareAccess()
+            }
 
         case .sharing(let signal):
             // Only ever from the device in the same pocket — the scope drops this case before
@@ -1294,8 +1455,10 @@ public final class MatchStore {
                     role = .guest
                     isJoining = false
                     joinRefuses = nil
+                    accessTable = nil
                     forgetLeaving(log.sessionID)
                     shareRole()
+                    shareAccess()
                     // Off the last shared match, for the watch on the same wrist too.
                     if wasShared {
                         leftSessionID = steppedOff
@@ -1335,7 +1498,10 @@ public final class MatchStore {
                     publishSnapshot(force: true)
                     if role == .guest, packet.isFromPairedDevice, !isJoining { offerOurSession(live: true) }
                     // The host's next match on a code kept all evening.
-                    if role == .guest, !packet.isFromPairedDevice, incoming.takesBack == nil { announceBegan() }
+                    if role == .guest, !packet.isFromPairedDevice, incoming.takesBack == nil {
+                        reidentify()
+                        announceBegan()
+                    }
                 }
             } else if incoming.sessionID == log.sessionID {
                 arrive(on: incoming.sessionID, from: packet)
@@ -1411,6 +1577,7 @@ public final class MatchStore {
         forgetLeaving(sessionID)
         persist()
         shareRole()
+        shareAccess()
         announceJoined()
     }
 
@@ -1566,6 +1733,7 @@ public final class MatchStore {
         role = .solo
         adopt(incoming)
         guard wasShared else { return }
+        forgetSharing()
         shareRole()
         onLeft?()
     }
@@ -1817,7 +1985,7 @@ public final class MatchStore {
             log: log, outbox: outbox, retired: retired, discarded: discarded, role: role,
             pairedRole: pairedRole, guestOf: guestOf,
             leftSessionID: leftSessionID, counterpartLeftSessionID: counterpartLeftSessionID,
-            pairedDevice: pairedDevice
+            pairedDevice: pairedDevice, access: accessTable, guests: guests, identity: identity
         ))
     }
 }

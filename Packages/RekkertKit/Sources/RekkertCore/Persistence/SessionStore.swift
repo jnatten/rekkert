@@ -27,6 +27,9 @@ public struct ActiveSession: Codable, Sendable, Hashable {
     /// come off the pair's persisted channels before any hello, and whether a match is the
     /// pair's own has to be answered on them.
     public var pairedDevice: DeviceID?
+    public var access: ShareAccessTable?
+    public var guests: [GuestCard]
+    public var identity: String?
 
     public init(
         log: MatchLog,
@@ -38,7 +41,10 @@ public struct ActiveSession: Codable, Sendable, Hashable {
         guestOf: UUID? = nil,
         leftSessionID: UUID? = nil,
         counterpartLeftSessionID: UUID? = nil,
-        pairedDevice: DeviceID? = nil
+        pairedDevice: DeviceID? = nil,
+        access: ShareAccessTable? = nil,
+        guests: [GuestCard] = [],
+        identity: String? = nil
     ) {
         self.log = log
         self.outbox = outbox
@@ -50,10 +56,14 @@ public struct ActiveSession: Codable, Sendable, Hashable {
         self.leftSessionID = leftSessionID
         self.counterpartLeftSessionID = counterpartLeftSessionID
         self.pairedDevice = pairedDevice
+        self.access = access
+        self.guests = guests
+        self.identity = identity
     }
 
     private enum CodingKeys: String, CodingKey {
         case log, outbox, retired, discarded, role, pairedRole, guestOf, leftSessionID, counterpartLeftSessionID, pairedDevice
+        case access, guests, identity
     }
 
     public init(from decoder: any Decoder) throws {
@@ -68,6 +78,9 @@ public struct ActiveSession: Codable, Sendable, Hashable {
         leftSessionID = try container.decodeIfPresent(UUID.self, forKey: .leftSessionID)
         counterpartLeftSessionID = try container.decodeIfPresent(UUID.self, forKey: .counterpartLeftSessionID)
         pairedDevice = try container.decodeIfPresent(DeviceID.self, forKey: .pairedDevice)
+        access = try container.decodeIfPresent(ShareAccessTable.self, forKey: .access)
+        guests = try container.decodeIfPresent([GuestCard].self, forKey: .guests) ?? []
+        identity = try container.decodeIfPresent(String.self, forKey: .identity)
     }
 }
 
@@ -415,6 +428,19 @@ public struct SessionStore: Sendable {
 
     public func save(_ preferences: HapticPreferences) throws {
         try write(try encoder.encode(preferences), to: hapticsURL)
+    }
+
+    private var shareAccessURL: URL { directory.appending(path: "share-access.json") }
+
+    public func loadShareAccess() -> ShareAccess {
+        guard let data = try? Data(contentsOf: shareAccessURL),
+              let access = try? decoder.decode(ShareAccess.self, from: data)
+        else { return .full }
+        return access
+    }
+
+    public func save(_ access: ShareAccess) throws {
+        try write(try encoder.encode(access), to: shareAccessURL)
     }
 
     // MARK: - Plumbing
