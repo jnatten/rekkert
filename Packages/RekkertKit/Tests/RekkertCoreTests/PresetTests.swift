@@ -64,6 +64,19 @@ struct PresetTests {
         ).summary == "Friendly · 0 players · best of 3")
     }
 
+    @Test func aTournamentPresetSaysHowLongItRuns() {
+        func summary(_ format: TournamentFormat, _ length: TournamentLength?) -> String {
+            PresetConfiguration.tournament(
+                format: format, name: "", players: (0 ..< 4).map { Player(name: "P\($0)") },
+                config: TournamentConfig(pointRules: PointCountRules(target: 21), length: length)
+            ).summary
+        }
+        #expect(summary(.americano, nil) == "Americano · 4 players · 1 court · to 21")
+        #expect(summary(.americano, .rounds(7)) == "Americano · 4 players · 1 court · to 21 · 7 rounds")
+        #expect(summary(.americano, .fullRotation) == "Americano · 4 players · 1 court · to 21 · full rotation")
+        #expect(summary(.mexicano, .fullRotation) == "Mexicano · 4 players · 1 court · to 21")
+    }
+
     @Test func savingReplacesAPresetWithTheSameIdentity() {
         var library = PresetLibrary()
         var preset = tournamentPreset()

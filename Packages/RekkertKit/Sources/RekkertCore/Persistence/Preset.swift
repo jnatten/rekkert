@@ -55,7 +55,14 @@ public enum PresetConfiguration: Codable, Sendable, Hashable {
     }
 
     private static func length(_ format: TournamentFormat, _ config: TournamentConfig) -> String {
-        guard format == .winnerCourt else { return "to \(config.pointRules.target)" }
+        guard format == .winnerCourt else {
+            let planned = switch config.length(for: format) {
+            case .rounds(let count)?: " · \(count) round\(count == 1 ? "" : "s")"
+            case .fullRotation?: " · full rotation"
+            case nil: ""
+            }
+            return "to \(config.pointRules.target)" + planned
+        }
         let ladder = config.ladder ?? LadderRules()
         if let minutes = ladder.roundMinutes { return "\(minutes) min" }
         return ladder.rules.setsToWin == 1 ? "first to \(ladder.rules.gamesPerSet)" : "best of \(ladder.rules.setsToWin * 2 - 1)"
