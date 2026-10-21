@@ -46,9 +46,9 @@ extension GameMode {
             ModeHelp(
                 pickItWhen: "For a tournament where everybody partners everybody, on one court or more.",
                 points: [
-                    "Rounds play to a points target: 16 unless you pick 21, 24 or 32.",
+                    "Rounds play to a target, 16 unless you pick another. Sitting out still scores half.",
                     "Each round is drawn to avoid repeat partners and repeat opponents.",
-                    "Sitting a round out still scores: half the target, unless you change it.",
+                    "Play on, set a number of rounds, or stop once everyone has partnered everyone.",
                 ]
             )
         case .mexicano:
@@ -56,7 +56,7 @@ extension GameMode {
                 pickItWhen: "For a tournament paired by the table, so the games stay close.",
                 points: [
                     "After every round the top four go on court 1, paired 1+4 against 2+3.",
-                    "Points to a target, as in Americano: 16 unless you pick another.",
+                    "Points to a target, as in Americano. Play on, or set a number of rounds.",
                     "Someone late? Before the first point you can change who sits out.",
                 ]
             )

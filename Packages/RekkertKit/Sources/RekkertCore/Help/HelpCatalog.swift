@@ -171,7 +171,7 @@ public enum HelpCatalog {
                 HelpItem(
                     "Next round",
                     symbol: "arrow.right.circle.fill",
-                    what: "Closes the round and draws the next.",
+                    what: "Closes the round and draws the next. Past the planned rounds: Another round.",
                     example: "Every court is done. Draw round 3 from the wrist.",
                     only: "Americano, Mexicano and Friendly"
                 ),
@@ -602,7 +602,7 @@ public enum HelpCatalog {
                     "Draw the next round",
                     symbol: "arrow.right.circle.fill",
                     also: ["dice"],
-                    what: "Draws the next round once every court is done.",
+                    what: "Draws it once every court is done. Past the planned rounds: Play another round.",
                     example: "Last court's in. On to round 4.",
                     only: "Americano and Mexicano"
                 ),
@@ -626,7 +626,7 @@ public enum HelpCatalog {
                     symbol: "flag.checkered",
                     also: ["trash"],
                     what: "Ends it and files it, or throws it away if nothing was played.",
-                    example: "Last round's in. Time for the table.",
+                    example: "All 7 planned rounds are in. It asks once: finish, or play one more.",
                     only: "Americano and Mexicano"
                 ),
             ]

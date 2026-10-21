@@ -106,6 +106,16 @@ again sooner than the numbers force. Benched players score a configurable number
 changed on the phone — for whoever is late — and the round is drawn again around the pick.
 A picked sit-out counts like any other, so whoever it spared is next in line.
 
+A tournament plays on until it is finished, unless setup gives it a **Length**: a number of
+rounds, or — in Americano — a full rotation, which runs until everybody has partnered
+everybody. A cancelled round does not count towards either. The courts screen says how far
+along it is, and once the last planned round is played out the phone that may finish asks,
+once, whether to finish or play another round. Nothing finishes by itself and there is always
+another round; past the plan, Finish tournament moves to the top. A full rotation takes at
+least as many rounds as the partnerships allow — 7 for 8 players on 2 courts — and the draw,
+picking one round at a time, sometimes needs one more; with players sitting out it can take
+several more.
+
 On the phone, the court list is the main tournament screen: every court with its score,
 plus standings and round history. Scores can be tapped in point by point, typed, nudged
 with a stepper, or picked from a list of results — in "total points played" mode both
@@ -361,7 +371,8 @@ each can be given a level of its own or put back on the default.
 deciding point's side, and taking those back. Not the whistle, drawing or confirming a round,
 the round clock, who sits out or the change-ends rule; and an Undo that would take back one of
 those is not offered. *Read-only* follows the match and changes nothing. Finishing it stays
-the host's whatever the level, as before. A guest's watch goes by its phone's level.
+the host's whatever the level, as before, and so does the question a tournament asks when its
+planned rounds are played. A guest's watch goes by its phone's level.
 
 Joining asks **Who are you?** once the match is on the phone, offering its players and *Just
 watching*; the match menu changes the answer later, and in a tournament it is the same choice
