@@ -529,7 +529,11 @@ final class AppModel {
                 players: (Array(Self.demoNames.prefix(courts * 4))
                     + (arguments.contains("-rekkert-demo-sit-outs") ? ["Per"] : []))
                     .map { Player(name: $0) },
-                config: TournamentConfig(pointRules: PointCountRules(target: 16), courtCount: courts)
+                config: TournamentConfig(
+                    pointRules: PointCountRules(target: 16),
+                    courtCount: courts,
+                    length: demoLength(arguments)
+                )
             )))
             store.nextRound()
         }
@@ -546,6 +550,14 @@ final class AppModel {
                 store.setScore(round: round, court: 1, points: BySide(a: 11, b: 5))
                 store.setRoundConfirmed(round, true)
                 store.nextRound()
+            }
+        }
+        // Plays the round in play out without drawing the next, which is where a planned
+        // last round asks whether to finish.
+        if arguments.contains("-rekkert-demo-score-round"),
+           case .tournament(let tournament)? = store.state, let round = tournament.currentRound {
+            for match in round.matches {
+                store.setScore(round: round.index, court: match.courtIndex, points: BySide(a: 9, b: 7))
             }
         }
         if arguments.contains("-rekkert-demo-swap-colours") {
@@ -609,6 +621,15 @@ final class AppModel {
               index + 1 < arguments.count,
               let count = Int(arguments[index + 1]) else { return 2 }
         return min(max(count, 1), 8)
+    }
+
+    /// `-rekkert-demo-length 3` plans three rounds, `-rekkert-demo-length full` a full rotation.
+    private func demoLength(_ arguments: [String]) -> TournamentLength? {
+        guard let index = arguments.firstIndex(of: "-rekkert-demo-length"),
+              index + 1 < arguments.count else { return nil }
+        let value = arguments[index + 1]
+        if value == "full" { return .fullRotation }
+        return Int(value).map { .rounds(max(1, $0)) }
     }
 
     private func demoMinutes(_ arguments: [String]) -> Int {
