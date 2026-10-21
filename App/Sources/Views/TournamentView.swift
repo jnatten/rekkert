@@ -26,6 +26,9 @@ struct CourtListView: View {
     @State private var showingCancel = false
     @State private var choosingSitOuts = false
     @State private var showingWhistle = false
+    @State private var offeredFinish: Set<FinishPrompt> = []
+    @State private var finishOffer: FinishPrompt?
+    @State private var seededOffers = false
     /// Which round is on screen. `nil` follows the newest one, so drawing a round moves
     /// the view along with it; browsing back pins it until you return to the end.
     @State private var browsing: Int?
@@ -99,7 +102,27 @@ struct CourtListView: View {
                 if let round = DemoLaunch.browseRound { browsing = round }
                 if let ref = DemoLaunch.openCourt { editing = ref }
                 if DemoLaunch.sitOutPick != nil { choosingSitOuts = true }
+                if DemoLaunch.finishOffer { finishOffer = currentPrompt }
                 #endif
+            }
+            .onAppear {
+                guard !seededOffers else { return }
+                seededOffers = true
+                if let prompt = currentPrompt { offeredFinish.insert(prompt) }
+            }
+            .onChange(of: currentPrompt) { _, prompt in
+                guard let prompt, model.store.canEndSession, !offeredFinish.contains(prompt) else { return }
+                offeredFinish.insert(prompt)
+                finishOffer = prompt
+            }
+            .confirmationDialog(finishOfferTitle, isPresented: showingFinishOffer, titleVisibility: .visible) {
+                Button("Finish tournament") { finishTournament() }
+                Button("Play another round") {
+                    if let round = TournamentView.tournament(model)?.currentRound { playAnotherRound(after: round) }
+                }
+                Button("Not yet", role: .cancel) {}
+            } message: {
+                Text("Finish now and the table is final, or play on and finish whenever you like.")
             }
             .confirmationDialog(endPrompt, isPresented: $showingEnd, titleVisibility: .visible) {
                 if hasResults {
@@ -114,8 +137,7 @@ struct CourtListView: View {
                         unfinishedRound.map { "Save with round \($0.index + 1) as it stands" } ?? "Save to history",
                         role: .destructive
                     ) {
-                        model.store.finish()
-                        model.finishSession()
+                        finishTournament()
                     }
                 } else {
                     Button("Discard", role: .destructive) { model.discard() }
@@ -267,8 +289,15 @@ struct CourtListView: View {
     private func managementSection(_ tournament: Tournament) -> some View {
         let index = viewed(tournament)
         let round = tournament.round(at: index)
+        let plan = tournament.plan
+        let isReached = plan?.isReached == true
+        let finishFirst = isReached && model.store.canEndSession && hasResults && index == tournament.latestRoundIndex
 
         Section {
+            if finishFirst {
+                Button("Finish tournament", systemImage: "flag.checkered") { showingEnd = true }
+                    .fontWeight(.semibold)
+            }
             if model.store.canRunRounds {
                 if let round, tournament.isLadder, round.index == tournament.latestRoundIndex, !round.isCancelled {
                     if !round.isEnded, !tournament.isDone(round) {
@@ -303,10 +332,11 @@ struct CourtListView: View {
                             browsing = nil
                         }
                     } else {
-                        Button("Finish round and draw the next", systemImage: "arrow.right.circle.fill") {
-                            model.store.setRoundConfirmed(round.index, true)
-                            model.store.nextRound()
-                            browsing = nil
+                        Button(
+                            isReached ? "Play another round" : "Finish round and draw the next",
+                            systemImage: "arrow.right.circle.fill"
+                        ) {
+                            playAnotherRound(after: round)
                         }
                         .disabled(!tournament.isDone(round))
 
@@ -325,18 +355,24 @@ struct CourtListView: View {
             }
 
             if model.store.canEndSession {
-                Button(
-                    hasResults ? "Finish tournament" : "Discard tournament",
-                    systemImage: hasResults ? "flag.checkered" : "trash",
-                    role: .destructive
-                ) {
-                    showingEnd = true
+                if !finishFirst {
+                    Button(
+                        hasResults ? "Finish tournament" : "Discard tournament",
+                        systemImage: hasResults ? "flag.checkered" : "trash",
+                        role: .destructive
+                    ) {
+                        showingEnd = true
+                    }
                 }
             } else {
                 // Somebody else's tournament: step off it rather than end it for them.
                 Button("Leave", systemImage: "rectangle.portrait.and.arrow.right") {
                     model.sharing.stop()
                 }
+            }
+        } header: {
+            if let plan, index == tournament.latestRoundIndex {
+                Text(plan.progress).textCase(nil)
             }
         } footer: {
             if tournament.playableCourts < 1 {
@@ -385,6 +421,40 @@ struct CourtListView: View {
         "Cancel round \(TournamentView.tournament(model)?.rounds.count ?? 0)?"
     }
 
+    private func finishTournament() {
+        model.store.finish()
+        model.finishSession()
+    }
+
+    private func playAnotherRound(after round: Round) {
+        model.store.setRoundConfirmed(round.index, true)
+        model.store.nextRound()
+        browsing = nil
+    }
+
+    private var currentPrompt: FinishPrompt? {
+        guard let tournament = TournamentView.tournament(model),
+              let round = tournament.plan?.finishPromptRound else { return nil }
+        return FinishPrompt(tournament: tournament.id, round: round)
+    }
+
+    /// Held back while a court or the bench is open over the list: the last point is usually
+    /// scored in the court's sheet, and the question waits for it to close.
+    private var showingFinishOffer: Binding<Bool> {
+        Binding(
+            get: { finishOffer != nil && editing == nil && !choosingSitOuts && !model.showingBoard },
+            set: { if !$0 { finishOffer = nil } }
+        )
+    }
+
+    private var finishOfferTitle: String {
+        switch TournamentView.tournament(model)?.length {
+        case .rounds(let count)?: count == 1 ? "That's the planned round" : "That's the \(count) planned rounds"
+        case .fullRotation?: "Everyone has partnered everyone"
+        case nil: "Finish the tournament?"
+        }
+    }
+
     /// The round in play when it has not been played out, and there are rounds before it to keep.
     private var unfinishedRound: Round? {
         guard let tournament = TournamentView.tournament(model),
@@ -393,6 +463,11 @@ struct CourtListView: View {
               !tournament.isDone(round) else { return nil }
         return round
     }
+}
+
+private struct FinishPrompt: Hashable {
+    let tournament: TournamentID
+    let round: Int
 }
 
 struct CourtRef: Identifiable, Hashable {

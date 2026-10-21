@@ -83,6 +83,7 @@ struct NewSessionView: View {
     @State private var pointRules = PointCountRules()
     @State private var presetName = ""
     @State private var config = TournamentConfig()
+    @State private var plannedRounds = 7
     @State private var players: [Player] = (0 ..< 4).map { _ in Player(name: "") }
     @FocusState private var focused: Field?
 
@@ -375,7 +376,7 @@ struct NewSessionView: View {
             .friendly(name: sessionName, players: namedPlayers, rules: rules)
         case .americano, .mexicano:
             .tournament(
-                format: mode == .mexicano ? .mexicano : .americano,
+                format: format,
                 name: sessionName,
                 players: namedPlayers,
                 config: config
@@ -646,6 +647,19 @@ struct NewSessionView: View {
         }
 
         Section {
+            Picker("Length", selection: lengthBinding) {
+                Text("Open").tag(0)
+                if mode == .americano { Text("Full rotation").tag(1) }
+                Text("Set rounds").tag(2)
+            }
+            if case .rounds(let count)? = config.length {
+                Stepper("Rounds: \(count)", value: plannedRoundsBinding, in: 1 ... 30)
+            }
+        } footer: {
+            Text(lengthExplanation)
+        }
+
+        Section {
             Picker("Play to", selection: $config.pointRules.target) {
                 ForEach(PointCountRules.commonTargets, id: \.self) { Text("\($0)").tag($0) }
                 if !PointCountRules.commonTargets.contains(config.pointRules.target) {
@@ -790,6 +804,51 @@ struct NewSessionView: View {
         )
     }
 
+    private var format: TournamentFormat { mode == .mexicano ? .mexicano : .americano }
+
+    private var lengthBinding: Binding<Int> {
+        Binding(
+            get: {
+                switch config.length(for: format) {
+                case nil: 0
+                case .fullRotation?: 1
+                case .rounds?: 2
+                }
+            },
+            set: {
+                if case .rounds(let count)? = config.length { plannedRounds = count }
+                config.length = switch $0 {
+                case 1: .fullRotation
+                case 2: .rounds(plannedRounds)
+                default: nil
+                }
+            }
+        )
+    }
+
+    private var plannedRoundsBinding: Binding<Int> {
+        Binding(
+            get: {
+                if case .rounds(let count)? = config.length { count } else { plannedRounds }
+            },
+            set: { config.length = .rounds($0) }
+        )
+    }
+
+    private var lengthExplanation: String {
+        switch config.length(for: format) {
+        case nil:
+            return "Rounds go on until you finish the tournament."
+        case .rounds(let count)?:
+            return "After round \(count) you're asked whether to finish, and can always play on."
+        case .fullRotation?:
+            let courts = config.courtCount == 1 ? "1 court" : "\(config.courtCount) courts"
+            let fewest = TournamentPlan.fewestRounds(players: namedPlayers.count, courts: config.courtCount)
+                .map { " At least \($0) rounds with \(namedPlayers.count) players on \(courts), more if some sit out." } ?? ""
+            return "Ends once everyone has partnered everyone.\(fewest) You're asked whether to finish, and can always play on."
+        }
+    }
+
     private var targetExplanation: String {
         switch config.pointRules.targetKind {
         case .totalPointsPlayed:
@@ -889,7 +948,7 @@ struct NewSessionView: View {
             model.remember(players: namedPlayers.map(\.name))
             model.store.configure(.tournament(Tournament(
                 name: sessionName,
-                format: mode == .mexicano ? .mexicano : .americano,
+                format: format,
                 players: namedPlayers,
                 config: config
             )))

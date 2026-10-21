@@ -41,6 +41,14 @@ struct WatchMenuView: View {
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
 
+                if case .tournament(let tournament)? = model.store.state, let plan = tournament.plan {
+                    Text(plan.progress)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                }
+
                 status
 
                 WatchWorkoutButton()
@@ -68,8 +76,16 @@ struct WatchMenuView: View {
                             }
                         }
                     }
+                    if finishesFirst {
+                        action("Finish & save", systemImage: "stop.circle", tint: .red) {
+                            confirming = .finish
+                        }
+                    }
                     if model.store.canRunRounds {
-                        action("Next round", systemImage: "arrow.right.circle.fill", tint: .blue) {
+                        action(
+                            tournament.plan?.isReached == true ? "Another round" : "Next round",
+                            systemImage: "arrow.right.circle.fill", tint: .blue
+                        ) {
                             confirming = .nextRound
                         }
                         .disabled(tournament.isLadder && !tournament.canDrawNextRound)
@@ -146,7 +162,7 @@ struct WatchMenuView: View {
                 .disabled(!model.store.canUndo)
 
                 if model.store.canEndSession {
-                    if hasResults {
+                    if hasResults, !finishesFirst {
                         action("Finish & save", systemImage: "stop.circle", tint: .red) {
                             confirming = .finish
                         }
@@ -199,6 +215,12 @@ struct WatchMenuView: View {
     /// A friendly ends a round rather than a set, and draws rather than finishes — so the
     /// questions the dialog asks are its own.
     private func question(_ pending: Confirmation) -> String {
+        if pending == .nextRound, case .tournament(let tournament)? = model.store.state,
+           tournament.plan?.isReached == true {
+            return tournament.length == .fullRotation
+                ? "Everyone has partnered everyone. Play another round?"
+                : "The planned rounds are played. Play another?"
+        }
         if case .tournament(let tournament)? = model.store.state, tournament.isLadder {
             switch pending {
             case .endRound: return "End the round on every court?"
@@ -212,6 +234,12 @@ struct WatchMenuView: View {
         case .nextRound: return "Draw the next round?"
         case .finish, .discard: return pending.question
         }
+    }
+
+    /// Once the planned rounds are played, finishing is what comes next.
+    private var finishesFirst: Bool {
+        guard case .tournament(let tournament)? = model.store.state else { return false }
+        return tournament.plan?.isReached == true && model.store.canEndSession && hasResults
     }
 
     private var status: some View {

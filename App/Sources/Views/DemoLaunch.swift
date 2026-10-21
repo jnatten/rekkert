@@ -128,6 +128,11 @@ enum DemoLaunch {
         return CourtRef(round: parts[0], court: parts[1])
     }
 
+    /// Asks whether to finish as if the planned last round had just been played out.
+    static var finishOffer: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-finish-offer")
+    }
+
     private static func value(for flag: String) -> String? {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
