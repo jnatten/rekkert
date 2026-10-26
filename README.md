@@ -224,6 +224,18 @@ played out or called off, a tournament round already confirmed, and any earlier 
 have gone back to look at. The full-screen board has no clock either — it is the two
 numbers and nothing else, read from the far end of the court.
 
+## Warm-up
+
+Turn on **Warm-up** while setting up a game, in any mode, and it opens on a warm-up instead
+of the score: a clock counting up from nil, your heart rate on the watch while a workout
+runs, and **Start game**. Nothing is scored during it. Start game, on any phone or watch
+that may run rounds, ends it for everybody and starts the game's clock from that moment. A
+tournament's first round is still drawn as the session starts, and its clock, a timed
+ladder's countdown included, starts again with the game. The phone shows that a workout is
+running but not the number, which stays on the wrist as it always has. The form remembers
+the switch from one game to the next, and a preset keeps its own. An older build on the
+other end does not know about warm-ups and goes straight to the score.
+
 ## Mid-match corrections
 
 Both apps carry three fixes for when reality and the app disagree. **Swap serving team**

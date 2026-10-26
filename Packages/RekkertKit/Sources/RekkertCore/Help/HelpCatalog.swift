@@ -316,6 +316,29 @@ public enum HelpCatalog {
             ]
         ),
         HelpPage(
+            id: "watch.warmup",
+            chapter: .watch,
+            title: "Warm-up",
+            symbol: "figure.run",
+            whereToFind: "A game set up with Warm-up on",
+            picture: .watchButtons,
+            readme: ["Warm-up"],
+            items: [
+                HelpItem(
+                    "Warm-up",
+                    symbol: "figure.run",
+                    what: "How long you've warmed up, and your heart rate while a workout runs.",
+                    example: "See how warm you are before anyone keeps score."
+                ),
+                HelpItem(
+                    "Start game",
+                    symbol: "play.fill",
+                    what: "Ends the warm-up on every device and opens the score.",
+                    example: "Everyone's ready. Start from the wrist."
+                ),
+            ]
+        ),
+        HelpPage(
             id: "watch.start",
             chapter: .watch,
             title: "With nothing on",
@@ -508,6 +531,29 @@ public enum HelpCatalog {
                     example: "40–40 on golden point and they take it on the right.",
                     only: "Golden and star point",
                     spot: HelpSpot(0.5, 0.94)
+                ),
+            ]
+        ),
+        HelpPage(
+            id: "phone.warmup",
+            chapter: .phone,
+            title: "Warm-up",
+            symbol: "figure.run",
+            whereToFind: "Turn on Warm-up when you set up a game",
+            picture: .phoneButtons,
+            readme: ["Warm-up"],
+            items: [
+                HelpItem(
+                    "Warm-up",
+                    symbol: "figure.run",
+                    what: "Opens on a clock with no score. Remembered, and kept in presets.",
+                    example: "Ten minutes of knocking up before anyone counts."
+                ),
+                HelpItem(
+                    "Start game",
+                    symbol: "play.fill",
+                    what: "Ends the warm-up on every device and starts the game's clock.",
+                    example: "Everyone's loose. Tap it and the score takes over."
                 ),
             ]
         ),
