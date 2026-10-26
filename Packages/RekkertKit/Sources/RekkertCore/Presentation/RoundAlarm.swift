@@ -35,7 +35,7 @@ public struct RoundAlarm: Equatable, Sendable {
     }
 
     public static func bell(for state: SessionState?, session: UUID) -> Bell? {
-        guard case .tournament(let tournament)? = state, !tournament.isFinished,
+        guard case .tournament(let tournament)? = state, !tournament.isFinished, tournament.warmupStartedAt == nil,
               let round = tournament.currentRound, !round.isCancelled, !round.isEnded,
               let endsAt = round.clock?.endsAt else { return nil }
         return Bell(session: session, round: round.index, endsAt: endsAt)

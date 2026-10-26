@@ -179,13 +179,18 @@ public final class MatchStore {
 
     // MARK: - Local mutations
 
-    public func configure(_ setup: SessionSetup) {
+    public func configure(_ setup: SessionSetup, warmup: Bool = false) {
         // Something of this device's own, started on nothing. A guest between two of the host's
         // matches, or one still waiting on a join, is stepping off — as starting a preset is.
         if log.isEmpty, role == .guest || isJoining { startNewSession() }
         resetDisplayForNewMatch()
-        record(.configure(setup, at: Date()))
+        record(.configure(setup, at: Date(), warmup: warmup ? true : nil))
         announceBegan()
+    }
+
+    public func endWarmup() {
+        guard canRunRounds, state?.warmingUpSince != nil else { return }
+        record(.endWarmup(at: Date()))
     }
     public func tap(round: Int = 0, court: Int = 0, team: TeamSide) {
         guard canScore else { return }
@@ -588,7 +593,7 @@ public final class MatchStore {
         apply(updated, publish: true)
 
         startNewSession()
-        configure(preset.configuration.makeSetup())
+        configure(preset.configuration.makeSetup(), warmup: preset.warmsUp)
         if preset.configuration.drawsRounds { nextRound() }
     }
 

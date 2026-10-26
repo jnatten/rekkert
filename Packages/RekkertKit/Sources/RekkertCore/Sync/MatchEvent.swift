@@ -5,7 +5,11 @@ public enum EventKind: Codable, Sendable, Hashable {
     /// Payload and never an ordering key: the log is ordered by Lamport stamp and device id
     /// precisely because two devices' clocks do not agree. Absent from logs written before
     /// the clock existed, which replay without one.
-    case configure(SessionSetup, at: Date? = nil)
+    ///
+    /// `warmup` holds the clock until `endWarmup`. Dropped by older builds, which go straight
+    /// to the game.
+    case configure(SessionSetup, at: Date? = nil, warmup: Bool? = nil)
+    case endWarmup(at: Date)
     /// `round` is ignored by traditional matches, which have only one scoreline. In a
     /// tournament it addresses the round explicitly, so an edit to an earlier round
     /// cannot land on the current one just because it arrived late.
@@ -128,7 +132,8 @@ public struct MatchEvent: Codable, Sendable, Hashable, Identifiable {
         case .point, .setScore, .setRoundConfirmed, .setRoundCancelled, .nextRound, .finish, .endRound: true
         // A serve correction is its own undo — swapping again puts it back — and undo
         // should keep meaning "take back the last thing that changed the score".
-        case .configure, .restore, .undo, .chooseServeSide, .setFirstServer, .setServeOrder, .setRoundClock, .unrecognised: false
+        case .configure, .endWarmup, .restore, .undo, .chooseServeSide, .setFirstServer, .setServeOrder, .setRoundClock,
+             .unrecognised: false
         }
     }
 }
@@ -138,7 +143,8 @@ extension EventKind {
     /// predate `MatchEvent.at`.
     public var payloadDate: Date? {
         switch self {
-        case .configure(_, let at), .endRound(_, let at), .nextRound(_, let at, _, _): at
+        case .configure(_, let at, _), .endRound(_, let at), .nextRound(_, let at, _, _): at
+        case .endWarmup(let at): at
         case .point, .setScore, .setFirstServer, .setServeOrder, .chooseServeSide, .setRoundClock,
              .setRoundConfirmed, .setRoundCancelled, .finish, .restore, .undo, .unrecognised: nil
         }

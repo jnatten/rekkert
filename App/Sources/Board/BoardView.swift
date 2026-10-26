@@ -42,6 +42,8 @@ struct BoardView: View {
             idle(metrics)
         case .waiting:
             waiting(metrics)
+        case .warmup:
+            warmup(metrics)
         case .match(let court):
             BoardMatchView(board: board, court: court, metrics: metrics)
         case .courts(let courts):
@@ -120,6 +122,20 @@ struct BoardView: View {
                 BoardStandings(standings: board.standings, metrics: metrics)
                     .frame(width: metrics.size.width * 0.28)
             }
+        }
+    }
+
+    private func warmup(_ metrics: BoardMetrics) -> some View {
+        VStack(spacing: 20 * metrics.unit) {
+            Image(systemName: "figure.run")
+                .font(metrics.font(100, .regular))
+                .foregroundStyle(.white.opacity(0.5))
+            Text("Warming up")
+                .font(metrics.font(64, .bold))
+            Text("The score shows up here once the game starts.")
+                .font(metrics.font(36, .medium))
+                .foregroundStyle(.white.opacity(0.6))
+                .multilineTextAlignment(.center)
         }
     }
 

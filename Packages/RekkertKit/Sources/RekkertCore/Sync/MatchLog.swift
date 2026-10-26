@@ -21,7 +21,7 @@ public struct MatchLog: Codable, Sendable, Hashable {
             // keeping if something else displaces it.
             case .point, .setScore, .setRoundConfirmed, .setRoundCancelled, .nextRound, .finish, .endRound, .restore: true
             case .setFirstServer, .setServeOrder: false
-            case .configure, .undo, .chooseServeSide, .setRoundClock, .unrecognised: false
+            case .configure, .endWarmup, .undo, .chooseServeSide, .setRoundClock, .unrecognised: false
             }
         }
     }

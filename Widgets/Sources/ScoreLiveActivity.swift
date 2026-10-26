@@ -64,6 +64,10 @@ private struct CompactSide: View {
                 .fontWeight(.bold)
                 .monospacedDigit()
                 .foregroundStyle(score.palette.color(side))
+        } else if position == 0 {
+            Image(systemName: score.symbol)
+        } else if let start = score.clockStart {
+            LiveClock(start: start).frame(width: 44)
         }
     }
 }
@@ -77,6 +81,8 @@ private struct Minimal: View {
                 Text(score.round.map { "R\($0)" } ?? "–")
             } else if let board = score.boards.first {
                 Text(board.games.map(score.pair) ?? score.pair(board.points))
+            } else {
+                Image(systemName: score.symbol)
             }
         }
         .font(.caption2.weight(.semibold).monospacedDigit())

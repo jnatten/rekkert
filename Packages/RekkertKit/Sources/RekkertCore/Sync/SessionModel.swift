@@ -40,6 +40,7 @@ public struct TraditionalSession: Codable, Sendable, Hashable {
     /// When the match started, which is what the clock on the board counts from. A match has
     /// no rounds, so this one clock runs the whole way through.
     public var startedAt: Date?
+    public var warmupStartedAt: Date?
     public var name: String
 
     public init(
@@ -48,6 +49,7 @@ public struct TraditionalSession: Codable, Sendable, Hashable {
         score: TraditionalState = TraditionalState(),
         isStopped: Bool = false,
         startedAt: Date? = nil,
+        warmupStartedAt: Date? = nil,
         name: String = ""
     ) {
         self.rules = rules
@@ -55,12 +57,13 @@ public struct TraditionalSession: Codable, Sendable, Hashable {
         self.score = score
         self.isStopped = isStopped
         self.startedAt = startedAt
+        self.warmupStartedAt = warmupStartedAt
         self.name = name
     }
 
     public var engine: TraditionalEngine { TraditionalEngine(rules: rules) }
 
-    private enum CodingKeys: String, CodingKey { case rules, teams, score, isStopped, startedAt, name }
+    private enum CodingKeys: String, CodingKey { case rules, teams, score, isStopped, startedAt, warmupStartedAt, name }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -69,6 +72,7 @@ public struct TraditionalSession: Codable, Sendable, Hashable {
         score = try container.decode(TraditionalState.self, forKey: .score)
         isStopped = try container.decodeIfPresent(Bool.self, forKey: .isStopped) ?? false
         startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
+        warmupStartedAt = try container.decodeIfPresent(Date.self, forKey: .warmupStartedAt)
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
     }
 }
@@ -86,6 +90,7 @@ public struct WinnerCourtSession: Codable, Sendable, Hashable {
     /// whistle for every one after it. Only the current round's, because a round here is a
     /// completed set rather than a struct with somewhere to keep one.
     public var roundStartedAt: Date?
+    public var warmupStartedAt: Date?
     public var name: String
 
     public init(
@@ -94,6 +99,7 @@ public struct WinnerCourtSession: Codable, Sendable, Hashable {
         score: TraditionalState = TraditionalState(),
         isFinished: Bool = false,
         roundStartedAt: Date? = nil,
+        warmupStartedAt: Date? = nil,
         name: String = ""
     ) {
         self.rules = rules
@@ -101,10 +107,11 @@ public struct WinnerCourtSession: Codable, Sendable, Hashable {
         self.score = score
         self.isFinished = isFinished
         self.roundStartedAt = roundStartedAt
+        self.warmupStartedAt = warmupStartedAt
         self.name = name
     }
 
-    private enum CodingKeys: String, CodingKey { case rules, teams, score, isFinished, roundStartedAt, name }
+    private enum CodingKeys: String, CodingKey { case rules, teams, score, isFinished, roundStartedAt, warmupStartedAt, name }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -113,6 +120,7 @@ public struct WinnerCourtSession: Codable, Sendable, Hashable {
         score = try container.decode(TraditionalState.self, forKey: .score)
         isFinished = try container.decode(Bool.self, forKey: .isFinished)
         roundStartedAt = try container.decodeIfPresent(Date.self, forKey: .roundStartedAt)
+        warmupStartedAt = try container.decodeIfPresent(Date.self, forKey: .warmupStartedAt)
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
     }
 
@@ -143,6 +151,7 @@ public struct PointCountSession: Codable, Sendable, Hashable {
     public var isStopped: Bool
     /// When the counting started, which is what the clock on the board counts from.
     public var startedAt: Date?
+    public var warmupStartedAt: Date?
     public var name: String
 
     public init(
@@ -151,6 +160,7 @@ public struct PointCountSession: Codable, Sendable, Hashable {
         score: PointCountState = PointCountState(),
         isStopped: Bool = false,
         startedAt: Date? = nil,
+        warmupStartedAt: Date? = nil,
         name: String = ""
     ) {
         self.rules = rules
@@ -158,10 +168,11 @@ public struct PointCountSession: Codable, Sendable, Hashable {
         self.score = score
         self.isStopped = isStopped
         self.startedAt = startedAt
+        self.warmupStartedAt = warmupStartedAt
         self.name = name
     }
 
-    private enum CodingKeys: String, CodingKey { case rules, teams, score, isStopped, startedAt, name }
+    private enum CodingKeys: String, CodingKey { case rules, teams, score, isStopped, startedAt, warmupStartedAt, name }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -170,6 +181,7 @@ public struct PointCountSession: Codable, Sendable, Hashable {
         score = try container.decode(PointCountState.self, forKey: .score)
         isStopped = try container.decode(Bool.self, forKey: .isStopped)
         startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
+        warmupStartedAt = try container.decodeIfPresent(Date.self, forKey: .warmupStartedAt)
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
     }
 
@@ -352,28 +364,43 @@ public enum SessionState: Codable, Sendable, Hashable {
         switch self {
         case .traditional(var session):
             session.startedAt = date
+            session.warmupStartedAt = nil
             return .traditional(session)
 
         case .pointCount(var session):
             session.startedAt = date
+            session.warmupStartedAt = nil
             return .pointCount(session)
 
         case .winnerCourt(var session):
             session.roundStartedAt = date
+            session.warmupStartedAt = nil
             return .winnerCourt(session)
 
         case .friendly(var session):
+            session.warmupStartedAt = nil
             guard let index = session.rounds.indices.last else { return .friendly(session) }
             session.rounds[index].startedAt = date
             return .friendly(session)
 
         case .tournament(var tournament):
+            tournament.warmupStartedAt = nil
             guard let index = tournament.rounds.indices.last else { return .tournament(tournament) }
             tournament.rounds[index].startedAt = date
             if let minutes = tournament.ladder?.roundMinutes {
                 tournament.rounds[index].clock = RoundClock(length: TimeInterval(minutes * 60), runningSince: date)
             }
             return .tournament(tournament)
+        }
+    }
+
+    public var warmingUpSince: Date? {
+        switch self {
+        case .traditional(let session): session.warmupStartedAt
+        case .pointCount(let session): session.warmupStartedAt
+        case .winnerCourt(let session): session.warmupStartedAt
+        case .friendly(let session): session.warmupStartedAt
+        case .tournament(let tournament): tournament.warmupStartedAt
         }
     }
 

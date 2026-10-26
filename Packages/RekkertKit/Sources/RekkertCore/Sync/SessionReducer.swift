@@ -11,8 +11,12 @@ public enum SessionReducer {
 
     static func apply(_ kind: EventKind, to state: inout SessionState?) {
         switch kind {
-        case .configure(let setup, let at):
-            configure(setup, at: at, into: &state)
+        case .configure(let setup, let at, let warmup):
+            configure(setup, at: at, warmupStartedAt: warmup == true ? at : nil, into: &state)
+
+        case .endWarmup(let at):
+            guard state?.warmingUpSince != nil else { return }
+            state = state?.restarted(at: at)
 
         case .restore(let archived, _):
             state = archived
@@ -213,7 +217,12 @@ public enum SessionReducer {
     /// A configure that lands on a session of the same kind is the setup being corrected
     /// rather than a session starting, so only the fresh branches take the stamp — putting a
     /// name right must not restart the clock.
-    private static func configure(_ setup: SessionSetup, at: Date?, into state: inout SessionState?) {
+    private static func configure(
+        _ setup: SessionSetup,
+        at: Date?,
+        warmupStartedAt: Date?,
+        into state: inout SessionState?
+    ) {
         switch (setup, state) {
         case (.traditional(let rules, let teams), .traditional(var session)):
             session.rules = rules
@@ -221,9 +230,13 @@ public enum SessionReducer {
             state = .traditional(session)
 
         case (.traditional(let rules, let teams), _):
-            state = .traditional(
-                TraditionalSession(rules: rules, teams: teams, score: TraditionalState(), startedAt: at)
-            )
+            state = .traditional(TraditionalSession(
+                rules: rules,
+                teams: teams,
+                score: TraditionalState(),
+                startedAt: at,
+                warmupStartedAt: warmupStartedAt
+            ))
 
         case (.tournament(let incoming), .tournament(var tournament)):
             tournament.name = incoming.name
@@ -234,7 +247,9 @@ public enum SessionReducer {
         case (.tournament(let incoming), _):
             // The rounds come from the draw, which has not happened yet, so there is nothing
             // to stamp here — `nextRound` starts the first one's clock.
-            state = .tournament(incoming)
+            var tournament = incoming
+            tournament.warmupStartedAt = warmupStartedAt
+            state = .tournament(tournament)
 
         case (.winnerCourt(let rules, let teams), .winnerCourt(var session)):
             session.rules = rules
@@ -242,7 +257,12 @@ public enum SessionReducer {
             state = .winnerCourt(session)
 
         case (.winnerCourt(let rules, let teams), _):
-            state = .winnerCourt(WinnerCourtSession(rules: rules, teams: teams, roundStartedAt: at))
+            state = .winnerCourt(WinnerCourtSession(
+                rules: rules,
+                teams: teams,
+                roundStartedAt: at,
+                warmupStartedAt: warmupStartedAt
+            ))
 
         case (.pointCount(let rules, let teams), .pointCount(var session)):
             session.rules = rules
@@ -250,7 +270,12 @@ public enum SessionReducer {
             state = .pointCount(session)
 
         case (.pointCount(let rules, let teams), _):
-            state = .pointCount(PointCountSession(rules: rules, teams: teams, startedAt: at))
+            state = .pointCount(PointCountSession(
+                rules: rules,
+                teams: teams,
+                startedAt: at,
+                warmupStartedAt: warmupStartedAt
+            ))
 
         case (.friendly(let incoming), .friendly(var session)):
             // The rounds already played stay where they are; the rest is the setup being
@@ -262,7 +287,9 @@ public enum SessionReducer {
             state = .friendly(session)
 
         case (.friendly(let incoming), _):
-            state = .friendly(incoming)
+            var session = incoming
+            session.warmupStartedAt = warmupStartedAt
+            state = .friendly(session)
         }
     }
 

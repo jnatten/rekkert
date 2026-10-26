@@ -18,10 +18,10 @@ private final class Court {
     let watch: MatchStore
     private var tasks: [Task<Void, Never>] = []
 
-    init(_ setup: SessionSetup, guestStore: SessionStore? = nil) {
+    init(_ setup: SessionSetup, warmup: Bool = false, guestStore: SessionStore? = nil) {
         let hostDevice = DeviceID()
         var log = MatchLog()
-        log.append(.configure(setup), from: hostDevice)
+        log.append(warmup ? .configure(setup, at: Date(), warmup: true) : .configure(setup), from: hostDevice)
 
         let (hostToPhone, phoneToHost) = LoopbackTransport.pair()
         let (phoneToWatch, watchToPhone) = LoopbackTransport.pair()
@@ -217,5 +217,22 @@ struct AccessTests {
 
         #expect(court.phone.access == .full)
         #expect(games(court.phone) == BySide(a: 1, b: 0))
+    }
+
+    @Test func aScorerWarmsUpButDoesNotStartTheGame() async {
+        let court = Court(winnerCourt, warmup: true)
+        await court.open(default: .score)
+        defer { court.close() }
+        #expect(court.phone.state?.warmingUpSince != nil)
+
+        court.phone.endWarmup()
+        court.watch.endWarmup()
+        await quietPeriod()
+        #expect(court.host.state?.warmingUpSince != nil, "starting the game is running it")
+
+        court.host.endWarmup()
+        await eventually { court.phone.state?.warmingUpSince == nil && court.watch.state?.warmingUpSince == nil }
+        #expect(court.phone.state?.warmingUpSince == nil)
+        #expect(court.watch.state?.warmingUpSince == nil)
     }
 }

@@ -114,6 +114,19 @@ public struct LiveScore: Codable, Sendable, Hashable {
     public var isOver: Bool { result != nil }
 
     public static func make(from state: SessionState, display: DisplayPreferences) -> LiveScore {
+        if let since = state.warmingUpSince {
+            return LiveScore(
+                kind: state.isTournament ? .tournament : .traditional,
+                title: state.title,
+                symbol: state.modeSymbol,
+                detail: "Warm-up",
+                clockStart: since,
+                boards: [],
+                leftSide: display.isMirrored ? .b : .a,
+                colorsSwapped: display.areColorsSwapped
+            )
+        }
+
         let snapshots: [ScoreboardSnapshot]
         var detail: String
         var round: Int?

@@ -93,19 +93,34 @@ public struct Preset: Codable, Sendable, Hashable, Identifiable {
     public var configuration: PresetConfiguration
     public var lastUsed: Date?
     public var useCount: Int
+    public var warmsUp: Bool
 
     public init(
         id: UUID = UUID(),
         name: String,
         configuration: PresetConfiguration,
         lastUsed: Date? = nil,
-        useCount: Int = 0
+        useCount: Int = 0,
+        warmsUp: Bool = false
     ) {
         self.id = id
         self.name = name
         self.configuration = configuration
         self.lastUsed = lastUsed
         self.useCount = useCount
+        self.warmsUp = warmsUp
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, name, configuration, lastUsed, useCount, warmsUp }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        configuration = try container.decode(PresetConfiguration.self, forKey: .configuration)
+        lastUsed = try container.decodeIfPresent(Date.self, forKey: .lastUsed)
+        useCount = try container.decode(Int.self, forKey: .useCount)
+        warmsUp = try container.decodeIfPresent(Bool.self, forKey: .warmsUp) ?? false
     }
 }
 

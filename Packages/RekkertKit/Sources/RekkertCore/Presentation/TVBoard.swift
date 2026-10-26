@@ -5,6 +5,7 @@ public struct TVBoard: Sendable, Hashable {
     public enum Content: Sendable, Hashable {
         case idle
         case waiting
+        case warmup
         case match(Court)
         case courts([Court])
         case result(SessionResult)
@@ -73,6 +74,13 @@ public struct TVBoard: Sendable, Hashable {
 
     private static func live(_ state: SessionState, display: DisplayPreferences) -> TVBoard {
         var board = header(state)
+
+        if let since = state.warmingUpSince {
+            board.detail = "Warm-up"
+            board.clockStart = since
+            board.content = .warmup
+            return board
+        }
 
         switch state {
         case .tournament(let tournament):

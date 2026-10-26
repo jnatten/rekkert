@@ -78,6 +78,7 @@ public struct FriendlySession: Codable, Sendable, Hashable {
     /// The last one is the one in play.
     public var rounds: [FriendlyRound]
     public var isFinished: Bool
+    public var warmupStartedAt: Date?
 
     public init(
         id: FriendlyID = FriendlyID(),
@@ -85,7 +86,8 @@ public struct FriendlySession: Codable, Sendable, Hashable {
         rules: TraditionalRules = TraditionalRules(setsToWin: 1),
         players: [Player] = [],
         rounds: [FriendlyRound] = [],
-        isFinished: Bool = false
+        isFinished: Bool = false,
+        warmupStartedAt: Date? = nil
     ) {
         self.id = id
         self.name = name
@@ -93,6 +95,7 @@ public struct FriendlySession: Codable, Sendable, Hashable {
         self.players = players
         self.rounds = rounds
         self.isFinished = isFinished
+        self.warmupStartedAt = warmupStartedAt
     }
 
     public var engine: TraditionalEngine { TraditionalEngine(rules: rules) }

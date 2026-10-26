@@ -115,6 +115,7 @@ public struct Tournament: Codable, Sendable, Hashable {
     /// each time the log is replayed: a tournament begun before the tie-break existed has to
     /// go on being drawn without it, or the rounds already played would be re-partnered.
     public var benchOrder: BenchOrder
+    public var warmupStartedAt: Date?
 
     public init(
         id: TournamentID = TournamentID(),
@@ -124,7 +125,8 @@ public struct Tournament: Codable, Sendable, Hashable {
         config: TournamentConfig = TournamentConfig(),
         rounds: [Round] = [],
         isFinished: Bool = false,
-        benchOrder: BenchOrder = .longestRested
+        benchOrder: BenchOrder = .longestRested,
+        warmupStartedAt: Date? = nil
     ) {
         self.id = id
         self.name = name
@@ -134,10 +136,11 @@ public struct Tournament: Codable, Sendable, Hashable {
         self.rounds = rounds
         self.isFinished = isFinished
         self.benchOrder = benchOrder
+        self.warmupStartedAt = warmupStartedAt
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, format, players, config, rounds, isFinished, benchOrder
+        case id, name, format, players, config, rounds, isFinished, benchOrder, warmupStartedAt
     }
 
     public init(from decoder: any Decoder) throws {
@@ -150,6 +153,7 @@ public struct Tournament: Codable, Sendable, Hashable {
         rounds = try container.decode([Round].self, forKey: .rounds)
         isFinished = try container.decode(Bool.self, forKey: .isFinished)
         benchOrder = try container.decodeIfPresent(BenchOrder.self, forKey: .benchOrder) ?? .fewestSitOuts
+        warmupStartedAt = try container.decodeIfPresent(Date.self, forKey: .warmupStartedAt)
     }
 
     public var currentRound: Round? { rounds.last }
