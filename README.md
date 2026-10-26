@@ -725,7 +725,7 @@ xcrun simctl boot <pair udid>
 ```
 
 Debug builds accept `-rekkert-demo traditional|winnercourt|friendly|americano|mexicano|ladder` (plus
-`-rekkert-demo-minutes N`, `-rekkert-demo-split`, `-rekkert-demo-points N`, `-rekkert-demo-deuce`, `-rekkert-demo-rounds`,
+`-rekkert-demo-minutes N`, `-rekkert-demo-split`, `-rekkert-demo-warmup`, `-rekkert-demo-points N`, `-rekkert-demo-deuce`, `-rekkert-demo-rounds`,
 `-rekkert-demo-friendly-rounds N`, `-rekkert-demo-friendly-players N`,
 `-rekkert-demo-rounds-sheet`,
 `-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N`, `-rekkert-demo-sit-outs [name]`,

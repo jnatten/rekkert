@@ -420,6 +420,7 @@ final class AppModel {
 
         guard let flag = arguments.firstIndex(of: "-rekkert-demo"), flag + 1 < arguments.count else { return }
         store.startNewSession()
+        let warmup = arguments.contains("-rekkert-demo-warmup")
 
         switch arguments[flag + 1] {
         case "winnercourt":
@@ -429,7 +430,7 @@ final class AppModel {
                     a: TeamInfo(name: "Us", players: ["Jonas", "Ada"]),
                     b: TeamInfo(name: "Them", players: ["Kim", "Sam"])
                 )
-            ))
+            ), warmup: warmup)
             // Two finished rounds and a third under way.
             for _ in 0 ..< 2 { store.tap(team: .a) ; store.tap(team: .a); store.tap(team: .a); store.tap(team: .a) }
             store.tap(team: .b); store.tap(team: .b); store.tap(team: .b); store.tap(team: .b)
@@ -446,7 +447,7 @@ final class AppModel {
                     a: TeamInfo(name: "Blues", players: ["Jonas", "Ada"]),
                     b: TeamInfo(name: "Oranges", players: ["Kim", "Sam"])
                 )
-            ))
+            ), warmup: warmup)
 
         case "traditional":
             store.configure(.traditional(
@@ -455,7 +456,7 @@ final class AppModel {
                     a: TeamInfo(name: "Blues", players: ["Jonas", "Ada"]),
                     b: TeamInfo(name: "Oranges", players: ["Kim", "Sam"])
                 )
-            ))
+            ), warmup: warmup)
         case "friendly":
             store.configure(.friendly(FriendlySession(
                 // Pinned, so a screenshot draws the same partnerships every time.
@@ -472,7 +473,7 @@ final class AppModel {
                     ["Jonas", "Ola", "Kari", "Trond", "Siri"].map { Player(name: $0) }
                         .prefix(friendlyPlayerCount(arguments))
                 )
-            )))
+            )), warmup: warmup)
             store.nextRound()
             // `-rekkert-demo-friendly-rounds 3` plays three of them out, which is the only
             // way to photograph the summary and the history screens.
@@ -505,7 +506,7 @@ final class AppModel {
                     partners: arguments.contains("-rekkert-demo-split") ? .split : .fixed,
                     start: .asListed
                 ))
-            )))
+            )), warmup: warmup)
             store.nextRound()
             // One round played and whistled, so the second has people moved up and down.
             for court in 0 ..< courts {
@@ -534,7 +535,7 @@ final class AppModel {
                     courtCount: courts,
                     length: demoLength(arguments)
                 )
-            )))
+            )), warmup: warmup)
             store.nextRound()
         }
 
