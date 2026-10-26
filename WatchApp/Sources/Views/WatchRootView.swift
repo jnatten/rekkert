@@ -44,6 +44,20 @@ struct WatchRootView: View {
 
     @ViewBuilder
     private var content: some View {
+        if let since = model.store.state?.warmingUpSince {
+            TabView(selection: $selection) {
+                workoutPage
+                WatchWarmupPage(since: since).tag(0)
+                WatchMenuView().tag(menuTag)
+            }
+            .tabViewStyle(.page)
+        } else {
+            playing
+        }
+    }
+
+    @ViewBuilder
+    private var playing: some View {
         switch model.store.state {
         case .none:
             if let result = model.store.lastResult {

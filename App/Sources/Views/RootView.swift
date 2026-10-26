@@ -12,23 +12,27 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            switch model.store.state {
-            case .none:
-                if let result = model.store.lastResult {
-                    MatchResultView(state: result)
-                } else {
-                    HomeView()
+            if let since = model.store.state?.warmingUpSince {
+                WarmupView(since: since)
+            } else {
+                switch model.store.state {
+                case .none:
+                    if let result = model.store.lastResult {
+                        MatchResultView(state: result)
+                    } else {
+                        HomeView()
+                    }
+                case .traditional:
+                    TraditionalMatchView()
+                case .tournament:
+                    TournamentView()
+                case .winnerCourt:
+                    WinnerCourtView()
+                case .pointCount:
+                    PointCountMatchView()
+                case .friendly:
+                    FriendlyMatchView()
                 }
-            case .traditional:
-                TraditionalMatchView()
-            case .tournament:
-                TournamentView()
-            case .winnerCourt:
-                WinnerCourtView()
-            case .pointCount:
-                PointCountMatchView()
-            case .friendly:
-                FriendlyMatchView()
             }
         }
         .environment(\.teamPalette, TeamPalette(isSwapped: model.store.display.areColorsSwapped))

@@ -53,13 +53,14 @@ struct WatchMenuView: View {
 
                 WatchWorkoutButton()
 
-                if isWinnerCourt, model.store.canRunRounds {
+                if isWinnerCourt, !isWarmingUp, model.store.canRunRounds {
                     action("End round", systemImage: "flag.pattern.checkered", tint: .orange) {
                         confirming = .endRound
                     }
                 }
                 if case .tournament(let tournament)? = model.store.state {
-                    if model.store.canRunRounds, tournament.isLadder, let round = tournament.currentRound, !round.isCancelled, !round.isEnded {
+                    if model.store.canRunRounds, !isWarmingUp, tournament.isLadder, let round = tournament.currentRound,
+                       !round.isCancelled, !round.isEnded {
                         if let clock = round.clock {
                             action(clock.isPaused ? "Resume" : "Pause", systemImage: clock.isPaused ? "play.fill" : "pause.fill") {
                                 WKInterfaceDevice.current().play(.click)
@@ -81,7 +82,7 @@ struct WatchMenuView: View {
                             confirming = .finish
                         }
                     }
-                    if model.store.canRunRounds {
+                    if model.store.canRunRounds, !isWarmingUp {
                         action(
                             tournament.plan?.isReached == true ? "Another round" : "Next round",
                             systemImage: "arrow.right.circle.fill", tint: .blue
@@ -106,7 +107,7 @@ struct WatchMenuView: View {
                         }
                     }
                 }
-                if model.store.canRunRounds, let round = friendlyRound {
+                if model.store.canRunRounds, !isWarmingUp, let round = friendlyRound {
                     // One button, whichever the round is asking for: draw the next one when
                     // this is over, stop this one where it stands while it is not.
                     if round.isFinished {
@@ -155,11 +156,13 @@ struct WatchMenuView: View {
                     model.store.toggleScoreboardMirrored()
                 }
 
-                action("Undo", systemImage: "arrow.uturn.backward") {
-                    WKInterfaceDevice.current().play(.retry)
-                    model.store.undoLast()
+                if !isWarmingUp {
+                    action("Undo", systemImage: "arrow.uturn.backward") {
+                        WKInterfaceDevice.current().play(.retry)
+                        model.store.undoLast()
+                    }
+                    .disabled(!model.store.canUndo)
                 }
-                .disabled(!model.store.canUndo)
 
                 if model.store.canEndSession {
                     if hasResults, !finishesFirst {
@@ -335,7 +338,9 @@ struct WatchMenuView: View {
         }
     }
 
-    private var hasResults: Bool { model.store.state?.hasResults ?? false }
+    private var hasResults: Bool { !isWarmingUp && model.store.state?.hasResults ?? false }
+
+    private var isWarmingUp: Bool { model.store.state?.warmingUpSince != nil }
 
     private var isWinnerCourt: Bool {
         if case .winnerCourt? = model.store.state { return true }

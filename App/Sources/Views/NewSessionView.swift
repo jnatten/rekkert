@@ -14,6 +14,7 @@ struct NewSessionView: View {
     init(mode: GameMode, from played: Tournament? = nil) {
         self.mode = mode
         editing = nil
+        _warmup = State(initialValue: UserDefaults.standard.bool(forKey: Self.warmupKey))
         // A friendly plays a whole match every round and then redraws, so one set is the
         // sane default where a Match wants best of three.
         if mode == .friendly {
@@ -33,6 +34,7 @@ struct NewSessionView: View {
         mode = GameMode(preset.configuration)
         editing = preset
         _presetName = State(initialValue: preset.name)
+        _warmup = State(initialValue: preset.warmsUp)
         switch preset.configuration {
         case .traditional(let rules, let teams):
             _rules = State(initialValue: rules)
@@ -85,7 +87,10 @@ struct NewSessionView: View {
     @State private var config = TournamentConfig()
     @State private var plannedRounds = 7
     @State private var players: [Player] = (0 ..< 4).map { _ in Player(name: "") }
+    @State private var warmup = false
     @FocusState private var focused: Field?
+
+    private static let warmupKey = "newSessionWarmup"
 
     private enum Field: Hashable {
         case presetName
@@ -106,6 +111,7 @@ struct NewSessionView: View {
                 case .friendly: friendlySections
                 case .americano, .mexicano: tournamentSections
                 }
+                warmupSection
                 if editing == nil { presetSection }
             }
             .navigationTitle(mode.title)
@@ -333,6 +339,14 @@ struct NewSessionView: View {
             : "Each player serves \(rules.servesPerTeam) points in a row before it passes to the other side."
     }
 
+    private var warmupSection: some View {
+        Section {
+            Toggle("Warm-up", isOn: $warmup)
+        } footer: {
+            Text("Opens on a timer with no score, until you start the game.")
+        }
+    }
+
     // MARK: - Presets
 
     @ViewBuilder
@@ -387,16 +401,18 @@ struct NewSessionView: View {
     private func savePresetIfNamed() {
         let name = trimmedPresetName
         guard !name.isEmpty else { return }
-        model.store.savePreset(Preset(name: name, configuration: configuration))
+        model.store.savePreset(Preset(name: name, configuration: configuration, warmsUp: warmup))
     }
 
     private func save() {
         guard let editing else { return }
         let name = trimmedPresetName
         let configuration = configuration
+        let warmup = warmup
         model.store.updatePreset(editing.id) {
             $0.name = name
             $0.configuration = configuration
+            $0.warmsUp = warmup
         }
         dismiss()
     }
@@ -910,15 +926,16 @@ struct NewSessionView: View {
 
     private func start() {
         savePresetIfNamed()
+        UserDefaults.standard.set(warmup, forKey: Self.warmupKey)
 
         switch mode {
         case .traditional:
             model.remember(players: namedTeamPlayers)
-            model.store.configure(.traditional(rules: rules, teams: teams))
+            model.store.configure(.traditional(rules: rules, teams: teams), warmup: warmup)
 
         case .pointCount:
             model.remember(players: namedTeamPlayers)
-            model.store.configure(.pointCount(rules: pointRules, teams: teams))
+            model.store.configure(.pointCount(rules: pointRules, teams: teams), warmup: warmup)
 
         case .winnerCourt where allCourts:
             model.remember(players: namedPlayers.map(\.name))
@@ -927,12 +944,12 @@ struct NewSessionView: View {
                 format: .winnerCourt,
                 players: namedPlayers,
                 config: ladderConfig
-            )))
+            )), warmup: warmup)
             model.store.nextRound()
 
         case .winnerCourt:
             model.remember(players: namedTeamPlayers)
-            model.store.configure(.winnerCourt(rules: winnerCourtRules, teams: teams))
+            model.store.configure(.winnerCourt(rules: winnerCourtRules, teams: teams), warmup: warmup)
 
         case .friendly:
             model.remember(players: namedPlayers.map(\.name))
@@ -940,7 +957,7 @@ struct NewSessionView: View {
                 name: sessionName,
                 rules: rules,
                 players: namedPlayers
-            )))
+            )), warmup: warmup)
             // Nothing to score until there is a round, exactly as a tournament works.
             model.store.nextRound()
 
@@ -951,7 +968,7 @@ struct NewSessionView: View {
                 format: format,
                 players: namedPlayers,
                 config: config
-            )))
+            )), warmup: warmup)
             model.store.nextRound()
         }
         dismiss()

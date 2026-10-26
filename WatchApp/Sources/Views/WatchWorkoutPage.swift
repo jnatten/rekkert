@@ -17,7 +17,7 @@ struct WatchWorkoutPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             elapsed
-            heartRate
+            WatchHeartRate()
             if let zones = model.workout.zones { zoneBar(zones) }
             figures
             Spacer(minLength: 0)
@@ -49,29 +49,6 @@ struct WatchWorkoutPage: View {
         .lineLimit(1)
         .minimumScaleFactor(0.6)
         .accessibilityLabel(model.workout.isPaused ? "Workout time, paused" : "Workout time")
-    }
-
-    /// Dashes until the first sample lands, which takes a few seconds. An empty space there
-    /// reads as a fault; a dash reads as "not yet", which is what it is.
-    private var heartRate: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 3) {
-            Image(systemName: "heart.fill")
-                .font(.system(size: 13))
-                .symbolEffect(.pulse, isActive: !model.workout.isPaused)
-            Text(model.workout.heartRate.map { "\(Int($0.rounded()))" } ?? "––")
-                .font(.system(size: 28, weight: .semibold, design: .rounded).monospacedDigit())
-            Text("BPM")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.pink.opacity(0.7))
-        }
-        .foregroundStyle(.pink)
-        .lineLimit(1)
-        .minimumScaleFactor(0.6)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            model.workout.heartRate.map { "\(Int($0.rounded())) beats per minute" }
-                ?? "Heart rate, waiting for a reading"
-        )
     }
 
     /// A bar per zone, each as wide as the time gone into it, with the one you are in now
@@ -199,5 +176,32 @@ struct WatchWorkoutPage: View {
                 .minimumScaleFactor(0.7)
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Dashes until the first sample lands, which takes a few seconds. An empty space there
+/// reads as a fault; a dash reads as "not yet", which is what it is.
+struct WatchHeartRate: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 3) {
+            Image(systemName: "heart.fill")
+                .font(.system(size: 13))
+                .symbolEffect(.pulse, isActive: !model.workout.isPaused)
+            Text(model.workout.heartRate.map { "\(Int($0.rounded()))" } ?? "––")
+                .font(.system(size: 28, weight: .semibold, design: .rounded).monospacedDigit())
+            Text("BPM")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.pink.opacity(0.7))
+        }
+        .foregroundStyle(.pink)
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            model.workout.heartRate.map { "\(Int($0.rounded())) beats per minute" }
+                ?? "Heart rate, waiting for a reading"
+        )
     }
 }
