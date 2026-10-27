@@ -31,6 +31,13 @@
 - Q: Where should someone read and share the record of what happened to the links? → A: On
   the phone only, with its watch's record merged in once the two are back in touch. The
   watch shows its link state live, but not the record.
+- Q: Should each guest's phone and watch also keep the code, so a guest whose app was ended,
+  or who left, gets back on without typing? → A: Yes, under the same rules as the host: on
+  that device only, never in a backup, at most 12 hours, forgotten on joining another match.
+- Q: A phone cannot wake its watch app. When a guest joins on the phone and their watch is
+  not showing Rekkert, what should happen? → A: The phone posts a notification that shows
+  on the watch; one tap there opens Rekkert on the match. Otherwise the match appears the
+  next time Rekkert is opened on the watch.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -130,15 +137,18 @@ case the watch ends up on the shared match.
 
 **Acceptance Scenarios**:
 
-1. **Given** a guest whose watch app is open, **When** they join on the phone, **Then** the
-   watch shows the shared match within 10 seconds.
-2. **Given** a guest whose watch app was closed when they joined, **When** they open it,
-   **Then** it shows the shared match.
+1. **Given** a guest whose watch has Rekkert in front, **When** they join on the phone,
+   **Then** the watch shows the shared match within 10 seconds.
+2. **Given** a guest whose watch did not have Rekkert in front when they joined, **When**
+   they open it, **Then** it shows the shared match.
 3. **Given** a guest's watch with a match of its own running, **When** the guest joins on
    the phone, **Then** the watch shows the shared match and its own match is filed in
    History, not lost.
 4. **Given** a guest's watch that is not on the match its phone is on, **When** the guest
    opens the watch, **Then** it says why and offers a single tap to get on it.
+5. **Given** a guest whose watch does not have Rekkert in front, **When** they join on the phone,
+   **Then** a notification appears on the watch, and tapping it opens Rekkert on the
+   shared match.
 
 ---
 
@@ -170,8 +180,8 @@ watch, and then stops sharing from the watch.
 5. **Given** a shared match, **When** a guest joins or drops out of reach, **Then** the
    host's watch shows it within 15 seconds.
 6. **Given** a shared match, **When** the host stops sharing on the watch and confirms,
-   **Then** the guests are told the match is no longer shared, and the host's match
-   carries on.
+   **Then** the guests are told the match is no longer shared and each keeps its copy in
+   History, and the host's match carries on.
 
 ---
 
@@ -201,9 +211,9 @@ watch, and joins again from the watch; the phone follows each step.
 
 ### Edge Cases
 
-- A guest's phone app is ended by the system while in a bag and cannot be woken by the
-  match. The guest's watch carries on with the match on its own if it can reach the host,
-  and otherwise says that the phone needs opening.
+- A guest's phone app is ended by the system while in a bag. It is brought back by the
+  radio or by its watch; until then, the guest's watch carries on with the match on its own
+  if it can reach the host, and otherwise says that the phone needs opening (FR-009).
 - The host's phone app is ended in the background and runs again mid-match. It comes back
   on the same code, and every guest gets back on by themselves (FR-025).
 - The host's phone leaves the match for good mid-match: its battery dies, or the host walks
@@ -212,11 +222,11 @@ watch, and joins again from the watch; the phone follows each step.
 - A guest's phone and watch both reach the host directly. The guest is counted once, no
   point is counted twice, and the other guests' links are not crowded out.
 - More guests try to join than the match can carry without Wi-Fi. The one who cannot get on
-  is told so, and the guests already on are unaffected.
+  is told so, and the guests already on are unaffected (FR-001).
 - Two courts nearby are each sharing a match. Every guest lands on the match whose code
-  they typed.
-- A guest types a wrong code on the watch. The watch says the code was not found, and
-  nothing changes on the guest's phone.
+  they typed (FR-029).
+- A guest types a wrong code on the watch. The watch says no match was found on that code
+  nearby, and nothing changes on the guest's phone.
 - A guest leaves on the phone. The watch leaves with it.
 - Guests run different versions of the app. An older version may not get the new watch
   features, but must not stop the match for anyone else.
@@ -233,37 +243,59 @@ watch, and joins again from the watch; the phone follows each step.
 
 - **FR-001**: Without a shared Wi-Fi network, a shared match MUST carry the host and up to
   seven guests, each with a phone and a watch, spread over two neighbouring courts, with
-  every device showing the same score. Past seven, guests MAY be turned away, and a guest
-  who is turned away MUST be told so (FR-008).
-- **FR-002**: A point scored on any device on the match MUST appear on every other device
-  in range within 30 seconds, and within 5 seconds for at least 95% of points, including
-  with phones locked.
+  every device showing the same score while the host can be reached (FR-026 covers the
+  rest). A guest counts once whether they are on with their phone, their watch or both; a
+  watch that joined without its phone, and a device on an older version, each count as one
+  guest. An eighth guest MUST be turned away and told so (FR-008).
+- **FR-002**: A point scored on any device on the match MUST show on every other device in
+  range within 30 seconds, and within 5 seconds for at least 95% of points, counted from the
+  tap that scored it, including with phones locked. A device is in range within about
+  30 metres of whatever it reaches the match through: the host, or its own phone. A guest's
+  watch counts while Rekkert is in front on it or a workout runs on it (FR-014); otherwise
+  the point shows within 10 seconds of Rekkert coming in front.
 - **FR-003**: A device that loses the match (out of range, phone locked, radio switched off
-  and on, the host's app ended and run again) MUST get back on it by itself once it can,
-  without the code being typed again.
+  and on, the host's app ended and run again) MUST get back on it by itself within
+  30 seconds of the cause going away, without the code being typed again.
 - **FR-004**: Getting back on MUST merge what each side scored while apart. Nothing scored
   on any device may be lost or counted twice.
 - **FR-005**: One guest joining, dropping off or failing MUST NOT take any other guest off
-  the match.
+  the match, nor push any other guest's points past the times in FR-002.
 - **FR-006**: What the guests' devices showed on 2026-10-26 is not known, so each way it
   could have failed — never getting on, getting on and then no longer following the host,
   and ending up with a different score — MUST be investigated under the incident's
   conditions. Each failure found MUST be traced to its cause, and an automated check that
   fails on the old behaviour MUST guard against it coming back.
-- **FR-007**: A device that is not in step with the match MUST NOT present its score as
-  current. It MUST say that it is out of reach, and show the way back.
-- **FR-008**: When a guest cannot get on (code not found, host out of range, no room,
-  Bluetooth off, permission denied), the guest's phone and watch MUST say which, in plain
-  words, within 15 seconds.
+- **FR-007**: A device that has not been in step with the match for 15 seconds MUST NOT
+  present its score as current: it MUST say that it is out of reach, since when, and show
+  the way back.
+- **FR-008**: When a guest cannot get on, the guest's phone and watch MUST say why within
+  15 seconds, in plain words: no match found on that code nearby (a wrong code and a host
+  out of range look the same to a guest), no room, Bluetooth off, or permission denied.
 - **FR-009**: When a guest's phone app has been ended by the system, the guest's watch MUST
-  carry on with the match on its own if it can reach the host, and otherwise MUST say that
-  the phone needs opening.
-- **FR-025**: The host's phone MUST keep the code until the host stops sharing, for at most
-  12 hours. A host whose app is ended and runs again in that time MUST come back on the same
-  code. The code MUST NOT be kept anywhere but the host's phone.
+  carry on with the match on its own while it can reach the host and a workout runs on it
+  or Rekkert is in front on it, and otherwise MUST say that the phone needs opening. Once
+  the phone's app runs again, the phone MUST take the match back from the watch by itself,
+  with nothing lost, and the sharing record MUST note the hand-back.
+- **FR-025**: The code MUST be kept only on devices that have been on the match — the host's
+  phone, and each guest's phone and watch — on that device alone and never in a backup, for
+  at most 12 hours: on the host until it stops sharing, on a guest until it joins another
+  match or is told sharing has stopped. A host whose app is ended and runs again in that
+  time MUST come back on the same code, and a guest whose app is ended and runs again MUST
+  get back on without the code being typed. An ended app MUST be brought back without
+  anyone touching that phone, by the radio or by its own watch, unless its owner swiped it
+  away. After 12 hours the code is no longer kept, but sharing carries on for as long as
+  the host's app keeps running.
 - **FR-026**: While the host is out of reach, every guest MUST be able to keep scoring on
-  their own devices and MUST be told the host is out of reach. Guests need not stay in step
-  with each other meanwhile; when the host is back, everything MUST merge as in FR-004.
+  their own devices and MUST be told within 15 seconds that the host is out of reach, and
+  since when. Finishing the match and settling its score stay the host's: no guest may do
+  either meanwhile.
+  Guests need not stay in step with each other; when the host is back, everything MUST
+  merge as in FR-004.
+- **FR-028**: When the host stops sharing, every guest in reach MUST be told before the host
+  lets go; its copy of the match MUST be kept in its History as it stood, and it MUST
+  forget the code.
+- **FR-029**: With other matches being shared nearby, a guest MUST only ever join the match
+  whose code it was given.
 
 **Seeing what is wrong**
 
@@ -282,35 +314,63 @@ watch, and joins again from the watch; the phone follows each step.
 **A guest's watch**
 
 - **FR-014**: When a guest's phone is on a shared match, the guest's watch MUST show that
-  match whenever the watch app is open and it can reach the phone or the host, within
-  10 seconds of the phone joining or the watch app opening, with nothing done on the watch.
+  match whenever Rekkert is in front on the watch with the wrist raised, or a workout is
+  running on it, and it can reach the phone or the host: within 10 seconds of the phone
+  joining or of Rekkert coming in front, with nothing done on the watch. With the wrist
+  down, the 10 seconds count from the next time the wrist is raised to Rekkert.
+- **FR-027**: When a guest's phone joins a shared match and cannot reach Rekkert on its
+  watch at that moment, the phone MUST post a notification that reaches the watch, and
+  tapping it on the watch MUST open Rekkert on that match. If notifications are not
+  allowed, the phone MUST say on joining that the watch will show the match once Rekkert is
+  opened on it. If the phone is in use, the notification may show there instead; the match
+  then reaches the watch once Rekkert is opened on it.
 - **FR-015**: If the guest's watch has a match of its own at that moment, the shared match
   MUST take over, and the watch's own match MUST be kept in History.
-- **FR-016**: A guest's watch that is not on its phone's match MUST say why, and MUST offer
-  a single tap to get onto it without typing the code.
+- **FR-016**: A guest's watch that is not on its phone's match MUST say why — its phone is
+  on a match the watch is not on, the watch cannot reach its phone, or its phone cannot
+  reach the host — and, where its phone is on the match, MUST offer a single tap to get
+  onto it without typing the code.
+- **FR-030**: A guest's watch MUST ask once before starting a match of its own while its
+  phone is on a shared match, since that takes the phone off the shared match.
 
 **The host's watch**
 
 - **FR-017**: While the host's phone is sharing, the host's watch MUST show the code as six
-  digits large enough to read out, at most two taps from the watch's scoreboard.
-- **FR-018**: The host's watch MUST also be able to show the code in a form a phone camera
-  can scan to join the match.
+  digits spanning the width of the screen on every supported watch size, at most two taps
+  from the watch's scoreboard.
+- **FR-018**: The host's watch MUST also be able to show the code in a form an iPhone camera
+  can scan from about 20 centimetres, on the smallest supported watch, to join the match.
 - **FR-019**: When the host's phone starts sharing on a new code (after sharing was stopped,
   or after 12 hours), the host's watch MUST show the new code.
 - **FR-020**: From the watch, with the phone left in the bag, the host MUST be able to start
-  sharing, stop sharing after confirming once, and see each guest's state as in FR-010.
-  If the watch cannot reach the host's phone, it MUST say so and change nothing.
+  sharing while a match is on, stop sharing after confirming once, and see each guest's
+  state as in FR-010. If the watch cannot reach the host's phone, it MUST say so and change
+  nothing. These controls MUST appear only on the host's watch. Between the matches of a
+  shared evening the code stays shared, as it does today.
 
 **A guest's wrist**
 
 - **FR-021**: A guest MUST be able to join from the watch's start screen and from its match
-  menu, whether or not the guest's phone can be reached at that moment.
+  menu, whether or not the guest's phone can be reached at that moment. A watch on the
+  match without its phone stays on it while a workout runs on it or Rekkert is in front on
+  it, and catches up when Rekkert next comes in front. A watch whose phone is hosting MUST
+  ask once before joining another match, since that stops the sharing for everyone on it.
 - **FR-022**: Leave MUST be at most two taps from the watch's scoreboard, MUST ask once
   before leaving, and MUST take that guest's phone and watch off the match together, leaving
-  the host's match unchanged.
+  the host's match unchanged. Leave MUST appear only on a guest's watch.
 - **FR-023**: Leaving on the guest's phone MUST take the guest's watch off the match too.
 - **FR-024**: For as long as a match is being shared on the same code, a guest who left it
-  MUST be able to join it again from the watch without typing the code.
+  MUST be able to join it again from the watch without typing the code. If the match is no
+  longer being shared, joining again MUST say so in the words of FR-008, and forget the
+  code.
+
+**On every watch**
+
+- **FR-031**: The watch's code, guest list and status lines MUST work with VoiceOver, with
+  the code read out digit by digit, and with larger text sizes. The six digits beside the
+  scannable code are its text alternative.
+- **FR-032**: A watch MUST tap the wrist, following its haptics setting, when its wearer has
+  been out of reach of the match for 15 seconds, and again when they are back in step.
 
 ### Key Entities
 
@@ -320,10 +380,13 @@ watch, and joins again from the watch; the phone follows each step.
 - **Guest**: a player on someone else's shared match, with a phone and usually a watch. A
   guest's phone and watch join and leave together.
 - **Code**: six digits that let a guest find and join a shared match. It lasts until the
-  host stops sharing, at most 12 hours, including across the host's app being ended and run
-  again.
+  host stops sharing, at most 12 hours, including across any app on the match being ended
+  and run again. It is kept only on the devices that have been on the match.
 - **Link**: a connection between two devices — a phone and its own watch, or a guest and the
-  host. Each link is in step, catching up, or out of reach.
+  host. Each link is **in step** (heard from within the last 15 seconds, and has every point
+  the other end has), **catching up** (heard from within 15 seconds, but missing some), or
+  **out of reach** (not heard from for 15 seconds). A guest's state on the host is the state
+  of its link.
 - **Sharing record**: a timed list of what happened to a phone's and its watch's links
   during a shared match, read on the phone. It stays on the owner's phone and watch unless
   the owner shares it.
@@ -341,25 +404,30 @@ watch, and joins again from the watch; the phone follows each step.
 - **SC-003**: A guest out of range for up to 10 minutes is back in step within 30 seconds of
   returning, without touching anything.
 - **SC-004**: No device shows an out-of-date score as current for more than 15 seconds.
-- **SC-005**: The incident's failure is reproduced by an automated check that fails before
-  the fix and passes after it.
-- **SC-006**: After a failure in the field, the sharing records alone are enough to tell
-  whether the break was between a watch and its own phone or between a guest and the host.
+- **SC-005**: Each cause of the incident found under FR-006 is reproduced by an automated
+  check that fails before its fix and passes after it.
+- **SC-006**: For each failure staged in the field test (the host's app ended, a guest out
+  of range, a guest's Bluetooth off, a watch out of reach of its phone), the sharing records
+  alone are enough to tell which link broke: a watch and its own phone, or a guest and the
+  host.
 - **SC-007**: With the phone in a bag, the host can start sharing and read the code out from
   the watch within 3 taps of the scoreboard.
 - **SC-008**: A guest can join from the watch within 10 seconds of typing the last digit,
   with the phone in a bag, and can leave within 3 taps.
-- **SC-009**: In automated tests that simulate the radio link with a host and seven guests,
-  each with a phone and a watch, over at least 30 minutes of play, every device shows the
-  host's score at every check, with points arriving within the times in SC-002. The same is
-  checked on real devices at the first club night after release.
-- **SC-010**: When the host's app is ended and runs again mid-match, every guest in range is
-  back in step within 30 seconds of it running again, without typing anything.
+- **SC-009**: In automated tests that simulate the radio link, with its speed set from the
+  measurements of the SC-001 field test, a host and seven guests, each with a phone and a
+  watch, play at least 30 minutes; every device shows the host's score at every check, with
+  points arriving within the times in SC-002. The same is checked on real devices at the
+  first club night after release.
+- **SC-010**: When the host's app is ended mid-match, every guest in range is back in step
+  within 30 seconds of the next point scored on any device, without anyone typing anything
+  or touching the host's phone.
 - **SC-011**: Every requirement under "Staying on the match" is covered by an automated test
   that simulates the radio link — drops, delays, suspended phones, an app ended and run
   again, seven guests — and those tests run on every push.
 - **SC-012**: The battery each phone and watch used during the release field test (SC-001)
-  is measured and reported beside the same session not shared.
+  is measured and reported beside an unshared match of the same length on the same devices,
+  with the same workout setting.
 
 ## Assumptions
 
@@ -367,13 +435,18 @@ watch, and joins again from the watch; the phone follows each step.
   both.
 - The host's phone does the hosting. A watch cannot host a match on its own; the host's
   watch starts, stops and shows the sharing that its phone does.
-- The code is kept only on the host's phone, and only until the host stops sharing or
-  12 hours pass. Sharing after that draws a new code.
+- The code is kept only on the devices that have been on the match, never in a backup, and
+  for at most 12 hours. Sharing after the host stops draws a new code.
+- A phone cannot wake its watch's app. A notification posted on the phone shows on the
+  watch, and is the way to bring Rekkert to the watch's screen without touching the phone.
 - Devices are within two neighbouring padel courts of each other, about 30 metres at most.
 - Every guest reaches the match through the host. Guests passing points on to each other,
   and a guest taking over as host, are out of scope.
-- An app that the system has ended in the background cannot be woken by the match. Until it
-  is opened again, that device can only be covered by its watch.
+- An app the system has ended is brought back by the radio or by its own watch. One its
+  owner has swiped away is not, until it is opened again; meanwhile its watch covers it
+  where it can (FR-009).
+- Taps on the watch are counted from its scoreboard. Reaching the match menu counts as one,
+  whether by a tap or a swipe.
 - Guests on an older version keep working as they do today, but do not get the new watch
   features.
 - Sharing has no battery limit. What it costs is measured and reported (SC-012), not used to
