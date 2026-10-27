@@ -51,6 +51,14 @@ final class WorkoutController {
     private(set) var failure: String?
     /// The workout that just ended, until it has been rated or the question waved off.
     private(set) var askingForEffort: EffortQuestion?
+    /// What waits on Rekkert's own explanation, the first time Health would ask.
+    private(set) var explaining: PendingAsk?
+
+    enum PendingAsk: Comparable {
+        case prepare
+        case ratings
+        case start
+    }
 
     /// Hands a finished workout, or a change of state, to the phone. Set by `AppModel`.
     @ObservationIgnored var publish: ((WorkoutSignal) -> Void)?
@@ -96,14 +104,7 @@ final class WorkoutController {
 
     /// Basal alongside active, because total calories is the two of them added up. Sharing
     /// it is not what gets it into the workout, though — see `read`.
-    private static var shared: Set<HKSampleType> {
-        [
-            HKQuantityType.workoutType(),
-            HKQuantityType(.activeEnergyBurned),
-            HKQuantityType(.basalEnergyBurned),
-            HKQuantityType(.workoutEffortScore),
-        ]
-    }
+    private static var shared: Set<HKSampleType> { HealthDisclosure.toShare(on: .watch) }
 
     /// The samples a workout is made of are the watch's own, written by the system, and the
     /// data source can only attach the ones this app is allowed to read. Basal was shared and
@@ -113,17 +114,7 @@ final class WorkoutController {
     /// The last two are for the zones rather than the workout: an age to estimate the
     /// maximum from, and a resting rate to measure the reserve up from. Health never says
     /// whether a read was granted, so both are asked for and neither is relied on.
-    private static var read: Set<HKObjectType> {
-        [
-            HKQuantityType(.heartRate),
-            HKQuantityType(.activeEnergyBurned),
-            HKQuantityType(.basalEnergyBurned),
-            HKQuantityType(.restingHeartRate),
-            HKCharacteristicType(.dateOfBirth),
-            HKQuantityType.workoutType(),
-            HKQuantityType(.workoutEffortScore),
-        ]
-    }
+    private static var read: Set<HKObjectType> { HealthDisclosure.toRead(on: .watch) }
 
     // MARK: - Starting and stopping
 
@@ -133,21 +124,57 @@ final class WorkoutController {
     func start() {
         guard isAvailable, !isTracking, !isStarting else { return }
         failure = nil
-        isStarting = true
-        Task {
-            defer { isStarting = false }
-            do {
-                try await health.requestAuthorization(toShare: Self.shared, read: Self.read)
-                try begin()
-            } catch {
-                stopped(with: error)
-            }
-        }
+        ask(.start)
     }
 
     func prepare() {
         guard isAvailable else { return }
-        Task { try? await health.requestAuthorization(toShare: Self.shared, read: Self.read) }
+        ask(.prepare)
+    }
+
+    /// Not now leaves things as they were, and the question comes back the next time the app
+    /// is opened with something waiting on it.
+    func answerExplainer(_ go: Bool) {
+        guard let pending = explaining else { return }
+        explaining = nil
+        if go { carryOn(pending) }
+    }
+
+    /// Opening the app can want both access for a start and a place for waiting ratings at
+    /// once, and a press can land while that is up; the explanation stands for the one that
+    /// does the most.
+    private func ask(_ pending: PendingAsk) {
+        Task {
+            if HealthAsk.explainFirst(await health.askStatus(on: .watch)) {
+                explaining = max(explaining ?? pending, pending)
+            } else {
+                carryOn(pending)
+            }
+        }
+    }
+
+    private func carryOn(_ pending: PendingAsk) {
+        switch pending {
+        case .prepare:
+            Task { try? await health.requestAuthorization(toShare: Self.shared, read: Self.read) }
+        case .ratings:
+            Task {
+                try? await health.requestAuthorization(toShare: Self.shared, read: Self.read)
+                for id in waiting.keys.compactMap(UUID.init(uuidString:)) { enqueue(id) }
+            }
+        case .start:
+            guard !isTracking, !isStarting else { return }
+            isStarting = true
+            Task {
+                defer { isStarting = false }
+                do {
+                    try await health.requestAuthorization(toShare: Self.shared, read: Self.read)
+                    try begin()
+                } catch {
+                    stopped(with: error)
+                }
+            }
+        }
     }
 
     func stop() {
@@ -234,10 +261,7 @@ final class WorkoutController {
     /// for the access, which a watch updated since its last workout has never been asked for.
     func writeWaitingRatings() {
         guard isAvailable, !waiting.isEmpty else { return }
-        Task {
-            try? await health.requestAuthorization(toShare: Self.shared, read: Self.read)
-            for id in waiting.keys.compactMap(UUID.init(uuidString:)) { enqueue(id) }
-        }
+        ask(.ratings)
     }
 
     private func save(_ effort: Int, to id: UUID) {
@@ -606,7 +630,7 @@ final class WorkoutController {
         switch (error as? HKError)?.code {
         case .errorAnotherWorkoutSessionStarted: failure = "Another workout is running"
         case .errorAuthorizationDenied, .errorAuthorizationNotDetermined:
-            failure = "Health access is off for Rekkert"
+            failure = "Turn on Apple Health access for Rekkert in Settings on your iPhone."
         default: failure = "Couldn't start"
         }
     }
@@ -634,6 +658,10 @@ final class WorkoutController {
     /// `-rekkert-demo-workout` dresses the screen as though one were running. The simulator
     /// has no wrist to read and Health will not start a session on it, so this is the only
     /// way the badge and the workout page get in front of `simctl`.
+    func pretendExplaining() {
+        explaining = .start
+    }
+
     func pretendRunning(paused: Bool = false) {
         isTracking = true
         isPaused = paused

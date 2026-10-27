@@ -6,6 +6,7 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
     @State private var askingToStartWorkout = false
     @State private var askingForEffort: EffortQuestion?
+    @State private var explainingHealth = false
     /// A code that arrived as a link, for the join sheet to send as it opens — or to show
     /// first, when joining it would take this phone off a shared match.
     @State private var linkedCode: SessionCode?
@@ -165,7 +166,7 @@ struct RootView: View {
             Button("Start workout") { model.follower.answerStart(true) }
             Button("Not now", role: .cancel) { model.follower.answerStart(false) }
         } message: {
-            Text("It runs on your watch while you play.")
+            Text("It runs on your watch while you play, and is saved to Apple Health.")
         }
         // Held back for as long as anything else is up, since a sheet cannot go over another:
         // the board or the code being shown can stay up long after the match has ended.
@@ -185,6 +186,19 @@ struct RootView: View {
                 onRate: { model.rateWorkout(question.id, effort: $0) },
                 onSkip: { model.workout.skipEffort() }
             )
+        }
+        .task(id: model.workout.explaining != nil) {
+            guard model.workout.explaining != nil else {
+                explainingHealth = false
+                return
+            }
+            repeat {
+                try? await Task.sleep(for: .milliseconds(300))
+            } while !Task.isCancelled && isPresenting
+            explainingHealth = model.workout.explaining != nil
+        }
+        .sheet(isPresented: $explainingHealth, onDismiss: { model.workout.answerExplainer(false) }) {
+            HealthExplainer { model.workout.answerExplainer($0) }
         }
     }
 

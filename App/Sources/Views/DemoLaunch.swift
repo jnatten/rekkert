@@ -91,6 +91,14 @@ enum DemoLaunch {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-settings")
     }
 
+    static var openAppleHealth: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-apple-health")
+    }
+
+    static var healthExplainer: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-health-explainer")
+    }
+
     /// Opens a friendly's rounds-and-standings sheet.
     static var openRounds: Bool {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-rounds-sheet")

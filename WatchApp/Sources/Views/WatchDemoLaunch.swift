@@ -35,6 +35,10 @@ enum WatchDemoLaunch {
     /// otherwise takes somebody else's match and a phone walking away with it.
     static var link: String? { value(after: "-rekkert-demo-watch-link") }
 
+    static var healthExplainer: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-health-explainer")
+    }
+
     private static func value(after flag: String) -> String? {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }

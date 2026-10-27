@@ -316,7 +316,7 @@ public enum HelpCatalog {
                 HelpItem(
                     "Start workout",
                     symbol: "figure.tennis",
-                    what: "Records a tennis workout in Health while you play.",
+                    what: "Records a tennis workout in Apple Health while you play.",
                     example: "Count the evening's padel towards your rings."
                 ),
                 HelpItem(
@@ -329,7 +329,7 @@ public enum HelpCatalog {
                 HelpItem(
                     "Stop workout",
                     symbol: "stop.circle",
-                    what: "Ends the workout and saves it to Health.",
+                    what: "Ends the workout and saves it to Apple Health.",
                     example: "You're done for the night."
                 ),
                 HelpItem(
@@ -460,7 +460,7 @@ public enum HelpCatalog {
                     "Start a workout",
                     symbol: "figure.tennis",
                     also: ["pause.circle", "play.circle", "stop.circle"],
-                    what: "Starts, holds or stops the workout on your watch.",
+                    what: "Starts, holds or stops the workout on your watch. It goes to Apple Health.",
                     example: "You're setting the match up on the phone anyway.",
                     needsWatch: true
                 ),
@@ -964,7 +964,7 @@ public enum HelpCatalog {
             symbol: "gearshape",
             whereToFind: "The gear on Home",
             picture: .phoneButtons,
-            readme: ["Workouts"],
+            readme: ["Workouts", "Apple Health"],
             items: [
                 HelpItem(
                     "Call the score",
@@ -992,6 +992,11 @@ public enum HelpCatalog {
                     what: "Stop the workout after a match: never, ask, or after a minute.",
                     example: "One match a night, and the workout should end with it.",
                     needsWatch: true
+                ),
+                HelpItem(
+                    "Apple Health",
+                    what: "What Rekkert saves to and reads from Apple Health, and where to change it.",
+                    example: "You want to know what the workout reads before you start one."
                 ),
             ]
         ),

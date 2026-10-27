@@ -31,6 +31,7 @@ struct WorkoutDetailView: View {
                 }
                 effort
                 LabeledContent("Saved as", value: "Tennis, indoor")
+                LabeledContent("Saved in", value: "Apple Health")
             }
 
             zones
@@ -153,7 +154,7 @@ struct WorkoutDetailView: View {
             } header: {
                 Text("Time in zones")
             } footer: {
-                Text("Worked out by Health from the zones you were on. Changing them later leaves this as it was on the day.")
+                Text("Worked out by Apple Health from the zones you were on. Changing them later leaves this as it was on the day.")
             }
         }
     }

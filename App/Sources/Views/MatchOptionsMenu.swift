@@ -53,11 +53,19 @@ struct MatchOptionsMenu: View {
                         model.workout.isPaused ? model.workout.resume() : model.workout.pause()
                     }
                 }
-                Button(
-                    model.workout.isTracking ? "Stop workout" : "Start workout",
-                    systemImage: model.workout.isTracking ? "stop.circle" : "figure.tennis"
-                ) {
+                Button {
                     model.workout.isTracking ? model.workout.stop() : model.workout.start()
+                } label: {
+                    if model.workout.isTracking {
+                        Label("Stop workout", systemImage: "stop.circle")
+                    } else {
+                        Label {
+                            Text("Start workout")
+                            Text("Saves to Apple Health")
+                        } icon: {
+                            Image(systemName: "figure.tennis")
+                        }
+                    }
                 }
             }
             Toggle(isOn: $announcer.isEnabled) {

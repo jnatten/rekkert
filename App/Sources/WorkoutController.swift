@@ -29,6 +29,13 @@ final class WorkoutController {
     /// Only put while the phone is in hand: a summary that reaches a phone in a pocket, or
     /// one queued from a session long since played, is no moment to ask.
     private(set) var askingForEffort: EffortQuestion?
+    /// What waits on Rekkert's own explanation, the first time Health would ask.
+    private(set) var explaining: PendingAsk?
+
+    enum PendingAsk {
+        case start
+        case prepare(onGo: @MainActor () -> Void)
+    }
 
     @ObservationIgnored var publish: ((WorkoutSignal) -> Void)?
 
@@ -38,22 +45,65 @@ final class WorkoutController {
 
     /// There has to be a wrist for any of this to mean anything. Without one the control is
     /// not shown at all, rather than shown and then doing nothing when pressed.
-    var isAvailable: Bool {
+    var isAvailable: Bool { reach == .canRecord }
+
+    var reach: HealthReach {
         #if DEBUG
-        if pretendsAvailable { return true }
+        if pretendsAvailable { return .canRecord }
         #endif
-        guard HKHealthStore.isHealthDataAvailable(), WCSession.isSupported() else { return false }
-        return WCSession.default.isPaired && WCSession.default.isWatchAppInstalled
+        let canPairWatch = WCSession.isSupported()
+        return HealthReach(
+            healthAvailable: HKHealthStore.isHealthDataAvailable(),
+            canPairWatch: canPairWatch,
+            isPaired: canPairWatch && WCSession.default.isPaired,
+            watchAppInstalled: canPairWatch && WCSession.default.isWatchAppInstalled
+        )
     }
 
-    func prepare() {
-        guard isAvailable else { return }
-        Task { try? await health.requestAuthorization(toShare: [HKQuantityType.workoutType()], read: []) }
+    /// `onGo` is what the caller holds back until Health may be asked: a setting chosen in
+    /// Settings is only stored once the explanation in front of the request is past.
+    func prepare(onGo: @escaping @MainActor () -> Void) {
+        guard isAvailable else { return onGo() }
+        ask(.prepare(onGo: onGo))
     }
 
     func start() {
-        guard isAvailable, !isTracking else { return }
+        guard isAvailable, !isTracking, explaining == nil else { return }
         failure = nil
+        ask(.start)
+    }
+
+    func answerExplainer(_ go: Bool) {
+        guard let pending = explaining else { return }
+        explaining = nil
+        if go { carryOn(pending) }
+    }
+
+    private func ask(_ pending: PendingAsk) {
+        Task {
+            if HealthAsk.explainFirst(await health.askStatus(on: .phone)) {
+                explaining = pending
+            } else {
+                carryOn(pending)
+            }
+        }
+    }
+
+    private func carryOn(_ pending: PendingAsk) {
+        switch pending {
+        case .prepare(let onGo):
+            onGo()
+            Task {
+                try? await health.requestAuthorization(
+                    toShare: HealthDisclosure.toShare(on: .phone), read: HealthDisclosure.toRead(on: .phone)
+                )
+            }
+        case .start:
+            launch()
+        }
+    }
+
+    private func launch() {
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .tennis
         configuration.locationType = .indoor
@@ -63,9 +113,12 @@ final class WorkoutController {
                 // its own copy of the summary, so a refused read cannot empty a list of
                 // workouts that plainly exist.
                 try await health.requestAuthorization(
-                    toShare: [HKQuantityType.workoutType()], read: []
+                    toShare: HealthDisclosure.toShare(on: .phone), read: HealthDisclosure.toRead(on: .phone)
                 )
                 try await health.startWatchApp(toHandle: configuration)
+            } catch let error as HKError
+                where error.code == .errorAuthorizationDenied || error.code == .errorAuthorizationNotDetermined {
+                failure = "Turn on Apple Health access for Rekkert in Settings."
             } catch {
                 failure = "Couldn't start on your watch"
             }
@@ -161,6 +214,10 @@ final class WorkoutController {
 
     func pretendFinished(_ question: EffortQuestion) {
         askingForEffort = question
+    }
+
+    func pretendExplaining() {
+        explaining = .start
     }
     #endif
 }

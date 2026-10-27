@@ -20,6 +20,11 @@ struct WatchWorkoutPage: View {
             WatchHeartRate()
             if let zones = model.workout.zones { zoneBar(zones) }
             figures
+            Text("Saving to Apple Health")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

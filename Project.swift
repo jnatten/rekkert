@@ -84,9 +84,9 @@ let project = Project(
                 // — it keeps its own copy of the summary — but the sheet the button puts up
                 // belongs on the device the button is on.
                 "NSHealthShareUsageDescription":
-                    "Rekkert shows the heart rate your Apple Watch reads while you play.",
+                    "Rekkert shows the heart rate and energy your Apple Watch saved to Apple Health while you played.",
                 "NSHealthUpdateUsageDescription":
-                    "Rekkert saves the session your Apple Watch records as a workout in Health.",
+                    "Rekkert saves the workout your Apple Watch records to Apple Health, as tennis.",
                 // Updated from the phone itself as points arrive, never pushed: there is no
                 // server to push from.
                 "NSSupportsLiveActivities": true,
@@ -154,9 +154,9 @@ let project = Project(
                 "NSBluetoothAlwaysUsageDescription":
                     "Rekkert keeps your watch on the match at your court when your iPhone isn't with you.",
                 "NSHealthShareUsageDescription":
-                    "Rekkert reads your heart rate and energy while a workout you started is running and once more when it ends, and your age and resting rate to place that heart rate in a zone.",
+                    "Rekkert reads your heart rate and energy from Apple Health while a workout you started is running and once when it ends, and your age and resting heart rate to place that heart rate in zones.",
                 "NSHealthUpdateUsageDescription":
-                    "Rekkert saves what you played as a tennis workout in Health.",
+                    "Rekkert saves what you played to Apple Health as a tennis workout, with its energy and your effort rating.",
             ]),
             sources: ["WatchApp/Sources/**", "Shared/**"],
             resources: ["WatchApp/Resources/**"],

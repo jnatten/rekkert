@@ -510,6 +510,20 @@ rather than a leak.
 None of it is required. Never press the button, leave both pickers on Do nothing, and the
 app is what it was: no prompt, no Workouts row, no Health access of any kind.
 
+## Apple Health
+
+Settings has an Apple Health section on every iPhone and iPad, watch or no watch, under
+Apple's own icon. App Review turned down a build for using Health without saying so on any
+screen it could reach, and every other mention needs a paired watch. The section says what
+Rekkert does with Apple Health and, where a workout cannot be recorded, why not; a row opens
+the whole list of what is saved and read, and where in the system's settings to change it.
+
+All of it is read from `HealthDisclosure`, which is also what both apps build their Health
+requests from, so the words cannot drift from what is collected and the tests pin both. The
+first time either device would put up Health's permission sheet, it explains itself first,
+and only while Health says the sheet would actually appear. Every control that starts a
+workout names Apple Health beside it, never "Health" alone, and a test holds the wording.
+
 ## The timeline
 
 Every event carries the moment the device that recorded it did, and a match is filed with a
@@ -815,6 +829,7 @@ Debug builds accept `-rekkert-demo traditional|winnercourt|friendly|americano|me
 `-rekkert-demo-fullscreen`, `-rekkert-demo-board`, `-rekkert-demo-courts N`, `-rekkert-demo-tv-shot`, `-rekkert-demo-tv-guide`,
 `-rekkert-demo-blackout`, `-rekkert-demo-settings`, `-rekkert-demo-swap-player`,
 `-rekkert-demo-workouts`, `-rekkert-demo-workout`, `-rekkert-demo-workout-paused`, `-rekkert-demo-effort`,
+`-rekkert-demo-apple-health`, `-rekkert-demo-health-explainer` (phone or watch),
 `-rekkert-demo-voices`, `-rekkert-demo-help [page id]` or
 `-rekkert-demo-new <mode>`) as
 launch arguments to put the app into a given state, since `simctl` cannot tap the screen.

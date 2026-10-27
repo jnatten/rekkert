@@ -22,7 +22,7 @@ struct WorkoutsView: View {
                 }
             } footer: {
                 if !model.workouts.isEmpty {
-                    Text("Deleting one here removes Rekkert's copy. The workout itself stays in the Health app.")
+                    Text("Deleting one here removes Rekkert's copy. The workout itself stays in Apple Health.")
                 }
             }
         }
@@ -33,7 +33,7 @@ struct WorkoutsView: View {
                 ContentUnavailableView(
                     "No workouts yet",
                     systemImage: "figure.tennis",
-                    description: Text("Start one from your Apple Watch and it shows up here.")
+                    description: Text("Start one from your Apple Watch and it shows up here and in Apple Health.")
                 )
             }
         }

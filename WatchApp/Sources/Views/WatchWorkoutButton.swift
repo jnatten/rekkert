@@ -20,6 +20,12 @@ struct WatchWorkoutButton: View {
                 // one that ends it.
                 if model.workout.isTracking { hold }
                 button
+                if !model.workout.isTracking && model.workout.failure == nil {
+                    Text("Saves to Apple Health")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
                 if let failure = model.workout.failure {
                     // The one thing worth saying, and only ever just after a press: a button
                     // that visibly does nothing reads as a broken app rather than as a

@@ -34,6 +34,8 @@ struct WatchRootView: View {
                     model.follower.answerStart(true)
                 }
                 Button("Not now", role: .cancel) { model.follower.answerStart(false) }
+            } message: {
+                Text("It's saved to Apple Health.")
             }
             .alert(
                 model.standIn.hostWhoStopped.map { "\($0) stopped sharing" } ?? "The host stopped sharing",
@@ -51,6 +53,12 @@ struct WatchRootView: View {
                 set: { if $0 == nil { model.workout.skipEffort() } }
             )) { _ in
                 WatchEffortSheet()
+            }
+            .sheet(isPresented: Binding(
+                get: { model.workout.explaining != nil },
+                set: { if !$0 { model.workout.answerExplainer(false) } }
+            )) {
+                WatchHealthExplainer()
             }
     }
 
@@ -169,6 +177,7 @@ struct WatchRootView: View {
         if WatchDemoLaunch.page == "standings" { selection = standingsTag }
         if WatchDemoLaunch.page == "workout" { selection = workoutTag }
         if WatchDemoLaunch.page == "code" { selection = menuTag }
+        if WatchDemoLaunch.healthExplainer { model.workout.pretendExplaining() }
         #endif
     }
 }

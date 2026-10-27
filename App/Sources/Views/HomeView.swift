@@ -133,9 +133,13 @@ struct HomeView: View {
                             }
                         }
                     } header: {
-                        Text("Workout")
+                        HStack {
+                            Text("Workout")
+                            Spacer()
+                            AppleHealthMark()
+                        }
                     } footer: {
-                        Text(model.workout.failure ?? "Records your heart rate and energy on your Apple Watch and saves it to Health as tennis, the nearest thing Health has to padel. It runs on its own: start it when you walk on, stop it when you walk off, and play as many matches in between as you like. Settings can have it start and stop with the match instead.")
+                        Text(model.workout.failure ?? "Records your heart rate and energy on your Apple Watch and saves it to Apple Health as tennis, the nearest thing Apple Health has to padel. It runs on its own: start it when you walk on, stop it when you walk off, and play as many matches in between as you like. Settings can have it start and stop with the match instead.")
                     }
                 }
 
@@ -167,6 +171,7 @@ struct HomeView: View {
                 case .record(let id): HistoryDetailView(id: id)
                 case .voice: VoicePickerView()
                 case .settings: SettingsView()
+                case .appleHealth: AppleHealthView()
                 case .workouts: WorkoutsView()
                 case .workout(let workout): WorkoutDetailView(workout: workout)
                 case .players: PlayersView()
@@ -227,6 +232,12 @@ struct HomeView: View {
                 }
                 if DemoLaunch.openSettings {
                     path = [.settings]
+                }
+                if DemoLaunch.openAppleHealth {
+                    path = [.settings, .appleHealth]
+                }
+                if DemoLaunch.healthExplainer {
+                    model.workout.pretendExplaining()
                 }
                 if DemoLaunch.openVoices {
                     model.announcer.isEnabled = true

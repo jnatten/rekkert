@@ -85,7 +85,7 @@ private struct PointByPoint: View {
                 Text("Timeline")
             } footer: {
                 if series == nil, AppModel.canPairWatch {
-                    Text("Start a workout on your watch before you play, and the heart rate goes here too.")
+                    Text("Start a workout on your watch before you play, and its heart rate from Apple Health goes here too.")
                 }
             }
             .onAppear { round = rounds.last ?? 0 }
@@ -232,8 +232,15 @@ private struct PointByPoint: View {
         }
         .chartXAxis { AxisMarks(preset: .aligned, values: .automatic(desiredCount: 4)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour().minute()) } }
         .chartXSelection(value: $selected)
+        .chartPlotStyle { plot in
+            plot.overlay(alignment: .topLeading) {
+                Text("Heart rate from Apple Health")
+                    .font(.caption2)
+                    .foregroundStyle(Color.secondary)
+            }
+        }
         .frame(height: 110)
-        .accessibilityLabel("Heart rate")
+        .accessibilityLabel("Heart rate from Apple Health")
         .accessibilityValue("From \(heart.map(\.bpm).min() ?? 0) to \(heart.map(\.bpm).max() ?? 0) beats per minute")
     }
 

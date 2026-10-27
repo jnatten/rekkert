@@ -8,6 +8,7 @@ enum HomeRoute: Hashable {
     case record(UUID)
     case voice
     case settings
+    case appleHealth
     case workouts
     case workout(WorkoutRecord)
     case players

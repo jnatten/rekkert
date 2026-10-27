@@ -130,6 +130,23 @@ if plutil -p "$iosplist" | grep -A5 UIRequiredDeviceCapabilities | grep -qi heal
   echo "FAIL: healthkit in UIRequiredDeviceCapabilities takes the app off every iPad"
   exit 1
 fi
+
+# App Review turns down a build whose Health use is not named as Apple Health, and the
+# permission sheet is the one screen every user of it sees.
+for target in "$plist" "$iosplist"; do
+  for key in NSHealthShareUsageDescription NSHealthUpdateUsageDescription; do
+    plutil -extract "$key" raw -o - "$target" | grep -q 'Apple Health' \
+      || { echo "FAIL: $key in $(dirname "$target" | xargs basename) does not say Apple Health"; exit 1; }
+    echo "  ok: $key in $(dirname "$target" | xargs basename) says Apple Health"
+  done
+done
+
+# Apple's icon is added by hand, under Apple's terms, so nothing else would notice it gone.
+for catalog in App/Resources/Assets.xcassets WatchApp/Resources/Assets.xcassets; do
+  find "$catalog/AppleHealth.imageset" \( -name '*.png' -o -name '*.pdf' -o -name '*.svg' \) 2>/dev/null | grep -q . \
+    || { echo "FAIL: Apple Health icon missing from $catalog; see specs/002-healthkit-ui-disclosure T002"; exit 1; }
+  echo "  ok: Apple Health icon in $catalog"
+done
 echo "  ok: healthkit is not a required capability"
 
 echo "==> Assert both apps ship a privacy manifest"

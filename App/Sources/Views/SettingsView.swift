@@ -97,6 +97,17 @@ struct SettingsView: View {
             }
 
             Section {
+                Text(HealthDisclosure.summary)
+                if let line = model.workout.reach.line {
+                    Text(line)
+                        .foregroundStyle(.secondary)
+                }
+                NavigationLink("What Rekkert saves and reads", value: HomeRoute.appleHealth)
+            } header: {
+                AppleHealthMark()
+            }
+
+            Section {
                 NavigationLink(value: HomeRoute.sharingRecord) {
                     Label("Sharing record", systemImage: "doc.text.magnifyingglass")
                 }
@@ -152,9 +163,9 @@ struct SettingsView: View {
     private var workoutOnMatchStart: Binding<WorkoutCue> {
         Binding(
             get: { model.store.haptics.workoutOnMatchStart },
-            set: {
-                model.store.setHaptics(workoutOnMatchStart: $0)
-                if $0 != .off { model.workout.prepare() }
+            set: { cue in
+                guard cue != .off else { return model.store.setHaptics(workoutOnMatchStart: cue) }
+                model.workout.prepare { model.store.setHaptics(workoutOnMatchStart: cue) }
             }
         )
     }
@@ -177,10 +188,11 @@ struct SettingsView: View {
         case .ask: "When a match ends, the watch taps your wrist and asks whether to stop the workout."
         case .automatic: "When a match ends, the watch stops the workout a minute later, unless another match starts or you keep it going."
         }
+        let health = "The workouts it starts are saved to Apple Health; see Apple Health below."
         guard start != nil || end != nil else {
-            return "A workout can start when you start or join a match, and stop when it ends, or Rekkert can ask you first. Nothing happens to a workout unless you choose it here."
+            return "A workout can start when you start or join a match, and stop when it ends, or Rekkert can ask you first. Nothing happens to a workout unless you choose it here. \(health)"
         }
-        return [start, end].compactMap(\.self).joined(separator: " ")
+        return [start, end, health].compactMap(\.self).joined(separator: " ")
     }
 
     private var liveScoreFooter: String {
