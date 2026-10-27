@@ -8,6 +8,9 @@ import WatchConnectivity
 private nonisolated enum Key {
     static let payload = "payload"
     static let revision = "revision"
+    static let kind = "kind"
+    static let day = "day"
+    static let linkRecord = "linkRecord"
 }
 
 /// Delegate callbacks arrive on WCSession's private non-main serial queue, so `[String: Any]`
@@ -16,15 +19,18 @@ nonisolated private final class WCShim: NSObject, WCSessionDelegate, @unchecked 
     private let onPacket: @Sendable (InboundPacket) -> Void
     private let onReachability: @Sendable (Bool) -> Void
     private let onActivated: @Sendable () -> Void
+    private let onRecord: @Sendable (String, Data) -> Void
 
     init(
         onPacket: @escaping @Sendable (InboundPacket) -> Void,
         onReachability: @escaping @Sendable (Bool) -> Void,
-        onActivated: @escaping @Sendable () -> Void
+        onActivated: @escaping @Sendable () -> Void,
+        onRecord: @escaping @Sendable (String, Data) -> Void
     ) {
         self.onPacket = onPacket
         self.onReachability = onReachability
         self.onActivated = onActivated
+        self.onRecord = onRecord
     }
 
     func session(
@@ -71,6 +77,10 @@ nonisolated private final class WCShim: NSObject, WCSessionDelegate, @unchecked 
     /// Read before returning: the file is gone once this does.
     func session(_ session: WCSession, didReceive file: WCSessionFile) {
         guard let data = try? Data(contentsOf: file.fileURL) else { return }
+        if file.metadata?[Key.kind] as? String == Key.linkRecord {
+            guard let day = file.metadata?[Key.day] as? String else { return }
+            return onRecord(day, data)
+        }
         onPacket(InboundPacket(payload: data))
     }
 
@@ -156,6 +166,13 @@ nonisolated public final class WatchConnectivityTransport: PeerTransport, @unche
     private let shim: WCShim
     private let revision = Revision()
     private let held: Held
+    private let records: RecordInbox
+
+    /// On the phone: one day of the watch's sharing record, arrived whole.
+    public var onRecord: (@Sendable (_ day: String, _ contents: Data) -> Void)? {
+        get { records.handler }
+        set { records.handler = newValue }
+    }
 
     public init() {
         var packetContinuation: AsyncStream<InboundPacket>.Continuation!
@@ -170,11 +187,25 @@ nonisolated public final class WatchConnectivityTransport: PeerTransport, @unche
         let sendReachability = reachabilityContinuation!
         let held = Held()
         self.held = held
+        let records = RecordInbox()
+        self.records = records
         shim = WCShim(
             onPacket: { sendPacket.yield($0) },
             onReachability: { sendReachability.yield($0) },
-            onActivated: { for payload in held.release() { Self.transfer(payload) } }
+            onActivated: { for payload in held.release() { Self.transfer(payload) } },
+            onRecord: { day, contents in records.handler?(day, contents) }
         )
+    }
+
+    /// On the watch: one day of its sharing record, to its phone, by a transfer that gets there
+    /// whether or not the phone's app is running.
+    public func sendRecord(day: String, contents: Data) {
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
+        let directory = FileManager.default.temporaryDirectory.appending(path: "rekkert-record", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appending(path: "\(UUID().uuidString).jsonl")
+        guard (try? contents.write(to: url, options: .atomic)) != nil else { return }
+        WCSession.default.transferFile(url, metadata: [Key.kind: Key.linkRecord, Key.day: day])
     }
 
     public static var isSupported: Bool { WCSession.isSupported() }
@@ -257,6 +288,16 @@ nonisolated private final class Held: @unchecked Sendable {
             defer { payloads = [] }
             return payloads
         }
+    }
+}
+
+nonisolated private final class RecordInbox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _handler: (@Sendable (String, Data) -> Void)?
+
+    var handler: (@Sendable (String, Data) -> Void)? {
+        get { lock.withLock { _handler } }
+        set { lock.withLock { _handler = newValue } }
     }
 }
 

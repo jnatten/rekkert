@@ -115,6 +115,39 @@ public final class WatchStandIn {
     /// nowhere until somebody opens it.
     public private(set) var phoneNeedsOpening = false
 
+    /// What the wrist says about somebody else's match it is on, the most pressing first.
+    public enum Status: Sendable, Equatable {
+        case hostOutOfReach(since: Date)
+        case phoneNeedsOpening
+        case followingOnTheWatch
+        case lookingForTheMatch
+        case onTheHostsPhone
+        case phoneOutOfReach
+    }
+
+    public var statuses: [Status] {
+        guard store.state != nil, !store.canEndSession else { return [] }
+        var statuses: [Status] = []
+        if let since = hostOutOfReachSince { statuses.append(.hostOutOfReach(since: since)) }
+        if phoneNeedsOpening { statuses.append(.phoneNeedsOpening) }
+        let isOwnLinkUp = sharing.isSharing && sharing.reachablePeers > 0
+        if isOwnLinkUp, !store.isPairReachable { statuses.append(.followingOnTheWatch) }
+        if hostOutOfReachSince == nil {
+            switch link {
+            case .up: statuses.append(.onTheHostsPhone)
+            case .reconnecting, .down: if !phoneNeedsOpening { statuses.append(.lookingForTheMatch) }
+            }
+        }
+        if !store.isPairReachable, !isOwnLinkUp { statuses.append(.phoneOutOfReach) }
+        return statuses
+    }
+
+    /// Whether the score on the wrist is the match's: a match of its own always is.
+    public var isInReachOfTheMatch: Bool {
+        let statuses = statuses
+        return statuses.isEmpty || statuses.contains(.onTheHostsPhone)
+    }
+
     /// Since when the host has been out of reach: by the wrist's own link while it stands in, and
     /// otherwise by what its phone last said.
     public var hostOutOfReachSince: Date? {
@@ -271,8 +304,10 @@ public final class WatchStandIn {
             joining = .failed(.notFound)
             owesJoined = false
         case .standIn:
+            store.recorder?.note(.standIn, on: .pair, in: store.log.sessionID)
             sharing.standIn()
         case .standDown:
+            store.recorder?.note(.standDown, on: .pair, in: store.log.sessionID)
             sharing.standDown()
             store.followPairedDevice()
         }

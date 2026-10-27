@@ -96,6 +96,14 @@ struct SettingsView: View {
                 }
             }
 
+            Section {
+                NavigationLink(value: HomeRoute.sharingRecord) {
+                    Label("Sharing record", systemImage: "doc.text.magnifyingglass")
+                }
+            } footer: {
+                Text("What happened to this iPhone's links and its watch's on shared matches this past week, to send to the developer if sharing went wrong. It stays on your devices unless you share it.")
+            }
+
             Section {} footer: {
                 CommitLabel()
             }

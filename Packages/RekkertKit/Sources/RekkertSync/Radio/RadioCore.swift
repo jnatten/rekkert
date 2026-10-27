@@ -110,8 +110,18 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
     private var lastRescan: Duration?
     private static var rescanEvery: Duration { .seconds(20) }
     private var _availability = RadioAvailability.unknown
+    private let availabilityUpdates = Broadcast<RadioAvailability>()
 
     public var availability: RadioAvailability { lock.withLock { _availability } }
+    public var availabilityChanges: AsyncStream<RadioAvailability> { availabilityUpdates.stream() }
+
+    private func noteAvailability(_ availability: RadioAvailability) {
+        let changed = lock.withLock { () -> Bool in
+            defer { _availability = availability }
+            return _availability != availability
+        }
+        if changed { availabilityUpdates.yield(availability) }
+    }
 
     private enum Intent: Sendable {
         case none
@@ -737,7 +747,7 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
 
     public func peripheralState(_ availability: RadioAvailability, session: Int) {
         guard lock.withLock({ peripheralSession == session }) else { return }
-        lock.withLock { _availability = availability }
+        noteAvailability(availability)
         guard availability == .on else { return lostTheRadio() }
         guard case .hosting = lock.withLock({ intent }) else { return }
         lock.withLock { isPublished = true }
@@ -805,7 +815,7 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
 
     public func centralState(_ availability: RadioAvailability, session: Int) {
         guard lock.withLock({ centralSession == session }) else { return }
-        lock.withLock { _availability = availability }
+        noteAvailability(availability)
         guard availability == .on else { return lostTheRadio() }
         guard case .joining = lock.withLock({ intent }) else { return }
         radio.scan()

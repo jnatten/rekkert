@@ -28,6 +28,7 @@ struct StandInHandBackTests {
         court.score(on: court.host.phone)
         #expect(await court.until(within: .seconds(30)) { court.inStep(guest.watch!, with: court.host.phone) })
         #expect(!guest.watch!.standIn!.phoneNeedsOpening)
+        #expect(guest.watch!.standIn!.statuses.contains(.followingOnTheWatch))
     }
 
     @Test func withoutAWorkoutOrTheAppInFrontItSaysThePhoneNeedsOpening() async {
@@ -38,6 +39,7 @@ struct StandInHandBackTests {
 
         #expect(await court.until(within: .seconds(30)) { guest.watch!.standIn!.phoneNeedsOpening })
         #expect(!guest.watch!.sharing.isSharing)
+        #expect(guest.watch!.standIn!.statuses.first == .phoneNeedsOpening)
     }
 
     @Test func thePhoneBackTakesOverAndNothingIsLost() async {

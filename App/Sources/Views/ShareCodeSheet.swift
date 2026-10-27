@@ -27,17 +27,21 @@ struct ShareCodeSheet: View {
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
 
-                    Label(joinedDescription, systemImage: "person.2.fill")
-                        .font(.headline)
-                        .foregroundStyle(model.sharing.reachablePeers > 0 ? Color.accentColor : .secondary)
+                    // Read again every second: a guest going quiet changes nothing until somebody looks.
+                    TimelineView(.periodic(from: .now, by: 1)) { _ in
+                        let participants = model.store.participantStates()
+                        VStack(spacing: 12) {
+                            Label(joinedDescription(participants), systemImage: "person.2.fill")
+                                .font(.headline)
+                                .foregroundStyle(participants.isEmpty ? .secondary : Color.accentColor)
+                            if !participants.isEmpty { whoIsOn(participants) }
+                        }
+                    }
 
                     whoMayDoWhat
 
                     VStack(spacing: 6) {
                         Text("Only you can finish this match.")
-                        if model.sharing.reachablePeers > model.store.guests.count {
-                            Text("A phone on an older Rekkert is not listed, and can do everything.")
-                        }
                         Text("Keep this phone nearby. The score keeps up over Bluetooth even when your phone is locked or in a bag, and the screen will not sleep while you are sharing.")
                     }
                     .font(.footnote)
@@ -104,12 +108,46 @@ struct ShareCodeSheet: View {
         )
     }
 
-    private var joinedDescription: String {
+    /// People, not links: a guest on two radios, or with its watch standing in, is one of them.
+    private func joinedDescription(_ participants: [ParticipantSummary]) -> String {
         if model.sharing.isReconnecting { return "Looking for them again" }
-        switch model.sharing.reachablePeers {
+        switch participants.count {
         case 0: return "Nobody has joined yet"
-        case 1: return "1 phone joined"
-        case let count: return "\(count) phones joined"
+        case 1: return "1 guest joined"
+        case let count: return "\(count) guests joined"
+        }
+    }
+
+    private func whoIsOn(_ participants: [ParticipantSummary]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(participants.enumerated()), id: \.element.id) { index, participant in
+                if index > 0 { Divider() }
+                LabeledContent(participant.name ?? "Phone \(index + 1)") {
+                    Text(participant.state.title)
+                        .foregroundStyle(participant.state.tint)
+                }
+                .padding(.vertical, 8)
+            }
+        }
+        .padding(.horizontal)
+        .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 12))
+    }
+}
+
+private extension ParticipantState {
+    var title: String {
+        switch self {
+        case .inStep: "In step"
+        case .catchingUp: "Catching up"
+        case .outOfReach(let since): "Out of reach since \(since.formatted(date: .omitted, time: .shortened))"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .inStep: .green
+        case .catchingUp: .secondary
+        case .outOfReach: .orange
         }
     }
 }

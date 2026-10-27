@@ -273,24 +273,24 @@ within 15 s, and each phone's merged record lists the events in order (spec US2)
 
 ### Tests for User Story 2 ⚠️ write first, watch them fail
 
-- [ ] T040 [P] [US2] Write `CoreTests/LinkRecordTests.swift`:
+- [X] T040 [P] [US2] Write `CoreTests/LinkRecordTests.swift`:
   - entries merged by `time` and deduplicated by `id`;
   - "Days older than 7 are pruned when a file is opened";
   - the export matches `contracts/sharing-record.md` line for line, and parses back;
   - "No player names, scores or codes are ever recorded";
   - the header notes "Watch entries up to HH:MM (not in touch since)" when the watch is behind.
-- [ ] T041 [P] [US2] Write `SyncTests/WhoIsOnTests.swift`. In `CourtHarness` (the return to `inStep` needs T030 from US1):
+- [X] T041 [P] [US2] Write `SyncTests/WhoIsOnTests.swift`. In `CourtHarness` (the return to `inStep` needs T030 from US1):
   - the host's participants move `inStep` → `outOfReach(since:)` → `inStep` within 15 s of each change (FR-010);
   - each device exposes pair reachability and match reachability separately (FR-011);
   - the four staged failures of SC-006 each leave records that name the broken link.
 
 ### Implementation for User Story 2
 
-- [ ] T042 [P] [US2] Add `LinkRecord` and `LinkRecordEntry` in `RekkertCore/Sync/LinkRecord.swift`, per data-model.md.
+- [X] T042 [P] [US2] Add `LinkRecord` and `LinkRecordEntry` in `RekkertCore/Sync/LinkRecord.swift`, per data-model.md.
   - Fields: `id`, `time`, `device` (`.phone`/`.watch`), `session: UUID?`, `link` (`.pair`/`.host(DeviceID)`/`.guest(DeviceID)`/`.radio`) and `kind: LinkEvent`. `LinkEvent` has every kind listed there, including the debug-only `pointArrived(latency:)`.
   - Add the plain-text export of `contracts/sharing-record.md`, and its parser.
   - T040 must pass.
-- [ ] T043 [US2] Add `LinkRecorder` in `RekkertSync/LinkRecorder.swift` (FR-012).
+- [X] T043 [US2] Add `LinkRecorder` in `RekkertSync/LinkRecorder.swift` (FR-012).
   - **Storage:** one file per day under Application Support, with `isExcludedFromBackup = true`, pruning days older than 7.
   - **Events recorded:**
     - from `linkChanges` (T011) and `RadioCore`: `proven`, `refused`, `wroteOff`, `redialled`;
@@ -300,19 +300,19 @@ within 15 s, and each phone's merged record lists the events in order (spec US2)
     - `notificationPosted`;
     - in debug builds only, `pointArrived(latency:)`.
   - **Wiring:** create it in `Shared/AppModel.swift`.
-- [ ] T044 [US2] Send the watch's record to the phone (D-11) with `RekkertSync/WatchConnectivityTransport.swift`.
+- [X] T044 [US2] Send the watch's record to the phone (D-11) with `RekkertSync/WatchConnectivityTransport.swift`.
   - On the watch, `RekkertSync/WatchConnectivityTransport.swift` sends the day files with `WCSession.transferFile`, metadata `{"kind": "linkRecord", "day": "YYYY-MM-DD"}`.
   - On the phone, `LinkRecorder` merges them and records `recordReceived(from: .watch)`.
   - T041 must pass.
-- [ ] T045 [P] [US2] List the participants in `App/Sources/Views/ShareCodeSheet.swift`: name, or "Phone 1"…, with **In step**, **Catching up** or **Out of reach since 20:41**. Count participants instead of links, and remove the false "older Rekkert" claim (ShareCodeSheet.swift:38).
-- [ ] T046 [P] [US2] Update `App/Sources/Views/ConnectionBadge.swift`. Show the watch link and the match link separately (FR-011). For a host with a kept code but no hosting, show "Not sharing: tap to share again on 482 915", which calls `host()` on the kept code.
-- [ ] T047 [P] [US2] Add the watch status lines from `contracts/watch-ui.md` to `WatchApp/Sources/Views/WatchMenuView.swift` and `WatchApp/Sources/Views/WatchCourtPage.swift`.
+- [X] T045 [P] [US2] List the participants in `App/Sources/Views/ShareCodeSheet.swift`: name, or "Phone 1"…, with **In step**, **Catching up** or **Out of reach since 20:41**. Count participants instead of links, and remove the false "older Rekkert" claim (ShareCodeSheet.swift:38).
+- [X] T046 [P] [US2] Update `App/Sources/Views/ConnectionBadge.swift`. Show the watch link and the match link separately (FR-011). For a host with a kept code but no hosting, show "Not sharing: tap to share again on 482 915", which calls `host()` on the kept code.
+- [X] T047 [P] [US2] Add the watch status lines from `contracts/watch-ui.md` to `WatchApp/Sources/Views/WatchMenuView.swift` and `WatchApp/Sources/Views/WatchCourtPage.swift`.
   - Use the contract's wording exactly.
   - The menu shows every line that applies. The court page shows one, with the match first: "Host out of reach since…" outranks "iPhone out of reach".
   - Add the stand-in lines "Your iPhone's app was closed: following on the watch" and "Open Rekkert on your iPhone".
-- [ ] T048 [P] [US2] Add a **Sharing record** entry to `App/Sources/Views/SettingsView.swift`, and a new `App/Sources/Views/SharingRecordView.swift`. It shows the merged record newest first, with a Share button exporting `rekkert-sharing-YYYY-MM-DD.txt` through the system share sheet. Nothing leaves otherwise (FR-013).
-- [ ] T049 [P] [US2] In `WatchApp/Sources/WatchHaptics.swift`, tap the wrist following `HapticPreferences` when the wearer has been out of reach of the match for 15 s, and again when back in step (FR-032).
-- [ ] T050 [US2] Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh`
+- [X] T048 [P] [US2] Add a **Sharing record** entry to `App/Sources/Views/SettingsView.swift`, and a new `App/Sources/Views/SharingRecordView.swift`. It shows the merged record newest first, with a Share button exporting `rekkert-sharing-YYYY-MM-DD.txt` through the system share sheet. Nothing leaves otherwise (FR-013).
+- [X] T049 [P] [US2] In `WatchApp/Sources/WatchHaptics.swift`, tap the wrist following `HapticPreferences` when the wearer has been out of reach of the match for 15 s, and again when back in step (FR-032).
+- [X] T050 [US2] Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh`
 
 **Checkpoint**: User Stories 1 and 2 both work. Failures are visible as they happen and
 explainable afterwards.

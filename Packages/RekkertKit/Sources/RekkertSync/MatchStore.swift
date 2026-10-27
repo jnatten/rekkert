@@ -73,6 +73,8 @@ public final class MatchStore {
     /// pair's persisted channels, before any hello, and "is this the pair's own match" has to be
     /// answered on them. A stale id matches events nobody is making, and the next hello replaces it.
     @ObservationIgnored private var pairedDevice: DeviceID?
+    /// This device's own watch or phone, as its hellos named it.
+    public var pairDevice: DeviceID? { pairedDevice }
 
     /// Whether that point was put in by one of these two devices rather than by somebody else.
     /// A phone propped at the net post is still you, so a point tapped on it is not news to
@@ -159,6 +161,15 @@ public final class MatchStore {
     /// The host of the match on screen stopped sharing it, and said so. Called before this end
     /// lets go of it, as `onLeft` is.
     @ObservationIgnored public var onStoppedByHost: (() -> Void)?
+    /// The sharing record, told what happens to each link as it happens.
+    @ObservationIgnored public var recorder: (any LinkRecording)?
+    /// The device on the far end of each link, as its first hello named it.
+    @ObservationIgnored private var farEnds: [LinkID: DeviceID] = [:]
+    /// The host this device last heard from on a link, for a guest's record.
+    @ObservationIgnored public private(set) var hostDevice: DeviceID?
+    @ObservationIgnored private var recordedPairReachable: Bool?
+    @ObservationIgnored private var recordedOutOfReach: Set<DeviceID> = []
+    @ObservationIgnored private let participantTick: Duration
 
     public init(
         device: DeviceID,
@@ -169,8 +180,10 @@ public final class MatchStore {
         sendTimeout: Duration = .seconds(6),
         retryInterval: Duration = .seconds(4),
         keepsHistory: Bool = true,
-        now: @escaping @Sendable () -> Date = { Date() }
+        now: @escaping @Sendable () -> Date = { Date() },
+        participantTick: Duration = .seconds(1)
     ) {
+        self.participantTick = participantTick
         self.sendTimeout = sendTimeout
         self.retryInterval = retryInterval
         self.keepsHistory = keepsHistory
@@ -1054,16 +1067,54 @@ public final class MatchStore {
         async let retries: Void = retryUndelivered()
         async let initial: Void = synchroniseOnce()
         async let links: Void = consumeLinkChanges()
-        _ = await (packets, reachability, retries, initial, links)
+        async let guests: Void = watchParticipants()
+        _ = await (packets, reachability, retries, initial, links, guests)
     }
 
     private func consumeLinkChanges() async {
         for await change in transport.linkChanges {
-            guard case .down(let link, _) = change else { continue }
+            guard case .down(let link, let reason) = change else { continue }
             heldOnLink[link] = nil
             delivering[link] = nil
             acknowledgeOutbox()
+            // A host gives up on a guest that stays connected; a guest hangs up and dials again.
+            if let owner = farEnds.removeValue(forKey: link) {
+                let kind: LinkEvent = reason == .timeout ? (role == .host ? .wroteOff : .redialled) : .dropped(reason)
+                recorder?.note(kind, on: farLink(owner), in: log.sessionID)
+            }
         }
+    }
+
+    /// Nobody says when a guest goes quiet, so the host looks, and records each one that has gone
+    /// out of reach or come back since it last did.
+    private func watchParticipants() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: participantTick)
+            guard role == .host, recorder != nil else {
+                recordedOutOfReach = []
+                continue
+            }
+            let away = Set(participantStates().compactMap { summary -> DeviceID? in
+                if case .outOfReach = summary.state { summary.id } else { nil }
+            })
+            for guest in away.subtracting(recordedOutOfReach) {
+                recorder?.note(.outOfReach, on: .guest(guest), in: log.sessionID)
+            }
+            for guest in recordedOutOfReach.subtracting(away) where participants.participant(for: guest) != nil {
+                recorder?.note(.backInStep, on: .guest(guest), in: log.sessionID)
+            }
+            recordedOutOfReach = away
+        }
+    }
+
+    private func farLink(_ owner: DeviceID) -> LinkRecordEntry.Link {
+        role == .host ? .guest(owner) : .host(owner)
+    }
+
+    /// Where a packet came from, as the record names it.
+    private func source(of packet: InboundPacket) -> LinkRecordEntry.Link {
+        if packet.isFromPairedDevice { return .pair }
+        return packet.link.flatMap { farEnds[$0] }.map(farLink) ?? .radio
     }
 
     private func consumeInbound() async {
@@ -1109,6 +1160,12 @@ public final class MatchStore {
         for await reachable in transport.reachability {
             isReachable = reachable
             isPairReachable = transport.isPairReachable
+            if recordedPairReachable != isPairReachable {
+                if recordedPairReachable != nil || isPairReachable {
+                    recorder?.note(isPairReachable ? .proven : .dropped(.unknown), on: .pair)
+                }
+                recordedPairReachable = isPairReachable
+            }
             // Back, it says again what it holds. Until then it may have come back with less.
             if !transport.isReachableBesideLinks { heldBesideLinks = nil }
             retryPatience = 1
@@ -1299,6 +1356,10 @@ public final class MatchStore {
         guard answered == session, session == log.sessionID else { return }
         if let link {
             learn(vector, on: link)
+            // An answer is as good as a hello for knowing how far that guest has got.
+            if role == .host, let owner = linkOwners[link] {
+                participants.heard(from: owner, vector: vector, at: now())
+            }
         } else {
             heldBesideLinks = heldBesideLinks(in: session)?.merging(vector) ?? vector
         }
@@ -1422,12 +1483,24 @@ public final class MatchStore {
         }
         guard noteParticipant(wire, from: packet) else {
             packet.reply?(encode(.noRoom(sessionID: log.sessionID)))
-            if let link = packet.link { transport.refuse(link) }
+            if let link = packet.link {
+                transport.refuse(link)
+                var sender: DeviceID?
+                if case .hello(_, _, let named) = wire { sender = named }
+                recorder?.note(.refused(.noRoom), on: .guest(sender ?? DeviceID(link.raw)), in: log.sessionID)
+            }
             return
         }
 
         switch wire {
         case .hello(let sessionID, let vector, let sender):
+            // The first word on a link names who is on the far end of it.
+            if let link = packet.link, !packet.isFromPairedDevice, farEnds[link] == nil {
+                let owner = sender ?? DeviceID(link.raw)
+                farEnds[link] = owner
+                if role != .host { hostDevice = owner }
+                recorder?.note(.proven, on: farLink(owner), in: sessionID)
+            }
             // Only the pair's: a stranger's phone is somebody else by definition, and on a
             // watch every packet arrives through its own phone anyway.
             if packet.isFromPairedDevice, let sender, sender != device, sender != pairedDevice {
@@ -1829,6 +1902,13 @@ public final class MatchStore {
         let before = state
         let session = log.sessionID
         guard log.merge(fresh) else { return }
+        if fresh.count > 1 { recorder?.note(.caughtUp(events: fresh.count), on: source(of: packet), in: session) }
+        #if DEBUG
+        for event in fresh {
+            guard case .point = event.kind, let at = event.at else { continue }
+            recorder?.note(.pointArrived(latency: now().timeIntervalSince(at)), on: source(of: packet), in: session)
+        }
+        #endif
         let overruled = packet.isFromPairedDevice ? [] : overrule(endingsIn: fresh)
         outbox.enqueue(contentsOf: fresh + overruled)
         push(fresh + overruled, in: session, from: packet.link)

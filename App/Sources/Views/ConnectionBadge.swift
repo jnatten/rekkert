@@ -91,6 +91,16 @@ struct SharingBadge: View {
             }
             .tint(.secondary)
             .accessibilityLabel("Not connected to the shared match. Rejoin")
+        } else if let code = model.sharing.keptHostCode, model.store.state != nil {
+            // The code everybody at the court already has, back where it was.
+            Button {
+                model.sharing.host(code: code)
+            } label: {
+                Label("Not sharing: tap to share again on \(code.description)", systemImage: "person.2.slash")
+                    .labelStyle(.iconOnly)
+            }
+            .tint(.orange)
+            .accessibilityLabel("Not sharing: tap to share again on \(code.description)")
         }
     }
 

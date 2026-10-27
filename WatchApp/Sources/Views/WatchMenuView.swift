@@ -1,4 +1,5 @@
 import RekkertCore
+import RekkertSync
 import SwiftUI
 import WatchKit
 
@@ -247,18 +248,17 @@ struct WatchMenuView: View {
 
     private var status: some View {
         VStack(spacing: 2) {
+            // The two links apart (FR-011): its own phone, then the match.
             Label(
-                model.store.isPairReachable ? "iPhone connected" : "iPhone not reachable",
+                model.store.isPairReachable ? "iPhone connected" : WatchStandIn.Status.phoneOutOfReach.line,
                 systemImage: model.store.isPairReachable ? "iphone.radiowaves.left.and.right" : "iphone.slash"
             )
             .foregroundStyle(model.store.isPairReachable ? .green : .secondary)
 
-            if model.sharing.isSharing {
-                Label(
-                    model.sharing.reachablePeers > 0 ? "On the host's iPhone" : "Looking for the host…",
-                    systemImage: "applewatch.radiowaves.left.and.right"
-                )
-                .foregroundStyle(model.sharing.reachablePeers > 0 ? .green : .secondary)
+            ForEach(model.standIn.statuses.filter { $0 != .phoneOutOfReach }, id: \.line) { status in
+                Label(status.line, systemImage: "applewatch.radiowaves.left.and.right")
+                    .foregroundStyle(status == .onTheHostsPhone ? .green : .orange)
+                    .multilineTextAlignment(.center)
             }
         }
         .font(.system(size: 11))

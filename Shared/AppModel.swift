@@ -4,6 +4,8 @@ import RekkertCore
 import RekkertSync
 #if os(watchOS)
 import WatchKit
+#else
+import UIKit
 #endif
 
 @Observable
@@ -37,6 +39,8 @@ final class AppModel {
     let workout: WorkoutController
     let follower: WorkoutFollower
     let roundAlarm = RoundAlarmFollower()
+    /// What happened to this device's links, kept a week (FR-012).
+    let recorder: LinkRecorder
     /// Driven from the match menu and presented at the root, so every scoreboard has it.
     var showingShareCode = false
     /// Joining is reachable from the start screen and from a match already in progress —
@@ -48,11 +52,16 @@ final class AppModel {
     init() {
         let persistence = try? SessionStore.applicationSupport()
         sessionStore = persistence
+        let recorder = LinkRecorder(
+            directory: LinkRecorder.standardDirectory ?? FileManager.default.temporaryDirectory,
+            device: AppModel.recordsAs
+        )
+        self.recorder = recorder
 
         // One peer as far as the store is concerned; a watch and some other people's phones
         // as far as anybody else is.
         let links = FanOutTransport()
-        links.attach(AppModel.makePairedTransport(), as: .pairedDevice)
+        links.attach(AppModel.makePairedTransport(recorder: recorder), as: .pairedDevice)
         let localNetwork = LocalNetworkTransport()
         links.attach(localNetwork, as: .sharedSession)
         // The same phones again, over the radio that goes on working with the screen off. A
@@ -60,6 +69,7 @@ final class AppModel {
         // by event id, so a duplicate costs bytes and nothing else.
         let bluetooth = BluetoothTransport()
         links.attach(bluetooth, as: .sharedSession)
+        bluetooth.onRestored = { [recorder] in Task { @MainActor in recorder.note(.launched(.restored)) } }
 
         let store = MatchStore(
             device: DeviceIdentity.current(),
@@ -68,6 +78,7 @@ final class AppModel {
             session: try? persistence?.loadActive(),
             keepsHistory: AppModel.keepsHistory
         )
+        store.recorder = recorder
         self.store = store
         let workout = WorkoutController()
         self.workout = workout
@@ -97,16 +108,42 @@ final class AppModel {
         #endif
     }
 
-    private static func makePairedTransport() -> any PeerTransport {
-        #if canImport(WatchConnectivity)
-        WatchConnectivityTransport()
+    private static var recordsAs: LinkRecordEntry.Device {
+        #if os(watchOS)
+        .watch
         #else
-        LoopbackTransport(reachable: false)
+        .phone
+        #endif
+    }
+
+    /// The watch's sharing record goes to its phone this way, and nowhere else.
+    private static func makePairedTransport(recorder: LinkRecorder) -> any PeerTransport {
+        #if canImport(WatchConnectivity)
+        let transport = WatchConnectivityTransport()
+        #if os(watchOS)
+        recorder.send = { [transport] day, contents in transport.sendRecord(day: day, contents: contents) }
+        #else
+        transport.onRecord = { [weak recorder] day, contents in
+            Task { @MainActor in recorder?.receive(watchDay: day, contents: contents) }
+        }
+        #endif
+        return transport
+        #else
+        return LoopbackTransport(reachable: false)
+        #endif
+    }
+
+    private static var launchedAs: LinkEvent.Launch {
+        #if os(watchOS)
+        WKApplication.shared().applicationState == .background ? .background : .user
+        #else
+        UIApplication.shared.applicationState == .background ? .background : .user
         #endif
     }
 
     func start() {
         guard runTask == nil else { return }
+        recorder.note(.launched(AppModel.launchedAs))
         runTask = Task { [store] in await store.run() }
         // A workout is between this device and the one in the same pocket. `MatchStore`
         // carries the messages and holds no opinion about them; the controller has the
@@ -147,6 +184,8 @@ final class AppModel {
         haptics.state = { [store] in store.state }
         haptics.me = { [store] in store.me }
         haptics.isOurs = { [store] author in store.isOurs(author) }
+        haptics.isInReach = { [standIn] in standIn.isInReachOfTheMatch }
+        Task { [haptics] in await haptics.watchReach() }
         store.onPoint = { [haptics] point in haptics.heard(point) }
         standIn.onJoined = { [follower] session in follower.heard(.began(session)) }
         #endif

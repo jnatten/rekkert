@@ -1,4 +1,5 @@
 import RekkertCore
+import RekkertSync
 import SwiftUI
 import WatchKit
 
@@ -59,19 +60,11 @@ struct WatchCourtPage: View {
 
     private var linkNotice: String? {
         #if DEBUG
-        if WatchDemoLaunch.link == "reconnecting" { return "Reconnecting…" }
-        if WatchDemoLaunch.link == "down" { return "Not connected" }
+        if WatchDemoLaunch.link == "reconnecting" { return WatchStandIn.Status.lookingForTheMatch.line }
+        if WatchDemoLaunch.link == "down" { return WatchStandIn.Status.phoneOutOfReach.line }
         #endif
-        // The match first: a score of the wrist's own is the thing to know about.
-        if let since = model.standIn.hostOutOfReachSince {
-            return "Host out of reach since \(since.formatted(date: .omitted, time: .shortened))"
-        }
-        if model.standIn.phoneNeedsOpening { return "Open Rekkert on your iPhone" }
-        return switch model.standIn.link {
-        case .up: nil
-        case .reconnecting: "Reconnecting…"
-        case .down: "Not connected"
-        }
+        // One line fits, and the match comes first: in step, nothing is said at all.
+        return model.standIn.statuses.first { $0 != .onTheHostsPhone }?.line
     }
 
     @ViewBuilder
@@ -344,6 +337,20 @@ struct WatchCourtPage: View {
                 model.store.setScore(round: round, court: court, points: updated)
             }
         )
+    }
+}
+
+extension WatchStandIn.Status {
+    /// The words of `contracts/watch-ui.md`.
+    var line: String {
+        switch self {
+        case .hostOutOfReach(let since): "Host out of reach since \(since.formatted(date: .omitted, time: .shortened))"
+        case .phoneNeedsOpening: "Open Rekkert on your iPhone"
+        case .followingOnTheWatch: "Your iPhone's app was closed: following on the watch"
+        case .lookingForTheMatch: "Looking for the match…"
+        case .onTheHostsPhone: "On the host's iPhone"
+        case .phoneOutOfReach: "iPhone out of reach"
+        }
     }
 }
 

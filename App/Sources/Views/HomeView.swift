@@ -171,6 +171,7 @@ struct HomeView: View {
                 case .workout(let workout): WorkoutDetailView(workout: workout)
                 case .players: PlayersView()
                 case .player(let person): PlayerStatsView(person: person)
+                case .sharingRecord: SharingRecordView()
                 }
             }
             .navigationTitle("Rekkert")

@@ -17,6 +17,7 @@ public enum HelpCatalog {
         "checkmark.circle.fill": "a done tick on the TV's board and in its guide",
         "clock": "when a match was played, and an empty History",
         "delete.left": "the watch keypad's delete key",
+        "doc.text.magnifyingglass": "the sharing record in Settings, beside its name",
         "exclamationmark.triangle": "a warning, beside what it warns about",
         "exclamationmark.triangle.fill": "a warning, beside what it warns about",
         "list.bullet": "the watch's presets page with nothing on it",

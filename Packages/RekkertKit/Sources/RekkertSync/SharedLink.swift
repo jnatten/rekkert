@@ -20,10 +20,13 @@ public protocol SharedLink: Sendable {
 
     /// Whether the radio under this link can be used at all.
     var availability: RadioAvailability { get }
+    /// Each change of it.
+    var availabilityChanges: AsyncStream<RadioAvailability> { get }
 }
 
 extension SharedLink {
     public var availability: RadioAvailability { .unknown }
+    public var availabilityChanges: AsyncStream<RadioAvailability> { AsyncStream { $0.finish() } }
 }
 
 extension BluetoothTransport: SharedLink {}

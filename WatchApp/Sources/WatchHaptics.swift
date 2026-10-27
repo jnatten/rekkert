@@ -22,6 +22,19 @@ final class WatchHaptics {
     @ObservationIgnored var me: () -> PlayerID? = { nil }
     /// Whether that point was entered on one of this person's own two devices.
     @ObservationIgnored var isOurs: (DeviceID) -> Bool = { _ in false }
+    /// Whether the score on the wrist is still the match's.
+    @ObservationIgnored var isInReach: () -> Bool = { true }
+    @ObservationIgnored private var reach = ReachCue()
+
+    /// Looked at every second for as long as the app runs: nothing announces a match going quiet.
+    func watchReach() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(1))
+            // Once on the way out and once on the way back, as hard as a point would buzz.
+            guard reach.observe(isInReach: isInReach(), at: Date()) != nil, preferences().mode != .off else { continue }
+            play(Buzz(taps: 1, strength: preferences().strength))
+        }
+    }
 
     /// Whether a tap on this watch's own scoreboard should still click.
     ///

@@ -28,6 +28,8 @@ final class CourtHarness {
         let directory: URL
         /// What the Keychain would hold: it outlives the app being ended.
         let keeper = MemoryCodeKeeper()
+        /// The sharing record, which is on disk and outlives it too.
+        fileprivate(set) var recorder: LinkRecorder!
         fileprivate(set) var store: MatchStore!
         fileprivate(set) var sharing: SharedSession!
         fileprivate(set) var core: RadioCore!
@@ -81,6 +83,18 @@ final class CourtHarness {
             let name = index == 0 ? "host" : "guest\(index)"
             let phone = Device(name: name, isWatch: false, radio: self.air.radio(canHost: true))
             let watch = withWatches ? Device(name: "\(name)-watch", isWatch: true, radio: self.air.radio(canHost: false)) : nil
+            let clock = self.air.clock
+            for device in [phone] + (watch.map { [$0] } ?? []) {
+                device.recorder = LinkRecorder(
+                    directory: device.directory.appendingPathComponent("record", isDirectory: true),
+                    device: device.isWatch ? .watch : .phone,
+                    now: { CourtHarness.epoch.addingTimeInterval(clock.now.seconds) }
+                )
+            }
+            // What `transferFile` does: gets there whether or not the phone's app is running.
+            watch?.recorder.send = { [recorder = phone.recorder!] day, contents in
+                recorder.receive(watchDay: day, contents: contents)
+            }
             if let watch {
                 let (phoneSide, watchSide) = LoopbackTransport.pair()
                 boot(phone, pairLink: phoneSide)
@@ -118,8 +132,10 @@ final class CourtHarness {
             sendTimeout: timing.sendTimeout,
             retryInterval: timing.retryInterval,
             keepsHistory: !device.isWatch,
-            now: { CourtHarness.epoch.addingTimeInterval(clock.now.seconds) }
+            now: { CourtHarness.epoch.addingTimeInterval(clock.now.seconds) },
+            participantTick: .milliseconds(20)
         )
+        store.recorder = device.recorder
         let sharing = SharedSession(
             store: store, link: LocalNetworkTransport(), bluetooth: core,
             graceBeforeNotice: timing.graceBeforeNotice, radioGrace: timing.radioGrace,
@@ -247,6 +263,17 @@ final class CourtHarness {
 
     func outOfRange(_ device: Device) { device.radio.walkAway() }
     func backInRange(_ device: Device) { device.radio.comeBack() }
+
+    /// The watch out of reach of its own phone, both still running.
+    func separate(_ player: Player) {
+        player.phone.pairLink?.setReachable(false)
+        player.watch?.pairLink?.setReachable(false)
+    }
+
+    func reunite(_ player: Player) {
+        player.phone.pairLink?.setReachable(true)
+        player.watch?.pairLink?.setReachable(true)
+    }
 
     /// The system ended the app: its process and its links are gone, what it wrote to disk is not.
     func endApp(_ device: Device) {

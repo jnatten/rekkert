@@ -35,17 +35,29 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     public static var serviceUUID: CBUUID { CBUUID(string: "7B63F774-3D1F-4011-807E-85119A4CBAC8") }
 
     private let core: RadioCore
+    private let radio: CoreBluetoothRadio
 
     public init(replyTimeout: Int = 4, proofTimeout: Int = 10, candidateTimeout: Int = 15) {
+        radio = CoreBluetoothRadio()
         core = RadioCore(
-            radio: CoreBluetoothRadio(),
+            radio: radio,
             replyTimeout: replyTimeout, proofTimeout: proofTimeout, candidateTimeout: candidateTimeout
         )
+    }
+
+    /// The system ran the app again to hand back a link it had been keeping.
+    public var onRestored: (@Sendable () -> Void)? {
+        get { radio.onRestored }
+        set { radio.onRestored = newValue }
     }
 
     public var inbound: AsyncStream<InboundPacket> { core.inbound }
     public var reachability: AsyncStream<Bool> { core.reachability }
     public var linkChanges: AsyncStream<LinkChange> { core.linkChanges }
+    public var availabilityChanges: AsyncStream<RadioAvailability> { core.availabilityChanges }
+    public var links: [LinkID] { core.links }
+    public func sendLive(_ payload: Data, on link: LinkID) async -> Data? { await core.sendLive(payload, on: link) }
+    public func refuse(_ link: LinkID) { core.refuse(link) }
 
     public func startHosting(code: SessionCode, share: UUID) { core.startHosting(code: code, share: share) }
     public func startJoining(code: SessionCode) { core.startJoining(code: code) }
@@ -119,6 +131,12 @@ nonisolated private final class CoreBluetoothRadio: NSObject, Radio,
     private var peripherals: [ObjectIdentifier: CBPeripheral] = [:]
     private var inboxes: [ObjectIdentifier: CBCharacteristic] = [:]
     private var restoredPeripherals: [CBPeripheral] = []
+    private var _onRestored: (@Sendable () -> Void)?
+
+    var onRestored: (@Sendable () -> Void)? {
+        get { lock.withLock { _onRestored } }
+        set { lock.withLock { _onRestored = newValue } }
+    }
 
     override init() {
         scheduler = DispatchScheduler(queue: queue)
@@ -225,7 +243,9 @@ nonisolated private final class CoreBluetoothRadio: NSObject, Radio,
 
     /// Nothing to take over: publishing again replaces the service the system kept, and the
     /// guests on it reconnect and prove themselves to this process afresh.
-    func peripheralManager(_ manager: CBPeripheralManager, willRestoreState state: [String: Any]) {}
+    func peripheralManager(_ manager: CBPeripheralManager, willRestoreState state: [String: Any]) {
+        onRestored?()
+    }
 
     func peripheralManager(_ manager: CBPeripheralManager, didReceiveRead request: CBATTRequest) {
         guard let body = events?.greeting(session: session(of: manager)) else {
@@ -373,6 +393,7 @@ nonisolated private final class CoreBluetoothRadio: NSObject, Radio,
     func centralManager(_ manager: CBCentralManager, willRestoreState state: [String: Any]) {
         let kept = state[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] ?? []
         lock.withLock { restoredPeripherals = kept }
+        onRestored?()
     }
     #endif
 

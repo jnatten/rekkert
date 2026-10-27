@@ -11,6 +11,7 @@ enum HomeRoute: Hashable {
     case workouts
     case workout(WorkoutRecord)
     case players
+    case sharingRecord
     case player(PersonID)
 }
 
