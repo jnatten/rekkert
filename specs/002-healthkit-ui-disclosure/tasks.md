@@ -56,16 +56,16 @@ story can be built and checked on its own.
 - [ ] T001 Run `swift test --package-path Packages/RekkertKit` and `./scripts/verify.sh` on
   the current commit and confirm both pass. Any failure found here is not this feature's, and
   must be raised before going on.
-- [ ] T002 [P] [Manual] Download the Apple Health icon from Apple Design Resources
-  (https://developer.apple.com/design/resources/, Technologies section), accepting Apple's
-  terms. Add it, unaltered, as an image set named `AppleHealth` in both
+- [X] T002 [P] [Manual] Download the Apple Health icon from Apple Design Resources
+  (https://developer.apple.com/design/resources/, Technologies section, "Apple Health
+  Icon"), accepting Apple's terms. Apple ships it as a 1920×1920 PNG with transparency,
+  inside a `.dmg`. Add it, unaltered, as an image set named `AppleHealth` in both
   `App/Resources/Assets.xcassets/AppleHealth.imageset/` and
   `WatchApp/Resources/Assets.xcassets/AppleHealth.imageset/`:
-  - single-scale vector (PDF or SVG) with "Preserve Vector Data" on;
+  - one universal, single-scale `AppleHealth.png`, scaled down where it is drawn;
   - no tint, mask or rendering-mode override;
-  - one appearance for light and dark, unless Apple ships both.
+  - one appearance for light and dark, as Apple ships only one.
 
-  Code may reference `Image("AppleHealth")` before this lands; it renders empty until then.
   T043 makes the gate fail without it (D-3).
 
 ---

@@ -137,7 +137,8 @@ From the HIG's HealthKit page
 - **Decision**: The developer downloads the Apple Health icon from Apple Design Resources
   (Technologies section), accepting Apple's terms. They add it, unaltered, as
   `AppleHealth.imageset` in both `App/Resources/Assets.xcassets` and
-  `WatchApp/Resources/Assets.xcassets`, as vector with "Preserve Vector Data".
+  `WatchApp/Resources/Assets.xcassets`. Apple ships it as a 1920×1920 PNG, which goes in as
+  one universal, single-scale image.
 
   `AppleHealthMark` draws it:
   - beside the text "Apple Health", with padding of a tenth of its height;
