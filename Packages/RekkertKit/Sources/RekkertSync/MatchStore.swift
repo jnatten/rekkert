@@ -135,6 +135,10 @@ public final class MatchStore {
     private let sendTimeout: Duration
     private let retryInterval: Duration
     private let snapshotInterval: TimeInterval
+    /// Who is on this host's match, kept for as long as it is shared.
+    public private(set) var participants = Participants()
+    @ObservationIgnored private var linkOwners: [LinkID: DeviceID] = [:]
+    @ObservationIgnored private let now: @Sendable () -> Date
 
     public init(
         device: DeviceID,
@@ -144,11 +148,13 @@ public final class MatchStore {
         snapshotInterval: TimeInterval = 1,
         sendTimeout: Duration = .seconds(6),
         retryInterval: Duration = .seconds(4),
-        keepsHistory: Bool = true
+        keepsHistory: Bool = true,
+        now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.sendTimeout = sendTimeout
         self.retryInterval = retryInterval
         self.keepsHistory = keepsHistory
+        self.now = now
         self.retired = session?.retired ?? []
         self.discarded = session?.discarded ?? []
         self.role = session?.role ?? .solo
@@ -373,6 +379,28 @@ public final class MatchStore {
     public var canScore: Bool { access.canScore }
     public var canRunRounds: Bool { access.canRunRounds }
 
+    public func participantStates() -> [ParticipantSummary] {
+        participants.states(now: now(), hostCoverage: log.coverage)
+    }
+
+    /// Puts whatever arrived on a link down to whoever is on the far end of it: named by the
+    /// first hello on the link, or by the link itself for a build that names nobody.
+    private func noteParticipant(_ wire: Wire, from packet: InboundPacket) {
+        guard role == .host, !packet.isFromPairedDevice, let link = packet.link else { return }
+        switch wire {
+        case .hello(_, let vector, let sender):
+            guard sender != device else { return }
+            let owner = sender ?? linkOwners[link] ?? DeviceID(link.raw)
+            linkOwners[link] = owner
+            participants.heard(from: owner, vector: vector, isOlderBuild: sender == nil, at: now())
+        case .guestCard(let card):
+            linkOwners[link] = card.device
+            participants.heard(from: card.device, pairedTo: card.pairedTo, name: card.name, at: now())
+        default:
+            if let owner = linkOwners[link] { participants.heard(from: owner, at: now()) }
+        }
+    }
+
     /// Opens this session to other phones. Changes nothing about the session itself — only
     /// what this device is willing to be told about it.
     public func startSharing() {
@@ -381,6 +409,8 @@ public final class MatchStore {
         if role != .host || accessTable == nil {
             accessTable = ShareAccessTable(standard: defaultAccess)
             guests = []
+            participants = Participants()
+            linkOwners = [:]
         }
         role = .host
         // A search left running underneath would conclude on the first guest to say hello
@@ -1216,6 +1246,7 @@ public final class MatchStore {
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
             return
         }
+        noteParticipant(wire, from: packet)
 
         switch wire {
         case .hello(let sessionID, let vector, let sender):
@@ -1412,6 +1443,9 @@ public final class MatchStore {
                 shareAccess()
             }
 
+        case .sharingStopped:
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+
         case .sharing(let signal):
             // Only ever from the device in the same pocket — the scope drops this case before
             // it can reach anybody else — but said out loud here too, because acting on a
@@ -1419,7 +1453,7 @@ public final class MatchStore {
             if packet.isFromPairedDevice { onSharing?(signal) }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
-        case .snapshot(let incoming):
+        case .snapshot(let incoming, _):
             if retired.contains(incoming.sessionID) {
                 guard let ended = overturnedEnding(of: incoming.sessionID, by: incoming.ordered) else {
                     return announceRetirement(of: incoming.sessionID, to: packet)

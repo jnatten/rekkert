@@ -178,6 +178,7 @@ extension SharingFailure {
         case .rejected: "Code not accepted"
         case .blocked: "iPhone cannot look"
         case .unreachable: "iPhone did not hear"
+        case .noRoom: "No room on this match"
         }
     }
 
@@ -189,6 +190,7 @@ extension SharingFailure {
         case .rejected: "Ask the host to read the code out again."
         case .blocked: "Let Rekkert find devices on the local network, in Settings on your iPhone."
         case .unreachable: "Your iPhone does the looking, and it is out of touch. Bring it closer and try again."
+        case .noRoom: "The host already has seven others on. One of them has to leave first."
         }
     }
 }

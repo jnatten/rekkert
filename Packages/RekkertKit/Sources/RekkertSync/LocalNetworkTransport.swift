@@ -47,6 +47,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         let connection: NWConnection
         /// Which advertised match this dialled, so it is not dialled twice. `nil` when accepted.
         let share: UUID?
+        let id = LinkID()
         var buffer = Data()
         var isReady = false
         init(_ connection: NWConnection, share: UUID? = nil) {
@@ -58,6 +59,8 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     private let packets: AsyncStream<InboundPacket>.Continuation
     private let reachabilityUpdates: AsyncStream<Bool>.Continuation
     private let statusUpdates: AsyncStream<Status>.Continuation
+    private let linkUpdates = Broadcast<LinkChange>()
+    public var linkChanges: AsyncStream<LinkChange> { linkUpdates.stream() }
 
     private let queue = DispatchQueue(label: "dev.natten.rekkert.localnetwork")
     private let lock = NSLock()
@@ -343,6 +346,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         oldBrowser?.cancel()
         for link in oldLinks { link.connection.cancel() }
         for resume in pending { resume.resume(nil) }
+        for link in lock.withLock({ oldLinks.filter(\.isReady) }) { linkUpdates.yield(.down(link.id, .hungUp)) }
         publish(.idle)
         reachabilityUpdates.yield(false)
     }
@@ -396,7 +400,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     /// sees the score without waiting for a round trip of its own. Said to everybody only when it
     /// is another match: the next one, or a result taken back.
     public func publishSnapshot(_ payload: Data) {
-        let session: UUID? = if case .snapshot(let log)? = try? Wire.decode(payload) { log.sessionID } else { nil }
+        let session: UUID? = if case .snapshot(let log, _)? = try? Wire.decode(payload) { log.sessionID } else { nil }
         let isAnotherMatch = lock.withLock { () -> Bool in
             lastSnapshot = payload
             defer { broadcastSession = session }
@@ -505,6 +509,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
                     self.send(Frame(kind: .oneway, payload: snapshot), on: link)
                 }
                 self.reachabilityUpdates.yield(true)
+                self.linkUpdates.yield(.up(link.id))
                 self.announce()
             case .failed(let error):
                 self.close(token, refusable: Self.isRefusal(error))
@@ -526,7 +531,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     /// each connection what it is rather than what we last heard it was — a sweep is this end
     /// hanging up on something already gone, not a loss with anything to read into it.
     private func sweepDeadLinks() {
-        let dead = lock.withLock { () -> [Link] in
+        let (dead, wereUp) = lock.withLock { () -> ([Link], [LinkID]) in
             var removed: [Link] = []
             for (token, link) in links {
                 switch link.connection.state {
@@ -537,13 +542,14 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
                     removed.append(link)
                 }
             }
-            return removed
+            return (removed, removed.filter(\.isReady).map(\.id))
         }
         guard !dead.isEmpty else { return }
         for link in dead {
             forgetDialDeadline(ObjectIdentifier(link.connection))
             link.connection.cancel()
         }
+        for link in wereUp { linkUpdates.yield(.down(link, .timeout)) }
         reachabilityUpdates.yield(isReachable)
     }
 
@@ -582,6 +588,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
                 refusable: refusable
             )
         }
+        if circumstances.everGotThere { linkUpdates.yield(.down(link.id, refusable ? .refused : .closedByPeer)) }
         reachabilityUpdates.yield(isReachable)
 
         switch ReconnectPolicy.loss(circumstances) {
@@ -678,16 +685,16 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             if let pending = lock.withLock({ waiting.removeValue(forKey: frame.correlation) }) {
                 pending.resume(frame.payload)
             } else if LinkReplies.isWorthHandingOn(late: frame.payload) {
-                packets.yield(InboundPacket(payload: frame.payload))
+                packets.yield(InboundPacket(payload: frame.payload, link: link.id))
             }
         case .request:
             let correlation = frame.correlation
-            packets.yield(InboundPacket(payload: frame.payload) { [weak self, weak link] answer in
+            packets.yield(InboundPacket(payload: frame.payload, reply: { [weak self, weak link] answer in
                 guard let self, let link else { return }
                 self.send(Frame(kind: .reply, correlation: correlation, payload: answer), on: link)
-            })
+            }, link: link.id))
         case .oneway:
-            packets.yield(InboundPacket(payload: frame.payload))
+            packets.yield(InboundPacket(payload: frame.payload, link: link.id))
         }
     }
 

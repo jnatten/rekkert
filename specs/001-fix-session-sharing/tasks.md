@@ -37,8 +37,8 @@ story can be built, tested and shipped on its own.
 
 **Purpose**: A known-good baseline, and the one test utility everything after needs
 
-- [ ] T001 Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh` on the current commit and confirm both pass; any failure found here is not this feature's and must be raised before going on
-- [ ] T002 [P] Add `TestClock` in `SyncTests/TestClock.swift`: a manually advanced `Clock` (`Duration`-based, `now` moves only on `advance(by:)`), with sleepers resumed in deadline order, for driving radio timing and liveness without real waits
+- [X] T001 Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh` on the current commit and confirm both pass; any failure found here is not this feature's and must be raised before going on
+- [X] T002 [P] Add `TestClock` in `SyncTests/TestClock.swift`: a manually advanced `Clock` (`Duration`-based, `now` moves only on `advance(by:)`), with sleepers resumed in deadline order, for driving radio timing and liveness without real waits
 
 ---
 
@@ -49,17 +49,17 @@ and let the host know links by device. Every story needs these.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T003 Define the platform-free radio seam in `RekkertSync/Radio/Radio.swift`. A `Radio` protocol keyed by opaque `PeerToken`s:
+- [X] T003 Define the platform-free radio seam in `RekkertSync/Radio/Radio.swift`. A `Radio` protocol keyed by opaque `PeerToken`s:
   - Host side: `offer(_ chunk: Data, to:) -> Bool`; a ready callback when the shared transmit queue has room; `maximumChunk(for:)`; subscribed and unsubscribed callbacks.
   - Guest side: `write(_:to:)` with a did-write callback; connect, disconnect, did-connect and did-disconnect.
   - Both sides: an injected `any Clock<Duration>`.
   - No `#if os(...)`, so it builds on macOS.
-- [ ] T004 Extract the state machine from `RekkertSync/BluetoothTransport.swift` into `RekkertSync/Radio/RadioCore.swift`, driven only through `Radio`:
+- [X] T004 Extract the state machine from `RekkertSync/BluetoothTransport.swift` into `RekkertSync/Radio/RadioCore.swift`, driven only through `Radio`:
   - What moves: `Peer` and its backlog, `step`/`drain`/`drainEverybody`, ask and miss with `LinkHealth`, the greeting/challenge/answer/confirm handshake with `LinkSeal`, the candidate and proof deadlines, and `ReconnectPolicy` use.
   - Replace `DispatchTime`/`asyncAfter` with the injected clock.
   - **Behaviour must not change in this task.** Existing `SyncTests` must still pass.
-- [ ] T005 Reduce `RekkertSync/BluetoothTransport.swift` to a CoreBluetooth adapter: the `Shim` delegates translate into `Radio` calls on `RadioCore`, and the `PeerTransport` conformance forwards to it. The macOS stub (today at BluetoothTransport.swift:1023-1045) keeps compiling. `scripts/verify.sh` must pass (depends on T004).
-- [ ] T006 [P] Build `SimulatedRadio` in `SyncTests/SimulatedRadio.swift`, implementing `Radio` over one shared medium driven by `TestClock`. It must model:
+- [X] T005 Reduce `RekkertSync/BluetoothTransport.swift` to a CoreBluetooth adapter: the `Shim` delegates translate into `Radio` calls on `RadioCore`, and the `PeerTransport` conformance forwards to it. The macOS stub (today at BluetoothTransport.swift:1023-1045) keeps compiling. `scripts/verify.sh` must pass (depends on T004).
+- [X] T006 [P] Build `SimulatedRadio` in `SyncTests/SimulatedRadio.swift`, implementing `Radio` over one shared medium driven by `TestClock`. It must model:
   - a host transmit queue of K slots, with a configurable number of slots freed per ready callback;
   - an airtime budget in bytes per second, shared by all links;
   - latency and loss per link;
@@ -69,14 +69,14 @@ and let the host know links by device. Every story needs these.
   - a cap on connections.
 
   Depends on T003 only.
-- [ ] T007 Build `CourtHarness` in `SyncTests/CourtHarness.swift`. It holds a host and up to 8 guests, each a `MatchStore` on a `RadioCore`-backed transport over one `SimulatedRadio`, and each with its own watch on a `LoopbackTransport` pair. Helpers:
+- [X] T007 Build `CourtHarness` in `SyncTests/CourtHarness.swift`. It holds a host and up to 8 guests, each a `MatchStore` on a `RadioCore`-backed transport over one `SimulatedRadio`, and each with its own watch on a `LoopbackTransport` pair. Helpers:
   - `score(on:)`, `allInStep()`, `advance(by:)`;
   - `endApp(_:)` (drop the objects but keep that device's `SessionStore` temp directory and in-memory code keeper) and `relaunch(_:restored:)`;
   - `outOfRange(_:)` and `backInRange(_:)`;
   - per-point arrival times on every device.
 
   Depends on T005 and T006.
-- [ ] T008 [P] Add the message changes from `contracts/wire-protocol.md`.
+- [X] T008 [P] Add the message changes from `contracts/wire-protocol.md`.
   - **In `RekkertCore/Sync/Wire.swift`:**
     - `SharingFailure.noRoom`;
     - `Wire.sharingStopped(sessionID:)`;
@@ -91,7 +91,7 @@ and let the host know links by device. Every story needs these.
     - every new case round-trips;
     - a `GuestCard` JSON without `pairedTo` still decodes;
     - an unknown `SharingSignal` case fails to decode instead of crashing.
-- [ ] T009 [P] Add `Participant` and `ParticipantState` in `RekkertCore/Sync/ParticipantState.swift`.
+- [X] T009 [P] Add `Participant` and `ParticipantState` in `RekkertCore/Sync/ParticipantState.swift`.
   - **Tests first**, in `CoreTests/ParticipantStateTests.swift`.
   - **`Participant` fields:** `id: DeviceID`, `name: String?`, `devices: Set<DeviceID>`, `lastHeard: Date?`, `vector: VersionVector`, `access: ShareAccess.Level` and `isOlderBuild: Bool`.
   - **States, quoted from data-model.md:**
@@ -99,11 +99,11 @@ and let the host know links by device. Every story needs these.
     - "`catchingUp`: `now − lastHeard ≤ 15 s` and `vector < host.coverage`";
     - "`outOfReach(since:)`: `now − lastHeard > 15 s`, with `since = lastHeard`".
   - **Limit:** "at most seven participants besides the host"; "A new device whose card names an existing participant does not count against it".
-- [ ] T010 Tag every proven link with its sender (D-7), across `RekkertCore/Sync/Wire.swift`, the transports and `RekkertSync/MatchStore.swift`. Depends on T004, T008 and T009.
+- [X] T010 Tag every proven link with its sender (D-7), across `RekkertCore/Sync/Wire.swift`, the transports and `RekkertSync/MatchStore.swift`. Depends on T004, T008 and T009.
   - `InboundPacket` in `RekkertCore/Sync/Wire.swift` gains an optional `link: LinkID`.
   - `RekkertSync/Radio/RadioCore.swift`, `RekkertSync/LocalNetworkTransport.swift` and `RekkertSync/FanOutTransport.swift` each record the `from:` of the first `hello` on a proven link against that link.
   - `RekkertSync/MatchStore.swift` keeps `participants: [DeviceID: Participant]` on the host, updated from hellos and guest cards. A proven link whose hellos name no sender becomes one participant with `isOlderBuild = true`.
-- [ ] T011 Report link changes with a reason (feeds D-10 and D-11), in `RekkertCore/Sync/Wire.swift` and every transport.
+- [X] T011 Report link changes with a reason (feeds D-10 and D-11), in `RekkertCore/Sync/Wire.swift` and every transport.
   - `PeerTransport` in `RekkertCore/Sync/Wire.swift` gains `linkChanges: AsyncStream<LinkChange>`: `up(LinkID)` or `down(LinkID, reason)`, with reasons `.timeout`, `.radioOff`, `.closedByPeer`, `.hungUp` and `.unknown`. Its default implementation is derived from `reachability`.
   - Implement it in `RekkertSync/Radio/RadioCore.swift`, `RekkertSync/LocalNetworkTransport.swift`, `RekkertSync/WatchConnectivityTransport.swift` and `RekkertSync/LoopbackTransport.swift`.
   - Depends on T004. It touches `Wire.swift`, so it runs after T008 and T010.

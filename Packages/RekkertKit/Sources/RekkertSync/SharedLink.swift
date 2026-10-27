@@ -20,3 +20,4 @@ public protocol SharedLink: Sendable {
 }
 
 extension BluetoothTransport: SharedLink {}
+extension RadioCore: SharedLink {}

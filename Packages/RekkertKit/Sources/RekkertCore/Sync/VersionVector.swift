@@ -14,6 +14,11 @@ public struct VersionVector: Sendable, Hashable, Codable {
 
     public var isEmpty: Bool { entries.isEmpty }
 
+    /// Whether this has seen everything `other` has.
+    public func covers(_ other: VersionVector) -> Bool {
+        other.entries.allSatisfy { self[$0.key] >= $0.value }
+    }
+
     /// The highest sequence number *every* one of them has seen.
     ///
     /// The only safe thing to acknowledge when a message went to more than one peer: the

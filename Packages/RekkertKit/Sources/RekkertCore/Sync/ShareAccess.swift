@@ -94,12 +94,15 @@ public struct ShareAccessTable: Codable, Sendable, Hashable {
 public struct GuestCard: Codable, Sendable, Hashable, Identifiable {
     public var device: DeviceID
     public var name: String?
+    /// The phone a watch is standing in for, so the host counts the two as one guest.
+    public var pairedTo: DeviceID?
 
     public var id: DeviceID { device }
 
-    public init(device: DeviceID, name: String?) {
+    public init(device: DeviceID, name: String?, pairedTo: DeviceID? = nil) {
         self.device = device
         self.name = name
+        self.pairedTo = pairedTo
     }
 }
 

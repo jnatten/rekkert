@@ -48,7 +48,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         /// Somebody else's phone: the match, and nothing personal.
         public static let sharedSession = Scope(isDurable: false) { wire in
             switch wire {
-            case .hello, .events, .snapshot, .retired, .access, .guestCard: true
+            case .hello, .events, .snapshot, .retired, .access, .guestCard, .sharingStopped: true
             // Saved setups and which side is blue belong to whoever's phone this is. The
             // whistle is between a phone and its own watch, and says nothing to anyone else.
             // Neither does what somebody's heart is doing: a workout is between a wrist and
@@ -73,10 +73,13 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         let scope: Scope
         let drain: Task<Void, Never>
         let watch: Task<Void, Never>
+        let links: Task<Void, Never>
     }
 
     private let packets: AsyncStream<InboundPacket>.Continuation
     private let reachabilityUpdates: AsyncStream<Bool>.Continuation
+    private let linkUpdates = Broadcast<LinkChange>()
+    public var linkChanges: AsyncStream<LinkChange> { linkUpdates.stream() }
     private let lock = NSLock()
     private var children: [ObjectIdentifier: Child] = [:]
     /// Handed to each child as it arrives, the way an application context greets a watch that
@@ -112,7 +115,8 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
                 guard let self else { return }
                 guard scope.admits(packet.payload) else { continue }
                 self.packets.yield(InboundPacket(
-                    payload: packet.payload, reply: packet.reply, isFromPairedDevice: scope.isPairedDevice
+                    payload: packet.payload, reply: packet.reply, isFromPairedDevice: scope.isPairedDevice,
+                    link: packet.link
                 ))
             }
         }
@@ -121,8 +125,14 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
                 self?.reachabilityChanged()
             }
         }
+        let linkChanges = transport.linkChanges
+        let links = Task { [weak self] in
+            for await change in linkChanges { self?.linkUpdates.yield(change) }
+        }
         lock.withLock {
-            children[token] = Child(token: token, transport: transport, scope: scope, drain: drain, watch: watch)
+            children[token] = Child(
+                token: token, transport: transport, scope: scope, drain: drain, watch: watch, links: links
+            )
         }
         transport.activate()
         if let snapshot = lock.withLock({ lastSnapshot }) { transport.publishSnapshot(snapshot) }
@@ -137,6 +147,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         }
         child?.drain.cancel()
         child?.watch.cancel()
+        child?.links.cancel()
         reachabilityChanged()
     }
 
@@ -215,7 +226,8 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
     /// Whether a live send that missed its moment is still worth delivering late.
     static func keepsOverDelay(_ wire: Wire) -> Bool {
         switch wire {
-        case .events, .snapshot, .retired, .left, .role, .presets, .display, .haptics, .displaced, .access: true
+        case .events, .snapshot, .retired, .left, .role, .presets, .display, .haptics, .displaced, .access,
+             .sharingStopped: true
         case .workout(.finished), .workout(.series), .workout(.rated): true
         case .workout(.stop), .workout(.pause), .workout(.resume), .workout(.running),
              .workout(.paused), .workout(.idle), .workout(.skipped): false

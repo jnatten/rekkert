@@ -185,7 +185,7 @@ public final class WatchStandIn {
             } else if pending == nil, !sharing.isSharing {
                 sharing.keepOnStandby(nil)
             }
-        case .join, .cancel:
+        case .join, .cancel, .hostingStatus, .startHosting, .stopHosting, .followPhone:
             break
         }
         evaluate()

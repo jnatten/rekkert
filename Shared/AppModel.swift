@@ -292,7 +292,8 @@ final class AppModel {
         case .join(let code): sharing.join(code, forTheWatch: true)
         case .cancel: sharing.cancelJoiningFromTheWatch()
         // Said by this end, not heard by it.
-        case .state, .standby: break
+        case .state, .standby, .hostingStatus: break
+        case .startHosting, .stopHosting, .followPhone: break
         }
     }
     #endif

@@ -68,15 +68,66 @@ public enum SharingSignal: Codable, Sendable, Hashable {
     /// Phone to watch: the match this phone is a guest on, so the wrist can reach the host
     /// itself. Nil when it is on none.
     case standby(SharingStandby?)
+    /// Phone to watch: what the phone is sharing, for a host's watch to show.
+    case hostingStatus(HostingStatus)
+    /// Watch to phone: share the match, or stop sharing it.
+    case startHosting
+    case stopHosting
+    /// Watch to phone: send me the match you are on.
+    case followPhone
 }
 
 public struct SharingStandby: Codable, Sendable, Hashable {
     public var code: SessionCode
     public var isThrough: Bool
+    public var share: UUID?
+    public var startedAt: Date?
 
-    public init(code: SessionCode, isThrough: Bool) {
+    public init(code: SessionCode, isThrough: Bool, share: UUID? = nil, startedAt: Date? = nil) {
         self.code = code
         self.isThrough = isThrough
+        self.share = share
+        self.startedAt = startedAt
+    }
+}
+
+public struct ParticipantSummary: Codable, Sendable, Hashable, Identifiable {
+    public var id: DeviceID
+    public var name: String?
+    public var state: ParticipantState
+
+    public init(id: DeviceID, name: String?, state: ParticipantState) {
+        self.id = id
+        self.name = name
+        self.state = state
+    }
+}
+
+public struct HostingStatus: Codable, Sendable, Hashable {
+    public var isSharing: Bool
+    public var code: SessionCode?
+    public var joinLink: URL?
+    public var qr: Data?
+    public var participants: [ParticipantSummary]
+    public var canShare: Bool
+    public var failure: SharingFailure?
+
+    public init(
+        isSharing: Bool,
+        code: SessionCode? = nil,
+        joinLink: URL? = nil,
+        qr: Data? = nil,
+        participants: [ParticipantSummary] = [],
+        canShare: Bool,
+        failure: SharingFailure? = nil
+    ) {
+        self.isSharing = isSharing
+        self.code = code
+        self.joinLink = joinLink
+        self.qr = qr
+        self.participants = participants
+        self.canShare = canShare
+        self.failure = failure
     }
 }
 
@@ -98,6 +149,7 @@ public enum SharingFailure: String, Codable, Sendable, Hashable {
     /// live or it is nothing, so a watch whose message did not land has to be told, rather
     /// than left watching a search that was never started.
     case unreachable
+    case noRoom
 }
 
 public enum Wire: Codable, Sendable, Hashable {
@@ -110,8 +162,9 @@ public enum Wire: Codable, Sendable, Hashable {
     /// builds, which decode this without it and go on as they did.
     case hello(sessionID: UUID, vector: VersionVector, from: DeviceID? = nil)
     case events(sessionID: UUID, events: [MatchEvent])
-    /// Whole-log backstop, used on the coalescing application-context channel.
-    case snapshot(MatchLog)
+    /// Whole-log backstop, used on the coalescing application-context channel. `role` is the
+    /// sender's, for its own watch; absent from older builds and from what goes to other phones.
+    case snapshot(MatchLog, role: SessionRole? = nil)
     /// "The session you are offering ended here." Retiring a session is otherwise
     /// knowledge one device holds alone: it refuses every packet for that session, and a
     /// counterpart that never heard the ending goes on scoring into a match that can no
@@ -154,6 +207,8 @@ public enum Wire: Codable, Sendable, Hashable {
     case access(ShareAccessTable)
     /// Guest's phone to host: who it is, so the host can tell the phones on its code apart.
     case guestCard(GuestCard)
+    /// Host to every guest, before it lets go: this match is no longer shared.
+    case sharingStopped(sessionID: UUID)
 
     public func encoded() throws -> Data {
         try JSONCoding.encoder.encode(self)
@@ -164,6 +219,23 @@ public enum Wire: Codable, Sendable, Hashable {
     }
 }
 
+/// One connection to another phone, so what arrives on it can be put down to whoever is on
+/// the far end.
+public struct LinkID: Hashable, Sendable {
+    public let raw: UUID
+
+    public init(_ raw: UUID = UUID()) { self.raw = raw }
+}
+
+public enum LinkDropReason: String, Codable, Sendable, Hashable {
+    case timeout, radioOff, closedByPeer, hungUp, refused, unknown
+}
+
+public enum LinkChange: Sendable, Hashable {
+    case up(LinkID)
+    case down(LinkID, LinkDropReason)
+}
+
 public struct InboundPacket: Sendable {
     public let payload: Data
     public let reply: (@Sendable (Data) -> Void)?
@@ -172,11 +244,18 @@ public struct InboundPacket: Sendable {
     /// name the session already on screen — and a join has to be able to tell an offer from
     /// its own wrist repeating what it has.
     public let isFromPairedDevice: Bool
+    public let link: LinkID?
 
-    public init(payload: Data, reply: (@Sendable (Data) -> Void)? = nil, isFromPairedDevice: Bool = false) {
+    public init(
+        payload: Data,
+        reply: (@Sendable (Data) -> Void)? = nil,
+        isFromPairedDevice: Bool = false,
+        link: LinkID? = nil
+    ) {
         self.payload = payload
         self.reply = reply
         self.isFromPairedDevice = isFromPairedDevice
+        self.link = link
     }
 }
 
@@ -212,10 +291,15 @@ public protocol PeerTransport: Sendable {
 
     /// This device's own watch or phone, as against anybody at all.
     var isPairReachable: Bool { get }
+
+    /// Each link to another phone coming up or going down, and why it went. Empty for a
+    /// transport that has no links of its own to tell apart.
+    var linkChanges: AsyncStream<LinkChange> { get }
 }
 
 extension PeerTransport {
     public func forgetSnapshot() {}
     public var reachableCount: Int { isReachable ? 1 : 0 }
     public var isPairReachable: Bool { isReachable }
+    public var linkChanges: AsyncStream<LinkChange> { AsyncStream { $0.finish() } }
 }
