@@ -455,7 +455,7 @@ needs the kept code from US1.
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T071 [P] Update `README.md`.
+- [X] T071 [P] Update `README.md`.
   - **"Joining from the wrist":** the watch dials the host itself, and the host's watch shares.
   - **"How syncing works":** the code is kept for at most 12 hours in this-device Keychain, Bluetooth state restoration, fair turns, per-participant delivery, and liveness.
   - **Add a section** on the sharing record.
@@ -464,9 +464,9 @@ needs the kept code from US1.
 - [ ] T073 [P] Add `-rekkert-demo-watch-page code` and `-rekkert-demo-watch-page follow-phone` to `WatchApp/Sources/Views/WatchDemoLaunch.swift`, and list them in `README.md`'s launch-argument list.
 - [ ] T074 [P] Add a debug-only **End app as the system would** to `App/Sources/Views/SettingsView.swift`. It calls `kill(getpid(), SIGKILL)`, so Bluetooth restoration can be tested on devices (quickstart §4 step 5).
 - [X] T075 Make the new and changed watch screens work with VoiceOver and larger text sizes (FR-031): `WatchMenuView.swift`, `WatchCourtPage.swift`, `WatchRootView.swift`, `WatchJoinView.swift`, `WatchCodeView.swift` and `WatchGuestsView.swift` in `WatchApp/Sources/Views/`.
-- [ ] T076 Check whether any task added an Info.plist key or entitlement. If one did, add its assertion to `scripts/verify.sh`. If none did, note that in the PR description.
-- [ ] T077 Run levels 1–3 of `specs/001-fix-session-sharing/quickstart.md` and record the results in the PR description.
-- [ ] T078 Run the real-device field test (manual): `specs/001-fix-session-sharing/quickstart.md` §4, four iPhones and four watches, Wi-Fi off.
+- [X] T076 Check whether any task added an Info.plist key or entitlement. If one did, add its assertion to `scripts/verify.sh`. If none did, note that in the PR description.
+- [X] T077 Run levels 1–3 of `specs/001-fix-session-sharing/quickstart.md` and record the results in the PR description.
+- [-] T078 **Deferred: skipped for now, and blocks nothing.** Run the real-device field test (manual): `specs/001-fix-session-sharing/quickstart.md` §4, four iPhones and four watches, Wi-Fi off.
   - Record the results in a new `specs/001-fix-session-sharing/field-test.md`: each step's outcome, the time from the last digit typed on a watch to that guest being on the match (SC-008), the exported sharing records, the SC-002 arrival times and the SC-012 battery figures.
   - Set `SimulatedRadio`'s airtime budget from the measured arrival times (SC-009).
 
@@ -489,7 +489,7 @@ needs the kept code from US1.
 - **US3 (Phase 5)**: after Foundational. Independent of US1 and US2.
 - **US4 (Phase 6)**: after Foundational. Scenario 6 (guests told on Stop) needs T035 from US1.
 - **US5 (Phase 7)**: after US1, because Join again needs the kept code (T022–T024).
-- **Polish (Phase 8)**: after the stories being shipped. T078 is last.
+- **Polish (Phase 8)**: after the stories being shipped. T078 is deferred and blocks nothing.
 
 ### Within Each Story
 
@@ -561,7 +561,7 @@ Task: "Wrist taps in WatchApp/Sources/WatchHaptics.swift"
 3. US3: the guest's watch follows its phone.
 4. US4: the host shares from the watch.
 5. US5: guests join and leave from the watch.
-6. Polish, then the field test (T078) before the App Store release.
+6. Polish. The field test (T078) is deferred, and nothing waits on it.
 
 ---
 

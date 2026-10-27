@@ -353,23 +353,46 @@ of it does anything. The watch has no camera, and a wrist joins by typing as bef
 Most people at a shared match only ever join one. They host nothing, set nothing up, and
 never touch the phone again once they are on it — so the six digits were the whole of
 their phone, and the one moment the app made them dig it out. **Join a match** on the watch's
-start screen takes them instead. The code is six digits, so the watch puts a number pad of its
-own on the screen rather than the system's letter keyboard, and the sixth digit joins without
-another tap. The phone's join sheet opens on the number pad for the same reason.
+start screen, or in the menu of a match already on it, takes them instead. The code is six
+digits, so the watch puts a number pad of its own on the screen rather than the system's letter
+keyboard, and the sixth digit joins without another tap. The phone's join sheet opens on the
+number pad for the same reason.
 
-The watch does not do the joining. It cannot: the local network and Bluetooth are both built
-on iOS alone, and the only thing a watch can talk to is the iPhone it is paired with. So it
-hands the code over and that phone goes looking — which is why the phone can stay in a bag,
-but cannot stay at home. The wrist is told how it is going, and the match arrives on it the
-way any match on that phone already does.
+The watch asks its phone first, since the phone has the local network as well as Bluetooth and
+keeps its link with the screen off. A phone that has not got there in twelve seconds — out of
+reach, suspended in a bag mid-search, or finding nothing — hands over, and the watch dials the
+host's phone itself, over Bluetooth, for twenty seconds before it says why it gave up: nothing
+on that code nearby, Bluetooth off, or no room on the match. A code the host refused is not
+tried again on the wrist. So the phone can stay in a bag, or at home.
 
-A join is live or it is nothing. Queued, it would be handed over twenty minutes later and go
-looking for a match that finished, so nothing is kept: a code that did not reach the phone
-says so on the wrist rather than leaving it watching a search nobody is running.
+Once on, the watch follows through its phone for as long as that phone is through to the host.
+A phone out of touch for fifteen seconds is stood in for: the watch keeps a link of its own to
+the host, and hands the match back once the phone is through again. The host counts the two as
+one person. watchOS lets an app hold a link of its own only while it is in front or running a
+workout, so that is when the wrist stands in; otherwise, with the phone's app ended too, it
+says the phone needs opening.
 
-Hosting stays on the phone. A host advertises over Bluetooth, and a watch has no way to
-advertise anything — `CBPeripheralManager` does not exist on watchOS — so there is no version
-of this where the code is read out from a wrist.
+A join is live or it is nothing: it is never queued for a phone to find twenty minutes later,
+when the match it was for has finished. What is kept is the code of a match the wrist got onto,
+for twelve hours, so **Join again** — on the start screen and in the menu — puts it back on
+without typing, and a watch whose app was ended goes back on by itself. Join again on a match
+nobody shares any more says there is nothing on that code nearby, and forgets it. **Leave**
+asks first, because the phone leaves with it.
+
+A guest's phone that joins takes its watch along: the shared match replaces anything of the
+watch's own, which goes to History. A watch that cannot be reached just then gets a
+notification on the wrist to tap, and one with a match of its own while its phone is on a
+shared one says so, with **Get on it**.
+
+The host's watch shares too. A watch cannot advertise — `CBPeripheralManager` does not exist
+on watchOS — so the phone still does the hosting, but it can be run from the wrist with the
+phone in a bag. **Share match**, in the menu of a match of the watch's own, asks the phone to
+share it, and shows the code as six digits to read out and as a picture of the join link for an
+iPhone's Camera. The phone draws the picture, since watchOS has no Core Image, and sends it
+over. **Who's on** lists everybody on the match — in step, catching up, or out of reach since
+when — and **Stop sharing** ends it for all of them, each keeping their copy in History.
+Joining another match from a watch whose phone is sharing asks first, since it stops the
+sharing for everyone on it. None of this shows on a guest's watch.
 
 ## Who may do what
 
@@ -662,14 +685,34 @@ password-authenticated key exchange would close that, and a padel score is not w
 A Bluetooth link can stay up with nothing on the other end, so it is not taken at its word: a
 host whose service goes away is hung up on and dialled again, three unanswered questions in a
 row with nothing arriving meanwhile and a peer stops counting as there, and the radio switched
-off and on starts everything afresh. A host that went away, or was hung up on for not
-answering, is looked for as well as dialled where it was, since an iPhone's Bluetooth address
-moves on; one that proved itself once is never written off for being slow to do it again, and a
-connection that comes back before the host's service does is let go of and found again. What is
-waiting to go out goes a piece for each peer in turn, so one peer's long answer holds up nobody
-else's. All of it lasts as long as the process does: iOS wakes a suspended app for traffic on the
-link, but one it has ended to free memory is not relaunched for it, and nothing moves on the
-radio until that phone is opened again.
+off and on starts everything afresh. Liveness runs both ways, because a guest that is only
+following has nothing of its own to say. It says hello whenever ten seconds pass with nothing
+sent, and hangs up and dials again when three of those go unanswered. A host keeps the link to
+a guest it has stopped counting, and goes on asking after it every fifteen seconds rather than
+falling silent on it. A host that went away, or was hung up on for not answering, is looked for
+as well as dialled where it was, since an iPhone's Bluetooth address moves on; one that proved
+itself once is never written off for being slow to do it again, and a connection that comes
+back before the host's service does is let go of and found again.
+
+What is waiting to go out goes a piece for each guest in turn, and the turn carries over from
+one moment the radio has room to the next, so the guest after the last one served goes first:
+however few pieces iOS takes at a time, every guest gets its share. Each guest's own queue goes
+handshake first, then the latest points, then catching up, and catching up is cut small enough
+for everybody else's points to go in between. Each guest is sent only what it is missing,
+worked out from what its last hello said it had, and nothing goes back on the link it came in
+on. The outbox lets an event go once everybody still on has it; a guest out of reach for a
+minute does not hold it up, and is caught up from its hello when it comes back.
+
+The host knows who is on by the device that proved itself rather than by the link, so a phone
+and the watch standing in for it count once, and **Who's on** can name them. It takes seven: the
+eighth is told there is no room, rather than let in to starve the others.
+
+iOS wakes a suspended app for traffic on the link. The phone's two Bluetooth managers are also
+set up for state restoration, so for an app iOS has ended to free memory it goes on advertising,
+keeps the service published and keeps pending connections, and launches the app again in the
+background when a guest connects or the host turns up. An app swiped away by hand is the
+exception: iOS takes that as meant, and nothing moves on the radio until the phone is opened
+again.
 
 A drop is not a refusal. `ReconnectPolicy` decides what losing a connection means, and the
 only thing that tells a wrong code from a host who walked off is whether anything ever worked.
@@ -678,10 +721,39 @@ even that is held until the search runs out, since one byte of fingerprint agree
 court's now and again — the right match, found after it over either link, still counts.
 Guests keep dialling on a timer rather than waiting for a Bonjour change that never comes, and
 a reconnect merges rather than replaces — both sides keep whatever they scored while apart. If
-the merged score is one nobody recognises, the host can settle it from the match menu. A host
-whose app was relaunched shares the match again on a new code, since the code is never kept; a
-guest still looking for the old one types the new one in, from the match menu or the notice
-that the match is out of reach, and is back on the same match with what it scored meanwhile.
+the merged score is one nobody recognises, the host can settle it from the match menu. A guest
+whose host has been gone for fifteen seconds says so, and since when — on the phone's sharing
+badge and on the watch — and goes on scoring meanwhile.
+
+The code is kept in the Keychain of every device that has been on the match: the host's phone,
+with the share id its keys are derived from, and each guest's phone and watch. It is kept for
+this device only, so it is never synced or backed up, and readable after the first unlock, so
+an app launched in the background with the phone locked still finds it. It lasts twelve hours,
+checked whenever it is read, since a Keychain item can outlive the app. Every launch looks for
+it. A host comes back on the same code, between matches too, and its guests
+find it again by themselves; a guest that was on the match when its app was ended goes back on.
+Stop sharing clears the host's. A guest forgets its copy when told sharing has stopped, replaces
+it on joining another match, and keeps it after Leave, for Join again.
+
+## The sharing record
+
+Something that goes wrong at a court is gone by the time anyone at a desk hears about it, so
+every phone and watch keeps a record of what happened to its links: launched and how, sharing
+started, restored or stopped, a guest proven, joined, out of reach or back in step, a link
+dropped and why — timed out, radio off, closed by the other end, hung up on — a join refused
+for a wrong code or no room, a wrist standing in or down, and the notification that brought a
+watch round. An app that was ended cannot write
+that it was, so a launch that finds a kept code writes "app had been ended" instead, which
+is what tells a host's phone killed in a bag apart from a watch that lost its phone.
+
+It is a file a day, in Application Support and left out of backups, and a week of it is kept.
+The watch writes its own and sends it to the phone with `transferFile`, durable, whenever the
+phone can be reached; the phone puts the two together by time. **Settings → Sharing record**
+shows it, and **Share** exports it as plain text, one line an entry, in the format
+[`specs/001-fix-session-sharing/contracts/sharing-record.md`](specs/001-fix-session-sharing/contracts/sharing-record.md)
+sets out and `LinkRecordTests` reads back. There are no names, scores or codes in it, and
+devices go by four hex digits of their random id. Debug builds also note how long each point
+took to arrive.
 
 ## Verifying
 
