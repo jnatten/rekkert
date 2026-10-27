@@ -1,12 +1,15 @@
 # Contract: What App Review Gets
 
-The submission after build 70 carries two things:
+The submission after build 70 carries three things:
 
 - the review notes below, replacing the "WORKOUTS (HEALTHKIT)" part of
   `fastlane/metadata/review_information/notes.txt`;
+- one image, `fastlane/review_attachment.png`, uploaded as the App Review attachment by
+  `scripts/release.sh --metadata`: the Apple Health section in Settings on an iPhone with no
+  watch, beside the explanation before the permission request;
 - a reply to the build 70 rejection with the same notes.
 
-Both are done by hand (research D-10). No screen recording is submitted: the build changes
+All three are done by hand (research D-10). No screen recording is submitted: the build changes
 the app itself, which is the first of the two ways out Apple offered, and the notes are
 what lead the reviewer to every place Apple Health is named.
 
@@ -29,6 +32,8 @@ WHERE TO SEE IT, WITH A PAIRED APPLE WATCH
 - Settings > Workout on your watch: start and stop a workout with each match. The footer says the workouts go to Apple Health.
 - On the watch: "Start workout" on the menu page next to the score, and on the idle screen, captioned "Saves to Apple Health".
 - Afterwards: start screen > Workouts lists them and says they stay in Apple Health, each workout's page shows "Saved in: Apple Health", and the workout is in the Apple Health app.
+
+The attached image shows the Apple Health section in Settings on an iPhone with no Apple Watch, and the explanation Rekkert shows before Apple Health's permission request.
 ```
 
 The rest of `notes.txt` (Getting started, Apple Watch, Sharing, TV, Live Activity, Encryption)

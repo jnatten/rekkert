@@ -464,7 +464,8 @@ W- point shows its words (SC-003).
 
      Correct the notes, and T039's copy, if either check fails.
 - [ ] T042 [US4] [Manual] In App Store Connect, for the next build:
-  - paste the review notes from T039;
+  - paste the review notes from T039, and upload `fastlane/review_attachment.png` with
+    them (`scripts/release.sh --metadata` does both);
   - reply to the build 70 rejection with the same notes;
   - submit.
 

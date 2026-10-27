@@ -95,6 +95,11 @@ enum DemoLaunch {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-apple-health")
     }
 
+    /// Opens Settings scrolled to the Apple Health section, for App Review's screenshot.
+    static var scrollToAppleHealth: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-settings-apple-health")
+    }
+
     static var healthExplainer: Bool {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-health-explainer")
     }

@@ -10,121 +10,132 @@ struct SettingsView: View {
         @Bindable var announcer = model.announcer
         @Bindable var fullscreen = model.fullscreen
         @Bindable var liveScore = model.liveScore
-        List {
-            Section {
-                Toggle(isOn: $fullscreen.isBlackout) {
-                    Label("Black out the colours", systemImage: "moon.fill")
-                }
-            } header: {
-                Text("Full screen")
-            } footer: {
-                Text("Draws both halves of the full-screen board black, with the names in the team colours, so the score stands out on a phone propped up in the sun. The moon button on the board switches it too.")
-            }
-
-            Section {
-                Toggle(isOn: $liveScore.isEnabled) {
-                    Label("Score on the Lock Screen", systemImage: "lock.iphone")
-                }
-            } footer: {
-                Text(liveScoreFooter)
-            }
-
-            Section {
-                Toggle(isOn: $announcer.isEnabled) {
-                    Label("Call the score", systemImage: "speaker.wave.2")
-                }
-                if announcer.isEnabled {
-                    NavigationLink(value: HomeRoute.voice) {
-                        LabeledContent("Voice", value: announcer.currentVoiceName)
-                    }
-                    Picker("Speed", selection: $announcer.speed) {
-                        ForEach(ScoreAnnouncer.Speed.allCases) { speed in
-                            Text(speed.title).tag(speed)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-            } footer: {
-                Text("Reads every point out loud, server first: \"thirty, fifteen\", \"deuce\", \"game\". The phone does the talking; the watch stays quiet.")
-            }
-
-            if AppModel.canPairWatch {
+        ScrollViewReader { proxy in
+            List {
                 Section {
-                    Picker(selection: hapticMode) {
-                        ForEach(HapticMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                    } label: {
-                        Label("Buzz on a point", systemImage: "hand.tap")
+                    Toggle(isOn: $fullscreen.isBlackout) {
+                        Label("Black out the colours", systemImage: "moon.fill")
                     }
-                    if model.store.haptics.mode != .off {
-                        Toggle("Only when someone else scores", isOn: onlyOthers)
-                        Picker("Strength", selection: hapticStrength) {
-                            ForEach(HapticStrength.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                } header: {
+                    Text("Full screen")
+                } footer: {
+                    Text("Draws both halves of the full-screen board black, with the names in the team colours, so the score stands out on a phone propped up in the sun. The moon button on the board switches it too.")
+                }
+
+                Section {
+                    Toggle(isOn: $liveScore.isEnabled) {
+                        Label("Score on the Lock Screen", systemImage: "lock.iphone")
+                    }
+                } footer: {
+                    Text(liveScoreFooter)
+                }
+
+                Section {
+                    Toggle(isOn: $announcer.isEnabled) {
+                        Label("Call the score", systemImage: "speaker.wave.2")
+                    }
+                    if announcer.isEnabled {
+                        NavigationLink(value: HomeRoute.voice) {
+                            LabeledContent("Voice", value: announcer.currentVoiceName)
+                        }
+                        Picker("Speed", selection: $announcer.speed) {
+                            ForEach(ScoreAnnouncer.Speed.allCases) { speed in
+                                Text(speed.title).tag(speed)
+                            }
                         }
                         .pickerStyle(.segmented)
                     }
                 } footer: {
-                    Text(hapticFooter)
+                    Text("Reads every point out loud, server first: \"thirty, fifteen\", \"deuce\", \"game\". The phone does the talking; the watch stays quiet.")
+                }
+
+                if AppModel.canPairWatch {
+                    Section {
+                        Picker(selection: hapticMode) {
+                            ForEach(HapticMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                        } label: {
+                            Label("Buzz on a point", systemImage: "hand.tap")
+                        }
+                        if model.store.haptics.mode != .off {
+                            Toggle("Only when someone else scores", isOn: onlyOthers)
+                            Picker("Strength", selection: hapticStrength) {
+                                ForEach(HapticStrength.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                    } footer: {
+                        Text(hapticFooter)
+                    }
+
+                    Section {
+                        Toggle(isOn: tapAnywhere) {
+                            Label("Tap anywhere to score", systemImage: "applewatch")
+                        }
+                    } header: {
+                        Text("Watch")
+                    } footer: {
+                        Text("Takes the undo button off the watch and makes its whole score screen the target: tap once for your point, twice for theirs, and hold to take the last one back. The phone's board stays as it is.")
+                    }
+
+                    if model.workout.isAvailable {
+                        Section {
+                            Picker(selection: workoutOnMatchStart) {
+                                ForEach(WorkoutCue.allCases, id: \.self) { Text($0.startTitle).tag($0) }
+                            } label: {
+                                Label("When a match starts", systemImage: "figure.tennis")
+                            }
+                            Picker(selection: workoutOnMatchEnd) {
+                                ForEach(WorkoutCue.allCases, id: \.self) { Text($0.endTitle).tag($0) }
+                            } label: {
+                                Label("When a match ends", systemImage: "flag.checkered")
+                            }
+                        } header: {
+                            Text("Workout on your watch")
+                        } footer: {
+                            Text(workoutFooter)
+                        }
+                    }
                 }
 
                 Section {
-                    Toggle(isOn: tapAnywhere) {
-                        Label("Tap anywhere to score", systemImage: "applewatch")
+                    Text(HealthDisclosure.summary)
+                    if let line = model.workout.reach.line {
+                        Text(line)
+                            .foregroundStyle(.secondary)
                     }
+                    NavigationLink("What Rekkert saves and reads", value: HomeRoute.appleHealth)
+                        .id(HomeRoute.appleHealth)
                 } header: {
-                    Text("Watch")
-                } footer: {
-                    Text("Takes the undo button off the watch and makes its whole score screen the target: tap once for your point, twice for theirs, and hold to take the last one back. The phone's board stays as it is.")
+                    AppleHealthMark()
                 }
 
-                if model.workout.isAvailable {
-                    Section {
-                        Picker(selection: workoutOnMatchStart) {
-                            ForEach(WorkoutCue.allCases, id: \.self) { Text($0.startTitle).tag($0) }
-                        } label: {
-                            Label("When a match starts", systemImage: "figure.tennis")
-                        }
-                        Picker(selection: workoutOnMatchEnd) {
-                            ForEach(WorkoutCue.allCases, id: \.self) { Text($0.endTitle).tag($0) }
-                        } label: {
-                            Label("When a match ends", systemImage: "flag.checkered")
-                        }
-                    } header: {
-                        Text("Workout on your watch")
-                    } footer: {
-                        Text(workoutFooter)
+                Section {
+                    NavigationLink(value: HomeRoute.sharingRecord) {
+                        Label("Sharing record", systemImage: "doc.text.magnifyingglass")
                     }
+                } footer: {
+                    Text("What happened to this iPhone's links and its watch's on shared matches this past week, to send to the developer if sharing went wrong. It stays on your devices unless you share it.")
+                }
+
+                #if DEBUG
+                Section {
+                    Button("End app as the system would", role: .destructive) { kill(getpid(), SIGKILL) }
+                } footer: {
+                    Text("Ends Rekkert the way iOS does to free memory, not the way swiping it away does, so Bluetooth can bring it back. Debug builds only.")
+                }
+                #endif
+
+                Section {} footer: {
+                    CommitLabel()
                 }
             }
-
-            Section {
-                Text(HealthDisclosure.summary)
-                if let line = model.workout.reach.line {
-                    Text(line)
-                        .foregroundStyle(.secondary)
+            .task {
+                #if DEBUG
+                if DemoLaunch.scrollToAppleHealth {
+                    try? await Task.sleep(for: .milliseconds(300))
+                    proxy.scrollTo(HomeRoute.appleHealth, anchor: .center)
                 }
-                NavigationLink("What Rekkert saves and reads", value: HomeRoute.appleHealth)
-            } header: {
-                AppleHealthMark()
-            }
-
-            Section {
-                NavigationLink(value: HomeRoute.sharingRecord) {
-                    Label("Sharing record", systemImage: "doc.text.magnifyingglass")
-                }
-            } footer: {
-                Text("What happened to this iPhone's links and its watch's on shared matches this past week, to send to the developer if sharing went wrong. It stays on your devices unless you share it.")
-            }
-
-            #if DEBUG
-            Section {
-                Button("End app as the system would", role: .destructive) { kill(getpid(), SIGKILL) }
-            } footer: {
-                Text("Ends Rekkert the way iOS does to free memory, not the way swiping it away does, so Bluetooth can bring it back. Debug builds only.")
-            }
-            #endif
-
-            Section {} footer: {
-                CommitLabel()
+                #endif
             }
         }
         .navigationTitle("Settings")

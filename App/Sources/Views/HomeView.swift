@@ -236,6 +236,9 @@ struct HomeView: View {
                 if DemoLaunch.openAppleHealth {
                     path = [.settings, .appleHealth]
                 }
+                if DemoLaunch.scrollToAppleHealth {
+                    path = [.settings]
+                }
                 if DemoLaunch.healthExplainer {
                     model.workout.pretendExplaining()
                 }

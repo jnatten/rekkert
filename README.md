@@ -829,7 +829,7 @@ Debug builds accept `-rekkert-demo traditional|winnercourt|friendly|americano|me
 `-rekkert-demo-fullscreen`, `-rekkert-demo-board`, `-rekkert-demo-courts N`, `-rekkert-demo-tv-shot`, `-rekkert-demo-tv-guide`,
 `-rekkert-demo-blackout`, `-rekkert-demo-settings`, `-rekkert-demo-swap-player`,
 `-rekkert-demo-workouts`, `-rekkert-demo-workout`, `-rekkert-demo-workout-paused`, `-rekkert-demo-effort`,
-`-rekkert-demo-apple-health`, `-rekkert-demo-health-explainer` (phone or watch),
+`-rekkert-demo-apple-health`, `-rekkert-demo-settings-apple-health`, `-rekkert-demo-health-explainer` (phone or watch),
 `-rekkert-demo-voices`, `-rekkert-demo-help [page id]` or
 `-rekkert-demo-new <mode>`) as
 launch arguments to put the app into a given state, since `simctl` cannot tap the screen.
@@ -986,7 +986,10 @@ of a public repository.
 
 A video or file for App Review goes in `fastlane/review_attachment.<ext>`, which is
 gitignored. `deliver` removes the attachment on every metadata upload it is not handed one
-for, so without that file a `--metadata` run takes away one attached in the web form.
+for, so without that file a `--metadata` run takes away one attached in the web form. The
+one for the Apple Health review is two iPhone screenshots side by side, taken with
+`-rekkert-demo-settings-apple-health` and `-rekkert-demo-health-explainer` on a simulator
+with no watch paired.
 
 ```sh
 ./scripts/release.sh --metadata                  # text only
