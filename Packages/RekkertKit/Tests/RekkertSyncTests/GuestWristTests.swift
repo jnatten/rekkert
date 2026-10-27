@@ -42,6 +42,20 @@ struct GuestWristTests {
         })
     }
 
+    /// FR-008: a code nobody nearby is sharing, typed on the wrist with the phone in reach, is
+    /// answered within 15 s — the phone's search and the wrist's own together, not one after the other.
+    @Test func aCodeNobodyIsSharingIsAnsweredWithinFifteenSeconds() async {
+        let court = CourtHarness(guests: 1, withWatches: true)
+        court.startMatch()
+        court.share()
+        let guest = court.guests.first!
+        await court.until(within: .seconds(5)) { guest.watch!.store.isPairReachable }
+        #expect(guest.watch!.store.isPairReachable)
+
+        guest.watch!.standIn!.join(SessionCode("106273")!)
+        #expect(await court.until(within: .seconds(15)) { guest.watch!.standIn!.joining == .failed(.notFound) })
+    }
+
     /// FR-022, FR-024: off from the wrist, the phone with it, and back on without typing.
     @Test func leavingAndJoiningAgainFromTheWrist() async {
         let court = court()

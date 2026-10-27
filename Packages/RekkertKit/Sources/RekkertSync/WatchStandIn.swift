@@ -15,6 +15,9 @@ nonisolated enum StandInPolicy {
 
     enum Join: Equatable {
         case askedPhone(since: ContinuousClock.Instant)
+        /// Asked the phone, and looking on the wrist alongside it: a phone in a bag may not see a
+        /// host the wrist can (RC-6), and one after the other would take twice FR-008's 15 s.
+        case both(since: ContinuousClock.Instant)
         case own(since: ContinuousClock.Instant)
     }
 
@@ -55,6 +58,20 @@ nonisolated enum StandInPolicy {
                 if now.phoneFailure == .rejected { return .refused(.rejected) }
                 if now.phoneFailure != nil || !now.isPairReachable { return .lookOnTheWrist }
                 return now.now - since >= timing.phoneWait ? .lookOnTheWrist : .nothing
+            case .both(let since):
+                if now.phoneFailure == .rejected { return .refused(.rejected) }
+                guard let own = now.ownFailure else {
+                    return now.now - since >= timing.ownWait ? .giveUp : .nothing
+                }
+                let phoneHasSpoken = now.phoneFailure != nil || !now.isPairReachable || now.now - since >= timing.phoneWait
+                guard phoneHasSpoken else { return .nothing }
+                // The host turning it away is the answer whoever heard it. Otherwise the phone's,
+                // since it carries the match, unless it could not look.
+                for case let failure? in [now.phoneFailure, own] where failure == .rejected || failure == .noRoom {
+                    return .refused(failure)
+                }
+                if let phone = now.phoneFailure, phone != .unreachable, phone != .blocked { return .refused(phone) }
+                return .refused(own)
             case .own(let since):
                 // Said as soon as the search has an answer, and in its words (FR-008).
                 if let failure = now.ownFailure { return .refused(failure) }
@@ -263,12 +280,24 @@ public final class WatchStandIn {
             lookOnTheWrist()
             return
         }
-        pending = .askedPhone(since: .now)
+        if mayUseTheRadio() {
+            pending = .both(since: .now)
+            sharing.join(code)
+        } else {
+            pending = .askedPhone(since: .now)
+        }
         Task {
             let landed = await store.send(.join(code))
-            guard !landed, attempt == self.attempt, case .askedPhone = pending else { return }
+            guard !landed, attempt == self.attempt, isAskingThePhone else { return }
             phoneFailure = .unreachable
             evaluate()
+        }
+    }
+
+    private var isAskingThePhone: Bool {
+        switch pending {
+        case .askedPhone, .both: true
+        case .own, nil: false
         }
     }
 
@@ -291,6 +320,9 @@ public final class WatchStandIn {
         attempt += 1
         switch pending {
         case .askedPhone: Task { [store] in await store.send(.cancel) }
+        case .both:
+            Task { [store] in await store.send(.cancel) }
+            sharing.cancelJoining()
         case .own: sharing.cancelJoining()
         // Through to a host with nothing on yet: the phone is still waiting on it.
         case nil where joining == .joined && store.state == nil: Task { [store] in await store.send(.cancel) }
@@ -313,7 +345,7 @@ public final class WatchStandIn {
     public func heard(_ signal: SharingSignal) {
         switch signal {
         case .state(let state):
-            guard case .askedPhone = pending else { return }
+            guard isAskingThePhone else { return }
             switch state {
             case .joined: phoneHasJoined = true
             case .failed(let failure): phoneFailure = failure
@@ -357,7 +389,7 @@ public final class WatchStandIn {
 
         let isHandedTheHostsMatch = store.state != nil && !store.canEndSession && store.log.sessionID != sessionAtJoin
         let hasLanded = switch pending {
-        case .askedPhone: phoneHasJoined || isPhoneThrough || isHandedTheHostsMatch
+        case .askedPhone, .both: phoneHasJoined || isPhoneThrough || isHandedTheHostsMatch
         case .own: !store.isJoining && store.state != nil
         case nil: false
         }
@@ -394,6 +426,7 @@ public final class WatchStandIn {
             Task { [store] in await store.send(.cancel) }
             lookOnTheWrist()
         case .giveUp:
+            if case .both = pending { Task { [store] in await store.send(.cancel) } }
             sharing.cancelJoining()
             pending = nil
             joining = .failed(.notFound)

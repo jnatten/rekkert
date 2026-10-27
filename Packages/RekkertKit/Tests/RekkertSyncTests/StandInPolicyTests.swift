@@ -83,6 +83,43 @@ struct StandInPolicyTests {
         #expect(StandInPolicy.next(circumstances, timing: timing) == .refused(.bluetoothOff))
     }
 
+    @Test func lookingAlongsideTheWristWaitsForThePhonesWord() {
+        var circumstances = asked(.both(since: start), after: 5)
+        circumstances.ownFailure = .notFound
+        #expect(StandInPolicy.next(circumstances, timing: timing) == .nothing)
+        circumstances.phoneFailure = .notFound
+        #expect(StandInPolicy.next(circumstances, timing: timing) == .refused(.notFound))
+    }
+
+    @Test func lookingAlongsideThePhoneThatNeverSaysIsWaitedForOnlySoLong() {
+        var circumstances = asked(.both(since: start), after: 12)
+        circumstances.ownFailure = .notFound
+        #expect(StandInPolicy.next(circumstances, timing: timing) == .refused(.notFound))
+        circumstances = asked(.both(since: start), after: 5)
+        circumstances.ownFailure = .notFound
+        circumstances.isPairReachable = false
+        #expect(StandInPolicy.next(circumstances, timing: timing) == .refused(.notFound))
+    }
+
+    @Test func lookingAlongsideTheBestReasonIsGiven() {
+        func answer(phone: SharingFailure, own: SharingFailure) -> StandInPolicy.Move {
+            var circumstances = asked(.both(since: start), after: 14)
+            circumstances.phoneFailure = phone
+            circumstances.ownFailure = own
+            return StandInPolicy.next(circumstances, timing: timing)
+        }
+        #expect(answer(phone: .notFound, own: .noRoom) == .refused(.noRoom))
+        #expect(answer(phone: .bluetoothOff, own: .notFound) == .refused(.bluetoothOff))
+        #expect(answer(phone: .unreachable, own: .notFound) == .refused(.notFound))
+        #expect(answer(phone: .blocked, own: .bluetoothOff) == .refused(.bluetoothOff))
+    }
+
+    @Test func lookingAlongsideEitherLandingEndsIt() {
+        var circumstances = asked(.both(since: start), after: 3)
+        circumstances.hasLanded = true
+        #expect(StandInPolicy.next(circumstances, timing: timing) == .landed)
+    }
+
     @Test func aMatchThePhoneIsCarryingIsLeftToIt() {
         #expect(StandInPolicy.next(onTheMatch(after: 60, phoneThrough: true), timing: timing) == .nothing)
     }

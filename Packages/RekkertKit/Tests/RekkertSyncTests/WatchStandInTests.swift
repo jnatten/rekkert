@@ -276,10 +276,12 @@ struct WatchStandInTests {
         #expect(court.sharing.standbyCode == other)
     }
 
-    @Test func thePhoneGetsTheFirstGoWhenItIsThere() async throws {
+    /// Without a workout or the app in front the wrist may not dial alongside, so it waits its turn.
+    @Test func withoutTheRadioThePhoneGetsTheFirstGo() async throws {
         var timing = quick
         timing.phoneWait = .seconds(30)
         let court = Court(timing: timing)
+        court.standIn.mayUseTheRadio = { false }
         let tasks = court.run()
         defer { tasks.forEach { $0.cancel() } }
         await eventually { court.watch.isPairReachable }
@@ -312,8 +314,9 @@ struct WatchStandInTests {
         #expect(court.standIn.joining == .searching, "through on the old code says nothing about the new one")
     }
 
-    @Test func aPhoneThatFindsNothingHandsTheJoinToTheWrist() async throws {
+    @Test func withoutTheRadioAPhoneThatFindsNothingHandsTheJoinToTheWrist() async throws {
         let court = Court()
+        court.standIn.mayUseTheRadio = { false }
         let tasks = court.run()
         defer { tasks.forEach { $0.cancel() } }
         await eventually { court.watch.isPairReachable }
@@ -329,8 +332,9 @@ struct WatchStandInTests {
     }
 
     /// A phone suspended in the middle of looking never says how it went.
-    @Test func aPhoneThatSaysNothingIsOnlyWaitedForSoLong() async throws {
+    @Test func withoutTheRadioAPhoneThatSaysNothingIsOnlyWaitedForSoLong() async throws {
         let court = Court()
+        court.standIn.mayUseTheRadio = { false }
         let tasks = court.run()
         defer { tasks.forEach { $0.cancel() } }
         await eventually { court.watch.isPairReachable }
@@ -342,10 +346,11 @@ struct WatchStandInTests {
         #expect(court.heardOnThePhone.contains(.cancel))
     }
 
-    @Test func aWrongCodeIsNotTriedAgainOnTheWrist() async throws {
+    @Test func withoutTheRadioAWrongCodeIsNotTriedAgainOnTheWrist() async throws {
         var timing = quick
         timing.phoneWait = .seconds(30)
         let court = Court(timing: timing)
+        court.standIn.mayUseTheRadio = { false }
         let tasks = court.run()
         defer { tasks.forEach { $0.cancel() } }
         await eventually { court.watch.isPairReachable }
@@ -357,6 +362,42 @@ struct WatchStandInTests {
         await eventually { court.standIn.joining == .failed(.rejected) }
         #expect(court.standIn.joining == .failed(.rejected))
         #expect(court.radio.joined == nil)
+        #expect(court.sharing.standbyCode == nil)
+    }
+
+    /// FR-008, RC-6: the wrist looks alongside its phone, and getting there first does not call
+    /// the phone off, which still has to get there too.
+    @Test func theWristLooksAlongsideItsPhone() async throws {
+        var timing = quick
+        timing.phoneWait = .seconds(30)
+        let court = Court(timing: timing)
+        let tasks = court.run()
+        defer { tasks.forEach { $0.cancel() } }
+        await eventually { court.watch.isPairReachable }
+
+        court.standIn.join(code)
+        await eventually { court.standIn.joining == .joined && court.heardOnThePhone.contains(.join(code)) }
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(court.heardOnThePhone == [.join(code)], "the phone is left to get there")
+        #expect(court.radio.joined == code)
+        #expect(court.watch.log.sessionID == court.host.log.sessionID)
+    }
+
+    @Test func aRefusalThePhoneHearsStopsTheWristLooking() async throws {
+        var timing = quick
+        timing.phoneWait = .seconds(30)
+        let court = Court(hostIsThere: false, timing: timing)
+        let tasks = court.run()
+        defer { tasks.forEach { $0.cancel() } }
+        await eventually { court.watch.isPairReachable }
+
+        court.standIn.join(code)
+        await eventually { !court.heardOnThePhone.isEmpty }
+        await court.phone.send(.state(.failed(.rejected)))
+
+        await eventually { court.standIn.joining == .failed(.rejected) }
+        #expect(court.standIn.joining == .failed(.rejected))
+        #expect(court.radio.stops > 0, "the wrist's own search was called off")
         #expect(court.sharing.standbyCode == nil)
     }
 

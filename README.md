@@ -358,12 +358,14 @@ digits, so the watch puts a number pad of its own on the screen rather than the 
 keyboard, and the sixth digit joins without another tap. The phone's join sheet opens on the
 number pad for the same reason.
 
-The watch asks its phone first, since the phone has the local network as well as Bluetooth and
-keeps its link with the screen off. A phone that has not got there in twelve seconds — out of
-reach, suspended in a bag mid-search, or finding nothing — hands over, and the watch dials the
-host's phone itself, over Bluetooth, for twenty seconds before it says why it gave up: nothing
-on that code nearby, Bluetooth off, or no room on the match. A code the host refused is not
-tried again on the wrist. So the phone can stay in a bag, or at home.
+The watch asks its phone, which has the local network as well as Bluetooth and keeps its link
+with the screen off, and dials the host's phone itself over Bluetooth at the same time, since a
+phone in a bag may not see a host that a watch held up can. Whichever gets there first puts the
+match on the wrist, and the phone is left to get there too. When neither does, the watch says
+why within fifteen seconds — nothing on that code nearby, Bluetooth off, or no room on the
+match — giving the host's refusal whoever heard it, and otherwise the phone's reason. Without
+the app in front or a workout the watch may not dial, so it gives the phone twelve seconds
+before looking itself. So the phone can stay in a bag, or at home.
 
 Once on, the watch follows through its phone for as long as that phone is through to the host.
 A phone out of touch for fifteen seconds is stood in for: the watch keeps a link of its own to
