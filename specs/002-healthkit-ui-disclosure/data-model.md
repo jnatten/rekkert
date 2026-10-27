@@ -121,4 +121,4 @@ press (or automatic start, or app open with a start set)
 A place in the app where Apple Health is named (spec: Key Entity). The full list, with the
 words used and the device each needs, is the contract in
 [contracts/identification-points.md](contracts/identification-points.md). The review notes
-and the recording are built from it.
+and the real-device check are built from it.

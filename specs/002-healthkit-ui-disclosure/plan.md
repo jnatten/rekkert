@@ -39,8 +39,8 @@ The approach:
   would bring up its sheet. It is one screen that never repeats the sheet's switches.
 - **Permission strings reworded to name Apple Health**, and `verify.sh` asserts it.
 - **The submission package.** Review notes rewritten around where Apple Health is shown,
-  starting with the path that needs no watch, plus a screen-recording script. The icon
-  download, the recording and the App Store Connect upload are manual steps for the
+  starting with the path that needs no watch. The icon download, the real-device check
+  and the App Store Connect upload are manual steps for the
   developer.
 
 What the apps read from and save to Apple Health does not change.
@@ -68,7 +68,7 @@ time, rather than kept in a flag of Rekkert's own (D-5).
 - `HelpTests` already holds the help to the screens and to the README.
 - `scripts/verify.sh` gains the permission-string assertion.
 - Manual walkthroughs on a simulator and on a physical iPhone and Apple Watch, per
-  [quickstart.md](quickstart.md). The real-device walkthrough doubles as the screen recording.
+  [quickstart.md](quickstart.md). No screen recording is sent to App Review.
 
 **Target Platform**: iOS 26 (iPhone and iPad, one binary) and watchOS 26.
 
@@ -123,10 +123,10 @@ specs/002-healthkit-ui-disclosure/
 ├── plan.md              # This file
 ├── research.md          # Phase 0: why it was rejected, HIG rules, decisions
 ├── data-model.md        # Phase 1: disclosure, reach, ask
-├── quickstart.md        # Phase 1: how to prove it, and the recording script
+├── quickstart.md        # Phase 1: how to prove it, up to the real devices
 ├── contracts/
 │   ├── identification-points.md   # Every place Apple Health is named, and the words
-│   └── review-notes.md            # What App Review gets, and the recording's shot list
+│   └── review-notes.md            # What App Review gets
 ├── checklists/
 │   └── requirements.md
 └── tasks.md             # Phase 2 output (/speckit-tasks; not created here)

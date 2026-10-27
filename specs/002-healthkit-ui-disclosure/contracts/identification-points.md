@@ -1,7 +1,7 @@
 # Contract: Where Apple Health Is Named
 
 Every place the app names Apple Health, how to reach it, whether it needs an Apple Watch, and
-the words. The review notes and the recording are built from this list. A screen that starts
+the words. The review notes and the real-device check are built from this list. A screen that starts
 a workout, asks to start one, asks for access, or shows data from Apple Health and is not
 listed here is a defect (SC-003).
 

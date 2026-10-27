@@ -1,13 +1,14 @@
 # Contract: What App Review Gets
 
-The submission after build 70 carries three things:
+The submission after build 70 carries two things:
 
 - the review notes below, replacing the "WORKOUTS (HEALTHKIT)" part of
   `fastlane/metadata/review_information/notes.txt`;
-- a screen recording, attached in App Store Connect › App Review Information;
 - a reply to the build 70 rejection with the same notes.
 
-All three are done by hand (research D-10).
+Both are done by hand (research D-10). No screen recording is submitted: the build changes
+the app itself, which is the first of the two ways out Apple offered, and the notes are
+what lead the reviewer to every place Apple Health is named.
 
 ## Review notes: the Apple Health part
 
@@ -28,8 +29,6 @@ WHERE TO SEE IT, WITH A PAIRED APPLE WATCH
 - Settings > Workout on your watch: start and stop a workout with each match. The footer says the workouts go to Apple Health.
 - On the watch: "Start workout" on the menu page next to the score, and on the idle screen, captioned "Saves to Apple Health".
 - Afterwards: start screen > Workouts lists them and says they stay in Apple Health, each workout's page shows "Saved in: Apple Health", and the workout is in the Apple Health app.
-
-A screen recording on a physical iPhone and Apple Watch showing each of these is attached.
 ```
 
 The rest of `notes.txt` (Getting started, Apple Watch, Sharing, TV, Live Activity, Encryption)
@@ -41,30 +40,3 @@ Before submitting, check two things on the real watch during T041:
   worth naming, use the direction the watch actually swipes.
 - Someone who has not used Rekkert, with an iPhone and no watch, reaches the Apple Health
   section on the first try from these notes alone (SC-006).
-
-## Recording: shot list
-
-Record on a physical iPhone with a paired Apple Watch, on a fresh install, with the system
-screen recorder. Show the watch with a second phone's camera, or the watch's own screenshots
-cut in. Target: under three minutes (SC-007).
-
-1. **No-watch path first.** Open Rekkert, tap the gear, and stop on the Apple Health section
-   (P-01) for three seconds. Open "What Rekkert saves and reads" (P-02) and scroll through it
-   slowly.
-2. **Back to the start screen.** Show the Workout section header with the icon, and its
-   footer (P-03).
-3. **Tap Start a workout.** The explainer appears (P-10). Tap Continue. The Apple Health
-   sheet appears (P-11). Allow.
-4. **On the watch.** The workout is running. Show "Saving to Apple Health" on the workout
-   page (W-03). Show Start workout's caption on the idle screen of a second, fresh start
-   (W-01).
-5. **Start a match on the phone.** Open "...", show "Stop workout" and, after stopping,
-   "Start workout · Saves to Apple Health" (P-04).
-6. **Settings › Workout on your watch.** Set "When a match starts" to Ask me, and show the
-   footer (P-06).
-7. **The result.** Open Workouts (P-07) and a workout (P-08). Then open the Apple Health app
-   and show the same workout under Workouts.
-8. **End on Settings › Apple Health again** (P-01).
-
-The watch's own explainer (W-05) is shown in a separate short clip from a fresh watch
-install if it does not come up in step 4: a phone-first start asks on the phone.

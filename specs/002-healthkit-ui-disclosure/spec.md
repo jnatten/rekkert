@@ -152,17 +152,17 @@ started.
 ### User Story 4 - The next submission carries the proof (Priority: P2)
 
 The developer submits the next build with review notes that tell the reviewer exactly where
-to find Apple Health in the app, starting with the Settings section that needs no watch, and
-with a screen recording made on a physical iPhone and Apple Watch that walks through every
-place it is named. The same notes and recording go with every later submission.
+to find Apple Health in the app, starting with the Settings section that needs no watch.
+The same notes go with every later submission. No screen recording is sent: Apple asked for
+one only from apps that keep their screens as they were, and this build changes them.
 
-**Why this priority**: Apple asked for the recording explicitly, and notes that lead the
-reviewer straight to the Apple Health section remove the chance that the next reviewer, too,
-tests without a watch and finds nothing.
+**Why this priority**: notes that lead the reviewer straight to the Apple Health section
+remove the chance that the next reviewer, too, tests without a watch and finds nothing.
 
 **Independent Test**: Hand the review notes to someone who has never used Rekkert, with an
 iPhone and no watch; following the notes alone, they reach the Apple Health section on the
-first try. Watch the recording and tick off every location the notes list.
+first try. On a physical iPhone and Apple Watch, follow the notes and find every location
+they list.
 
 **Acceptance Scenarios**:
 
@@ -171,11 +171,7 @@ first try. Watch the recording and tick off every location the notes list.
 2. **Given** the review notes, **When** a reviewer with an Apple Watch follows them, **Then**
    they can start a workout, see Apple Health named at each step, and find the workout in the
    Health app afterwards.
-3. **Given** the screen recording, **When** it is played, **Then** it shows, on a physical
-   iPhone and Apple Watch: the Apple Health section in Settings, starting a workout from the
-   phone and from the watch with Apple Health named, the explanation before the permission
-   request, the workout in Rekkert's Workouts list, and the same workout in the Health app.
-4. **Given** the App Store listing, **When** it is read, **Then** it still names Apple Health
+3. **Given** the App Store listing, **When** it is read, **Then** it still names Apple Health
    in the Workouts and Privacy paragraphs.
 
 ---
@@ -201,7 +197,7 @@ first try. Watch the recording and tick off every location the notes list.
   sizes and on the smallest supported watch.
 - **Light and dark appearance**: the icon follows Apple's rules for both.
 - **Demo and screenshot launches**: the Apple Health section appears in them as it would on
-  a real device, so App Store screenshots and the recording can show it.
+  a real device, so App Store screenshots can show it.
 - **Older watch app build paired with a newer phone app, or the other way round**: each side
   shows its own identification; nothing here travels between the devices.
 
@@ -279,10 +275,8 @@ first try. Watch the recording and tick off every location the notes list.
 - **FR-020**: The review notes MUST list, for a device without an Apple Watch and for one
   with, the exact path to every place Apple Health is identified, starting with the Settings
   section.
-- **FR-021**: A screen recording made on a physical iPhone with a paired Apple Watch MUST
-  show every location the review notes list, the explanation before the permission request,
-  and the recorded workout in the Health app; it MUST be attached to the App Review
-  Information and kept there for later submissions.
+- **FR-021**: *Dropped 2026-10-27.* No screen recording is submitted; the review notes
+  (FR-020) are what lead App Review to Apple Health.
 - **FR-022**: The App Store description MUST continue to name Apple Health, and the
   description, the review notes, the privacy page and the Apple Health section MUST NOT
   contradict each other about what is saved or read.
@@ -295,7 +289,7 @@ first try. Watch the recording and tick off every location the notes list.
   thing in their own length.
 - **Identification point**: a place in the app where Apple Health is named — its screen,
   device, how it is reached, and whether it needs an Apple Watch. The review notes and the
-  recording are built from the full list of them.
+  real-device check are built from the full list of them.
 
 ## Success Criteria *(mandatory)*
 
@@ -315,7 +309,7 @@ first try. Watch the recording and tick off every location the notes list.
   before and after the change.
 - **SC-006**: Someone following the review notes alone reaches the Apple Health section on
   the first try, without an Apple Watch.
-- **SC-007**: The screen recording shows every identification point in under three minutes.
+- **SC-007**: *Dropped 2026-10-27, with FR-021.*
 
 ## Assumptions
 
@@ -334,10 +328,8 @@ first try. Watch the recording and tick off every location the notes list.
 - The privacy page already describes the Apple Health use in detail and needs at most a
   wording check against the Settings section.
 - The App Store description already names Apple Health; it is kept, not rewritten.
-- The screen recording is made by the developer on their own iPhone and Apple Watch; it
-  cannot be produced by an automated test.
 - The fix ships in the next build after 70, through the usual TestFlight release, with the
-  review notes and the recording added by hand in App Store Connect.
+  review notes added by hand in App Store Connect.
 - Session sharing work (`001-fix-session-sharing`) is changing the watch's menu page in
   parallel. The watch requirements here apply to the menu page as it stands when both are
   merged.

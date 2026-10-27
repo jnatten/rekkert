@@ -271,22 +271,23 @@ From the HIG's HealthKit page
     PRIVACY. Keywords and subtitle are unchanged.
 - **Rationale**: FR-022, with the least churn to the listing.
 
-### D-10: Review notes and the recording
+### D-10: Review notes, and no recording
 
 - **Decision**: `fastlane/metadata/review_information/notes.txt` gets its Health part
   rewritten as "APPLE HEALTH", per [contracts/review-notes.md](contracts/review-notes.md).
-  The notes open with the path that needs no watch, then the path with a watch, and say
-  that a recording on a physical iPhone and Apple Watch is attached. The recording follows
-  the shot list in that contract and in [quickstart.md](quickstart.md).
+  The notes open with the path that needs no watch, then the path with a watch.
 
   The developer does three things by hand:
-  - uploads the notes and attaches the recording in App Store Connect's App Review
-    Information;
+  - uploads the notes in App Store Connect's App Review Information;
   - replies to the build 70 rejection in App Store Connect with the same text;
   - submits the next build.
-- **Rationale**: Apple asked for the recording explicitly. Notes that start with the no-watch
-  path stop the next reviewer repeating the last one's experience. The constitution keeps
-  listing uploads manual.
+- **Rationale**: Notes that start with the no-watch path stop the next reviewer repeating the
+  last one's experience. The constitution keeps listing uploads manual.
+- **No recording** (decided 2026-10-27): Apple asked for a screen recording only from apps
+  that already showed their Health use and wanted to argue so. This build changes the app,
+  which is the other way out it offered, so no recording is sent. The trade-off is that a
+  reviewer without a watch sees only the Settings section and its page, and has the notes'
+  word for the rest.
 
 ### D-11: Workout controls stay hidden where nothing can be recorded
 

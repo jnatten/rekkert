@@ -427,12 +427,13 @@ while Apple Health would show its sheet, and permission strings that name Apple 
 
 ## Phase 6: User Story 4 - The next submission carries the proof (Priority: P2)
 
-**Goal**: Review notes that lead App Review to Apple Health on any device, a recording on
-physical devices, and settled access paths (FR-020 to FR-022).
+**Goal**: Review notes that lead App Review to Apple Health on any device, checked on
+physical devices, and settled access paths (FR-020, FR-022). No screen recording is sent
+(FR-021 and SC-007 dropped 2026-10-27).
 
 **Independent Test**: someone with an iPhone and no watch follows the notes alone and
-reaches the Apple Health section on the first try (SC-006). The recording shows every P- and
-W- point (SC-003) in under three minutes (SC-007).
+reaches the Apple Health section on the first try (SC-006). On the real pair, every P- and
+W- point shows its words (SC-003).
 
 - [X] T039 [P] [US4] In `fastlane/metadata/review_information/notes.txt`, replace the
   "WORKOUTS (HEALTHKIT)" part (heading and paragraphs, up to "SHARING A MATCH") with the
@@ -452,9 +453,9 @@ W- point (SC-003) in under three minutes (SC-007).
   - Drop the *Draft* marks on P-02 and W-04.
 
   Re-run `swift test`.
-- [ ] T041 [US4] [Manual] On the real pair, with a release-configuration or TestFlight build
-  of this branch that includes T002's icon:
-  1. Follow [quickstart.md](quickstart.md) R-1 and R-2.
+- [X] T041 [US4] [Manual] On the real pair, with a build of this branch that includes
+  T002's icon:
+  1. Follow [quickstart.md](quickstart.md) R-1 and R-2, and tick every P- and W- point.
   2. Do the two checks listed after the notes in
      [contracts/review-notes.md](contracts/review-notes.md):
      - confirm the watch menu page's side;
@@ -462,13 +463,9 @@ W- point (SC-003) in under three minutes (SC-007).
        watch, to the Apple Health section (SC-006).
 
      Correct the notes, and T039's copy, if either check fails.
-  3. Make the recording per R-4 and the shot list, and tick every P- and W- point against
-     it.
 - [ ] T042 [US4] [Manual] In App Store Connect, for the next build:
   - paste the review notes from T039;
-  - attach the recording under App Review Information;
-  - reply to the build 70 rejection with the same notes and a line saying the recording is
-    attached;
+  - reply to the build 70 rejection with the same notes;
   - submit.
 
   Confirm the App Store description still names Apple Health in WORKOUTS and PRIVACY
@@ -496,7 +493,7 @@ W- point (SC-003) in under three minutes (SC-007).
   Change no other claim (D-9).
 - [X] T045 [P] In `README.md`, add `-rekkert-demo-apple-health` and
   `-rekkert-demo-health-explainer` to the debug launch-argument list.
-- [ ] T046 Run `swift test --package-path Packages/RekkertKit` and `./scripts/verify.sh`,
+- [X] T046 Run `swift test --package-path Packages/RekkertKit` and `./scripts/verify.sh`,
   then [quickstart.md](quickstart.md) §3 and §4 in full. Fix anything they find.
 - [X] T047 If `001-fix-session-sharing` has reached `main` meanwhile, rebase this branch
   onto it with `jj rebase` and resolve the overlaps listed in plan.md Constraints. Keep both
@@ -587,7 +584,7 @@ Task: "WatchWorkoutPage caption (T030)"
 2. **US2**: names Apple Health at every control. This is cheap, and covers a reviewer who
    does have a watch.
 3. **US3**: the explainer and the purpose strings.
-4. **US4**: notes, recording, submit.
+4. **US4**: notes, a real-device check, submit.
 
 US1 and US2 together make the strongest case. US3 matters most for a reviewer who tests
 with a watch. Submit with all four rather than splitting across builds: a second rejection

@@ -38,8 +38,8 @@
   `/speckit-clarify`: the Apple Health section also shows on iPad (FR-001); Rekkert shows its
   own explanation before the first permission request (FR-015, User Story 3, P2); the workout
   controls stay hidden without a watch, with the section explaining why.
-- FR-021 (the screen recording) and the review notes in FR-020 are done by hand in App Store
-  Connect, outside the code.
+- The review notes in FR-020 are done by hand in App Store Connect, outside the code. FR-021
+  (a screen recording) and SC-007 were dropped on 2026-10-27: no recording is submitted.
 - Revised during `/speckit-plan`, and still passing:
   - FR-005, FR-013 and FR-015 were brought in line with Apple's HealthKit HIG: access is
     managed only in system settings; the words are "Apple Health" or "the Apple Health app";

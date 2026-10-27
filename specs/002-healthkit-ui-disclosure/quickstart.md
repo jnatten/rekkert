@@ -1,9 +1,8 @@
 # Quickstart: Proving Apple Health Is Named Everywhere
 
-How to show this feature works, from the fastest check to the recording that goes to App
-Review. The words each screen must show are in
-[contracts/identification-points.md](contracts/identification-points.md). The recording's
-shot list is in [contracts/review-notes.md](contracts/review-notes.md).
+How to show this feature works, from the fastest check to the real devices. The words each screen must show are in
+[contracts/identification-points.md](contracts/identification-points.md). What App Review is
+told is in [contracts/review-notes.md](contracts/review-notes.md).
 
 ## Prerequisites
 
@@ -112,14 +111,12 @@ changed:
 Update the *Draft* copy in P-02 and W-04, and `HealthDisclosure.changeAccess`, to the paths
 actually found, before the build that is submitted.
 
-**R-4. Record.** Follow the shot list in [contracts/review-notes.md](contracts/review-notes.md)
-with the system screen recorder, on a fresh install again (R-1). Keep it under three minutes
-(SC-007). Then tick every P- and W- point in the contract against the recording (SC-003).
+**R-4. Tick every point.** Go through every P- and W- point in the contract on the real
+pair (SC-003). No screen recording is made for App Review.
 
 **R-5. Submit.** This is done by hand in App Store Connect (research D-10):
 
 - paste the review notes;
-- attach the recording under App Review Information;
 - reply to the build 70 rejection with the same text;
 - submit the build.
 
@@ -129,5 +126,5 @@ with the system screen recorder, on a fresh install again (R-1). Keep it under t
 - Section 3 passes on iPhone and iPad.
 - Section 4 passes.
 - R-2 and R-3 are done, with the drafts settled.
-- The recording covers every identification point.
+- Every identification point was seen on the real pair.
 - The next build is not rejected under 2.5.1 (SC-001).

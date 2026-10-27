@@ -19,8 +19,6 @@ WHERE TO SEE IT, WITH A PAIRED APPLE WATCH
 - On the watch: "Start workout" on the menu page next to the score, and on the idle screen, captioned "Saves to Apple Health".
 - Afterwards: start screen > Workouts lists them and says they stay in Apple Health, each workout's page shows "Saved in: Apple Health", and the workout is in the Apple Health app.
 
-A screen recording on a physical iPhone and Apple Watch showing each of these is attached.
-
 SHARING A MATCH (LOCAL NETWORK AND BLUETOOTH BACKGROUND MODES)
 In a match, open the "..." menu and tap Share this match. The phone shows a six-digit code. On a second iPhone or iPad, tap Join a match on the start screen and enter the code. Both devices then show and score the same match.
 The share screen also shows the code as a QR code. Scanning it with the Camera app opens Rekkert and joins without typing, and so does Scan the host's code on the Join a match screen. That button is the only use of the camera, and nothing it sees is kept or sent.
