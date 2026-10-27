@@ -438,7 +438,7 @@ W- point (SC-003) in under three minutes (SC-007).
   "WORKOUTS (HEALTHKIT)" part (heading and paragraphs, up to "SHARING A MATCH") with the
   text block in [contracts/review-notes.md](contracts/review-notes.md), verbatim. Leave every
   other part unchanged.
-- [ ] T040 [US4] [Manual] On an iPhone running iOS 26 with a paired Apple Watch on watchOS
+- [X] T040 [US4] [Manual] On an iPhone running iOS 26 with a paired Apple Watch on watchOS
   26, find where Rekkert's Apple Health access is changed. This is quickstart R-3: the
   Settings route, the Apple Health app's own route, and where the watch app's access lives.
   Then:

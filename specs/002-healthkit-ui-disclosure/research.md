@@ -300,9 +300,8 @@ From the HIG's HealthKit page
 - **Decision**: The page states the system path in words, with no link. The expected path
   on iPhone is **Settings › Privacy & Security › Health › Rekkert**, which also covers what
   the watch app may read and save. The Apple Health app's own route (profile picture ›
-  Apps) is given as a second line. Both paths are confirmed on a device running iOS 26 and
-  watchOS 26 before the copy is final ([quickstart.md](quickstart.md), step R-3). The Apple
-  Health app was redesigned in iOS 26.4, so the second path may have moved. The watch
+  Apps) is given as a second line. Both paths were confirmed on a real iPhone and Apple
+  Watch on 2026-10-27 ([quickstart.md](quickstart.md), step R-3, task T040). The watch
   failure text says "Turn on Apple Health access for Rekkert in Settings on your iPhone",
   short enough for the smallest watch.
 - **Rationale**: The HIG says access is managed only in the system's settings. The

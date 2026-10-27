@@ -25,7 +25,7 @@ Two conventions apply throughout:
 | | | | | Section "Read from Apple Health" | One line per `HealthDisclosure.read` kind, title and reason |
 | | | | | Section "When" | `HealthDisclosure.when` |
 | | | | | Section "Where it goes" | `HealthDisclosure.whereItGoes` |
-| | | | | Section "Change access" | *Draft*: "Settings › Privacy & Security › Health › Rekkert", then "Or in the Apple Health app: your picture › Apps › Rekkert" |
+| | | | | Section "Change access" | "Settings › Privacy & Security › Health › Rekkert", then "Or in the Apple Health app: your picture › Apps › Rekkert" |
 | P-03 | Home › Workout section | Home | Yes | Header: "Workout", mark trailing | — |
 | | | | | Footer | "Records your heart rate and energy on your Apple Watch and saves it to Apple Health as tennis, the nearest thing Apple Health has to padel. It runs on its own: start it when you walk on, stop it when you walk off, and play as many matches in between as you like. Settings can have it start and stop with the match instead." |
 | P-04 | A match's menu › Start workout | Match › ⋯ | Yes | Item subtitle | "Saves to Apple Health" |
@@ -54,7 +54,7 @@ Two conventions apply throughout:
 | W-01 | Start workout, on the menu page, the idle screen and the result screen | Watch app | Caption under the button, while not running and with no failure text | "Saves to Apple Health" |
 | W-02 | "Start a workout?" | Match start with Ask me | Alert message | "It's saved to Apple Health." |
 | W-03 | Workout page | A page beside the score, while a workout runs | Caption at the foot | "Saving to Apple Health" |
-| W-04 | Start failed for access | Start workout with access off | Failure text | *Draft*: "Turn on Apple Health access for Rekkert in Settings on your iPhone." |
+| W-04 | Start failed for access | Start workout with access off | Failure text | "Turn on Apple Health access for Rekkert in Settings on your iPhone." |
 | W-05 | Explainer | First Start workout, automatic start, or app open with a start set | Mark, title | "Rekkert works with Apple Health" |
 | | | | Body | "Workouts you start are saved to Apple Health. While one runs, Rekkert reads your heart rate and energy. Nothing leaves your watch and iPhone." |
 | | | | Buttons | "Continue" · "Not now" |
