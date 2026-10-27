@@ -2169,7 +2169,7 @@ public final class MatchStore {
         switch signal {
         case .standby: announcedStandby = signal
         case .hostingStatus: announcedHosting = signal
-        case .join, .cancel, .startHosting, .stopHosting, .followPhone, .state: break
+        case .join, .cancel, .startHosting, .stopHosting, .followPhone, .state, .hostStoppedSharing: break
         }
     }
 

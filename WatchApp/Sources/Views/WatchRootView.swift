@@ -35,6 +35,17 @@ struct WatchRootView: View {
                 }
                 Button("Not now", role: .cancel) { model.follower.answerStart(false) }
             }
+            .alert(
+                model.standIn.hostWhoStopped.map { "\($0) stopped sharing" } ?? "The host stopped sharing",
+                isPresented: Binding(
+                    get: { model.standIn.hostStoppedSharing },
+                    set: { if !$0 { model.standIn.acknowledgeStoppedSharing() } }
+                )
+            ) {
+                Button("OK") { model.standIn.acknowledgeStoppedSharing() }
+            } message: {
+                Text("Your copy of the match is saved in History on your iPhone.")
+            }
             .sheet(item: Binding(
                 get: { model.workout.askingForEffort },
                 set: { if $0 == nil { model.workout.skipEffort() } }

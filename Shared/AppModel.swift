@@ -179,6 +179,7 @@ final class AppModel {
         sharing.onHostingStatus = { [weak self] status, isNews in self?.tellTheWatch(status, isNews: isNews) }
         sharing.onStandby = { [store] standby in Task { await store.send(.standby(standby)) } }
         sharing.onJoined = { [weak self] in self?.beckonTheWatch() }
+        sharing.onStoppedByHost = { [store] host in Task { await store.sendDurably(.hostStoppedSharing(host: host)) } }
         store.onSharing = { [weak self] signal in self?.joinFromWatch(signal) }
         liveScore.follow(store)
         #endif
@@ -347,7 +348,7 @@ final class AppModel {
         case .join(let code): sharing.join(code, forTheWatch: true)
         case .cancel: sharing.cancelJoiningFromTheWatch()
         // Said by this end, not heard by it.
-        case .state, .standby, .hostingStatus: break
+        case .state, .standby, .hostingStatus, .hostStoppedSharing: break
         // "Get on it": the wrist asked for the match this phone is on.
         case .followPhone: store.offerToThePair()
         // The host's wrist, with this phone in a bag. Answered with what is being shared.

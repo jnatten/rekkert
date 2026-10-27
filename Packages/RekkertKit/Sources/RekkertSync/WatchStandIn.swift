@@ -169,6 +169,19 @@ public final class WatchStandIn {
         return statuses
     }
 
+    /// The host stopped sharing the match the wrist was on, heard from the phone or, standing in,
+    /// from the host itself (US4 AS6). Worth saying once.
+    public var hostStoppedSharing: Bool { heardHostStopped || sharing.hostStoppedSharing }
+    public var hostWhoStopped: String? { heardHostStopped ? heardStoppingHost : sharing.hostWhoStopped }
+    private var heardHostStopped = false
+    private var heardStoppingHost: String?
+
+    public func acknowledgeStoppedSharing() {
+        heardHostStopped = false
+        heardStoppingHost = nil
+        sharing.acknowledgeStoppedSharing()
+    }
+
     /// Who the host of the match the phone is on said they are, for the wrist to call it by.
     public var phonesHostName: String? { phoneStandby?.hostName }
 
@@ -374,6 +387,9 @@ public final class WatchStandIn {
             }
         case .hostingStatus(let status):
             heard(hosting: status)
+        case .hostStoppedSharing(let host):
+            heardHostStopped = true
+            heardStoppingHost = host
         case .join, .cancel, .startHosting, .stopHosting, .followPhone:
             break
         }

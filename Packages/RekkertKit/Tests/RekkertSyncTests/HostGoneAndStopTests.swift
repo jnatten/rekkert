@@ -68,6 +68,19 @@ struct HostGoneAndStopTests {
         #expect(court.host.phone.store.state == board, "the host's own match carries on")
     }
 
+    /// US4 AS6: the wrist is told too, since that is what a guest with the phone in a bag looks at.
+    @Test func stoppingIsSaidOnEveryGuestsWatch() async {
+        let court = await sharedCourt(withWatches: true)
+        court.host.phone.sharing.stop()
+        #expect(await court.until(within: .seconds(10)) {
+            court.guests.allSatisfy { $0.watch!.standIn!.hostStoppedSharing }
+        })
+
+        let watch = court.guests.first!.watch!.standIn!
+        watch.acknowledgeStoppedSharing()
+        #expect(!watch.hostStoppedSharing, "said once")
+    }
+
     /// The guests call the match by who the host said they are: "Ada's match", on the phone and
     /// on the wrist, right up to "Ada stopped sharing".
     @Test func theGuestsKnowTheHostByTheNameTheyGave() async {
@@ -83,7 +96,9 @@ struct HostGoneAndStopTests {
         #expect(court.host.phone.store.hostName == nil, "the host's own match is not somebody else's")
 
         court.host.phone.sharing.stop()
-        #expect(await court.until(within: .seconds(10)) { guest.phone.sharing.hostWhoStopped == "Ada" })
+        #expect(await court.until(within: .seconds(10)) {
+            guest.phone.sharing.hostWhoStopped == "Ada" && guest.watch!.standIn!.hostWhoStopped == "Ada"
+        })
     }
 
     /// A host from before this build cuts its links without a word. Its guests see it go as they

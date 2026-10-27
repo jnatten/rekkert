@@ -40,6 +40,8 @@ public final class SharedSession {
     @ObservationIgnored public var onStandby: ((SharingStandby?) -> Void)?
     /// A join got through, once per code dialled.
     @ObservationIgnored public var onJoined: (() -> Void)?
+    /// The host stopped sharing the match this device was a guest on, for its watch to hear.
+    @ObservationIgnored public var onStoppedByHost: ((_ host: String?) -> Void)?
     /// What the host's watch shows, each time it changes (D-14). `isNews` when sharing started,
     /// stopped or changed code: worth queuing for a watch whose app is not running, and worth a
     /// fresh picture of the code.
@@ -475,6 +477,7 @@ public final class SharedSession {
         forgetWhatWasAskedFor()
         standbyCode = nil
         hostStoppedSharing = true
+        onStoppedByHost?(hostWhoStopped)
     }
 
     public func acknowledgeStoppedSharing() {

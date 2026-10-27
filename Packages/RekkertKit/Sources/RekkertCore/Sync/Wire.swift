@@ -75,6 +75,9 @@ public enum SharingSignal: Codable, Sendable, Hashable {
     case stopHosting
     /// Watch to phone: send me the match you are on.
     case followPhone
+    /// Phone to watch: the host stopped sharing the match the phone was a guest on, and its copy
+    /// went to History. With who the host said they are, if they did.
+    case hostStoppedSharing(host: String?)
 }
 
 public struct SharingStandby: Codable, Sendable, Hashable {
