@@ -104,6 +104,14 @@ struct SettingsView: View {
                 Text("What happened to this iPhone's links and its watch's on shared matches this past week, to send to the developer if sharing went wrong. It stays on your devices unless you share it.")
             }
 
+            #if DEBUG
+            Section {
+                Button("End app as the system would", role: .destructive) { kill(getpid(), SIGKILL) }
+            } footer: {
+                Text("Ends Rekkert the way iOS does to free memory, not the way swiping it away does, so Bluetooth can bring it back. Debug builds only.")
+            }
+            #endif
+
             Section {} footer: {
                 CommitLabel()
             }

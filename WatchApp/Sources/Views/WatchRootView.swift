@@ -157,6 +157,7 @@ struct WatchRootView: View {
         if WatchDemoLaunch.page == "menu" { selection = menuTag }
         if WatchDemoLaunch.page == "standings" { selection = standingsTag }
         if WatchDemoLaunch.page == "workout" { selection = workoutTag }
+        if WatchDemoLaunch.page == "code" { selection = menuTag }
         #endif
     }
 }
@@ -167,7 +168,7 @@ struct WatchPhonesMatchBanner: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        if let elsewhere = model.standIn.phonesMatchElsewhere {
+        if let elsewhere {
             VStack(spacing: 4) {
                 Text("Your iPhone is on a shared match")
                     .font(.footnote.weight(.semibold))
@@ -192,6 +193,13 @@ struct WatchPhonesMatchBanner: View {
             }
             .padding(.vertical, 4)
         }
+    }
+
+    private var elsewhere: WatchStandIn.PhonesMatch? {
+        #if DEBUG
+        if let demo = WatchDemoLaunch.phonesMatchElsewhere { return demo }
+        #endif
+        return model.standIn.phonesMatchElsewhere
     }
 }
 

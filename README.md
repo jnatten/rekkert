@@ -802,7 +802,7 @@ Debug builds accept `-rekkert-demo traditional|winnercourt|friendly|americano|me
 `-rekkert-demo-rounds-sheet`,
 `-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N`, `-rekkert-demo-sit-outs [name]`,
 `-rekkert-demo-open-court R,C`, `-rekkert-demo-roster`, `-rekkert-demo-presets`,
-`-rekkert-demo-watch-page menu|standings|controls`, `-rekkert-demo-watch-join CODE`,
+`-rekkert-demo-watch-page menu|standings|controls|workout|presets|code|follow-phone`, `-rekkert-demo-watch-join CODE`,
 `-rekkert-demo-fullscreen`, `-rekkert-demo-board`, `-rekkert-demo-courts N`, `-rekkert-demo-tv-shot`, `-rekkert-demo-tv-guide`,
 `-rekkert-demo-blackout`, `-rekkert-demo-settings`, `-rekkert-demo-swap-player`,
 `-rekkert-demo-workouts`, `-rekkert-demo-workout`, `-rekkert-demo-workout-paused`, `-rekkert-demo-effort`,
@@ -845,6 +845,10 @@ scores and brought back to catch up from the log, and then the host's app ended 
 with no code at all, to come back on the one it kept and reach a guest nobody touched.
 `--no-build` reuses the last build, `--keep` leaves the simulators up.
 
+On the watch paired with the host, `-rekkert-demo-watch-page code` opens the menu with the
+code over it, as **Code** does. `-rekkert-demo-watch-page follow-phone` puts up the banner a
+guest's watch shows when its phone is on a shared match and the wrist is not.
+
 `-rekkert-share-access readOnly|score|full` sets what phones joining the host get,
 `-rekkert-demo-share-sheet` opens the host's share sheet, and `-rekkert-share-as NAME` answers
 the guest's "Who are you?" with that name.
@@ -856,6 +860,10 @@ CoreBluetooth's XPC connection is refused and everything above goes over the loc
 And a phone in a pocket, because a backgrounded simulator app is not suspended — its listener
 and its sockets stay up, which is the one condition the Bluetooth link exists for. All of them
 need two real iPhones.
+
+Bluetooth state restoration needs one more thing on them: an app ended the way iOS ends it, not
+swiped away, since iOS restores nothing for an app its user closed. Debug builds have **End app
+as the system would** at the foot of Settings for that.
 
 `swift scripts/psk-spike.swift` checks, in a couple of seconds and with no devices at all,
 that a session code still works as a TLS pre-shared key.

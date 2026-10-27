@@ -461,8 +461,8 @@ needs the kept code from US1.
   - **Add a section** on the sharing record.
   - **Remove** "the code is never kept" and "there is no version of this where the code is read out from a wrist".
 - [X] T072 [P] Add a third phase to `scripts/share.sh`: end the host's app (`xcrun simctl terminate`) and relaunch it. Assert the host comes back on the same code, and that every `active.json` again holds the same events with nothing typed.
-- [ ] T073 [P] Add `-rekkert-demo-watch-page code` and `-rekkert-demo-watch-page follow-phone` to `WatchApp/Sources/Views/WatchDemoLaunch.swift`, and list them in `README.md`'s launch-argument list.
-- [ ] T074 [P] Add a debug-only **End app as the system would** to `App/Sources/Views/SettingsView.swift`. It calls `kill(getpid(), SIGKILL)`, so Bluetooth restoration can be tested on devices (quickstart §4 step 5).
+- [X] T073 [P] Add `-rekkert-demo-watch-page code` and `-rekkert-demo-watch-page follow-phone` to `WatchApp/Sources/Views/WatchDemoLaunch.swift`, and list them in `README.md`'s launch-argument list.
+- [X] T074 [P] Add a debug-only **End app as the system would** to `App/Sources/Views/SettingsView.swift`. It calls `kill(getpid(), SIGKILL)`, so Bluetooth restoration can be tested on devices (quickstart §4 step 5).
 - [X] T075 Make the new and changed watch screens work with VoiceOver and larger text sizes (FR-031): `WatchMenuView.swift`, `WatchCourtPage.swift`, `WatchRootView.swift`, `WatchJoinView.swift`, `WatchCodeView.swift` and `WatchGuestsView.swift` in `WatchApp/Sources/Views/`.
 - [X] T076 Check whether any task added an Info.plist key or entitlement. If one did, add its assertion to `scripts/verify.sh`. If none did, note that in the PR description.
 - [X] T077 Run levels 1–3 of `specs/001-fix-session-sharing/quickstart.md` and record the results in the PR description.

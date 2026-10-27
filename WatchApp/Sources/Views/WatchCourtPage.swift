@@ -62,6 +62,7 @@ struct WatchCourtPage: View {
         #if DEBUG
         if WatchDemoLaunch.link == "reconnecting" { return WatchStandIn.Status.lookingForTheMatch.line }
         if WatchDemoLaunch.link == "down" { return WatchStandIn.Status.phoneOutOfReach.line }
+        if WatchDemoLaunch.phonesMatchElsewhere != nil { return "Your iPhone is on a shared match" }
         #endif
         // One line fits, and the match comes first: in step, nothing is said at all.
         if let line = model.standIn.statuses.first(where: { $0 != .onTheHostsPhone })?.line { return line }

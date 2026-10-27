@@ -218,6 +218,11 @@ struct WatchMenuView: View {
             Button("Cancel", role: .cancel) {}
         }
         .sheet(isPresented: $showingCode) { NavigationStack { WatchCodeView() } }
+        .task {
+            #if DEBUG
+            if WatchDemoLaunch.page == "code" { showingCode = true }
+            #endif
+        }
         .sheet(isPresented: $showingGuests) { NavigationStack { WatchGuestsView() } }
         .confirmationDialog("Stop sharing? Everyone else leaves this match.", isPresented: $confirmingStopSharing, titleVisibility: .visible) {
             Button("Stop sharing", role: .destructive) {

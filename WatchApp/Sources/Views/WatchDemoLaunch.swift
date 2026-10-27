@@ -1,10 +1,16 @@
 #if DEBUG
 import Foundation
+import RekkertSync
 
-/// `-rekkert-demo-watch-page menu|standings|controls|workout|presets` opens straight onto a page that
-/// otherwise needs a swipe, so screens can be captured from `simctl`.
+/// `-rekkert-demo-watch-page menu|standings|controls|workout|presets|code|follow-phone` opens
+/// straight onto a page that otherwise needs a swipe, so screens can be captured from `simctl`.
 enum WatchDemoLaunch {
     static var page: String? { value(after: "-rekkert-demo-watch-page") }
+
+    /// `-rekkert-demo-watch-page follow-phone` puts up the banner a guest's watch shows when its
+    /// phone is on a shared match the wrist is not, which otherwise takes a guest phone and a
+    /// match of the watch's own.
+    static var phonesMatchElsewhere: WatchStandIn.PhonesMatch? { page == "follow-phone" ? .canFollow : nil }
 
     /// `-rekkert-demo-watch-sides fixed|followPhone|manual` picks the side mode, which
     /// otherwise takes a tap on the menu page.
