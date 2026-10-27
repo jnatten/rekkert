@@ -40,3 +40,8 @@
   controls stay hidden without a watch, with the section explaining why.
 - FR-021 (the screen recording) and the review notes in FR-020 are done by hand in App Store
   Connect, outside the code.
+- Revised during `/speckit-plan`, and still passing:
+  - FR-005, FR-013 and FR-015 were brought in line with Apple's HealthKit HIG: access is
+    managed only in system settings; the words are "Apple Health" or "the Apple Health app";
+    and the explainer does not repeat the permission screen.
+  - The saved list now includes the active and resting energy the watch already saves.

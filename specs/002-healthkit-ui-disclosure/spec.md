@@ -19,8 +19,8 @@ showing where it already is, and keep that recording in the review notes for eve
 submission.
 
 Rekkert's Apple Health use is real and narrow. A workout the player starts is recorded on the
-Apple Watch and saved to Apple Health as indoor tennis, with an effort rating if they give
-one. While it runs, and once more when it ends, the watch reads heart rate and active and
+Apple Watch and saved to Apple Health as indoor tennis, with the active and resting energy it
+burned and an effort rating if they give one. While it runs, and once more when it ends, the watch reads heart rate and active and
 resting energy; it also reads date of birth and the latest resting heart rate to place the
 heart rate in zones. Nothing is read unless a workout is started.
 
@@ -68,7 +68,8 @@ answers what is saved, what is read, when, where it goes, and where to change ac
 3. **Given** an iPhone with a paired Apple Watch, **When** the user opens Settings, **Then**
    the Apple Health section is shown alongside the existing "Workout on your watch" settings.
 4. **Given** the Apple Health section, **When** the user reads it, **Then** it lists what is
-   saved to Apple Health (workouts as indoor tennis, effort ratings), what is read (heart
+   saved to Apple Health (workouts as indoor tennis, with their active and resting energy,
+   and effort ratings), what is read (heart
    rate, active and resting energy, resting heart rate, date of birth, and Rekkert's own
    workouts and ratings), and when (only while a workout the player started is running, and
    once when it ends).
@@ -215,7 +216,8 @@ first try. Watch the recording and tick off every location the notes list.
 - **FR-002**: The section MUST show the Apple Health icon beside its name, using Apple's own
   artwork as Apple's guidelines allow.
 - **FR-003**: The section MUST say, in plain language: what Rekkert saves to Apple Health
-  (workouts, as indoor tennis, and effort ratings); what it reads (heart rate, active and
+  (workouts, as indoor tennis, with their active and resting energy, and effort ratings);
+  what it reads (heart rate, active and
   resting energy, resting heart rate, date of birth, and its own workouts and ratings); that
   it reads only while a workout the player started is running and once when it ends; why it
   reads date of birth and resting heart rate (to place heart rate in zones); and that
@@ -224,7 +226,8 @@ first try. Watch the recording and tick off every location the notes list.
   the iPhone, and, on a device where workouts cannot be recorded, why not (no paired watch,
   watch without Rekkert, iPad, or Apple Health unavailable).
 - **FR-005**: The section MUST tell the player where to review or turn off Rekkert's Apple
-  Health access, and MAY take them there directly where the system allows it.
+  Health access in the system's own settings. It MUST NOT offer switches of its own that
+  change what flows to or from Apple Health.
 - **FR-006**: Opening or reading the section MUST NOT trigger an Apple Health permission
   request.
 
@@ -243,8 +246,9 @@ first try. Watch the recording and tick off every location the notes list.
   in, Apple Health.
 - **FR-012**: Messages about Apple Health access failing, on either device, MUST name Apple
   Health and say where to turn access on.
-- **FR-013**: User-facing text MUST call the service "Apple Health", or "the Health app" when
-  it means the app itself; bare "Health" MUST NOT be used for it.
+- **FR-013**: User-facing text MUST call the service "Apple Health", or "the Apple Health
+  app" when it means the app itself, as Apple's guidelines ask; bare "Health" and
+  "HealthKit" MUST NOT be used for it.
 - **FR-014**: The in-app help MUST describe the Apple Health integration, and every help
   entry that mentions it MUST use the same name.
 
@@ -252,7 +256,9 @@ first try. Watch the recording and tick off every location the notes list.
 
 - **FR-015**: The first time on a device that Rekkert would ask Apple Health for access, it
   MUST first show its own explanation of what it will ask for and why, with a way to continue
-  to the system request and a way to back out.
+  to the system request and a way to back out. The explanation MUST NOT repeat the system
+  request's own choices (no per-item switches), so it never reads as a second permission
+  screen.
 - **FR-016**: Backing out MUST leave no system request shown, no workout started and no
   setting changed, and the explanation MUST appear again the next time.
 - **FR-017**: Once the system request has been shown on a device, the explanation MUST NOT
@@ -315,10 +321,10 @@ first try. Watch the recording and tick off every location the notes list.
   watch is therefore the core of the fix.
 - "CareKit" in the rejection is standard wording; Rekkert does not use CareKit and nothing
   needs to change for it.
-- Apple allows apps to show the Apple Health icon and to use the name "Apple Health" inside
-  the app to identify a Health integration, as long as its published guidelines for the
-  artwork are followed. The "Works with Apple Health" badge is for marketing, not the app,
-  and is not used here.
+- Apple's Human Interface Guidelines allow the Apple Health icon inside the app to show it
+  works with Apple Health, provided it is Apple's own artwork, sits beside the name "Apple
+  Health", keeps clear space around it, and is never used as a button or in place of words.
+  The "Works with Apple Health" badge is for marketing, not the app, and is not used here.
 - The app's text is English only; no other languages are in scope.
 - The workout controls stay hidden where no workout can be recorded, as today. The Apple
   Health section is what explains their absence.
