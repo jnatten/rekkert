@@ -10,8 +10,9 @@
 # the event log each device writes to `active.json` rather than on the screen, so a drifting
 # score fails the script instead of waiting to be noticed in a screenshot.
 #
-# Two phases: everybody agrees while they are all there, and then the guest is killed, the
-# host scores while it is away, and the guest comes back and catches up from the log.
+# Three phases: everybody agrees while they are all there; then the guest is killed, the host
+# scores while it is away, and the guest comes back and catches up from the log; then the
+# host's app is ended and launched again with no code, and has to find its kept one by itself.
 #
 # What this cannot test, and there is no rigging that fixes it:
 #   - Bluetooth. The simulator has no bluetoothd; CoreBluetooth's XPC connection is refused,
@@ -120,16 +121,25 @@ wait_for() {
 }
 
 watch_has_a_match() { events_on "$WATCH" "$WATCH_ID" >/dev/null 2>&1; }
+guest_has_a_match() { events_on "$GUEST" "$IOS_ID" >/dev/null 2>&1; }
 
 # A phone booted from cold can take well over a minute to bring WatchConnectivity up, which
 # the run's own waits are not there to cover. A match that reaches the watch says it is up.
-echo "==> Wait for the watch to hear from its phone"
+# The guest's first launch after a cold boot can sit on a blank screen for longer than the
+# join is given, so it is got out of the way here too.
+echo "==> Wait for the watch to hear from its phone, and the guest to start"
 install_fresh "$HOST" "$IOS_APP" "$IOS_ID"
+install_fresh "$GUEST" "$IOS_APP" "$IOS_ID"
 install_fresh "$WATCH" "$WATCH_APP" "$WATCH_ID"
 xcrun simctl launch "$HOST" "$IOS_ID" -rekkert-demo traditional >/dev/null
+xcrun simctl launch "$GUEST" "$IOS_ID" -rekkert-demo traditional >/dev/null
 xcrun simctl launch "$WATCH" "$WATCH_ID" >/dev/null
 if ! wait_for $((SECONDS + 240)) watch_has_a_match; then
   echo "FAIL: the watch never heard from its phone"
+  exit 1
+fi
+if ! wait_for $((SECONDS + 120)) guest_has_a_match; then
+  echo "FAIL: the guest's app never started"
   exit 1
 fi
 
@@ -197,5 +207,34 @@ fi
 echo "==> Guest comes back to a score it never saw"
 xcrun simctl launch "$GUEST" "$IOS_ID" -rekkert-share-join "$CODE" >/dev/null
 agree rejoined $((SECONDS + 60))
+
+# What the host's record says it did on the way back in. Kept beside the log rather than read
+# off the screen, and never holding the code, so it is the only outside word on a restore.
+restored_count() {
+  local container
+  container=$(xcrun simctl get_app_container "$HOST" "$IOS_ID" data)
+  cat "$container/Library/Application Support/SharingRecord/"*.jsonl 2>/dev/null | grep -c '"sharingRestored"' || true
+}
+
+# Relaunched with no code at all. The guest is left running and untouched, still looking for
+# the code it was given, so a point of the host's reaching it says the host came back on that
+# same code — and the record says it was the kept one rather than a new share.
+RESTORE_LATE=20
+echo "==> Host's app is ended and comes back on its kept code"
+RESTORED_BEFORE=$(restored_count)
+REJOINED=$(host_count)
+xcrun simctl terminate "$HOST" "$IOS_ID" >/dev/null
+xcrun simctl launch "$HOST" "$IOS_ID" -rekkert-demo-late-tap "$RESTORE_LATE" >/dev/null
+RELAUNCHED=$SECONDS
+if ! wait_for $((RELAUNCHED + RESTORE_LATE + 30)) host_has_more_than "$REJOINED"; then
+  echo "FAIL: the relaunched host never scored its late point"
+  exit 1
+fi
+if [ "$(restored_count)" -le "$RESTORED_BEFORE" ]; then
+  shoot_all restored
+  echo "FAIL: the relaunched host did not share its kept code again"
+  exit 1
+fi
+agree restored $((SECONDS + 60))
 
 echo "==> Screenshots in $SHOTS"

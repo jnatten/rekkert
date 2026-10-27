@@ -841,8 +841,9 @@ types, its phone goes looking, and all three end up on the host's log:
 
 `./scripts/share.sh` does all of that and asserts it: two phones and the paired watch on one
 match, everybody's `active.json` holding the same events, then the guest killed while the host
-scores and brought back to catch up from the log. `--no-build` reuses the last build, `--keep`
-leaves the simulators up.
+scores and brought back to catch up from the log, and then the host's app ended and launched
+with no code at all, to come back on the one it kept and reach a guest nobody touched.
+`--no-build` reuses the last build, `--keep` leaves the simulators up.
 
 `-rekkert-share-access readOnly|score|full` sets what phones joining the host get,
 `-rekkert-demo-share-sheet` opens the host's share sheet, and `-rekkert-share-as NAME` answers
