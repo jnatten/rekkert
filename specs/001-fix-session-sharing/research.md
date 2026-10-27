@@ -189,7 +189,7 @@ airtime is shared, are unknown.
   every launch path: user, WatchConnectivity and Bluetooth restoration.
   - With an unexpired kept code and `role == .host`, it hosts again on that code and share
     id.
-  - With `role == .guest`, it resumes joining.
+  - With `role == .guest`, meaning the guest was still on the match when its app was ended, it resumes joining. A guest that had left keeps its code only for Join again.
   - The guard in `host()` that needs a match on (`SharedSession.swift:159`) is relaxed for a
     restore, so a host between matches comes back too.
 - **Rationale**: removes RC-1 and RC-5 at the root, so guests reconnect by themselves

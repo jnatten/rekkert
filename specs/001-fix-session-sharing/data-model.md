@@ -28,6 +28,7 @@ again without typing the code.
   A host still sharing when its code expires carries on sharing; only keeping it stops, so
   an app ended after that shares on a new code.
 - A guest forgets its kept code when told sharing has stopped (FR-028).
+- `restore()` rejoins a guest only if its stored role is still `.guest`. After a Leave, the kept code serves Join again and nothing else.
 - Stored as one Keychain item: this device only, after first unlock, not synchronisable.
   It never goes in `active.json` or any other file.
 - At most one kept code per device. Hosting or joining another code replaces it.
