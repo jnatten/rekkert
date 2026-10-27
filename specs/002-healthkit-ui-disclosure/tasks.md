@@ -181,6 +181,8 @@ collect exactly what they did before, built from the disclosure instead of liter
   an `HStack`. The HIG rules apply (D-3):
   - padding of `size / 10` around the image;
   - no `clipShape`, tint, shadow, border or overlay;
+  - `.textCase(nil)` on the name, so a list section header never turns it into "APPLE
+    HEALTH";
   - `.accessibilityElement(children: .ignore)` with label "Apple Health".
 
   Add a doc comment saying it must never be put inside a `Button`, `NavigationLink` or menu
@@ -261,7 +263,7 @@ the minimum 2.5.1 fix.
 ## Phase 4: User Story 2 - Every workout control and prompt says it goes to Apple Health (Priority: P1)
 
 **Goal**: Apple Health named at every point of use on both devices, with the icon only in
-non-interactive places (P-03 to P-09, P-12 second row, W-01 to W-04, W-07).
+non-interactive places (P-03 to P-09, P-12 second row, P-13, W-01 to W-04, W-07).
 
 **Independent Test**: [quickstart.md](quickstart.md) §4 steps 1, 5, 6 and 7 on paired
 simulators. Every listed point shows its words from the contract.
@@ -310,9 +312,8 @@ simulators. Every listed point shows its words from the contract.
     style;
   - change the footer hint to the P-09 text.
 - [ ] T027 [P] [US2] In `App/Sources/WorkoutController.swift`, in `start()`'s `catch`, map
-  `HKError.errorAuthorizationDenied` and `.errorAuthorizationNotDetermined` to "Turn on
-  Apple Health access for Rekkert in Settings." All other errors keep "Couldn't start on your
-  watch" (FR-012).
+  `HKError.errorAuthorizationDenied` and `.errorAuthorizationNotDetermined` to the P-13
+  text. All other errors keep "Couldn't start on your watch" (FR-012).
 
 ### Implementation for User Story 2 (Apple Watch)
 
@@ -440,11 +441,15 @@ W- point (SC-003) in under three minutes (SC-007).
 - [ ] T040 [US4] [Manual] On an iPhone running iOS 26 with a paired Apple Watch on watchOS
   26, find where Rekkert's Apple Health access is changed. This is quickstart R-3: the
   Settings route, the Apple Health app's own route, and where the watch app's access lives.
-  Then update all of these to the paths found, and drop the *Draft* marks in the contract:
-  - `HealthDisclosure.changeAccess` in `RekkertCore/Health/HealthDisclosure.swift`;
-  - the W-04 text in `WatchApp/Sources/WorkoutController.swift`;
-  - the T027 text in `App/Sources/WorkoutController.swift`;
-  - P-02 and W-04 in [contracts/identification-points.md](contracts/identification-points.md).
+  Then:
+  - Update `HealthDisclosure.changeAccess` in `RekkertCore/Health/HealthDisclosure.swift`,
+    and P-02 in [contracts/identification-points.md](contracts/identification-points.md),
+    to the paths found. These may quote the Health menu (FR-013's exemption).
+  - Leave the failure messages P-13 (`App/Sources/WorkoutController.swift`) and W-04
+    (`WatchApp/Sources/WorkoutController.swift`) pointing to "Settings". They must never
+    quote the Health menu, which would fail T019. Change them only if access turns out not
+    to live in the iPhone's Settings.
+  - Drop the *Draft* marks on P-02 and W-04.
 
   Re-run `swift test`.
 - [ ] T041 [US4] [Manual] On the real pair, with a release-configuration or TestFlight build

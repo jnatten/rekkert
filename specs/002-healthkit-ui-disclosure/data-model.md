@@ -33,14 +33,14 @@ disclosure").
 
 | Field | Type | Value |
 |---|---|---|
-| `saved(on:)` | `(Device) -> [HealthData]` | phone: `[workout]`; watch: `[workout, activeEnergy, restingEnergy, effort]` |
-| `read(on:)` | `(Device) -> [HealthData]` | phone: `[]`; watch: `[heartRate, activeEnergy, restingEnergy, restingHeartRate, dateOfBirth, workout, effort]` |
+| `saved(on:)` | `(HealthDevice) -> [HealthData]` | phone: `[workout]`; watch: `[workout, activeEnergy, restingEnergy, effort]` |
+| `read(on:)` | `(HealthDevice) -> [HealthData]` | phone: `[]`; watch: `[heartRate, activeEnergy, restingEnergy, restingHeartRate, dateOfBirth, workout, effort]` |
 | `summary` | `String` | Two sentences for the Settings section and the explainers |
 | `when` | `String` | Only while a workout you started is running, and once when it ends |
 | `whereItGoes` | `String` | Stays on your iPhone and Apple Watch; never sent to other phones or anywhere else |
 | `changeAccess` | `[String]` | The system paths, in order (D-12) |
 
-`Device` is `.phone` or `.watch`.
+`HealthDevice` is `.phone` or `.watch`.
 
 **Rules**:
 

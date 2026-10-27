@@ -45,6 +45,7 @@ Two conventions apply throughout:
 | | | | | `NSHealthShareUsageDescription` | "Rekkert shows the heart rate and energy your Apple Watch saved to Apple Health while you played." |
 | P-12 | Help › Settings | Home › ? › Settings | No | Item "Apple Health" | "What Rekkert saves to and reads from Apple Health, and where to change it." |
 | | Help › Home | Home › ? › Home | Yes | Item "Start a workout" | "Starts, holds or stops the workout on your watch. It goes to Apple Health." |
+| P-13 | Start failed for access | Start workout with access off | Yes | Home Workout footer, in place of P-03's while it shows | "Turn on Apple Health access for Rekkert in Settings." |
 
 ## Apple Watch
 
@@ -82,5 +83,13 @@ Those lines live in `HealthDisclosure.changeAccess`, outside the scanned folders
 
 - The mark is one element, labelled "Apple Health". Its image is hidden from VoiceOver on its
   own, so the name is not read twice.
-- Every caption above wraps at the largest Dynamic Type size. The watch captions fit the smallest
-  supported case (40 mm) at the largest text size by wrapping, never by truncating.
+- On the phone, every caption above uses a Dynamic Type text style and wraps at the largest
+  size.
+- On the watch, W-01 and W-03 keep the fixed 10 pt size of the existing failure text, so
+  they do not grow with the text size:
+  - **W-01** wraps.
+  - **W-03** stays on one line and shrinks to fit, because the workout page must not scroll.
+    If it no longer fits on the 40 mm case, T030 stops and asks rather than drop the caption
+    or let the page scroll.
+- P-13 and W-04, the failure messages, point to Settings but never quote the Health menu.
+  That keeps them inside the wording rule above (T019).
