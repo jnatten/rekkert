@@ -79,7 +79,9 @@ From the HIG's HealthKit page
 ### D-1: An Apple Health section in Settings, on every iPhone and iPad
 
 - **Decision**: Settings gains an Apple Health section, shown unconditionally. It sits
-  directly above "Workout on your watch", so on a phone without a watch it ends the list.
+  after the watch-only sections, directly below "Workout on your watch" where that shows,
+  and before the build label. That keeps it outside the `canPairWatch` and `isAvailable`
+  gates, and on a phone without a watch it ends the list.
   - **Header**: the icon beside the name, through `AppleHealthMark` (D-3). The header is not
     interactive, so the icon is never a button.
   - **Body**: a two-sentence summary from `HealthDisclosure`, and the device's reach line
