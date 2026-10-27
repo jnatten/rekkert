@@ -163,7 +163,8 @@ final class CourtHarness {
                 switch signal {
                 case .join(let code): sharing.join(code, forTheWatch: true)
                 case .cancel: sharing.cancelJoiningFromTheWatch()
-                case .state, .standby, .hostingStatus, .startHosting, .stopHosting, .followPhone: break
+                case .followPhone: store.offerToThePair()
+                case .state, .standby, .hostingStatus, .startHosting, .stopHosting: break
                 }
             }
         }
@@ -268,6 +269,12 @@ final class CourtHarness {
     func separate(_ player: Player) {
         player.phone.pairLink?.setReachable(false)
         player.watch?.pairLink?.setReachable(false)
+    }
+
+    /// What a phone and its watch queue for each other arrives only when the system gets round to it.
+    func holdQueues(of player: Player, _ holding: Bool = true) {
+        player.phone.pairLink?.setHoldingQueue(holding)
+        player.watch?.pairLink?.setHoldingQueue(holding)
     }
 
     func reunite(_ player: Player) {

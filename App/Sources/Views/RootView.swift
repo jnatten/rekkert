@@ -119,6 +119,17 @@ struct RootView: View {
             Text("Whoever shared this match is out of reach. The score here is the last that got through, and Rekkert will pick it up again if they come back. If they shared it again on a new code, enter that one.")
         }
         .alert(
+            "Open Rekkert on your watch",
+            isPresented: Binding(
+                get: { model.watchFollowsWhenOpened },
+                set: { model.watchFollowsWhenOpened = $0 }
+            )
+        ) {
+            Button("OK") { model.watchFollowsWhenOpened = false }
+        } message: {
+            Text("Your watch shows the match once Rekkert is opened on it. Allow notifications for Rekkert and it will be told when you join.")
+        }
+        .alert(
             "The host stopped sharing",
             isPresented: Binding(
                 get: { model.sharing.hostStoppedSharing },

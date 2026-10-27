@@ -1,4 +1,5 @@
 import RekkertCore
+import RekkertSync
 import SwiftUI
 import WatchKit
 
@@ -160,9 +161,71 @@ struct WatchRootView: View {
     }
 }
 
+/// The phone is on a shared match and the wrist is not (FR-016): one tap where that can be put
+/// right, and why not where it cannot.
+struct WatchPhonesMatchBanner: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if let elsewhere = model.standIn.phonesMatchElsewhere {
+            VStack(spacing: 4) {
+                Text("Your iPhone is on a shared match")
+                    .font(.footnote.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                switch elsewhere {
+                case .canFollow:
+                    Button("Get on it", systemImage: "arrow.right.circle") {
+                        WKInterfaceDevice.current().play(.click)
+                        model.standIn.followThePhone()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .font(.footnote)
+                case .phoneOutOfReach:
+                    Text(WatchStandIn.Status.phoneOutOfReach.line)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                case .phoneCannotReachHost:
+                    Text("Your iPhone can't reach the host")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+    }
+}
+
+/// A guest's wrist starting a match of its own takes its phone off the shared one (FR-030), so it
+/// asks first. Whether it has to is the store's to say.
+private struct AsksBeforeTakingThePhoneOff: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Binding var pending: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(
+            "This takes your iPhone off the shared match.",
+            isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Start anyway", role: .destructive) {
+                pending?()
+                pending = nil
+            }
+            Button("Cancel", role: .cancel) { pending = nil }
+        }
+    }
+}
+
+private extension View {
+    func asksBeforeTakingThePhoneOff(_ pending: Binding<(() -> Void)?>) -> some View {
+        modifier(AsksBeforeTakingThePhoneOff(pending: pending))
+    }
+}
+
 struct WatchIdleView: View {
     @Environment(AppModel.self) private var model
     @State private var joining = false
+    @State private var pendingStart: (() -> Void)?
 
     var body: some View {
         ScrollView {
@@ -170,13 +233,15 @@ struct WatchIdleView: View {
                 // A match called off has no result screen to show it on.
                 WatchWorkoutFollowCard()
 
+                WatchPhonesMatchBanner()
+
                 connection
 
                 Button("Quick match", systemImage: "bolt") {
-                    model.store.configure(.traditional(
-                        rules: TraditionalRules(),
-                        teams: BySide(a: .home, b: .away)
-                    ))
+                    let start = { [store = model.store] in
+                        store.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+                    }
+                    if model.store.startingOwnMatchTakesPhoneOff { pendingStart = start } else { start() }
                 }
                 .buttonStyle(.bordered)
                 .font(.footnote)
@@ -196,6 +261,7 @@ struct WatchIdleView: View {
             .padding(.horizontal, 2)
         }
         .sheet(isPresented: $joining) { WatchJoinView() }
+        .asksBeforeTakingThePhoneOff($pendingStart)
         .task {
             #if DEBUG
             if WatchDemoLaunch.joinCode != nil { joining = true }
@@ -217,6 +283,7 @@ struct WatchIdleView: View {
 /// things everybody reaches for out of sight.
 struct WatchPresetsView: View {
     @Environment(AppModel.self) private var model
+    @State private var pendingStart: (() -> Void)?
 
     var body: some View {
         ScrollView {
@@ -228,7 +295,8 @@ struct WatchPresetsView: View {
                         .font(.headline)
                     ForEach(model.store.presets.presets) { preset in
                         Button {
-                            model.store.start(preset)
+                            let start = { [store = model.store] in store.start(preset) }
+                            if model.store.startingOwnMatchTakesPhoneOff { pendingStart = start } else { start() }
                         } label: {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(preset.name)
@@ -250,6 +318,7 @@ struct WatchPresetsView: View {
             }
             .padding(.horizontal, 2)
         }
+        .asksBeforeTakingThePhoneOff($pendingStart)
     }
 
     private var empty: some View {

@@ -130,6 +130,24 @@ struct IncidentTests {
         #expect(!court.inStep(eighth, with: court.host.phone))
     }
 
+    /// RW-2: the guest's watch was warming up a match of its own when the phone joined. It ends up
+    /// on the host's match with nothing scored and nothing done on the wrist, even with what the
+    /// two queue for each other taking its time, as WatchConnectivity's queue does.
+    @Test func guestWatchTakesItsPhonesMatch() async {
+        let court = CourtHarness(guests: 1)
+        court.startMatch()
+        court.share()
+        let guest = court.guests.first!
+        guest.watch!.store.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)), warmup: true)
+        await court.run(for: .seconds(2))
+
+        court.holdQueues(of: guest)
+        court.join(guest)
+        #expect(await court.until(within: .seconds(10)) {
+            guest.watch!.store.log.sessionID == court.host.phone.store.log.sessionID
+        })
+    }
+
     /// RW-4: a guest's watch standing in for its phone is the same guest, not another one.
     @Test func standingInWatchCountsOnce() async {
         var timing = CourtHarness.Timing()

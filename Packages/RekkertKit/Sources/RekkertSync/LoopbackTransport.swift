@@ -19,6 +19,9 @@ nonisolated public final class LoopbackTransport: PeerTransport, @unchecked Send
     /// peer. The durable queue still gets through, as it would.
     private var swallowing = false
     private var unanswered = 0
+    /// The durable queue held back, as `transferUserInfo` is when the system is in no hurry.
+    private var holdingQueue = false
+    private var heldQueue: [Data] = []
 
     public init(reachable: Bool = true) {
         var packetContinuation: AsyncStream<InboundPacket>.Continuation!
@@ -85,8 +88,24 @@ nonisolated public final class LoopbackTransport: PeerTransport, @unchecked Send
     /// Stands in for a durable queue: delivered even when the peer is "unreachable",
     /// which is what transferUserInfo does on a real device.
     public func queue(_ payload: Data) {
-        guard let peer = lock.withLock({ self.peer }) else { return }
-        peer.packets.yield(InboundPacket(payload: payload))
+        let peer = lock.withLock { () -> LoopbackTransport? in
+            guard !holdingQueue else {
+                heldQueue.append(payload)
+                return nil
+            }
+            return self.peer
+        }
+        peer?.packets.yield(InboundPacket(payload: payload))
+    }
+
+    public func setHoldingQueue(_ value: Bool) {
+        let released = lock.withLock { () -> [Data] in
+            holdingQueue = value
+            guard !value else { return [] }
+            defer { heldQueue = [] }
+            return heldQueue
+        }
+        for payload in released { queue(payload) }
     }
 
     public func publishSnapshot(_ payload: Data) {

@@ -167,6 +167,8 @@ public final class MatchStore {
     @ObservationIgnored private var farEnds: [LinkID: DeviceID] = [:]
     /// The host this device last heard from on a link, for a guest's record.
     @ObservationIgnored public private(set) var hostDevice: DeviceID?
+    /// The shared match this device's own phone last said it is a guest on.
+    public private(set) var pairsSharedMatch: UUID?
     @ObservationIgnored private var recordedPairReachable: Bool?
     @ObservationIgnored private var recordedOutOfReach: Set<DeviceID> = []
     @ObservationIgnored private let participantTick: Duration
@@ -576,6 +578,28 @@ public final class MatchStore {
     }
 
     /// A watch on a match through its phone holds no role of its own: the phone's decides.
+    /// A watch whose phone is a guest: a match started here takes the phone off the shared one
+    /// (FR-030), so the wrist asks first.
+    public var startingOwnMatchTakesPhoneOff: Bool { !keepsHistory && pairedRole == .guest }
+
+    /// "Get on it": whatever said the phone's match was left no longer does, and the phone is
+    /// asked to offer it again.
+    public func followThePhone() async -> Bool {
+        leftSessionID = nil
+        counterpartLeftSessionID = nil
+        persist()
+        return await send(.followPhone)
+    }
+
+    /// The watch asked for the match this phone is on: offered again, with the role, to the pair
+    /// alone.
+    public func offerToThePair() {
+        guard !log.isEmpty else { return }
+        let offer = snapshot()
+        transport.queue(offer)
+        Task { _ = await sendLiveBesideLinks(offer) }
+    }
+
     public func followPairedDevice() {
         guard role == .guest, !isJoining else { return }
         if !log.isEmpty { guestOf = log.sessionID }
@@ -1578,6 +1602,12 @@ public final class MatchStore {
             defer {
                 if heldBefore != (pairedRole, leftSessionID, counterpartLeftSessionID) { persist() }
             }
+            // A role on its own says the pair is on something else now: ask what, rather than
+            // wait for its next snapshot or point to say.
+            if packet.isFromPairedDevice, incoming != heldBefore.0 {
+                if incoming != .guest { pairsSharedMatch = nil }
+                Task { await synchronise() }
+            }
             // Dropping a session says solo, so this is the pair confirming it is off the one
             // left here. Until then it may still be pushing that session back; from now on
             // the only way it can hold that session is by having walked back in. This reads
@@ -1724,7 +1754,8 @@ public final class MatchStore {
             if packet.isFromPairedDevice { onSharing?(signal) }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
-        case .snapshot(let incoming, _):
+        case .snapshot(let incoming, let pairRole):
+            if packet.isFromPairedDevice, let pairRole { heardThePairIsOn(incoming, as: pairRole) }
             if retired.contains(incoming.sessionID) {
                 guard let ended = overturnedEnding(of: incoming.sessionID, by: incoming.ordered) else {
                     return announceRetirement(of: incoming.sessionID, to: packet)
@@ -1775,6 +1806,8 @@ public final class MatchStore {
                         tellThePairItLeft(steppedOff)
                     }
                     persist()
+                    // The watch weighs this against its own match by the role it carries.
+                    publishSnapshot(force: true)
                     announceJoined()
                 }
             } else if incoming.sessionID == leftSessionID, !isThePairsOwnFromThePair(incoming, packet) {
@@ -1888,6 +1921,7 @@ public final class MatchStore {
         persist()
         shareRole()
         shareAccess()
+        publishSnapshot(force: true)
         announceJoined()
     }
 
@@ -2159,15 +2193,32 @@ public final class MatchStore {
     /// `live` sends it to whoever is connected as well. Only for a counterpart known to hold
     /// nothing: offered live to one holding a different match, two devices that each think
     /// theirs is the one would sit pushing sessions at each other for ever.
+    /// The queue reaches only the pair, so only that copy says the role.
     private func offerOurSession(live: Bool = false) {
         guard !log.isEmpty else { return }
-        let offer = encode(.snapshot(log))
-        transport.queue(offer)
-        if live { Task { _ = await sendLive(offer) } }
+        transport.queue(snapshot())
+        if live { Task { _ = await sendLive(snapshot(forThePair: false)) } }
     }
 
     private func requestSnapshot(_ packet: InboundPacket) {
-        packet.reply?(encode(.snapshot(log)))
+        packet.reply?(snapshot(forThePair: packet.isFromPairedDevice))
+    }
+
+    /// The whole log, and for this device's own watch or phone the role it is held in: a watch
+    /// that reads its phone is a guest takes the match without weighing the clocks. Nobody else
+    /// is told the role, and over Bluetooth the bytes count: on a host answering seven guests at
+    /// once, they were enough to hold the first point back.
+    private func snapshot(forThePair: Bool = true) -> Data {
+        encode(.snapshot(log, role: forThePair ? role : nil))
+    }
+
+    /// Put down before anything is weighed. Only a guest is acted on here: the other roles carry
+    /// meaning about leaving that the role message alone is in step with.
+    private func heardThePairIsOn(_ incoming: MatchLog, as pairRole: SessionRole) {
+        pairsSharedMatch = pairRole == .guest && !incoming.isEmpty ? incoming.sessionID : nil
+        guard pairRole == .guest, pairedRole != .guest else { return }
+        pairedRole = .guest
+        persist()
     }
 
     /// Tells the counterpart the session it is offering is over here.
@@ -2238,7 +2289,7 @@ public final class MatchStore {
         }
         snapshotPending = false
         lastSnapshotPublished = Date()
-        transport.publishSnapshot(encode(.snapshot(log)))
+        transport.publishSnapshot(snapshot())
     }
 
     private func scheduleSnapshot(after delay: TimeInterval) {
@@ -2253,7 +2304,7 @@ public final class MatchStore {
             self.snapshotPending = false
             guard !self.log.isEmpty else { return }
             self.lastSnapshotPublished = Date()
-            self.transport.publishSnapshot(self.encode(.snapshot(self.log)))
+            self.transport.publishSnapshot(self.snapshot())
         }
     }
 

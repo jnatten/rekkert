@@ -135,7 +135,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
             )
         }
         transport.activate()
-        if let snapshot = lock.withLock({ lastSnapshot }) { transport.publishSnapshot(snapshot) }
+        if let snapshot = lock.withLock({ lastSnapshot }) { transport.publishSnapshot(Self.snapshot(snapshot, for: scope)) }
         reachabilityChanged()
         return token
     }
@@ -272,8 +272,16 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         guard let wire = try? Wire.decode(payload) else { return }
         lock.withLock { lastSnapshot = payload }
         for child in snapshotOfChildren() where child.scope.carries(wire) {
-            child.transport.publishSnapshot(payload)
+            child.transport.publishSnapshot(Self.snapshot(payload, for: child.scope))
         }
+    }
+
+    /// The role is for this device's own watch or phone. Another phone is told the match.
+    private static func snapshot(_ payload: Data, for scope: Scope) -> Data {
+        guard !scope.isPairedDevice, case .snapshot(let log, _?)? = try? Wire.decode(payload),
+              let plain = try? Wire.snapshot(log).encoded()
+        else { return payload }
+        return plain
     }
 
     public func queue(_ payload: Data) {

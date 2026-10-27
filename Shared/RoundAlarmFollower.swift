@@ -97,7 +97,8 @@ final class RoundAlarmFollower {
         return answer
     }
 
-    nonisolated private static func askToNotify() async -> Bool {
+    /// Also how joining asks, so the question is put once whichever comes first.
+    nonisolated static func askToNotify() async -> Bool {
         let center = UNUserNotificationCenter.current()
         switch await center.notificationSettings().authorizationStatus {
         case .notDetermined:

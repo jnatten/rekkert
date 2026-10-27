@@ -331,7 +331,7 @@ Each time the watch ends up on the shared match (spec US3).
 
 ### Tests for User Story 3 ⚠️ write first, watch them fail
 
-- [ ] T051 [P] [US3] Add tests to `SyncTests/GuestWatchFollowTests.swift`:
+- [X] T051 [P] [US3] Add tests to `SyncTests/GuestWatchFollowTests.swift`:
   - the snapshot carries the role, and a watch running a warm-up of its own adopts its guest phone's match without waiting for a point;
   - a `.role` arriving on its own triggers a re-sync;
   - the watch's own unshared match is filed through `.displaced` (FR-015);
@@ -342,25 +342,25 @@ Each time the watch ends up on the shared match (spec US3).
 
 ### Implementation for User Story 3
 
-- [ ] T052 [US3] Make a guest phone's match win on its watch (D-12, FR-014), in `RekkertSync/MatchStore.swift`.
+- [X] T052 [US3] Make a guest phone's match win on its watch (D-12, FR-014), in `RekkertSync/MatchStore.swift`.
   - Put `role`, plus a summary of the shared match the phone is on (session id and host name), in the application-context payload with the log.
   - On the watch, adopt that match whenever the context says the phone is a guest, before any `createdAt` comparison (today MS:1543-1553).
   - Re-sync when `.role` arrives (today MS:1312).
   - Keep the `createdAt` rule for two unshared sessions.
   - Expose `startingOwnMatchTakesPhoneOff: Bool` on `MatchStore`: true on a watch whose paired phone is a guest on a shared match. T051 asserts it, and T055 reads it.
-- [ ] T053 [US3] Handle `.followPhone`: in `Shared/AppModel.swift`'s `joinFromWatch`, call into `RekkertSync/MatchStore.swift` to re-offer the phone's snapshot with its role.
-- [ ] T054 [US3] Add the banner "Your iPhone is on Ada's match" with **Get on it** to `WatchApp/Sources/Views/WatchRootView.swift` and `WatchApp/Sources/Views/WatchCourtPage.swift`. **Get on it** sends `.followPhone`.
+- [X] T053 [US3] Handle `.followPhone`: in `Shared/AppModel.swift`'s `joinFromWatch`, call into `RekkertSync/MatchStore.swift` to re-offer the phone's snapshot with its role.
+- [X] T054 [US3] Add the banner "Your iPhone is on Ada's match" with **Get on it** to `WatchApp/Sources/Views/WatchRootView.swift` and `WatchApp/Sources/Views/WatchCourtPage.swift`. **Get on it** sends `.followPhone`.
   - Show the FR-016 reason when the watch cannot do it: "iPhone out of reach", or the phone cannot reach the host.
-- [ ] T055 [US3] Confirm before a guest's watch starts a match of its own (FR-030). In `WatchApp/Sources/Views/WatchRootView.swift`, Quick match and the presets page ask first whenever `store.startingOwnMatchTakesPhoneOff` (T052) is true: "This takes your iPhone off Ada's match." The view holds no rule of its own (constitution, Principle I).
-- [ ] T056 [US3] Post the notification that brings the watch (FR-027, D-13), in `Shared/AppModel.swift`, iOS only.
+- [X] T055 [US3] Confirm before a guest's watch starts a match of its own (FR-030). In `WatchApp/Sources/Views/WatchRootView.swift`, Quick match and the presets page ask first whenever `store.startingOwnMatchTakesPhoneOff` (T052) is true: "This takes your iPhone off Ada's match." The view holds no rule of its own (constitution, Principle I).
+- [X] T056 [US3] Post the notification that brings the watch (FR-027, D-13), in `Shared/AppModel.swift`, iOS only.
   - **When:** on joining as a guest while the watch cannot be reached.
   - **What:** a local notification titled "You're on Ada's match", body "Tap to follow on your watch.", in a category the watch app handles.
   - **Permission:** asked through the same flow as `Shared/RoundAlarmFollower.swift`, if it has never been asked.
   - **If notifications are not allowed:** say on the phone that the watch will show the match once Rekkert is opened on it.
   - **Withdraw** it once the watch is on the match.
   - **Record** `notificationPosted`.
-- [ ] T057 [US3] Handle the notification on the watch, in `WatchApp/Sources/RekkertWatchApp.swift`: register the category, and on a tap open on the match and send `.followPhone`.
-- [ ] T058 [US3] Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh`
+- [X] T057 [US3] Handle the notification on the watch, in `WatchApp/Sources/RekkertWatchApp.swift`: register the category, and on a tap open on the match and send `.followPhone`.
+- [X] T058 [US3] Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh`
 
 **Checkpoint**: The guest's watch follows its phone. US1–US3 each work on their own.
 

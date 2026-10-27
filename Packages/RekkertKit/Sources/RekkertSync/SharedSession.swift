@@ -37,6 +37,8 @@ public final class SharedSession {
     /// `dismissFailure` all set the phase themselves.
     @ObservationIgnored public var publish: ((SharingState) -> Void)?
     @ObservationIgnored public var onStandby: ((SharingStandby?) -> Void)?
+    /// A join got through, once per code dialled.
+    @ObservationIgnored public var onJoined: (() -> Void)?
     @ObservationIgnored private var reportedStandby: SharingStandby?
     @ObservationIgnored private var hasReportedStandby = false
     public private(set) var standbyCode: SessionCode?
@@ -270,6 +272,7 @@ public final class SharedSession {
         if !hasRecordedJoin {
             hasRecordedJoin = true
             recorder?.note(.joined, on: hostLink, in: store.log.sessionID)
+            onJoined?()
         }
         let kept = keeper?.read(now: now())
         guard kept?.code != wanted || kept?.role != .guest else { return }

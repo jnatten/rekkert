@@ -64,7 +64,9 @@ struct WatchCourtPage: View {
         if WatchDemoLaunch.link == "down" { return WatchStandIn.Status.phoneOutOfReach.line }
         #endif
         // One line fits, and the match comes first: in step, nothing is said at all.
-        return model.standIn.statuses.first { $0 != .onTheHostsPhone }?.line
+        if let line = model.standIn.statuses.first(where: { $0 != .onTheHostsPhone })?.line { return line }
+        // A match of the wrist's own, with its phone on the shared one (FR-016).
+        return model.standIn.phonesMatchElsewhere == nil ? nil : "Your iPhone is on a shared match"
     }
 
     @ViewBuilder
@@ -190,6 +192,7 @@ struct WatchCourtPage: View {
     private func controls(_ snapshot: ScoreboardSnapshot) -> some View {
         ScrollView {
             VStack(spacing: 8) {
+                WatchPhonesMatchBanner()
                 if let label = snapshot.courtLabel {
                     HStack(spacing: 4) {
                         CourtSwatch(index: snapshot.courtIndex, size: 8)

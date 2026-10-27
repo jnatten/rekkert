@@ -142,6 +142,26 @@ public final class WatchStandIn {
         return statuses
     }
 
+    /// The phone is on a shared match the wrist is not on (FR-016): whether one tap can fix it,
+    /// and if not, why not.
+    public enum PhonesMatch: Sendable, Equatable {
+        case canFollow
+        case phoneOutOfReach
+        case phoneCannotReachHost
+    }
+
+    public var phonesMatchElsewhere: PhonesMatch? {
+        guard let match = store.pairsSharedMatch, match != store.log.sessionID else { return nil }
+        if !store.isPairReachable { return .phoneOutOfReach }
+        if hasHeardStandby, phoneStandby?.isThrough != true { return .phoneCannotReachHost }
+        return .canFollow
+    }
+
+    /// "Get on it": the phone's match, without typing its code.
+    public func followThePhone() {
+        Task { [store] in _ = await store.followThePhone() }
+    }
+
     /// Whether the score on the wrist is the match's: a match of its own always is.
     public var isInReachOfTheMatch: Bool {
         let statuses = statuses

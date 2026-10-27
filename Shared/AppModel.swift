@@ -6,6 +6,8 @@ import RekkertSync
 import WatchKit
 #else
 import UIKit
+import UserNotifications
+import WatchConnectivity
 #endif
 
 @Observable
@@ -24,6 +26,9 @@ final class AppModel {
     var showingBoard = false
     var showingTVGuide = false
     var showingHelp = false
+    /// Joined with the watch out of reach and notifications not allowed: the phone says the watch
+    /// shows the match once Rekkert is opened on it (FR-027).
+    var watchFollowsWhenOpened = false
     #endif
     #if os(watchOS)
     /// Which way this wrist reads the court. Device-local, like the phone's full-screen
@@ -172,6 +177,7 @@ final class AppModel {
         #else
         sharing.publish = { [store] state in Task { await store.send(.state(state)) } }
         sharing.onStandby = { [store] standby in Task { await store.send(.standby(standby)) } }
+        sharing.onJoined = { [weak self] in self?.beckonTheWatch() }
         store.onSharing = { [weak self] signal in self?.joinFromWatch(signal) }
         liveScore.follow(store)
         #endif
@@ -341,7 +347,9 @@ final class AppModel {
         case .cancel: sharing.cancelJoiningFromTheWatch()
         // Said by this end, not heard by it.
         case .state, .standby, .hostingStatus: break
-        case .startHosting, .stopHosting, .followPhone: break
+        // "Get on it": the wrist asked for the match this phone is on.
+        case .followPhone: store.offerToThePair()
+        case .startHosting, .stopHosting: break
         }
     }
     #endif
@@ -934,3 +942,44 @@ final class AppModel {
         Task { await refreshPlayerStats() }
     }
 }
+
+extension AppModel {
+    /// The notification that brings a guest's watch round, posted by the phone and acted on by the watch.
+    static let followMatchCategory = "rekkert.followMatch"
+}
+
+#if os(iOS)
+extension AppModel {
+    /// A phone cannot wake its watch, and a watch app that is not running hears of the match only
+    /// when somebody opens it. A notification is what reaches the wrist with the phone in a bag
+    /// (FR-027, D-13); a watch already in reach needs none.
+    func beckonTheWatch() {
+        guard WCSession.isSupported(), WCSession.default.isPaired, WCSession.default.isWatchAppInstalled,
+              !store.isPairReachable else { return }
+        let session = store.log.sessionID
+        Task {
+            guard await RoundAlarmFollower.askToNotify() else {
+                watchFollowsWhenOpened = true
+                return
+            }
+            let content = UNMutableNotificationContent()
+            content.title = "You're on a shared match"
+            content.body = "Tap to follow on your watch."
+            content.categoryIdentifier = Self.followMatchCategory
+            let id = "follow-\(session.uuidString)"
+            try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
+            recorder.note(.notificationPosted, in: session)
+            await withdraw(id, onceTheWatchIsOn: session)
+        }
+    }
+
+    /// Gone once the watch can be reached, which is the watch on the match: it is handed it as
+    /// soon as it is.
+    private func withdraw(_ id: String, onceTheWatchIsOn session: UUID) async {
+        while !store.isPairReachable, store.log.sessionID == session {
+            try? await Task.sleep(for: .seconds(2))
+        }
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [id])
+    }
+}
+#endif
