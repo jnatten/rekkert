@@ -1,50 +1,113 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# Rekkert Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Domain Logic Lives in RekkertCore
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+All scoring, scheduling, sync, stats, and persistence logic lives in the RekkertKit
+packages (`RekkertCore`, `RekkertSync`) and stays free of SwiftUI, UIKit, WatchKit, and
+HealthKit. The iPhone app, the Watch app, and the widgets are thin shells that render
+state and forward taps; they MUST NOT hold rules of their own. A behaviour that cannot be
+expressed as a function of the engine's state does not belong in a view.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+Rationale: one brain drives both surfaces, so the phone and the watch can never disagree
+about what a tap means; and the engine stays testable on macOS with no device or
+simulator in the loop.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### II. Deterministic, Convergent State (NON-NEGOTIABLE)
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+There is no server to arbitrate, so convergence is the product. Every device that has seen
+the same events MUST compute the same state. Draws and schedules are seeded on the session
+id and the round number and read only who has played with and against whom — never the
+scores — so the phone and the watch produce identical rounds without negotiating.
+Reconciliation is monotonic: a late event MAY correct a score, but MUST NOT re-partner,
+re-order, or rewrite a round that players have already walked onto. Any change to the
+reducer, the event wire format, the version vectors, or a draw/schedule is weighed against
+this principle first.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+Rationale: a match is scored across two or more devices that drop in and out of contact;
+if they can diverge, the scoreboard lies, and nothing in the UI will explain why.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### III. Test the Engine, Test-First
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+Behaviour in `RekkertCore` and `RekkertSync` is covered by Swift Testing suites that run
+without a device. New scoring rules, draw and ladder logic, sync reducers, and the
+invariants in Principle II ship together with the tests that pin them down; a bug fix
+starts with a test that fails for the stated reason and then passes. Convergence and
+determinism are asserted with tests, not assumed.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+Rationale: the rules are subtle — deuce, golden point, star point, tiebreaks, super-
+tiebreaks, timed ladders, Americano draws, two-way sync — and a regression here is
+invisible until a real match goes wrong on court.
+
+### IV. verify.sh Is the Gate
+
+`scripts/verify.sh` is the single definition of "green": package tests, `tuist generate`,
+both app builds, and the assertions that the watch app is embedded and that the runtime
+entitlements are present. It runs on every push in CI, and no change merges while it is
+red. Runtime-only invariants that fail silently — watch embedding, and the Info.plist
+keys for Health, the local network, and background Bluetooth — are asserted in the script,
+never trusted to a passing build.
+
+Rationale: an entitlement or embedding mistake does not fail a compile. It fails a user
+mid-match, with nothing on screen to say why, so the gate has to catch what the compiler
+will not.
+
+### V. Local-First, Private by Construction
+
+The score belongs to the players and stays on their own devices. It travels directly
+between them over the local network and Bluetooth; there is no account, no sign-up, and no
+server holding the match. Cryptography is Apple's own (TLS, HKDF, ChaChaPoly) and nothing
+else. The camera, Health, and the local network are each used only for the stated purpose,
+and nothing they see is retained or sent anywhere beyond the devices at the court. New
+capabilities that would send match or player data off-device are a constitutional change,
+not a feature.
+
+Rationale: a casual game at a court should need no account and leak nothing; privacy here
+is a property of the architecture, not a setting.
+
+## Platform & Technical Constraints
+
+- **Language & concurrency.** Swift 6 language mode throughout. Default actor isolation is
+  `MainActor` in the apps and in `RekkertSync`; `RekkertCore` is nonisolated. Code added to
+  a target MUST respect that target's isolation rather than silencing it.
+- **Platforms.** Targets build for iOS, watchOS, and macOS 26. The engine must keep
+  building and testing on macOS so the test suite stays device-free.
+- **Project generation.** The Xcode project and workspace are generated by Tuist from
+  `Project.swift`. The generated `.xcodeproj`/`.xcworkspace` are build outputs; project and
+  target configuration — targets, settings, Info.plist contents, entitlements — is edited
+  in `Project.swift` and the `Derived`/`Tuist` inputs, never in generated files.
+- **Toolchain.** Tool versions are pinned in `mise.toml`; CI uses the pinned toolchain.
+  The built Info.plist is stamped with the source commit for the Settings page.
+- **Dependencies.** The runtime depends on Apple frameworks only. Adding a third-party
+  runtime dependency requires justification against Principles I and V.
+
+## Development Workflow & Quality Gates
+
+- **Before merge.** `scripts/verify.sh` passes locally and in CI. A change that touches
+  scoring, scheduling, or sync includes the tests for it (Principle III). A change that
+  touches an Info.plist key, entitlement, or the watch embedding re-runs the verify
+  assertions that guard them (Principle IV).
+- **Release.** Builds reach TestFlight through the `testflight` workflow, numbered one past
+  the latest build App Store Connect holds; the App Store listing is uploaded by hand.
+  Tests do not gate releases only because they already run on every push.
+- **Version control.** The working VCS is jj. Commit messages follow the conventional-
+  commit style already in the history; AI attribution trailers are not added to commits.
+- **Changes agents make.** Unrecognized edits in the working copy are assumed to be another
+  agent's; keep changes focused and, if they cause trouble, stop and ask rather than
+  reverting someone else's work.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution supersedes other working practices where they conflict. Amendments are
+made by editing this file, with a semantic-version bump and a dated entry in the Sync
+Impact Report: MAJOR for removing or redefining a principle, MINOR for adding a principle
+or a materially new rule, PATCH for clarifications and wording.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+Every review verifies compliance, and Principles II (convergence) and IV (the gate) are
+checked explicitly on any change that could affect them. Added complexity, and any new
+runtime dependency or off-device data flow, must be justified against Principles I and V or
+dropped. Runtime development guidance for day-to-day work lives in `README.md` and the
+`.specify/` templates; this document governs the non-negotiables those build on.
+
+**Version**: 1.0.0 | **Ratified**: 2026-10-27 | **Last Amended**: 2026-10-27
