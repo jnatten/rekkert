@@ -69,6 +69,8 @@ struct WatchJoinView: View {
         Text(typed.isEmpty ? "···-···" : typed)
             .font(.system(.title3, design: .monospaced))
             .foregroundStyle(typed.isEmpty ? .tertiary : .primary)
+            .accessibilityLabel("Code")
+            .accessibilityValue(typed.isEmpty ? "None typed" : typed.filter(\.isNumber).map(String.init).joined(separator: " "))
 
         Grid(horizontalSpacing: 4, verticalSpacing: 4) {
             ForEach([["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"]], id: \.self) { row in
@@ -85,6 +87,7 @@ struct WatchJoinView: View {
                     Image(systemName: "delete.left").padKey()
                 }
                 .disabled(typed.isEmpty)
+                .accessibilityLabel("Delete")
             }
         }
         .buttonStyle(.plain)
@@ -100,7 +103,7 @@ struct WatchJoinView: View {
                 ? "Six digits, as the host reads them out."
                 : "No iPhone here — your watch looks for the host's iPhone itself."
         )
-        .font(.system(size: 10))
+        .scaledFont(size: 10)
         .multilineTextAlignment(.center)
         .foregroundStyle(.secondary)
     }
@@ -137,11 +140,12 @@ struct WatchJoinView: View {
             Image(systemName: "antenna.radiowaves.left.and.right.slash")
                 .font(.title3)
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             Text(failure.title(code: typed))
                 .font(.headline)
                 .multilineTextAlignment(.center)
             Text(failure.watchAdvice)
-                .font(.system(size: 10))
+                .scaledFont(size: 10)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
             Button("Try again") {

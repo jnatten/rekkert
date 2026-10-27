@@ -182,11 +182,11 @@ struct WatchPhonesMatchBanner: View {
                     .font(.footnote)
                 case .phoneOutOfReach:
                     Text(WatchStandIn.Status.phoneOutOfReach.line)
-                        .font(.system(size: 10))
+                        .scaledFont(size: 10)
                         .foregroundStyle(.secondary)
                 case .phoneCannotReachHost:
                     Text("Your iPhone can't reach the host")
-                        .font(.system(size: 10))
+                        .scaledFont(size: 10)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -285,7 +285,7 @@ struct WatchIdleView: View {
             model.store.isPairReachable ? "iPhone connected" : "iPhone not reachable",
             systemImage: model.store.isPairReachable ? "iphone.radiowaves.left.and.right" : "iphone.slash"
         )
-        .font(.system(size: 10))
+        .scaledFont(size: 10)
         .foregroundStyle(model.store.isPairReachable ? .green : .secondary)
     }
 }

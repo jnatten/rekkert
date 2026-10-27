@@ -309,7 +309,7 @@ struct WatchMenuView: View {
                     .multilineTextAlignment(.center)
             }
         }
-        .font(.system(size: 11))
+        .scaledFont(size: 11)
         .padding(.bottom, 2)
     }
 

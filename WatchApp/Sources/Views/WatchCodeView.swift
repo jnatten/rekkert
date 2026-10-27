@@ -55,6 +55,7 @@ struct WatchHostingTrouble: View {
             Image(systemName: "iphone.slash")
                 .font(.title3)
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             Text(text)
                 .font(.footnote)
                 .multilineTextAlignment(.center)

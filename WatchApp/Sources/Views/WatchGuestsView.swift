@@ -19,9 +19,9 @@ struct WatchGuestsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name)
                         .font(.footnote.weight(.semibold))
-                        .lineLimit(1)
+                        .lineLimit(2)
                     Text(participant.state.title)
-                        .font(.system(size: 11))
+                        .scaledFont(size: 11)
                         .foregroundStyle(participant.state.tint)
                 }
                 .accessibilityElement(children: .ignore)
