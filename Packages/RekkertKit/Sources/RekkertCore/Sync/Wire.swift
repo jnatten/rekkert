@@ -82,12 +82,18 @@ public struct SharingStandby: Codable, Sendable, Hashable {
     public var isThrough: Bool
     public var share: UUID?
     public var startedAt: Date?
+    /// Since when the host has been out of reach, once it has been long enough to say so.
+    public var hostOutOfReachSince: Date?
 
-    public init(code: SessionCode, isThrough: Bool, share: UUID? = nil, startedAt: Date? = nil) {
+    public init(
+        code: SessionCode, isThrough: Bool, share: UUID? = nil, startedAt: Date? = nil,
+        hostOutOfReachSince: Date? = nil
+    ) {
         self.code = code
         self.isThrough = isThrough
         self.share = share
         self.startedAt = startedAt
+        self.hostOutOfReachSince = hostOutOfReachSince
     }
 }
 
@@ -150,6 +156,8 @@ public enum SharingFailure: String, Codable, Sendable, Hashable {
     /// than left watching a search that was never started.
     case unreachable
     case noRoom
+    case bluetoothOff
+    case bluetoothDenied
 }
 
 public enum Wire: Codable, Sendable, Hashable {
@@ -209,6 +217,8 @@ public enum Wire: Codable, Sendable, Hashable {
     case guestCard(GuestCard)
     /// Host to every guest, before it lets go: this match is no longer shared.
     case sharingStopped(sessionID: UUID)
+    /// Host to a phone saying hello when the match already has as many guests as it takes.
+    case noRoom(sessionID: UUID)
 
     public func encoded() throws -> Data {
         try JSONCoding.encoder.encode(self)
@@ -295,6 +305,22 @@ public protocol PeerTransport: Sendable {
     /// Each link to another phone coming up or going down, and why it went. Empty for a
     /// transport that has no links of its own to tell apart.
     var linkChanges: AsyncStream<LinkChange> { get }
+
+    /// Stops carrying the match to whoever is on `link`: a guest past the limit.
+    func refuse(_ link: LinkID)
+
+    /// Every other phone this reaches one at a time, by the link it is on, while that link is up.
+    /// Empty for a transport whose far end is one device.
+    var links: [LinkID] { get }
+
+    /// The far end of one link alone: its reply, or `nil`.
+    func sendLive(_ payload: Data, on link: LinkID) async -> Data?
+
+    /// `sendLive` to whatever is not on a link: the pair, folded as `sendLive` folds.
+    func sendLiveBesideLinks(_ payload: Data) async -> Data?
+
+    /// Whether anything is there that is not on a link.
+    var isReachableBesideLinks: Bool { get }
 }
 
 extension PeerTransport {
@@ -302,4 +328,11 @@ extension PeerTransport {
     public var reachableCount: Int { isReachable ? 1 : 0 }
     public var isPairReachable: Bool { isReachable }
     public var linkChanges: AsyncStream<LinkChange> { AsyncStream { $0.finish() } }
+    public func refuse(_ link: LinkID) {}
+    public var links: [LinkID] { [] }
+    public func sendLive(_ payload: Data, on link: LinkID) async -> Data? { nil }
+    public func sendLiveBesideLinks(_ payload: Data) async -> Data? {
+        links.isEmpty ? await sendLive(payload) : nil
+    }
+    public var isReachableBesideLinks: Bool { links.isEmpty && isReachable }
 }

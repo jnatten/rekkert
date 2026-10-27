@@ -194,7 +194,7 @@ struct JoinMatchSheet: View {
 
     private func trouble(_ failure: LocalNetworkTransport.Failure) -> some View {
         ContentUnavailableView {
-            Label(failure.title, systemImage: "antenna.radiowaves.left.and.right.slash")
+            Label(failure.title(code: typed), systemImage: "antenna.radiowaves.left.and.right.slash")
         } description: {
             Text(failure.advice)
         } actions: {
@@ -231,11 +231,14 @@ struct JoinMatchSheet: View {
 }
 
 extension LocalNetworkTransport.Failure {
-    var title: String {
+    func title(code: String) -> String {
         switch self {
-        case .notFound: "Nothing found"
+        case .notFound: SessionCode(code) == nil ? "Nothing found" : "No match on \(code) nearby"
         case .rejected: "Code not accepted"
         case .blocked: "Cannot see the local network"
+        case .noRoom: "No room on this match"
+        case .bluetoothOff: "Bluetooth is off on your iPhone"
+        case .bluetoothDenied: "Rekkert can't use Bluetooth"
         }
     }
 
@@ -249,6 +252,12 @@ extension LocalNetworkTransport.Failure {
             "A match was there but would not accept that code. Ask the host to read it out again."
         case .blocked:
             "Rekkert needs permission to find devices on the local network before it can join a match."
+        case .noRoom:
+            "The host already has seven others on. One of them has to leave before you can join."
+        case .bluetoothOff:
+            "With no Wi-Fi, Rekkert finds the host over Bluetooth. Switch it on in Control Center and try again."
+        case .bluetoothDenied:
+            "Allow Rekkert to use Bluetooth in Settings, then try again."
         }
     }
 }

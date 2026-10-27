@@ -127,7 +127,7 @@ eighth guest refused.
 
 ### Tests for User Story 1 ⚠️ write first, watch them fail
 
-- [ ] T012 [P] [US1] Write `SyncTests/IncidentTests.swift` with `CourtHarness`, one test per cause. Each must fail on today's behaviour.
+- [X] T012 [P] [US1] Write `SyncTests/IncidentTests.swift` with `CourtHarness`, one test per cause. Each must fail on today's behaviour.
   - `hostAppEndedComesBackOnTheSameCode` (RC-1): host's app ended mid-match; guests in step within 30 s of the next point, with no code typed.
   - `silentFollowerIsNeverWrittenOff` (RC-2): a guest that never scores stays in step for 45 simulated minutes while the host misses three answers.
   - `everyGuestGetsTurns` (RC-3): 7 guests, one slot freed per ready callback; every guest gets every point.
@@ -135,127 +135,127 @@ eighth guest refused.
   - `guestAppEndedRejoinsWithoutTyping` (RC-5).
   - `eighthGuestIsToldNoRoom` (RC-7).
   - `standingInWatchCountsOnce` (RW-4).
-- [ ] T013 [P] [US1] Write `CoreTests/KeptCodeTests.swift` for the rules in data-model.md §KeptCode:
+- [X] T013 [P] [US1] Write `CoreTests/KeptCodeTests.swift` for the rules in data-model.md §KeptCode:
   - `expiresAt = startedAt + 12 h`;
   - "An expired item counts as absent and is deleted";
   - the host clears it on stop;
   - a guest's code is replaced on joining another code, kept after Leave, and forgotten when told sharing has stopped;
   - a typed code that never worked is never kept;
   - at most one kept code per device.
-- [ ] T014 [P] [US1] Write `SyncTests/HubSchedulerTests.swift` (D-4):
+- [X] T014 [P] [US1] Write `SyncTests/HubSchedulerTests.swift` (D-4):
   - the turn cursor carries on across ready callbacks;
   - a host-side send never drains one guest greedily;
   - priority is handshake, then live, then catch-up;
   - a long catch-up frame interleaves with other guests' live pushes;
   - no guest is starved when one slot is freed per callback.
-- [ ] T015 [P] [US1] Write `SyncTests/PerParticipantDeliveryTests.swift` (D-5):
+- [X] T015 [P] [US1] Write `SyncTests/PerParticipantDeliveryTests.swift` (D-5):
   - each participant is sent only `log.events(after: known[p])`;
   - "An event leaves the outbox once every participant that is not `outOfReach` for more than 60 s covers it";
   - a participant away for 10 minutes is caught up from the log, with nothing lost or doubled (FR-004);
   - a packet is never sent back on the link it came in on;
   - the phone↔watch pair outbox is unchanged.
-- [ ] T016 [P] [US1] Write `SyncTests/LivenessTests.swift` (D-6):
+- [X] T016 [P] [US1] Write `SyncTests/LivenessTests.swift` (D-6):
   - an idle guest sends a hello after 10 s with nothing sent;
   - after three misses, the host marks the guest out of reach and sends it a hello every 15 s, never going silent;
   - a guest that gets no answer to three hellos hangs up and dials again;
   - a guest is back in step within 30 s of the cause going away (FR-003, SC-003).
-- [ ] T017 [P] [US1] Write `SyncTests/CapacityTests.swift` (D-8, FR-001, FR-005):
+- [X] T017 [P] [US1] Write `SyncTests/CapacityTests.swift` (D-8, FR-001, FR-005):
   - seven guest participants are accepted;
   - the eighth is refused with `noRoom` and told within 15 s;
   - a phone and its standing-in watch count once;
   - a watch that joined alone counts once, and so does an older build;
   - a subscriber that has not proved itself within 15 s is dropped;
   - none of this pushes the other guests' points past FR-002's times.
-- [ ] T018 [P] [US1] Write `SyncTests/RestoreTests.swift` (D-2, FR-025, using `CourtHarness.relaunch`):
+- [X] T018 [P] [US1] Write `SyncTests/RestoreTests.swift` (D-2, FR-025, using `CourtHarness.relaunch`):
   - a host relaunched with an unexpired kept code shares again on the same code and share id, including between matches;
   - a relaunched guest resumes joining;
   - a guest that left, from its phone or from its watch, still has its kept code, and a relaunch does not put it back on;
   - a restored relaunch (Bluetooth restoration) and one woken by its watch both run `restore()`;
   - an expired code restores nothing;
   - past 12 hours, sharing carries on in the running app but the code is no longer kept.
-- [ ] T019 [P] [US1] Write `SyncTests/HostGoneAndStopTests.swift`:
+- [X] T019 [P] [US1] Write `SyncTests/HostGoneAndStopTests.swift`:
   - **FR-026, host gone for good:** guests keep scoring; they are told "out of reach" with a since-time within 15 s; they cannot finish or settle the score; everything merges when the host is back.
   - **FR-028:** on Stop, every guest in reach receives `sharingStopped` before the links are cut, files its copy in History as it stood, and forgets the code.
   - **Fallback for an older host:** the guest shows out of reach.
-- [ ] T020 [P] [US1] Write `SyncTests/JoinRefusalTests.swift`:
+- [X] T020 [P] [US1] Write `SyncTests/JoinRefusalTests.swift`:
   - **FR-008:** within 15 s each failure reports its own reason: no match on that code nearby (wrong code, or host out of range), `noRoom`, Bluetooth off, permission denied.
   - **FR-029:** with two hosts nearby on different codes, a guest joins only its own, and only a refused key counts against the code.
-- [ ] T021 [P] [US1] Write `SyncTests/StandInHandBackTests.swift` (FR-009):
+- [X] T021 [P] [US1] Write `SyncTests/StandInHandBackTests.swift` (FR-009):
   - with the guest's phone app ended and a workout running on the watch, the watch carries on with the match on its own;
   - without a workout and not in front, it reports that the phone needs opening;
   - when the phone's app runs again, the phone takes over, the watch stands down, and nothing is lost.
 
 ### Implementation for User Story 1
 
-- [ ] T022 [P] [US1] Add `KeptCode` in `RekkertCore/Sync/KeptCode.swift`.
+- [X] T022 [P] [US1] Add `KeptCode` in `RekkertCore/Sync/KeptCode.swift`.
   - Fields: `code: SessionCode`, `share: UUID`, `role: SessionRole`, `startedAt: Date`, and the computed `expiresAt` = `startedAt + 12 h`.
   - `current(now:)` returns `nil` past `expiresAt`.
   - Add the lifecycle rules from data-model.md §KeptCode. T013 must pass.
-- [ ] T023 [P] [US1] Add `CodeKeeper` in `RekkertSync/CodeKeeper.swift`.
+- [X] T023 [P] [US1] Add `CodeKeeper` in `RekkertSync/CodeKeeper.swift`.
   - A `CodeKeeping` protocol with `read() -> KeptCode?`, `keep(_:)` and `forget()`.
   - A Keychain implementation: one generic-password item, accessibility `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, `kSecAttrSynchronizable = false`. It deletes the item on read when it has expired.
   - An in-memory implementation for tests.
   - The code must never be written to `active.json` or any other file.
-- [ ] T024 [US1] Keep the code, and bring sharing back, in `RekkertSync/SharedSession.swift`. Depends on T022 and T023.
+- [X] T024 [US1] Keep the code, and bring sharing back, in `RekkertSync/SharedSession.swift`. Depends on T022 and T023.
   - `keep` the code in `host()`, and when a join proves itself.
   - `forget` on a host's `stop()`. A guest forgets only on joining another code and when `sharingStopped` arrives. A guest's `leave()` and `letGo()` keep the code, since a Leave from its watch reaches the phone as `store.onLeft` → `letGo()` (SharedSession.swift:106) and FR-024 needs the code for **Join again**.
   - Add `restore()`. With a kept host code, rehost on the kept code and share id, even between matches. With a kept guest code, `resumeJoining` only if the stored role is still `.guest`, meaning it was on the match when its app was ended. A guest that had left keeps its code for **Join again** and is not put back on by a relaunch.
   - Relax the `store.state != nil` guard in `host()` for a restore only.
-- [ ] T025 [US1] Call `sharing.restore()` from `start()` in `Shared/AppModel.swift` on every launch path: user, WatchConnectivity background launch, and Bluetooth restoration. Correct the launch comment in `App/Sources/RekkertApp.swift` (today it claims the radio relaunches the app). `AppModel` is shared, so this runs on the watch too; T067 gives the watch a kept code to restore.
-- [ ] T026 [US1] Add CoreBluetooth state restoration in `RekkertSync/BluetoothTransport.swift` (D-3).
+- [X] T025 [US1] Call `sharing.restore()` from `start()` in `Shared/AppModel.swift` on every launch path: user, WatchConnectivity background launch, and Bluetooth restoration. Correct the launch comment in `App/Sources/RekkertApp.swift` (today it claims the radio relaunches the app). `AppModel` is shared, so this runs on the watch too; T067 gives the watch a kept code to restore.
+- [X] T026 [US1] Add CoreBluetooth state restoration in `RekkertSync/BluetoothTransport.swift` (D-3).
   - Create `CBPeripheralManager` with `CBPeripheralManagerOptionRestoreIdentifierKey`, and `CBCentralManager` with `CBCentralManagerOptionRestoreIdentifierKey`.
   - Implement `willRestoreState` on both. Hand the restored service, subscribed centrals and pending peripherals to `RadioCore` as existing peers, then trigger `restore()`.
   - iOS only.
-- [ ] T027 [P] [US1] Add `HubScheduler` in `RekkertSync/Radio/HubScheduler.swift`, a pure type (D-4):
+- [X] T027 [P] [US1] Add `HubScheduler` in `RekkertSync/Radio/HubScheduler.swift`, a pure type (D-4):
   - a turn cursor that persists across ready callbacks;
   - a per-peer backlog in priority order: handshake, then live, then catch-up;
   - catch-up frames split so they interleave;
   - live frames keep their 4 s expiry.
-- [ ] T028 [P] [US1] Add `LinkLiveness` in `RekkertSync/Radio/LinkLiveness.swift`, a pure type (D-6), driven by the injected clock:
+- [X] T028 [P] [US1] Add `LinkLiveness` in `RekkertSync/Radio/LinkLiveness.swift`, a pure type (D-6), driven by the injected clock:
   - the guest's idle hello at 10 s;
   - the host's out-of-reach mark after three misses, then a hello every 15 s;
   - the guest's redial after three unanswered hellos.
-- [ ] T029 [US1] Make `RekkertSync/Radio/RadioCore.swift` use `HubScheduler` in place of `drainEverybody` and the greedy single-peer `drain`, for every host-side send. T014 and `everyGuestGetsTurns` must pass (depends on T027).
-- [ ] T030 [US1] Make `RekkertSync/Radio/RadioCore.swift` use `LinkLiveness`.
+- [X] T029 [US1] Make `RekkertSync/Radio/RadioCore.swift` use `HubScheduler` in place of `drainEverybody` and the greedy single-peer `drain`, for every host-side send. T014 and `everyGuestGetsTurns` must pass (depends on T027).
+- [X] T030 [US1] Make `RekkertSync/Radio/RadioCore.swift` use `LinkLiveness`.
   - `missed()` for a central no longer just clears `isReady` and goes silent.
   - Liveness state changes are emitted on `linkChanges`.
   - T016 and `silentFollowerIsNeverWrittenOff` must pass (depends on T028).
-- [ ] T031 [US1] Add the participant limit (D-8) in `RekkertSync/Radio/RadioCore.swift`, `RekkertSync/SharedSession.swift` and `RekkertSync/LocalNetworkTransport.swift`. T017 and `eighthGuestIsToldNoRoom` must pass.
+- [X] T031 [US1] Add the participant limit (D-8) in `RekkertSync/Radio/RadioCore.swift`, `RekkertSync/SharedSession.swift` and `RekkertSync/LocalNetworkTransport.swift`. T017 and `eighthGuestIsToldNoRoom` must pass.
   - In `RekkertSync/Radio/RadioCore.swift` and `RekkertSync/SharedSession.swift`, the handshake refuses with `noRoom` once seven guest participants are on, counting a guest's phone and its card-naming watch as one.
   - Drop a subscriber that has not proved itself within 15 s.
   - Make `RekkertSync/LocalNetworkTransport.swift` refuse the same way.
-- [ ] T032 [US1] Fix rediscovery in `RekkertSync/Radio/RadioCore.swift` (RC-3 tail, RC-6).
+- [X] T032 [US1] Fix rediscovery in `RekkertSync/Radio/RadioCore.swift` (RC-3 tail, RC-6).
   - A proof timeout never blacklists a host; only a refused key does.
   - `resumeJoining` clears the blacklist.
   - A pending connect to the host's old peripheral gives up after 20 s and rescans by service UUID, keeping the connect attempt alongside.
-- [ ] T033 [US1] Deliver per participant (D-5) in `RekkertSync/MatchStore.swift` and `RekkertSync/FanOutTransport.swift`. T015 and `deliveryDoesNotSnowball` must pass.
+- [X] T033 [US1] Deliver per participant (D-5) in `RekkertSync/MatchStore.swift` and `RekkertSync/FanOutTransport.swift`. T015 and `deliveryDoesNotSnowball` must pass.
   - **In `RekkertSync/MatchStore.swift`:**
     - Keep `known: [DeviceID: VersionVector]` from hellos.
     - Send each participant only what it lacks, never the whole outbox to everyone.
     - Forget an outbox event per the rule quoted in T015.
   - **In `RekkertSync/FanOutTransport.swift`:** send per participant through the link tags from T010, and never send back to the source link.
   - **Retire `RekkertSync/ReplyFold.swift`** for shared-session sends. Keep the pair (phone↔watch) acknowledgement as it is.
-- [ ] T034 [US1] Count a standing-in watch with its phone (RW-4) in `RekkertSync/WatchStandIn.swift` and `RekkertSync/MatchStore.swift`. `standingInWatchCountsOnce` must pass.
+- [X] T034 [US1] Count a standing-in watch with its phone (RW-4) in `RekkertSync/WatchStandIn.swift` and `RekkertSync/MatchStore.swift`. `standingInWatchCountsOnce` must pass.
   - In `RekkertSync/WatchStandIn.swift`, once the watch is proven on the host, it sends a `GuestCard` with `pairedTo` set to its phone's `DeviceID`.
   - In `RekkertSync/MatchStore.swift`, the host adds that watch to the phone's participant `devices`.
-- [ ] T035 [US1] Make Stop tell the guests (FR-028, D-9) in `RekkertSync/SharedSession.swift` and `RekkertSync/MatchStore.swift`.
+- [X] T035 [US1] Make Stop tell the guests (FR-028, D-9) in `RekkertSync/SharedSession.swift` and `RekkertSync/MatchStore.swift`.
   - `stop()` in `RekkertSync/SharedSession.swift` sends `Wire.sharingStopped` to every guest and waits up to 2 s for it to go out before cutting links.
   - In `RekkertSync/MatchStore.swift`, a guest receiving it files its copy in History as Leave does, forgets the kept code, and sets a "stopped by host" state for the screens.
-- [ ] T036 [US1] Show a host that is out of reach (FR-007, FR-026, D-10), from `RekkertSync/SharedSession.swift` to the phone's and watch's screens.
+- [X] T036 [US1] Show a host that is out of reach (FR-007, FR-026, D-10), from `RekkertSync/SharedSession.swift` to the phone's and watch's screens.
   - `RekkertSync/SharedSession.swift` exposes `hostOutOfReachSince: Date?`, set once the host has been out of reach for 15 s.
   - In `RekkertSync/MatchStore.swift`, finishing and settling are disabled on guests while it is set.
   - `App/Sources/Views/ConnectionBadge.swift` shows "Host out of reach since 20:41".
   - `WatchApp/Sources/Views/WatchCourtPage.swift` shows the same line beneath the score.
   - No stale score may be presented as current for more than 15 s (SC-004).
-- [ ] T037 [US1] Say why a join failed (FR-008), in `RekkertSync/SharedSession.swift`, `App/Sources/Views/JoinMatchSheet.swift` and `WatchApp/Sources/Views/WatchJoinView.swift`.
+- [X] T037 [US1] Say why a join failed (FR-008), in `RekkertSync/SharedSession.swift`, `App/Sources/Views/JoinMatchSheet.swift` and `WatchApp/Sources/Views/WatchJoinView.swift`.
   - Map search and handshake outcomes to `SharingFailure` in `RekkertSync/SharedSession.swift`: no match found nearby, `noRoom`, Bluetooth off, permission denied. All within 15 s.
   - Show the contract's wording in `App/Sources/Views/JoinMatchSheet.swift` and `WatchApp/Sources/Views/WatchJoinView.swift`: "No match on 482 915 nearby", "No room on this match", "Bluetooth is off on your iPhone", "Rekkert can't use Bluetooth: allow it in Settings".
   - T020 must pass.
-- [ ] T038 [US1] Hand the match back from the watch to the phone (FR-009), in `RekkertSync/WatchStandIn.swift`. T021 must pass.
+- [X] T038 [US1] Hand the match back from the watch to the phone (FR-009), in `RekkertSync/WatchStandIn.swift`. T021 must pass.
   - Extend `StandInPolicy` and the stand-in in `RekkertSync/WatchStandIn.swift`: stand in when the phone's app has ended, while a workout runs or Rekkert is in front.
   - Otherwise report `phoneNeedsOpening`.
   - Stand down as soon as the phone is through again.
-- [ ] T039 [US1] Run `swift test --package-path Packages/RekkertKit` (every suite T012–T021 green, existing suites unchanged) and `scripts/verify.sh`
+- [X] T039 [US1] Run `swift test --package-path Packages/RekkertKit` (every suite T012–T021 green, existing suites unchanged) and `scripts/verify.sh`
 
 **Checkpoint**: User Story 1 works on its own. Guests stay on through every cause found.
 This is the MVP and can ship without the remaining stories.

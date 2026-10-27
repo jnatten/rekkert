@@ -123,7 +123,7 @@ struct WatchJoinView: View {
             Image(systemName: "antenna.radiowaves.left.and.right.slash")
                 .font(.title3)
                 .foregroundStyle(.secondary)
-            Text(failure.title)
+            Text(failure.title(code: typed))
                 .font(.headline)
                 .multilineTextAlignment(.center)
             Text(failure.watchAdvice)
@@ -172,13 +172,15 @@ private extension View {
 }
 
 extension SharingFailure {
-    var title: String {
+    func title(code: String) -> String {
         switch self {
-        case .notFound: "Nothing found"
+        case .notFound: SessionCode(code) == nil ? "Nothing found" : "No match on \(code) nearby"
         case .rejected: "Code not accepted"
         case .blocked: "iPhone cannot look"
         case .unreachable: "iPhone did not hear"
         case .noRoom: "No room on this match"
+        case .bluetoothOff: "Bluetooth is off on your iPhone"
+        case .bluetoothDenied: "Rekkert can't use Bluetooth"
         }
     }
 
@@ -191,6 +193,8 @@ extension SharingFailure {
         case .blocked: "Let Rekkert find devices on the local network, in Settings on your iPhone."
         case .unreachable: "Your iPhone does the looking, and it is out of touch. Bring it closer and try again."
         case .noRoom: "The host already has seven others on. One of them has to leave first."
+        case .bluetoothOff: "Switch Bluetooth on in Control Center on your iPhone and try again."
+        case .bluetoothDenied: "Allow it in Settings on your iPhone, then try again."
         }
     }
 }

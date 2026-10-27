@@ -29,6 +29,9 @@ nonisolated enum StandInPolicy {
         var hasCode = false
         var isOnHostsMatch = false
         var isStandingIn = false
+        /// A workout running, or Rekkert in front: otherwise the system does not let the radio
+        /// keep a link of the wrist's own.
+        var mayUseTheRadio = true
     }
 
     enum Move: Equatable {
@@ -39,6 +42,7 @@ nonisolated enum StandInPolicy {
         case giveUp
         case standIn
         case standDown
+        case phoneNeedsOpening
     }
 
     static func next(_ now: Circumstances, timing: Timing = Timing()) -> Move {
@@ -57,7 +61,10 @@ nonisolated enum StandInPolicy {
         // Only on the phone's say-so: a phone that is merely back may be no nearer the host.
         if now.isPhoneThrough { return now.isStandingIn ? .standDown : .nothing }
         if now.isStandingIn { return .nothing }
-        return now.now - now.phoneLastThrough >= timing.grace ? .standIn : .nothing
+        guard now.now - now.phoneLastThrough >= timing.grace else { return .nothing }
+        if now.mayUseTheRadio { return .standIn }
+        // A phone whose app is running is still trying; one that is not has to be opened.
+        return now.isPairReachable ? .nothing : .phoneNeedsOpening
     }
 }
 
@@ -99,6 +106,20 @@ public final class WatchStandIn {
         let isPhoneCarrying = store.isPairReachable && (!hasHeardStandby || phoneStandby?.isThrough == true)
         if isOwnLinkUp || isPhoneCarrying { return .up }
         return sharing.isSharing || sharing.standbyCode != nil || store.isPairReachable ? .reconnecting : .down
+    }
+
+    /// Whether the wrist may hold a link of its own just now: a workout running, or the app in
+    /// front. Set by the app.
+    @ObservationIgnored public var mayUseTheRadio: @MainActor () -> Bool = { true }
+    /// The phone's app is not running and the wrist cannot stand in for it, so the score here goes
+    /// nowhere until somebody opens it.
+    public private(set) var phoneNeedsOpening = false
+
+    /// Since when the host has been out of reach: by the wrist's own link while it stands in, and
+    /// otherwise by what its phone last said.
+    public var hostOutOfReachSince: Date? {
+        if sharing.isSharing { return sharing.hostOutOfReachSince }
+        return store.isPairReachable ? phoneStandby?.hostOutOfReachSince : nil
     }
 
     public convenience init(store: MatchStore, sharing: SharedSession) {
@@ -223,11 +244,13 @@ public final class WatchStandIn {
             phoneLastThrough: phoneLastThrough,
             hasCode: sharing.standbyCode != nil,
             isOnHostsMatch: store.state != nil && !store.canEndSession,
-            isStandingIn: sharing.isSharing
+            isStandingIn: sharing.isSharing,
+            mayUseTheRadio: mayUseTheRadio()
         ), timing: timing)
+        phoneNeedsOpening = move == .phoneNeedsOpening
 
         switch move {
-        case .nothing:
+        case .nothing, .phoneNeedsOpening:
             break
         case .landed:
             pending = nil
@@ -253,6 +276,8 @@ public final class WatchStandIn {
             sharing.standDown()
             store.followPairedDevice()
         }
+
+        store.standsInForThePair = sharing.isSharing
 
         if owesJoined, joining == .joined, isHandedTheHostsMatch {
             owesJoined = false

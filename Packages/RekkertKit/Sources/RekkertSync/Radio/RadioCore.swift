@@ -43,21 +43,33 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
         /// Only a host has one of these, and only to answer the right central.
         let central: RadioPeer?
         let link = LinkID()
+        var liveness: LinkLiveness
+        /// Past the limit: told so, and never counted as there again on this connection.
+        var isRefused = false
 
-        init(seal: LinkSeal, central: RadioPeer? = nil) {
+        init(seal: LinkSeal, central: RadioPeer? = nil, now: Duration) {
             self.seal = seal
             self.central = central
+            liveness = LinkLiveness(now: now)
         }
     }
 
     /// Whole frames, so one nobody is waiting for any more can be dropped before its first
     /// chunk goes out, never halfway through, which would take the frame after it down too.
     private struct Outgoing {
-        let chunks: [Data]
+        /// Sealed only when its turn comes, so frames are numbered in the order they go out: the
+        /// far end refuses one numbered below a frame it has already opened. `nil` for the
+        /// handshake, which is sealed already and carries no number.
+        var frame: Frame?
+        var chunks: [Data]
         var sent = 0
         let expires: Duration?
         /// The question this is, when it is one.
         let correlation: UInt32?
+        let priority: HubScheduler<RadioPeer>.Priority
+
+        /// Sealed, or partly sent: past the point where anything may go ahead of it.
+        var isStarted: Bool { sent > 0 || (frame != nil && !chunks.isEmpty) }
     }
 
     private let packets: AsyncStream<InboundPacket>.Continuation
@@ -75,6 +87,7 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
     private var server: RadioPeer?
     private var serverHasInbox = false
     private var peers: [RadioPeer: Peer] = [:]
+    private var turns = HubScheduler<RadioPeer>()
     private var waiting: [UInt32: ResumeOnce] = [:]
     /// Questions whose last chunk went out, so one dropped unsent does not count against the peer.
     private var askedWhole: Set<UInt32> = []
@@ -93,6 +106,12 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
     private var candidateDeadline: (any RadioTimer)?
     /// A host this was on has gone, and is being dialled again as well as looked for afresh.
     private var isRedialling = false
+    private var tick: (any RadioTimer)?
+    private var lastRescan: Duration?
+    private static var rescanEvery: Duration { .seconds(20) }
+    private var _availability = RadioAvailability.unknown
+
+    public var availability: RadioAvailability { lock.withLock { _availability } }
 
     private enum Intent: Sendable {
         case none
@@ -136,6 +155,7 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
             return nextSession
         }
         radio.openPeripheral(session: session)
+        startTicking()
     }
 
     public func startJoining(code: SessionCode) {
@@ -147,6 +167,7 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
             return nextSession
         }
         radio.openCentral(session: session)
+        startTicking()
     }
 
     /// Putting it back after the app has been away is usually putting nothing back at all: a
@@ -160,7 +181,11 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
     }
 
     public func resumeJoining(code: SessionCode) {
-        let standing = lock.withLock { if case .joining = intent { true } else { false } }
+        // Whatever was turned away last time is worth asking again.
+        let standing = lock.withLock { () -> Bool in
+            rejected = []
+            if case .joining = intent { return true } else { return false }
+        }
         guard !standing else { return }
         startJoining(code: code)
     }
@@ -171,6 +196,8 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
                 peripheralSession != nil, centralSession != nil, server, Array(waiting.values), candidateDeadline,
                 peers.values.filter(\.isReady).map(\.link)
             )
+            tick?.cancel()
+            tick = nil
             candidateDeadline = nil
             isRedialling = false
             peripheralSession = nil
@@ -179,6 +206,7 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
             server = nil
             serverHasInbox = false
             peers = [:]
+            turns = HubScheduler()
             waiting = [:]
             askedWhole = []
             intent = .none
@@ -198,6 +226,70 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
         reachabilityUpdates.yield(false)
     }
 
+    // MARK: - Liveness
+
+    private func startTicking() {
+        let timer = scheduler.run(after: .seconds(1)) { [weak self] in
+            guard let self else { return }
+            let isOn = self.lock.withLock { if case .none = self.intent { false } else { true } }
+            guard isOn else { return }
+            self.checkLiveness()
+            self.startTicking()
+        }
+        let previous = lock.withLock { () -> (any RadioTimer)? in
+            defer { tick = timer }
+            return tick
+        }
+        previous?.cancel()
+    }
+
+    private func checkLiveness() {
+        let now = scheduler.now
+        // The host this was on has gone and is still being looked for. A scan reports each
+        // peripheral once, and its address moves on, so the scan is started over from time to time.
+        let rescan = lock.withLock { () -> Bool in
+            guard isRedialling, centralSession != nil else {
+                lastRescan = nil
+                return false
+            }
+            guard let last = lastRescan else {
+                lastRescan = now
+                return false
+            }
+            guard now - last >= Self.rescanEvery else { return false }
+            lastRescan = now
+            return true
+        }
+        if rescan {
+            radio.stopScan()
+            radio.scan()
+        }
+        let (nudge, probes) = lock.withLock { () -> (Bool, [Peer]) in
+            var nudge = false
+            var probes: [Peer] = []
+            for peer in peers.values {
+                if peer.central == nil {
+                    if peer.isReady, peer.liveness.shouldNudge(now: now) { nudge = true }
+                } else if peer.seal.isProven, !peer.isReady, !peer.isRefused, peer.liveness.shouldProbe(now: now) {
+                    probes.append(peer)
+                }
+            }
+            return (nudge, probes)
+        }
+        // The store says hello whenever it hears the link is up, which is the question a quiet
+        // guest needs to ask: what has been going on while it said nothing.
+        if nudge { reachabilityUpdates.yield(true) }
+        for peer in probes { Task { [weak self] in await self?.probe(peer) } }
+    }
+
+    /// Something a guest given up on has to answer. Every build answers a message it cannot read
+    /// with a hello, which brings the link back and says how far that guest has got.
+    private func probe(_ peer: Peer) async {
+        guard let reply = await ask(Data(), of: peer) else { return }
+        lock.withLock { peer.liveness.answered() }
+        packets.yield(InboundPacket(payload: reply, link: peer.link))
+    }
+
     // MARK: - PeerTransport
 
     public func activate() {}
@@ -210,22 +302,33 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
         lock.withLock { peers.values.count { $0.isReady } }
     }
 
+    public var links: [LinkID] {
+        lock.withLock { peers.values.filter(\.isReady).map(\.link) }
+    }
+
     public func sendLive(_ payload: Data) async -> Data? {
         let ready = lock.withLock { peers.values.filter(\.isReady) }
         guard !ready.isEmpty else { return nil }
 
-        let replies = await withTaskGroup(of: Data?.self) { group in
+        let replies = await withTaskGroup(of: (LinkID, Data?).self) { group in
             for peer in ready {
-                group.addTask { await self.ask(payload, of: peer) }
+                group.addTask { (peer.link, await self.ask(payload, of: peer)) }
             }
-            var collected: [Data?] = []
+            var collected: [(LinkID, Data?)] = []
             for await reply in group { collected.append(reply) }
             return collected
         }
 
-        let folded = ReplyFold.fold(replies, expected: ready.count)
-        for extra in folded.unsolicited { packets.yield(InboundPacket(payload: extra)) }
-        return folded.acknowledgement
+        // Handed on under the link they came back on, so whatever they bring is not sent back to it.
+        for case let (link, reply?) in replies where !LinkReplies.isAcknowledgement(reply) {
+            packets.yield(InboundPacket(payload: reply, link: link))
+        }
+        return ReplyFold.fold(replies.map(\.1), expected: ready.count).acknowledgement
+    }
+
+    public func sendLive(_ payload: Data, on link: LinkID) async -> Data? {
+        guard let peer = lock.withLock({ peers.values.first { $0.isReady && $0.link == link } }) else { return nil }
+        return await ask(payload, of: peer)
     }
 
     /// No durable queue out here, the same as the local network: a peer that is not connected
@@ -302,28 +405,47 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
     private func send(_ frame: Frame, to peer: Peer) {
         let mtu = mtu(for: peer)
         let expires = LinkReplies.patience(for: frame.kind, replyTimeout: replySeconds).map { scheduler.now + .seconds($0) }
-        // Sealed and queued under the one lock: frames are numbered as they are sealed, and one
-        // that overtook an earlier one on its way into the backlog would be refused as seen.
-        let queued = lock.withLock { () -> Bool in
-            guard let sealed = peer.seal.seal(frame) else { return false }
-            peer.backlog.append(Outgoing(
-                chunks: Chunking.split(sealed, mtu: mtu), expires: expires,
-                correlation: frame.kind == .request ? frame.correlation : nil
-            ))
-            return true
+        guard FrameCodec.fits(frame) else { return }
+        let estimate = (FrameCodec.headerSize + frame.payload.count + 64) / max(1, mtu - Chunking.headerSize) + 1
+        lock.withLock {
+            place(Outgoing(
+                frame: frame, chunks: [], expires: expires,
+                correlation: frame.kind == .request ? frame.correlation : nil,
+                priority: HubScheduler.priority(chunks: estimate)
+            ), on: peer)
         }
-        guard queued else { return }
-        // Drained on the one queue the radio already calls back on, so a send from a reply
-        // closure, a send from the store and the "ready again" callback never drain the same
-        // backlog at once — two of them would put the same chunk on the air and skip the next.
-        scheduler.run { [weak self] in self?.drain(peer) }
+        wake(peer)
     }
 
     /// The proof, which is sealed already.
     private func enqueue(_ sealed: Data, to peer: Peer) {
         let mtu = mtu(for: peer)
-        lock.withLock { peer.backlog.append(Outgoing(chunks: Chunking.split(sealed, mtu: mtu), expires: nil, correlation: nil)) }
-        scheduler.run { [weak self] in self?.drain(peer) }
+        lock.withLock {
+            place(Outgoing(
+                frame: nil, chunks: Chunking.split(sealed, mtu: mtu), expires: nil, correlation: nil, priority: .handshake
+            ), on: peer)
+        }
+        wake(peer)
+    }
+
+    /// Under `lock`.
+    private func place(_ outgoing: Outgoing, on peer: Peer) {
+        let index = HubScheduler<RadioPeer>.position(
+            for: outgoing.priority, in: peer.backlog.map { ($0.priority, $0.isStarted) }
+        )
+        peer.backlog.insert(outgoing, at: index)
+    }
+
+    /// Drained on the one queue the radio already calls back on, so a send from a reply
+    /// closure, a send from the store and the "ready again" callback never drain the same
+    /// backlog at once — two of them would put the same chunk on the air and skip the next.
+    /// A host's guests share one transmit queue, so a send to any of them is a turn for all.
+    private func wake(_ peer: Peer) {
+        if peer.central != nil {
+            scheduler.run { [weak self] in self?.drainHost() }
+        } else {
+            scheduler.run { [weak self] in self?.drain(peer) }
+        }
     }
 
     private func mtu(for peer: Peer) -> Int {
@@ -347,12 +469,24 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
 
     private enum Step { case sent, blocked, done }
 
-    /// One chunk of the peer's oldest frame, if the link will take it.
+    /// One chunk of the peer's next frame, if the link will take it.
     private func step(_ peer: Peer) -> Step {
+        let mtu = mtu(for: peer)
         let next = lock.withLock { () -> Data? in
             let now = scheduler.now
-            while let first = peer.backlog.first, first.sent == 0, let expires = first.expires, expires < now {
-                peer.backlog.removeFirst()
+            while let first = peer.backlog.first {
+                if !first.isStarted, let expires = first.expires, expires < now {
+                    peer.backlog.removeFirst()
+                    continue
+                }
+                guard first.chunks.isEmpty, let frame = first.frame else { break }
+                // Sealed here, as it goes out, so the numbering follows the order on the air.
+                guard let sealed = peer.seal.seal(frame) else {
+                    peer.backlog.removeFirst()
+                    continue
+                }
+                peer.backlog[0].chunks = Chunking.split(sealed, mtu: mtu)
+                break
             }
             return peer.backlog.first.map { $0.chunks[$0.sent] }
         }
@@ -382,7 +516,9 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
                 return false
             }
             guard published else { return false }
-            return radio.update(chunk, to: central)
+            let taken = radio.update(chunk, to: central)
+            if taken { lock.withLock { peer.liveness.sent(at: scheduler.now) } }
+            return taken
         }
         let (server, hasInbox, isCurrent) = lock.withLock { () -> (RadioPeer?, Bool, Bool) in
             guard let server = self.server else { return (nil, false, false) }
@@ -392,7 +528,10 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
         // the one that replaced it, it breaks whatever frame that one is in the middle of.
         guard isCurrent, let server, hasInbox else { return false }
         guard lock.withLock({ !peer.isWriting }) else { return false }
-        lock.withLock { peer.isWriting = true }
+        lock.withLock {
+            peer.isWriting = true
+            peer.liveness.sent(at: scheduler.now)
+        }
         radio.write(chunk, to: server)
         return true
     }
@@ -428,19 +567,26 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
 
     /// A chunk from each in turn. Drained one at a time, whoever came first filled the queue with
     /// a long frame every time it had room, and everybody else's replies waited until too late.
-    private func drainEverybody() {
-        var turn = lock.withLock { Array(peers.values) }
-        while !turn.isEmpty {
-            var next: [Peer] = []
-            for peer in turn {
+    /// The turn carries on from one callback to the next: started over from the same guest
+    /// every time, the queue freeing one slot served that guest and nobody after it.
+    private func drainHost() {
+        while true {
+            var progressed = false
+            for key in lock.withLock({ turns.turns() }) {
+                guard let peer = lock.withLock({ peers[key] }), peer.central != nil else { continue }
                 switch step(peer) {
-                case .sent: next.append(peer)
-                case .done: break
+                case .sent:
+                    lock.withLock { turns.served(key) }
+                    progressed = true
+                case .done:
+                    continue
                 // A host's queue is one queue for every subscriber: full for one, full for all.
-                case .blocked: if peer.central != nil { return }
+                // One cleared for a guest that came back as another is not a refusal.
+                case .blocked:
+                    if lock.withLock({ !peer.backlog.isEmpty }) { return }
                 }
             }
-            turn = next
+            guard progressed else { return }
         }
     }
 
@@ -456,7 +602,10 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
             lock.withLock { peer.reassembler.reset() }
             return
         }
-        guard let whole, let opened = lock.withLock({ peer.seal.open(whole) }) else { return }
+        guard let whole else { return }
+        guard let opened = lock.withLock({ peer.seal.open(whole) }) else {
+            return refusedKey(whole, from: peer)
+        }
 
         switch opened {
         case .answer(let answer):
@@ -486,6 +635,22 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
         }
     }
 
+    /// Silence from a host says nothing about the code: it may only be busy. So a host told a key
+    /// it cannot open says so, and that refusal is the one thing that turns a guest away from it.
+    private func refusedKey(_ sealed: Data, from peer: Peer) {
+        let (isHostSide, isUnproven) = lock.withLock { (peer.central != nil, !peer.seal.isProven) }
+        guard isUnproven else { return }
+        if isHostSide {
+            guard sealed != LinkSeal.refusal else { return }
+            return enqueue(LinkSeal.refusal, to: peer)
+        }
+        let candidate = lock.withLock { () -> RadioPeer? in
+            guard !hasProven, let server, peers[server] === peer else { return nil }
+            return server
+        }
+        if let candidate { reject(candidate) }
+    }
+
     private func handOn(_ frame: Frame, from peer: Peer) {
         switch frame.kind {
         case .reply:
@@ -509,16 +674,35 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
     /// Counted from here, and said: each end's store says hello when it hears, which is what
     /// catches either side up.
     private func ready(_ peer: Peer) {
-        let wasReady = lock.withLock { () -> Bool in
+        let wasReady = lock.withLock { () -> Bool? in
+            guard !peer.isRefused else { return nil }
             defer { peer.isReady = true }
             return peer.isReady
         }
+        guard let wasReady else { return }
         if !wasReady { linkUpdates.yield(.up(peer.link)) }
         reachabilityUpdates.yield(true)
     }
 
+    public func refuse(_ link: LinkID) {
+        let wasReady = lock.withLock { () -> Bool? in
+            guard let peer = peers.values.first(where: { $0.link == link }), peer.central != nil else { return nil }
+            defer {
+                peer.isRefused = true
+                peer.isReady = false
+            }
+            return peer.isReady
+        }
+        guard wasReady == true else { return }
+        linkUpdates.yield(.down(link, .refused))
+        reachabilityUpdates.yield(isReachable)
+    }
+
     private func forget(_ token: RadioPeer, because reason: LinkDropReason) {
-        let peer = lock.withLock { peers.removeValue(forKey: token) }
+        let peer = lock.withLock { () -> Peer? in
+            turns.leave(token)
+            return peers.removeValue(forKey: token)
+        }
         guard let peer else { return }
         if lock.withLock({ peer.isReady }) { linkUpdates.yield(.down(peer.link, reason)) }
         reachabilityUpdates.yield(isReachable)
@@ -532,6 +716,7 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
         let (pending, deadline, hadPeers, wereUp) = lock.withLock {
             let values = (Array(waiting.values), candidateDeadline, !peers.isEmpty, peers.values.filter(\.isReady).map(\.link))
             peers = [:]
+            turns = HubScheduler()
             waiting = [:]
             askedWhole = []
             server = nil
@@ -550,9 +735,10 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
 
     // MARK: - Hosting
 
-    public func peripheralState(poweredOn: Bool, session: Int) {
+    public func peripheralState(_ availability: RadioAvailability, session: Int) {
         guard lock.withLock({ peripheralSession == session }) else { return }
-        guard poweredOn else { return lostTheRadio() }
+        lock.withLock { _availability = availability }
+        guard availability == .on else { return lostTheRadio() }
         guard case .hosting = lock.withLock({ intent }) else { return }
         lock.withLock { isPublished = true }
         radio.publish()
@@ -571,12 +757,23 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
         guard lock.withLock({ peripheralSession == session }),
               case .hosting(let code, let share) = lock.withLock({ intent })
         else { return }
-        let peer = Peer(seal: LinkSeal(role: .host, code: code, share: share), central: central)
+        let peer = Peer(seal: LinkSeal(role: .host, code: code, share: share), central: central, now: scheduler.now)
         // Not ready until it has proved itself. Counted on subscribing, a central with the
         // wrong code — or any Bluetooth tool at all — was waited on by every send, answered
         // none of them, and kept the outbox from ever being acknowledged.
-        lock.withLock { peers[central] = peer }
+        lock.withLock {
+            peers[central] = peer
+            turns.join(central)
+        }
+        // A subscriber that never proves itself is nobody's guest, and holds a place in the turn.
+        scheduler.run(after: Self.proofLimit) { [weak self] in
+            guard let self else { return }
+            let unproven = self.lock.withLock { self.peers[central] === peer && !peer.seal.isProven }
+            if unproven { self.forget(central, because: .refused) }
+        }
     }
+
+    private static var proofLimit: Duration { .seconds(15) }
 
     public func unsubscribed(_ central: RadioPeer) {
         forget(central, because: .closedByPeer)
@@ -601,14 +798,15 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
     }
 
     public func readyToUpdate() {
-        drainEverybody()
+        drainHost()
     }
 
     // MARK: - Joining
 
-    public func centralState(poweredOn: Bool, session: Int) {
+    public func centralState(_ availability: RadioAvailability, session: Int) {
         guard lock.withLock({ centralSession == session }) else { return }
-        guard poweredOn else { return lostTheRadio() }
+        lock.withLock { _availability = availability }
+        guard availability == .on else { return lostTheRadio() }
         guard case .joining = lock.withLock({ intent }) else { return }
         radio.scan()
     }
@@ -749,7 +947,7 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
         else { return reject(peripheral) }
 
         lock.withLock { isRedialling = false }
-        let peer = Peer(seal: LinkSeal(role: .guest, code: code, share: greeting.share))
+        let peer = Peer(seal: LinkSeal(role: .guest, code: code, share: greeting.share), now: scheduler.now)
         // Proved afresh on a greeting read again — the host's service back after its radio went
         // off and on — so one that was counted as there is not, until it is.
         let wasReady = lock.withLock { () -> Bool in
@@ -798,9 +996,26 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
                 // asks again.
                 if hasCentral { self.radio.cancelConnection(unproven) }
             } else {
-                self.reject(unproven)
+                // Said nothing in time, which a busy host does: let go of and looked for again,
+                // never turned away. Only a refused key says it is another court.
+                self.dropCandidate(unproven)
             }
         }
+    }
+
+    private func dropCandidate(_ peripheral: RadioPeer) {
+        let hasCentral = lock.withLock { () -> Bool in
+            peers.removeValue(forKey: peripheral)
+            if server == peripheral {
+                server = nil
+                serverHasInbox = false
+            }
+            return centralSession != nil
+        }
+        guard hasCentral else { return }
+        radio.cancelConnection(peripheral)
+        radio.stopScan()
+        radio.scan()
     }
 
     /// Somebody else's court: hung up on, and not dialled again for the rest of this join.

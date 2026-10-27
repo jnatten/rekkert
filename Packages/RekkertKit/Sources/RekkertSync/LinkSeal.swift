@@ -36,6 +36,10 @@ nonisolated struct LinkSeal {
 
     private static let nonceSize = 16
 
+    /// A host's answer to a challenge it cannot open. Unsealed, since there is no key in common
+    /// to seal it with, and of no kind `open` takes.
+    static let refusal = Data([0])
+
     private let role: Role
     private let sealing: SymmetricKey
     private let opening: SymmetricKey

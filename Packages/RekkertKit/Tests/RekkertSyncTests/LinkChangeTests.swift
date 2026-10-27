@@ -54,13 +54,19 @@ struct LinkChangeTests {
         #expect(await court.until(within: .seconds(10)) { guest.reasons == [.radioOff] })
     }
 
-    @Test func theHostStoppingHangsUpOnEveryGuest() async {
+    /// Told first, the guest is the one that hangs up.
+    @Test func theHostStoppingHasEveryGuestHangUp() async {
         let court = await sharedCourt()
         let host = ChangeLog(court.host.phone.core.linkChanges)
-        defer { host.stop() }
+        let guest = ChangeLog(court.guests.first!.phone.core.linkChanges)
+        defer {
+            host.stop()
+            guest.stop()
+        }
 
         court.host.phone.sharing.stop()
-        #expect(await court.until(within: .seconds(10)) { host.reasons == [.hungUp] })
+        #expect(await court.until(within: .seconds(10)) { guest.reasons == [.hungUp] })
+        #expect(await court.until(within: .seconds(10)) { host.reasons == [.closedByPeer] })
     }
 
     @Test func theFanOutPassesItsChildrensChangesOn() async {

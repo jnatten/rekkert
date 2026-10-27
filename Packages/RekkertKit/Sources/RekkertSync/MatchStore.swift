@@ -138,7 +138,27 @@ public final class MatchStore {
     /// Who is on this host's match, kept for as long as it is shared.
     public private(set) var participants = Participants()
     @ObservationIgnored private var linkOwners: [LinkID: DeviceID] = [:]
+    @ObservationIgnored private var refusedLinks: Set<LinkID> = []
+    /// What the phone on each link holds of `heldSession`, from its hellos and its answers, so it
+    /// is sent what it lacks and nothing more. Forgotten with the link.
+    @ObservationIgnored private var heldOnLink: [LinkID: VersionVector] = [:]
+    /// What the pair last said it holds of `heldSession`.
+    @ObservationIgnored private var heldBesideLinks: VersionVector?
+    @ObservationIgnored private var heldSession: UUID?
+    /// On their way down each link and not answered yet, so a retry does not send them again.
+    @ObservationIgnored private var delivering: [LinkID: Set<EventID>] = [:]
+    /// A watch on somebody else's match by a link of its own. It says it is its phone's before
+    /// anything else on a link, so the host counts the two as one guest and never turns it away
+    /// as one too many.
+    @ObservationIgnored public var standsInForThePair = false {
+        didSet { if standsInForThePair, !oldValue { Task { await introduceAsThePairs() } } }
+    }
     @ObservationIgnored private let now: @Sendable () -> Date
+    /// The host this was joining turned it away.
+    @ObservationIgnored public var onRefused: ((SharingFailure) -> Void)?
+    /// The host of the match on screen stopped sharing it, and said so. Called before this end
+    /// lets go of it, as `onLeft` is.
+    @ObservationIgnored public var onStoppedByHost: (() -> Void)?
 
     public init(
         device: DeviceID,
@@ -384,21 +404,29 @@ public final class MatchStore {
     }
 
     /// Puts whatever arrived on a link down to whoever is on the far end of it: named by the
-    /// first hello on the link, or by the link itself for a build that names nobody.
-    private func noteParticipant(_ wire: Wire, from packet: InboundPacket) {
-        guard role == .host, !packet.isFromPairedDevice, let link = packet.link else { return }
+    /// first hello on the link, or by the link itself for a build that names nobody. Whether
+    /// there is room for them.
+    private func noteParticipant(_ wire: Wire, from packet: InboundPacket) -> Bool {
+        guard role == .host, !packet.isFromPairedDevice, let link = packet.link else { return true }
+        guard !refusedLinks.contains(link) else { return false }
+        let admission: Participants.Admission
         switch wire {
         case .hello(_, let vector, let sender):
-            guard sender != device else { return }
+            guard sender != device else { return true }
             let owner = sender ?? linkOwners[link] ?? DeviceID(link.raw)
             linkOwners[link] = owner
-            participants.heard(from: owner, vector: vector, isOlderBuild: sender == nil, at: now())
+            admission = participants.heard(from: owner, vector: vector, isOlderBuild: sender == nil, at: now())
         case .guestCard(let card):
             linkOwners[link] = card.device
-            participants.heard(from: card.device, pairedTo: card.pairedTo, name: card.name, at: now())
+            admission = participants.heard(from: card.device, pairedTo: card.pairedTo, name: card.name, at: now())
         default:
-            if let owner = linkOwners[link] { participants.heard(from: owner, at: now()) }
+            guard let owner = linkOwners[link] else { return true }
+            admission = participants.heard(from: owner, at: now())
         }
+        guard admission == .full else { return true }
+        refusedLinks.insert(link)
+        linkOwners[link] = nil
+        return false
     }
 
     /// Opens this session to other phones. Changes nothing about the session itself — only
@@ -411,6 +439,7 @@ public final class MatchStore {
             guests = []
             participants = Participants()
             linkOwners = [:]
+            refusedLinks = []
         }
         role = .host
         // A search left running underneath would conclude on the first guest to say hello
@@ -1024,7 +1053,17 @@ public final class MatchStore {
         async let reachability: Void = consumeReachability()
         async let retries: Void = retryUndelivered()
         async let initial: Void = synchroniseOnce()
-        _ = await (packets, reachability, retries, initial)
+        async let links: Void = consumeLinkChanges()
+        _ = await (packets, reachability, retries, initial, links)
+    }
+
+    private func consumeLinkChanges() async {
+        for await change in transport.linkChanges {
+            guard case .down(let link, _) = change else { continue }
+            heldOnLink[link] = nil
+            delivering[link] = nil
+            acknowledgeOutbox()
+        }
     }
 
     private func consumeInbound() async {
@@ -1041,14 +1080,15 @@ public final class MatchStore {
     private func retryUndelivered() async {
         while !Task.isCancelled {
             try? await Task.sleep(for: retryInterval * retryPatience)
-            guard !outbox.isEmpty else {
+            guard !outbox.isEmpty || isAnyLinkBehind else {
                 retryPatience = 1
                 continue
             }
 
             if transport.isReachable {
                 await flush()
-                retryPatience = outbox.isEmpty ? 1 : min(retryPatience * 2, Self.maximumRetryPatience)
+                let isDone = outbox.isEmpty && !isAnyLinkBehind
+                retryPatience = isDone ? 1 : min(retryPatience * 2, Self.maximumRetryPatience)
             } else {
                 retryPatience = 1
                 queuePending()
@@ -1069,6 +1109,8 @@ public final class MatchStore {
         for await reachable in transport.reachability {
             isReachable = reachable
             isPairReachable = transport.isPairReachable
+            // Back, it says again what it holds. Until then it may have come back with less.
+            if !transport.isReachableBesideLinks { heldBesideLinks = nil }
             retryPatience = 1
             if reachable { Task { await synchroniseOnce() } }
         }
@@ -1103,6 +1145,7 @@ public final class MatchStore {
     private func askWhatIsMissing() async {
         isReachable = transport.isReachable
         isPairReachable = transport.isPairReachable
+        await introduceAsThePairs()
         // Coverage rather than the raw vector: this is the "what am I missing" question, and
         // the highest number seen is the wrong answer to it when something below is absent.
         guard let payload = try? Wire.hello(sessionID: log.sessionID, vector: log.coverage, from: device).encoded() else { return }
@@ -1112,6 +1155,12 @@ public final class MatchStore {
             handle(InboundPacket(payload: reply))
         }
         await flush()
+    }
+
+    private func introduceAsThePairs() async {
+        guard standsInForThePair, let pairedDevice else { return }
+        let card = encode(.guestCard(GuestCard(device: device, name: nil, pairedTo: pairedDevice)))
+        for link in transport.links { _ = await sendLive(card, on: link) }
     }
 
     private func record(_ kind: EventKind) {
@@ -1181,27 +1230,44 @@ public final class MatchStore {
         isFlushing = false
     }
 
+    /// The pair is sent what it has not acknowledged, and each phone on a link is caught up from
+    /// the log on what it lacks. The whole outbox to everybody, every retry, was more than the
+    /// radio could carry once one guest fell behind, and only grew from there.
     private func sendPending() async {
         isReachable = transport.isReachable
         isPairReachable = transport.isPairReachable
-        guard !outbox.isEmpty, transport.isReachable else { return }
+        guard transport.isReachable else { return }
         let session = log.sessionID
-        guard let payload = try? Wire.events(sessionID: session, events: outbox.pending).encoded() else { return }
-
-        guard let reply = await sendLive(payload) else {
-            queuePending()
-            return
+        let catchingUp = transport.links.compactMap { link -> Task<Void, Never>? in
+            let lacking = lacking(on: link)
+            return lacking.isEmpty ? nil : deliver(lacking, on: link, in: session)
         }
-        acknowledge(reply, for: session)
+        let forThePair = heldBesideLinks(in: session).map { held in
+            outbox.pending.filter { $0.id.seq > held[$0.id.device] }
+        } ?? outbox.pending
+        if !forThePair.isEmpty, let payload = try? Wire.events(sessionID: session, events: forThePair).encoded() {
+            if let reply = await sendLiveBesideLinks(payload) {
+                acknowledge(reply, for: session)
+            } else {
+                queuePending()
+            }
+        }
+        for task in catchingUp { await task.value }
     }
 
     /// On its own round trip, never queued behind a retry that one slow peer can hold for seconds.
-    private func push(_ events: [MatchEvent], in session: UUID) {
-        guard !events.isEmpty, transport.isReachable,
-              let payload = try? Wire.events(sessionID: session, events: events).encoded()
-        else { return }
+    /// A phone on a link is sent only what it does not hold already, and the one these came from
+    /// nothing: sent back, every point went round twice.
+    private func push(_ events: [MatchEvent], in session: UUID, from source: LinkID? = nil) {
+        guard !events.isEmpty, transport.isReachable else { return }
+        for link in transport.links where link != source {
+            let lacking = held(on: link).map { held in events.filter { $0.id.seq > held[$0.id.device] } } ?? events
+            guard !lacking.isEmpty else { continue }
+            deliver(lacking, on: link, in: session)
+        }
+        guard let payload = try? Wire.events(sessionID: session, events: events).encoded() else { return }
         Task {
-            guard let reply = await sendLive(payload) else {
+            guard let reply = await sendLiveBesideLinks(payload) else {
                 if session == log.sessionID { queuePending() }
                 return
             }
@@ -1209,15 +1275,87 @@ public final class MatchStore {
         }
     }
 
-    private func acknowledge(_ reply: Data, for session: UUID) {
+    /// Answered by that phone alone, so nobody else's silence holds its acknowledgement back.
+    /// Counted as on its way before the send starts, so nothing that looks meanwhile sends it again.
+    @discardableResult
+    private func deliver(_ events: [MatchEvent], on link: LinkID, in session: UUID) -> Task<Void, Never>? {
+        guard let payload = try? Wire.events(sessionID: session, events: events).encoded() else { return nil }
+        let ids = Set(events.map(\.id))
+        delivering[link, default: []].formUnion(ids)
+        return Task {
+            let reply = await sendLive(payload, on: link)
+            delivering[link]?.subtract(ids)
+            guard let reply else { return }
+            acknowledge(reply, for: session, on: link)
+        }
+    }
+
+    private func acknowledge(_ reply: Data, for session: UUID, on link: LinkID? = nil) {
         guard case .hello(let answered, let vector, _)? = try? Wire.decode(reply) else {
             // Anything else is the counterpart saying it is not on the session we just
             // sent — which is the one thing that has to be acted on rather than dropped.
-            return handle(InboundPacket(payload: reply))
+            return handle(InboundPacket(payload: reply, link: link))
         }
         guard answered == session, session == log.sessionID else { return }
-        outbox.acknowledge(upTo: vector)
-        persist()
+        if let link {
+            learn(vector, on: link)
+        } else {
+            heldBesideLinks = heldBesideLinks(in: session)?.merging(vector) ?? vector
+        }
+        acknowledgeOutbox()
+    }
+
+    /// The outbox lets go of an event once everything there holds it: the pair by its own answer,
+    /// and every phone on a link that is up. One that is not there does not hold it back: it says
+    /// what it holds when it is back, and is caught up from the log.
+    private func acknowledgeOutbox() {
+        startHolding()
+        var held: [VersionVector] = []
+        if transport.isReachableBesideLinks {
+            guard let heldBesideLinks else { return }
+            held.append(heldBesideLinks)
+        }
+        for link in transport.links {
+            guard let onLink = heldOnLink[link] else { return }
+            held.append(onLink)
+        }
+        guard !held.isEmpty, !outbox.isEmpty else { return }
+        let before = outbox.pending.count
+        outbox.acknowledge(upTo: .lowerBound(of: held))
+        if outbox.pending.count != before { persist() }
+    }
+
+    private func held(on link: LinkID) -> VersionVector? {
+        heldSession == log.sessionID ? heldOnLink[link] : nil
+    }
+
+    private func heldBesideLinks(in session: UUID) -> VersionVector? {
+        heldSession == session ? heldBesideLinks : nil
+    }
+
+    private func learn(_ vector: VersionVector, on link: LinkID) {
+        startHolding()
+        heldOnLink[link] = heldOnLink[link]?.merging(vector) ?? vector
+    }
+
+    /// What anybody holds is of one session, and a new one starts it over.
+    private func startHolding() {
+        guard heldSession != log.sessionID else { return }
+        heldSession = log.sessionID
+        heldOnLink = [:]
+        heldBesideLinks = nil
+    }
+
+    /// What the phone on `link` is known to lack here, besides what is on its way to it. Nothing for
+    /// one that has not said what it holds: it says so as its link comes up.
+    private func lacking(on link: LinkID) -> [MatchEvent] {
+        guard let held = held(on: link) else { return [] }
+        let underway = delivering[link] ?? []
+        return log.events(missingRelativeTo: held).filter { !underway.contains($0.id) }
+    }
+
+    private var isAnyLinkBehind: Bool {
+        transport.links.contains { !lacking(on: $0).isEmpty }
     }
 
     /// WatchConnectivity does not promise to call back. A reply that never arrives would
@@ -1229,10 +1367,46 @@ public final class MatchStore {
     /// send is left to finish on its own instead, and whatever it comes back with is dropped.
     private func sendLive(_ payload: Data) async -> Data? {
         let transport = transport
-        let timeout = sendTimeout
-        return await withCheckedContinuation { continuation in
+        return await answer { await transport.sendLive(payload) }
+    }
+
+    private func sendLiveBesideLinks(_ payload: Data) async -> Data? {
+        let transport = transport
+        return await answer { await transport.sendLiveBesideLinks(payload) }
+    }
+
+    private func sendLive(_ payload: Data, on link: LinkID) async -> Data? {
+        let transport = transport
+        return await answer { await transport.sendLive(payload, on: link) }
+    }
+
+    /// Tells every phone on a link that this match is no longer shared, and is done once each has
+    /// said it heard or `patience` is up. Said to the links up now, before anything turns them round.
+    public func sayStoppedSharing(within patience: Duration = .seconds(2)) -> Task<Void, Never> {
+        let notice = encode(.sharingStopped(sessionID: log.sessionID))
+        let links = transport.links
+        let transport = transport
+        return Task {
+            await withTaskGroup(of: Void.self) { group in
+                for link in links {
+                    group.addTask {
+                        _ = await Self.answer(within: patience) { await transport.sendLive(notice, on: link) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func answer(_ send: @escaping @Sendable () async -> Data?) async -> Data? {
+        await Self.answer(within: sendTimeout, send)
+    }
+
+    private nonisolated static func answer(
+        within timeout: Duration, _ send: @escaping @Sendable () async -> Data?
+    ) async -> Data? {
+        await withCheckedContinuation { continuation in
             let once = ResumeOnce(continuation)
-            Task { once.resume(await transport.sendLive(payload)) }
+            Task { once.resume(await send()) }
             Task {
                 try? await Task.sleep(for: timeout)
                 once.resume(nil)
@@ -1246,7 +1420,11 @@ public final class MatchStore {
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
             return
         }
-        noteParticipant(wire, from: packet)
+        guard noteParticipant(wire, from: packet) else {
+            packet.reply?(encode(.noRoom(sessionID: log.sessionID)))
+            if let link = packet.link { transport.refuse(link) }
+            return
+        }
 
         switch wire {
         case .hello(let sessionID, let vector, let sender):
@@ -1273,6 +1451,10 @@ public final class MatchStore {
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
             arrive(on: sessionID, from: packet)
             packet.reply?(encode(.events(sessionID: log.sessionID, events: log.events(missingRelativeTo: vector))))
+            if let link = packet.link, !packet.isFromPairedDevice {
+                // Answered with everything it lacked, so it holds at least everything here too.
+                learn(packet.reply == nil ? vector : vector.merging(log.coverage), on: link)
+            }
 
         case .events(let sessionID, let events):
             if retired.contains(sessionID) {
@@ -1283,6 +1465,9 @@ public final class MatchStore {
             }
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
             arrive(on: sessionID, from: packet)
+            if let link = packet.link, !packet.isFromPairedDevice, let held = held(on: link) {
+                heldOnLink[link] = held.extended(by: events.map(\.id))
+            }
             relay(events, from: packet)
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
@@ -1426,14 +1611,17 @@ public final class MatchStore {
                 packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
                 return
             }
-            if let index = guests.firstIndex(where: { $0.device == card.device }) {
-                if guests[index] != card {
-                    guests[index] = card
+            // A watch speaking for its phone is that guest, already listed by the phone.
+            if card.pairedTo == nil {
+                if let index = guests.firstIndex(where: { $0.device == card.device }) {
+                    if guests[index] != card {
+                        guests[index] = card
+                        persist()
+                    }
+                } else {
+                    guests.append(card)
                     persist()
                 }
-            } else {
-                guests.append(card)
-                persist()
             }
             // The reply is the only way to answer one phone alone, and a new one knows nothing yet.
             if let accessTable, let reply = packet.reply {
@@ -1443,7 +1631,17 @@ public final class MatchStore {
                 shareAccess()
             }
 
-        case .sharingStopped:
+        case .sharingStopped(let sessionID):
+            // The host letting everybody go, and saying so first. Kept in History as it stood,
+            // as a Leave keeps it, and the watch on the same wrist goes with it.
+            if !packet.isFromPairedDevice, sessionID == log.sessionID, !log.isEmpty, !canEndSession {
+                onStoppedByHost?()
+                leaveSharedSession()
+            }
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+
+        case .noRoom:
+            if !packet.isFromPairedDevice, isJoining || role == .guest { onRefused?(.noRoom) }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
         case .sharing(let signal):
@@ -1633,7 +1831,7 @@ public final class MatchStore {
         guard log.merge(fresh) else { return }
         let overruled = packet.isFromPairedDevice ? [] : overrule(endingsIn: fresh)
         outbox.enqueue(contentsOf: fresh + overruled)
-        push(fresh + overruled, in: session)
+        push(fresh + overruled, in: session, from: packet.link)
         // Only what was genuinely new, so the same point arriving over both radios is
         // mentioned once, and the board as it stands before this device redraws it.
         let after = SessionReducer.state(of: log)

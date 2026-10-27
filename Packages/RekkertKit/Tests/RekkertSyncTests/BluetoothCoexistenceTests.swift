@@ -74,11 +74,13 @@ struct BluetoothCoexistenceTests {
         #expect(radio.joined == code)
     }
 
-    @Test func stoppingClosesBoth() {
+    /// Once the guests have been told, which with nobody on is at once.
+    @Test func stoppingClosesBoth() async {
         let (sharing, store, radio) = make()
         store.configure(setup)
         sharing.host()
-        sharing.stop()
+        await sharing.stop()?.value
+        await eventually { radio.stops == 1 }
         #expect(radio.stops == 1)
     }
 

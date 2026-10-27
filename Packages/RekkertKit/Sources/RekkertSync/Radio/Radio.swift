@@ -14,6 +14,11 @@ nonisolated public struct RadioPeer: Hashable, Sendable {
     }
 }
 
+/// Whether the radio can be used at all, as the system says.
+nonisolated public enum RadioAvailability: Sendable, Equatable {
+    case on, off, denied, unknown
+}
+
 nonisolated public protocol RadioTimer: Sendable {
     func cancel()
 }
@@ -57,7 +62,7 @@ nonisolated public protocol Radio: AnyObject, Sendable {
 }
 
 nonisolated public protocol RadioListener: AnyObject, Sendable {
-    func peripheralState(poweredOn: Bool, session: Int)
+    func peripheralState(_ availability: RadioAvailability, session: Int)
     func greeting(session: Int) -> Data?
     func subscribed(_ central: RadioPeer, session: Int)
     func unsubscribed(_ central: RadioPeer)
@@ -65,7 +70,7 @@ nonisolated public protocol RadioListener: AnyObject, Sendable {
     func received(writes: [(central: RadioPeer, offset: Int, value: Data)], session: Int) -> Bool
     func readyToUpdate()
 
-    func centralState(poweredOn: Bool, session: Int)
+    func centralState(_ availability: RadioAvailability, session: Int)
     func discovered(_ peripheral: RadioPeer, session: Int)
     func connected(_ peripheral: RadioPeer, session: Int)
     func disconnected(_ peripheral: RadioPeer, failed: Bool, session: Int)

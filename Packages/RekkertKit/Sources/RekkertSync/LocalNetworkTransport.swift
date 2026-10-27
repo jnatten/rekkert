@@ -27,6 +27,11 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         case rejected
         /// The local network is not ours to look at.
         case blocked
+        /// The host already has as many guests as it takes.
+        case noRoom
+        /// Nothing found, with Bluetooth switched off or not Rekkert's to use.
+        case bluetoothOff
+        case bluetoothDenied
     }
 
     public enum Status: Sendable, Equatable {
@@ -67,7 +72,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
 
     private let listener = Slot<NWListener>()
     private let browser = Slot<NWBrowser>()
-    private var links: [ObjectIdentifier: Link] = [:]
+    private var openLinks: [ObjectIdentifier: Link] = [:]
     private var waiting: [UInt32: ResumeOnce] = [:]
     private var nextCorrelation: UInt32 = 1
     /// What this has been asked to be, as against what it currently is. The system takes the
@@ -94,7 +99,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     private var broadcastSession: UUID?
     private var searchDeadline: DispatchWorkItem?
     private var redialTimer: DispatchSourceTimer?
-    /// Per link, so a dial that never arrives can be given up on. Keyed the same way `links` is.
+    /// Per link, so a dial that never arrives can be given up on. Keyed the same way `openLinks` is.
     private var dialDeadlines: [ObjectIdentifier: DispatchWorkItem] = [:]
     private var listenerAttempts = 0
 
@@ -254,7 +259,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     private func armSearchDeadline(after delay: DispatchTimeInterval, extended: Bool = false) {
         let deadline = DispatchWorkItem { [weak self] in
             guard let self, !self.isReachable else { return }
-            let (dialling, foundOnce) = self.lock.withLock { (!self.links.isEmpty, self.hasEverJoined) }
+            let (dialling, foundOnce) = self.lock.withLock { (!self.openLinks.isEmpty, self.hasEverJoined) }
             // A match found once and lost is a reconnect, and the redial's to see through.
             guard !foundOnce else { return }
             if dialling, !extended {
@@ -327,8 +332,8 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         let oldListener = listener.install(nil)
         let oldBrowser = browser.install(nil)
         let (oldLinks, pending, deadline, dials) = lock.withLock {
-            let values = (Array(links.values), Array(waiting.values), searchDeadline, Array(dialDeadlines.values))
-            links = [:]
+            let values = (Array(openLinks.values), Array(waiting.values), searchDeadline, Array(dialDeadlines.values))
+            openLinks = [:]
             waiting = [:]
             searchDeadline = nil
             dialDeadlines = [:]
@@ -363,29 +368,40 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     }
 
     public var isReachable: Bool {
-        lock.withLock { links.values.contains { $0.isReady } }
+        lock.withLock { openLinks.values.contains { $0.isReady } }
     }
 
     public var reachableCount: Int {
-        lock.withLock { links.values.count { $0.isReady } }
+        lock.withLock { openLinks.values.count { $0.isReady } }
+    }
+
+    public var links: [LinkID] {
+        lock.withLock { openLinks.values.filter(\.isReady).map(\.id) }
     }
 
     public func sendLive(_ payload: Data) async -> Data? {
-        let ready = lock.withLock { links.values.filter(\.isReady) }
+        let ready = lock.withLock { openLinks.values.filter(\.isReady) }
         guard !ready.isEmpty else { return nil }
 
-        let replies = await withTaskGroup(of: Data?.self) { group in
+        let replies = await withTaskGroup(of: (LinkID, Data?).self) { group in
             for link in ready {
-                group.addTask { await self.ask(payload, on: link) }
+                group.addTask { (link.id, await self.ask(payload, on: link)) }
             }
-            var collected: [Data?] = []
+            var collected: [(LinkID, Data?)] = []
             for await reply in group { collected.append(reply) }
             return collected
         }
 
-        let folded = ReplyFold.fold(replies, expected: ready.count)
-        for extra in folded.unsolicited { packets.yield(InboundPacket(payload: extra)) }
-        return folded.acknowledgement
+        // Handed on under the link they came back on, so whatever they bring is not sent back to it.
+        for case let (link, reply?) in replies where !LinkReplies.isAcknowledgement(reply) {
+            packets.yield(InboundPacket(payload: reply, link: link))
+        }
+        return ReplyFold.fold(replies.map(\.1), expected: ready.count).acknowledgement
+    }
+
+    public func sendLive(_ payload: Data, on id: LinkID) async -> Data? {
+        guard let link = lock.withLock({ openLinks.values.first { $0.isReady && $0.id == id } }) else { return nil }
+        return await ask(payload, on: link)
     }
 
     /// WatchConnectivity's durable queue has no counterpart here: a peer that is not connected
@@ -456,7 +472,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             // The browser reports everything it can see every time anything changes, and it
             // is rebuilt each time the app comes back — so a host this is already on comes
             // round again, and dialling it again would hold two links to one phone.
-            guard !lock.withLock({ refused.contains(share) || links.values.contains { $0.share == share } }) else { continue }
+            guard !lock.withLock({ refused.contains(share) || openLinks.values.contains { $0.share == share } }) else { continue }
 
             let connection = NWConnection(
                 to: result.endpoint,
@@ -483,8 +499,8 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             case (.joining, .some), (.hosting, .none): break
             default: return false
             }
-            if let share, links.values.contains(where: { $0.share == share }) { return false }
-            links[token] = link
+            if let share, openLinks.values.contains(where: { $0.share == share }) { return false }
+            openLinks[token] = link
             return true
         }
         guard isNew else { return connection.cancel() }
@@ -497,7 +513,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
                 // A connection let go of by `stop()` can still say it is ready, after the next
                 // join has begun; counted, it read as that join having found its match.
                 let isCurrent = self.lock.withLock { () -> Bool in
-                    guard self.links[token] === link else { return false }
+                    guard self.openLinks[token] === link else { return false }
                     link.isReady = true
                     self.hasEverJoined = true
                     return true
@@ -533,12 +549,12 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     private func sweepDeadLinks() {
         let (dead, wereUp) = lock.withLock { () -> ([Link], [LinkID]) in
             var removed: [Link] = []
-            for (token, link) in links {
+            for (token, link) in openLinks {
                 switch link.connection.state {
                 case .ready, .preparing, .setup:
                     continue
                 default:
-                    links.removeValue(forKey: token)
+                    openLinks.removeValue(forKey: token)
                     removed.append(link)
                 }
             }
@@ -571,9 +587,14 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         lock.withLock { dialDeadlines.removeValue(forKey: token) }?.cancel()
     }
 
+    public func refuse(_ link: LinkID) {
+        guard let token = lock.withLock({ openLinks.first { $0.value.id == link }?.key }) else { return }
+        close(token, refusable: false)
+    }
+
     private func close(_ token: ObjectIdentifier, refusable: Bool) {
         forgetDialDeadline(token)
-        let link = lock.withLock { links.removeValue(forKey: token) }
+        let link = lock.withLock { openLinks.removeValue(forKey: token) }
         guard let link else { return }
         link.connection.cancel()
 
@@ -584,7 +605,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
                 everGotThere: link.isReady,
                 hasEverJoined: hasEverJoined,
                 isHosting: isHosting,
-                linksRemain: !links.isEmpty,
+                linksRemain: !openLinks.isEmpty,
                 refusable: refusable
             )
         }
@@ -645,7 +666,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     /// stopped advertising produces no new event, so a guest whose link dropped would wait
     /// for one that never comes.
     private func redial() {
-        let (intent, count) = lock.withLock { (self.intent, links.count) }
+        let (intent, count) = lock.withLock { (self.intent, openLinks.count) }
         guard case .joining(let code) = intent, count == 0, let browser = browser.current else { return }
         consider(browser.browseResults, code: code)
     }
@@ -726,7 +747,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     }
 
     private func broadcast(_ payload: Data) {
-        let ready = lock.withLock { links.values.filter(\.isReady) }
+        let ready = lock.withLock { openLinks.values.filter(\.isReady) }
         for link in ready { send(Frame(kind: .oneway, payload: payload), on: link) }
     }
 
@@ -747,7 +768,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
 /// already the only thing it talks to — nor on macOS, which is a platform here only so the
 /// tests run without a simulator. The type still exists so nothing above it needs an `#if`.
 nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked Sendable {
-    public enum Failure: Sendable, Equatable { case notFound, rejected, blocked }
+    public enum Failure: Sendable, Equatable { case notFound, rejected, blocked, noRoom, bluetoothOff, bluetoothDenied }
     public enum Status: Sendable, Equatable {
         case idle, hosting(peers: Int), searching, joined(peers: Int), failed(Failure)
     }

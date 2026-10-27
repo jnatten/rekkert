@@ -119,6 +119,17 @@ struct RootView: View {
             Text("Whoever shared this match is out of reach. The score here is the last that got through, and Rekkert will pick it up again if they come back. If they shared it again on a new code, enter that one.")
         }
         .alert(
+            "The host stopped sharing",
+            isPresented: Binding(
+                get: { model.sharing.hostStoppedSharing },
+                set: { if !$0 { model.sharing.acknowledgeStoppedSharing() } }
+            )
+        ) {
+            Button("OK") { model.sharing.acknowledgeStoppedSharing() }
+        } message: {
+            Text("The match as it stood is saved in History.")
+        }
+        .alert(
             "Switched to the newer match",
             isPresented: Binding(
                 get: { model.store.replacedSessionTitle != nil },

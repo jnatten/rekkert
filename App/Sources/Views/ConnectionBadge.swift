@@ -68,7 +68,7 @@ struct SharingBadge: View {
                 }
                 .tint(tint)
                 .accessibilityLabel(description)
-            } else if isHosting || model.sharing.isReconnecting {
+            } else if isHosting || model.sharing.isReconnecting || hostOutOfReachSince != nil {
                 Button {
                     // A guest has no code to read out. Lost, it may have a new one to type in.
                     if isHosting { model.showingShareCode = true } else { model.showingJoin = true }
@@ -96,12 +96,22 @@ struct SharingBadge: View {
 
     private var isHosting: Bool { model.sharing.code != nil }
 
+    private var hostOutOfReachSince: Date? { model.sharing.hostOutOfReachSince }
+
     // Icon only: the scoreboard toolbar is already full, and a count here pushes the rest into
     // an overflow menu. Colour says whether anybody is on, and the sheet behind it says how many.
+    // The one exception is a host out of reach: the score here has been this phone's own since
+    // then, and the time says so beside it.
     private var glyph: some View {
-        Label("\(model.sharing.reachablePeers)", systemImage: symbol)
-            .labelStyle(.iconOnly)
-            .symbolEffect(.pulse, isActive: model.sharing.isReconnecting)
+        HStack(spacing: 3) {
+            Label("\(model.sharing.reachablePeers)", systemImage: symbol)
+                .labelStyle(.iconOnly)
+                .symbolEffect(.pulse, isActive: model.sharing.isReconnecting)
+            if let hostOutOfReachSince {
+                Text(hostOutOfReachSince, format: .dateTime.hour().minute())
+                    .font(.caption.monospacedDigit())
+            }
+        }
     }
 
     /// Somebody else's match with no link to it. The code goes with the app, so a guest back from a
@@ -114,15 +124,19 @@ struct SharingBadge: View {
     /// A match that has gone quiet is not the same as one nobody has joined, and the grey of
     /// the second would have read as the first.
     private var symbol: String {
-        model.sharing.isReconnecting ? "person.2.slash" : "person.2.fill"
+        model.sharing.isReconnecting || hostOutOfReachSince != nil ? "person.2.slash" : "person.2.fill"
     }
 
     private var tint: Color {
+        if hostOutOfReachSince != nil { return .orange }
         if model.sharing.isReconnecting { return .secondary }
         return model.sharing.reachablePeers > 0 ? Color.accentColor : .secondary
     }
 
     private var description: String {
+        if let hostOutOfReachSince {
+            return "Host out of reach since \(hostOutOfReachSince.formatted(date: .omitted, time: .shortened))"
+        }
         if model.sharing.isReconnecting { return "Reconnecting to the shared match" }
         guard isHosting else {
             return model.sharing.reachablePeers > 0 ? "Connected to the shared match" : "Looking for the shared match"

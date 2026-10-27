@@ -97,6 +97,19 @@ struct StandInPolicyTests {
         #expect(StandInPolicy.next(onTheMatch(after: 60, phoneThrough: true, standingIn: true), timing: timing) == .standDown)
     }
 
+    @Test func withoutAWorkoutOrTheAppInFrontAnEndedPhoneHasToBeOpened() {
+        var circumstances = onTheMatch(after: 15)
+        circumstances.mayUseTheRadio = false
+        circumstances.isPairReachable = false
+        #expect(StandInPolicy.next(circumstances, timing: timing) == .phoneNeedsOpening)
+    }
+
+    @Test func aPhoneStillRunningIsNotToldToBeOpened() {
+        var circumstances = onTheMatch(after: 15)
+        circumstances.mayUseTheRadio = false
+        #expect(StandInPolicy.next(circumstances, timing: timing) == .nothing)
+    }
+
     @Test func nothingIsStoodInForWithoutACodeOrAHost() {
         #expect(StandInPolicy.next(onTheMatch(after: 60, hasCode: false), timing: timing) == .nothing)
         #expect(StandInPolicy.next(onTheMatch(after: 60, hostsMatch: false), timing: timing) == .nothing)

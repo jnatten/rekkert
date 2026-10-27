@@ -19,6 +19,21 @@ public struct VersionVector: Sendable, Hashable, Codable {
         other.entries.allSatisfy { self[$0.key] >= $0.value }
     }
 
+    /// Everything either has seen.
+    public func merging(_ other: VersionVector) -> VersionVector {
+        VersionVector(entries.merging(other.entries, uniquingKeysWith: Swift.max))
+    }
+
+    /// Carried on by whatever of `ids` follows on from what this has seen. An id past a gap says
+    /// nothing about the ones in the gap, so it carries nothing.
+    public func extended(by ids: some Sequence<EventID>) -> VersionVector {
+        var result = self
+        for id in ids.sorted(by: { $0.seq < $1.seq }) where result[id.device] + 1 == id.seq {
+            result[id.device] = id.seq
+        }
+        return result
+    }
+
     /// The highest sequence number *every* one of them has seen.
     ///
     /// The only safe thing to acknowledge when a message went to more than one peer: the

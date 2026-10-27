@@ -29,7 +29,8 @@ final class PhoneAppDelegate: NSObject, UIApplicationDelegate {
     }
 
     /// Here as well as on the window: the system launches the app in the background for the
-    /// watch or the radio, and no window is made then, so nothing would be listening.
+    /// watch, or for the radio once Bluetooth has restored the state it kept, and no window is
+    /// made then, so nothing would be listening.
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil

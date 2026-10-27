@@ -2,6 +2,9 @@ import Foundation
 import Observation
 import RekkertCore
 import RekkertSync
+#if os(watchOS)
+import WatchKit
+#endif
 
 @Observable
 final class AppModel {
@@ -69,7 +72,7 @@ final class AppModel {
         let workout = WorkoutController()
         self.workout = workout
         follower = WorkoutFollower(workout: workout, cues: { [store] in store.haptics })
-        let sharing = SharedSession(store: store, link: localNetwork, bluetooth: bluetooth)
+        let sharing = SharedSession(store: store, link: localNetwork, bluetooth: bluetooth, keeper: KeychainCodeKeeper())
         self.sharing = sharing
         #if os(watchOS)
         standIn = WatchStandIn(store: store, sharing: sharing)
@@ -125,6 +128,9 @@ final class AppModel {
         // went; the same two ends as the workout, the other way round.
         #if os(watchOS)
         store.onSharing = { [standIn] signal in standIn.heard(signal) }
+        standIn.mayUseTheRadio = { [workout] in
+            workout.isTracking || WKApplication.shared().applicationState == .active
+        }
         Task { [standIn] in await standIn.run() }
         #else
         sharing.publish = { [store] state in Task { await store.send(.state(state)) } }
@@ -154,6 +160,9 @@ final class AppModel {
         // button while Health is still recording would be a lie.
         workout.recover()
         #endif
+        // However this launch came about — opened, woken by the watch, or by the radio — a match
+        // this device was sharing or on when the app was ended goes back to being shared.
+        sharing.restore()
         #if DEBUG
         seedDemoIfRequested()
         #endif

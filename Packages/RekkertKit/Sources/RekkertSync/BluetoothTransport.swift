@@ -52,6 +52,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     public func resumeHosting(code: SessionCode, share: UUID) { core.resumeHosting(code: code, share: share) }
     public func resumeJoining(code: SessionCode) { core.resumeJoining(code: code) }
     public func stop() { core.stop() }
+    public var availability: RadioAvailability { core.availability }
 
     public func activate() {}
     public var isReachable: Bool { core.isReachable }
@@ -101,6 +102,10 @@ nonisolated private final class CoreBluetoothRadio: NSObject, Radio,
     /// Host to guest.
     private static var outboxUUID: CBUUID { CBUUID(string: "ED139EC2-90FC-462C-B600-84F425782C1E") }
     private static let unknownMaximum = 20
+    /// The system keeps advertising, the published service and pending connections under these
+    /// after it ends the app, and launches the app again when somebody uses them.
+    private static let hostRestoration = "dev.natten.rekkert.bluetooth.host"
+    private static let guestRestoration = "dev.natten.rekkert.bluetooth.guest"
 
     private let queue = DispatchQueue(label: "dev.natten.rekkert.bluetooth")
     let scheduler: any RadioScheduler
@@ -113,6 +118,7 @@ nonisolated private final class CoreBluetoothRadio: NSObject, Radio,
     private var centrals: [ObjectIdentifier: CBCentral] = [:]
     private var peripherals: [ObjectIdentifier: CBPeripheral] = [:]
     private var inboxes: [ObjectIdentifier: CBCharacteristic] = [:]
+    private var restoredPeripherals: [CBPeripheral] = []
 
     override init() {
         scheduler = DispatchScheduler(queue: queue)
@@ -137,7 +143,10 @@ nonisolated private final class CoreBluetoothRadio: NSObject, Radio,
 
     func openPeripheral(session: Int) {
         #if os(iOS)
-        let manager = CBPeripheralManager(delegate: self, queue: queue, options: nil)
+        let manager = CBPeripheralManager(
+            delegate: self, queue: queue,
+            options: [CBPeripheralManagerOptionRestoreIdentifierKey: Self.hostRestoration]
+        )
         lock.withLock { peripheralManager = (manager, session) }
         #endif
     }
@@ -201,9 +210,22 @@ nonisolated private final class CoreBluetoothRadio: NSObject, Radio,
         return peer
     }
 
-    func peripheralManagerDidUpdateState(_ manager: CBPeripheralManager) {
-        events?.peripheralState(poweredOn: manager.state == .poweredOn, session: session(of: manager))
+    private static func availability(_ state: CBManagerState) -> RadioAvailability {
+        switch state {
+        case .poweredOn: .on
+        case .poweredOff: .off
+        case .unauthorized: .denied
+        default: .unknown
+        }
     }
+
+    func peripheralManagerDidUpdateState(_ manager: CBPeripheralManager) {
+        events?.peripheralState(Self.availability(manager.state), session: session(of: manager))
+    }
+
+    /// Nothing to take over: publishing again replaces the service the system kept, and the
+    /// guests on it reconnect and prove themselves to this process afresh.
+    func peripheralManager(_ manager: CBPeripheralManager, willRestoreState state: [String: Any]) {}
 
     func peripheralManager(_ manager: CBPeripheralManager, didReceiveRead request: CBATTRequest) {
         guard let body = events?.greeting(session: session(of: manager)) else {
@@ -250,7 +272,12 @@ nonisolated private final class CoreBluetoothRadio: NSObject, Radio,
     // MARK: - Joining
 
     func openCentral(session: Int) {
-        let manager = CBCentralManager(delegate: self, queue: queue, options: nil)
+        #if os(iOS)
+        let options: [String: Any]? = [CBCentralManagerOptionRestoreIdentifierKey: Self.guestRestoration]
+        #else
+        let options: [String: Any]? = nil
+        #endif
+        let manager = CBCentralManager(delegate: self, queue: queue, options: options)
         lock.withLock { centralManager = (manager, session) }
     }
 
@@ -259,6 +286,7 @@ nonisolated private final class CoreBluetoothRadio: NSObject, Radio,
             centralManager = nil
             peripherals = [:]
             inboxes = [:]
+            restoredPeripherals = []
         }
     }
 
@@ -325,8 +353,28 @@ nonisolated private final class CoreBluetoothRadio: NSObject, Radio,
     }
 
     func centralManagerDidUpdateState(_ manager: CBCentralManager) {
-        events?.centralState(poweredOn: manager.state == .poweredOn, session: session(of: manager))
+        let session = session(of: manager)
+        events?.centralState(Self.availability(manager.state), session: session)
+        guard manager.state == .poweredOn else { return }
+        // A host the system kept this app connected to while it was ended is not found by a scan
+        // again, so it is handed over as found.
+        let kept = lock.withLock { () -> [CBPeripheral] in
+            defer { restoredPeripherals = [] }
+            return restoredPeripherals
+        }
+        let connected = manager.retrieveConnectedPeripherals(withServices: [Self.serviceUUID])
+        var seen = Set<ObjectIdentifier>()
+        for peripheral in kept + connected where seen.insert(ObjectIdentifier(peripheral)).inserted {
+            events?.discovered(remember(peripheral), session: session)
+        }
     }
+
+    #if os(iOS)
+    func centralManager(_ manager: CBCentralManager, willRestoreState state: [String: Any]) {
+        let kept = state[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] ?? []
+        lock.withLock { restoredPeripherals = kept }
+    }
+    #endif
 
     func centralManager(
         _ manager: CBCentralManager,

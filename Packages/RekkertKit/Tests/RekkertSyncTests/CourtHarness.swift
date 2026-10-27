@@ -26,6 +26,8 @@ final class CourtHarness {
         let isWatch: Bool
         let radio: SimulatedRadio
         let directory: URL
+        /// What the Keychain would hold: it outlives the app being ended.
+        let keeper = MemoryCodeKeeper()
         fileprivate(set) var store: MatchStore!
         fileprivate(set) var sharing: SharedSession!
         fileprivate(set) var core: RadioCore!
@@ -55,26 +57,38 @@ final class CourtHarness {
 
     let air: Airwaves
     let timing: Timing
-    let code = SessionCode("482915")!
+    let code: SessionCode
     private(set) var players: [Player] = []
     private var scored: [EventID: Duration] = [:]
     private var arrived: [EventID: [ObjectIdentifier: Duration]] = [:]
 
     var clock: TestClock { air.clock }
+    /// The radio's clock as the stores read it.
+    var wallClock: Date { CourtHarness.epoch.addingTimeInterval(clock.now.seconds) }
     var host: Player { players[0] }
     var guests: ArraySlice<Player> { players.dropFirst() }
     var devices: [Device] { players.flatMap { [$0.phone] + ($0.watch.map { [$0] } ?? []) } }
 
-    init(guests: Int, withWatches: Bool = true, settings: Airwaves.Settings = Airwaves.Settings(), timing: Timing = Timing()) {
-        air = Airwaves(settings: settings)
+    /// `air` from another court puts both within range of each other, as two courts at one club are.
+    init(
+        guests: Int, withWatches: Bool = true, settings: Airwaves.Settings = Airwaves.Settings(),
+        timing: Timing = Timing(), air: Airwaves? = nil, code: SessionCode = SessionCode("482915")!
+    ) {
+        self.air = air ?? Airwaves(settings: settings)
         self.timing = timing
+        self.code = code
         for index in 0 ... guests {
             let name = index == 0 ? "host" : "guest\(index)"
-            let phone = Device(name: name, isWatch: false, radio: air.radio(canHost: true))
-            let watch = withWatches ? Device(name: "\(name)-watch", isWatch: true, radio: air.radio(canHost: false)) : nil
-            let (phoneSide, watchSide) = LoopbackTransport.pair()
-            boot(phone, pairLink: phoneSide)
-            if let watch { boot(watch, pairLink: watchSide) }
+            let phone = Device(name: name, isWatch: false, radio: self.air.radio(canHost: true))
+            let watch = withWatches ? Device(name: "\(name)-watch", isWatch: true, radio: self.air.radio(canHost: false)) : nil
+            if let watch {
+                let (phoneSide, watchSide) = LoopbackTransport.pair()
+                boot(phone, pairLink: phoneSide)
+                boot(watch, pairLink: watchSide)
+            } else {
+                // No watch paired: the link to one is there and never reachable, as WatchConnectivity's is.
+                boot(phone, pairLink: LoopbackTransport(reachable: false))
+            }
             players.append(Player(phone: phone, watch: watch))
         }
     }
@@ -108,7 +122,12 @@ final class CourtHarness {
         )
         let sharing = SharedSession(
             store: store, link: LocalNetworkTransport(), bluetooth: core,
-            graceBeforeNotice: timing.graceBeforeNotice, radioGrace: timing.radioGrace
+            graceBeforeNotice: timing.graceBeforeNotice, radioGrace: timing.radioGrace,
+            keeper: device.keeper, now: { CourtHarness.epoch.addingTimeInterval(clock.now.seconds) },
+            sleep: { duration in
+                let until = clock.now + duration
+                while clock.now < until, !Task.isCancelled { try? await Task.sleep(for: .milliseconds(1)) }
+            }
         )
         device.core = core
         device.links = links
@@ -119,8 +138,20 @@ final class CourtHarness {
         if device.isWatch {
             let standIn = WatchStandIn(store: store, sharing: sharing, timing: timing.standIn, tick: timing.standInTick)
             device.standIn = standIn
+            store.onSharing = { [standIn] signal in standIn.heard(signal) }
             device.tasks.append(Task { await standIn.run() })
+        } else {
+            sharing.publish = { [store] state in Task { await store.send(.state(state)) } }
+            sharing.onStandby = { [store] standby in Task { await store.send(.standby(standby)) } }
+            store.onSharing = { [sharing] signal in
+                switch signal {
+                case .join(let code): sharing.join(code, forTheWatch: true)
+                case .cancel: sharing.cancelJoiningFromTheWatch()
+                case .state, .standby, .hostingStatus, .startHosting, .stopHosting, .followPhone: break
+                }
+            }
         }
+        sharing.restore()
     }
 
     // MARK: - Playing
@@ -185,7 +216,7 @@ final class CourtHarness {
     private func noteArrivals() {
         let now = clock.now
         for (event, _) in scored {
-            for device in devices where device.store.log.events[event] != nil {
+            for device in devices where device.store?.log.events[event] != nil {
                 let key = ObjectIdentifier(device)
                 if arrived[event, default: [:]][key] == nil { arrived[event, default: [:]][key] = now }
             }
@@ -200,9 +231,10 @@ final class CourtHarness {
     // MARK: - Agreement
 
     func inStep(_ device: Device, with other: Device) -> Bool {
-        device.store.log.sessionID == other.store.log.sessionID
-            && device.store.log.vector == other.store.log.vector
-            && device.store.state == other.store.state
+        guard let mine = device.store, let theirs = other.store else { return false }
+        return mine.log.sessionID == theirs.log.sessionID
+            && mine.log.vector == theirs.log.vector
+            && mine.state == theirs.state
     }
 
     /// Every device holds the host's match: the same session, every event, the same board.
@@ -222,6 +254,8 @@ final class CourtHarness {
         device.tasks = []
         device.radio.end()
         device.pairLink?.disconnect()
+        // WatchConnectivity says so on the other wrist or phone: an app that is not running is not reachable.
+        counterpart(of: device)?.pairLink?.setReachable(false)
         device.store = nil
         device.sharing = nil
         device.core = nil
@@ -233,8 +267,11 @@ final class CourtHarness {
     /// with its watch or phone anew.
     func relaunch(_ device: Device) {
         device.radio.relaunch()
+        guard let counterpart = counterpart(of: device) else {
+            return boot(device, pairLink: LoopbackTransport(reachable: false))
+        }
         let (mine, theirs) = LoopbackTransport.pair()
-        if let counterpart = counterpart(of: device), let links = counterpart.links {
+        if let links = counterpart.links {
             if let token = counterpart.pairToken { links.detach(token) }
             counterpart.pairLink?.disconnect()
             counterpart.pairLink = theirs

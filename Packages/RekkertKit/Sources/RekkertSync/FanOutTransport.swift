@@ -48,7 +48,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         /// Somebody else's phone: the match, and nothing personal.
         public static let sharedSession = Scope(isDurable: false) { wire in
             switch wire {
-            case .hello, .events, .snapshot, .retired, .access, .guestCard, .sharingStopped: true
+            case .hello, .events, .snapshot, .retired, .access, .guestCard, .sharingStopped, .noRoom: true
             // Saved setups and which side is blue belong to whoever's phone this is. The
             // whistle is between a phone and its own watch, and says nothing to anyone else.
             // Neither does what somebody's heart is doing: a workout is between a wrist and
@@ -167,9 +167,37 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         for child in snapshotOfChildren() { child.transport.activate() }
     }
 
+    public var links: [LinkID] {
+        snapshotOfChildren().flatMap(\.transport.links)
+    }
+
+    public var isReachableBesideLinks: Bool {
+        snapshotOfChildren().contains { $0.transport.links.isEmpty && $0.transport.isReachable }
+    }
+
     public func sendLive(_ payload: Data) async -> Data? {
+        await sendLive(payload, to: snapshotOfChildren())
+    }
+
+    public func sendLiveBesideLinks(_ payload: Data) async -> Data? {
+        await sendLive(payload, to: snapshotOfChildren().filter(\.transport.links.isEmpty))
+    }
+
+    /// Answered by that phone alone, so nobody else's silence holds its acknowledgement back.
+    public func sendLive(_ payload: Data, on link: LinkID) async -> Data? {
+        guard let wire = try? Wire.decode(payload),
+              let child = snapshotOfChildren().first(where: { $0.scope.carries(wire) && $0.transport.links.contains(link) })
+        else { return nil }
+        let transport = child.transport
+        guard let reply = await Self.answer(within: childTimeout, { await transport.sendLive(payload, on: link) }),
+              child.scope.admits(reply)
+        else { return nil }
+        return reply
+    }
+
+    private func sendLive(_ payload: Data, to children: [Child]) async -> Data? {
         guard let wire = try? Wire.decode(payload) else { return nil }
-        let recipients = snapshotOfChildren().filter { $0.scope.carries(wire) }
+        let recipients = children.filter { $0.scope.carries(wire) }
         // Only a child that was there counts towards "everybody answered". One that is not
         // connected was never really sent to, and holding the acknowledgement for it would
         // stop a phone with no watch paired from ever draining its outbox.
@@ -181,7 +209,8 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         let acknowledgements = await withTaskGroup(of: Data?.self) { group in
             for child in recipients {
                 group.addTask {
-                    let reply = await Self.answer(from: child.transport, to: payload, within: timeout)
+                    let transport = child.transport
+                    let reply = await Self.answer(within: timeout, { await transport.sendLive(payload) })
                     // A live send that did not land still has to reach a channel that
                     // survives the counterpart not running, or attaching a second child
                     // would quietly switch the watch's durable fallback off.
@@ -212,10 +241,10 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
 
     /// A child's answer, or nothing once it has had its time. The send is left to finish on its
     /// own: one parked on a continuation the framework never resumes cannot be cancelled.
-    private static func answer(from transport: any PeerTransport, to payload: Data, within timeout: Duration) async -> Data? {
+    private static func answer(within timeout: Duration, _ send: @escaping @Sendable () async -> Data?) async -> Data? {
         await withCheckedContinuation { continuation in
             let once = ResumeOnce(continuation)
-            Task { once.resume(await transport.sendLive(payload)) }
+            Task { once.resume(await send()) }
             Task {
                 try? await Task.sleep(for: timeout)
                 once.resume(nil)
@@ -231,8 +260,12 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         case .workout(.finished), .workout(.series), .workout(.rated): true
         case .workout(.stop), .workout(.pause), .workout(.resume), .workout(.running),
              .workout(.paused), .workout(.idle), .workout(.skipped): false
-        case .hello, .sharing, .guestCard: false
+        case .hello, .sharing, .guestCard, .noRoom: false
         }
+    }
+
+    public func refuse(_ link: LinkID) {
+        for child in snapshotOfChildren() { child.transport.refuse(link) }
     }
 
     public func publishSnapshot(_ payload: Data) {

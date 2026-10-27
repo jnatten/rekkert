@@ -69,6 +69,17 @@ struct ParticipantStateTests {
         #expect(participants.all[0].devices == [watch, phone])
     }
 
+    @Test func aWatchCountedAloneUntilItNamesItsPhoneThenJoinsIt() {
+        let phone = DeviceID(), watch = DeviceID()
+        var participants = Participants()
+        participants.heard(from: phone, at: start)
+        participants.heard(from: watch, at: start)
+        #expect(participants.all.count == 2)
+        #expect(participants.heard(from: watch, pairedTo: phone, at: start) == .known)
+        #expect(participants.all.count == 1)
+        #expect(participants.participant(for: watch)?.id == phone)
+    }
+
     @Test func hearingAgainMovesLastHeardOnAndNeverBack() {
         let guest = DeviceID()
         var participants = Participants()

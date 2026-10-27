@@ -13,6 +13,12 @@ nonisolated enum LinkReplies {
         return true
     }
 
+    /// A hello, which is what answers a send. Anything else in a reply is news to hand on.
+    static func isAcknowledgement(_ payload: Data) -> Bool {
+        if case .hello? = try? Wire.decode(payload) { return true }
+        return false
+    }
+
     /// How long a frame waits for its turn on the link before it is dropped unsent, in seconds.
     /// A question nobody waits for any more is not worth asking. An answer is still true after
     /// the asker gave up waiting — it is handed on late above — and over Bluetooth the one to a

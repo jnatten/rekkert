@@ -17,6 +17,13 @@ public protocol SharedLink: Sendable {
     func startJoining(code: SessionCode)
     func resumeJoining(code: SessionCode)
     func stop()
+
+    /// Whether the radio under this link can be used at all.
+    var availability: RadioAvailability { get }
+}
+
+extension SharedLink {
+    public var availability: RadioAvailability { .unknown }
 }
 
 extension BluetoothTransport: SharedLink {}

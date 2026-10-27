@@ -59,6 +59,12 @@ public struct Participants: Codable, Sendable, Hashable {
         isOlderBuild: Bool = false,
         at time: Date
     ) -> Admission {
+        // Counted on its own until it named its phone, a watch joins that guest instead.
+        if let pairedTo,
+           all.contains(where: { $0.id != device && ($0.id == pairedTo || $0.devices.contains(pairedTo)) }),
+           let alone = all.firstIndex(where: { $0.id == device && $0.devices == [device] }) {
+            all.remove(at: alone)
+        }
         if let index = all.firstIndex(where: { $0.id == device || $0.devices.contains(device) || (pairedTo != nil && $0.id == pairedTo) }) {
             all[index].devices.insert(device)
             all[index].lastHeard = max(all[index].lastHeard, time)

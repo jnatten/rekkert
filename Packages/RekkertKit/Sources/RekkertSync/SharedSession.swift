@@ -5,8 +5,9 @@ import RekkertCore
 /// Hosting and joining, as the screens see it.
 ///
 /// Holds the one piece of state the match itself must never carry: the code. It is not in the
-/// log, which travels to every peer and into History, and it is not on disk — sharing lasts as
-/// long as the app is in front of you, and a host who quits shares again with a new one.
+/// log, which travels to every peer and into History. It is kept only by `keeper`, on this
+/// device, for at most twelve hours, so a host whose app was ended shares again on the same one
+/// and a guest gets back on without it typed.
 @MainActor
 @Observable
 public final class SharedSession {
@@ -45,6 +46,20 @@ public final class SharedSession {
     /// worth saying so. The scoreboard goes on showing the copy it holds, which is the point
     /// — but a score that has quietly stopped being true is worse than an honest notice.
     public private(set) var hasLostTheMatch = false
+    /// Since when nothing has reached the host, once that has gone on for `hostGrace`. From then
+    /// on the score here is this device's own, and the screens say so rather than pass it off as
+    /// the match's.
+    public private(set) var hostOutOfReachSince: Date? {
+        didSet { if hostOutOfReachSince != oldValue { reportStandby() } }
+    }
+    /// The host stopped sharing and said so: the copy here went to History, and that is worth
+    /// saying once.
+    public private(set) var hostStoppedSharing = false
+
+    /// Short of FR-026's fifteen seconds by the time a link can take to be found down.
+    private static let hostGrace: Duration = .seconds(10)
+    private var hostLostAt: Date?
+    private var watchingTheHost: Task<Void, Never>?
 
     private let store: MatchStore
     private let link: LocalNetworkTransport
@@ -60,10 +75,16 @@ public final class SharedSession {
     /// Folding them with `max` undercounts a room where somebody is on one link only,
     /// which is better than telling four people there are eight of them.
     private var bluetoothPeers = 0
-    /// Kept so sharing can be stood back up after the app has been put down. The code is
-    /// never written to disk — this lasts exactly as long as the app is running.
+    /// Kept so sharing can be stood back up after the app has been put down. What outlives the
+    /// app is in `keeper`.
     private var hosted: (code: SessionCode, share: UUID)?
     private var wanted: SessionCode?
+    private let keeper: (any CodeKeeping)?
+    private let now: @Sendable () -> Date
+    private let sleep: @Sendable (Duration) async -> Void
+    /// How long a join typed in has to find its match before it says why it could not.
+    private let searchLimit: Duration
+    private var searchDeadline: Task<Void, Never>?
     /// Whether this device has ever actually been on the match it is looking for. A search
     /// that follows a typed code may give up and say so; one that follows a link going away
     /// may not — there is a score on the screen, and it came from somewhere.
@@ -87,13 +108,21 @@ public final class SharedSession {
         link: LocalNetworkTransport,
         bluetooth: (any SharedLink)? = nil,
         graceBeforeNotice: Duration = .seconds(20),
-        radioGrace: Duration = .seconds(10)
+        radioGrace: Duration = .seconds(10),
+        keeper: (any CodeKeeping)? = nil,
+        now: @escaping @Sendable () -> Date = { Date() },
+        searchLimit: Duration = .seconds(14),
+        sleep: @escaping @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0) }
     ) {
         self.store = store
         self.link = link
         self.bluetooth = bluetooth
         self.graceBeforeNotice = graceBeforeNotice
         self.radioGrace = radioGrace
+        self.keeper = keeper
+        self.now = now
+        self.searchLimit = searchLimit
+        self.sleep = sleep
         watching = Task { [weak self] in
             for await status in link.status { self?.apply(status) }
         }
@@ -104,12 +133,15 @@ public final class SharedSession {
         // on the way in, and the first snapshot of it goes out before a later turn comes round —
         // to a host with nothing on, which takes it up as its own.
         store.onLeft = { [weak self] in self?.letGo() }
+        store.onRefused = { [weak self] _ in self?.turnedAway() }
+        store.onStoppedByHost = { [weak self] in self?.stoppedByHost() }
         if let bluetooth {
             let changes = bluetooth.reachability
             watchingBluetooth = Task { [weak self] in
                 for await _ in changes {
                     guard let self else { return }
                     self.bluetoothPeers = bluetooth.reachableCount
+                    if self.bluetoothPeers > 0 { self.noteProven() }
                     self.reportStandby()
                     if self.bluetoothPeers > 0, self.waitingForTheRadio != nil, let wanted = self.wanted {
                         self.keepLooking(for: wanted)
@@ -119,6 +151,7 @@ public final class SharedSession {
                     if self.bluetoothPeers == 0, case .searching = self.phase, self.hasJoinedBefore {
                         self.beginNoticingTheLoss()
                     }
+                    self.checkTheHost()
                 }
             }
         }
@@ -161,6 +194,7 @@ public final class SharedSession {
         // conclude on the first guest to say hello and make this phone a guest on its own
         // match.
         if wanted != nil { cancelJoining() }
+        hostStoppedSharing = false
         store.startSharing()
         // Still sharing underneath, on a code everybody at the court already has: put back what
         // went rather than starting over on a new one.
@@ -171,10 +205,49 @@ public final class SharedSession {
             return
         }
         let code = requested ?? .random()
-        hosted = (code, UUID())
-        link.startHosting(code: code, share: hosted!.share)
-        bluetooth?.startHosting(code: code, share: hosted!.share)
+        let share = UUID()
+        hosted = (code, share)
+        link.startHosting(code: code, share: share)
+        bluetooth?.startHosting(code: code, share: share)
         phase = .hosting(code)
+        remember(.hosted(KeptCode(code: code, share: share, role: .host, startedAt: now())))
+    }
+
+    /// Puts back what this device was doing when its app was ended: hosting on the code it kept,
+    /// or looking for the match it was a guest on. A guest that had left keeps its code for
+    /// joining again, and is not put back on.
+    public func restore() {
+        guard case .off = phase, hosted == nil, wanted == nil, let kept = keeper?.read(now: now()) else { return }
+        switch kept.role {
+        case .host where store.role == .host:
+            let share = kept.share ?? UUID()
+            store.startSharing()
+            hosted = (kept.code, share)
+            link.startHosting(code: kept.code, share: share)
+            bluetooth?.startHosting(code: kept.code, share: share)
+            phase = .hosting(kept.code)
+        case .guest where store.role == .guest:
+            dial(kept.code)
+            hasJoinedBefore = true
+        default:
+            break
+        }
+    }
+
+    /// A join that got through, on whichever link: the code is worth keeping from here.
+    private func noteProven() {
+        guard let wanted, hosted == nil, store.role != .host else { return }
+        let kept = keeper?.read(now: now())
+        guard kept?.code != wanted || kept?.role != .guest else { return }
+        remember(.proven(KeptCode(code: wanted, share: nil, role: .guest, startedAt: now())))
+    }
+
+    private func remember(_ moment: KeptCode.Moment) {
+        guard let keeper else { return }
+        let current = keeper.read(now: now())
+        let next = KeptCode.after(moment, kept: current)
+        guard next != current else { return }
+        if let next { keeper.keep(next) } else { keeper.forget() }
     }
 
     /// What the transport should be asked to put back when the app comes to the front.
@@ -232,40 +305,85 @@ public final class SharedSession {
     public func join(_ code: SessionCode, forTheWatch: Bool = false) {
         let steppingOff = joiningStepsOff(code)
         // Joining somebody else's match is the end of hosting this one.
-        if hosted != nil { stop() }
+        let farewell = hosted != nil ? stop() : nil
         store.beginJoining(steppingOff: steppingOff, forThePair: forTheWatch)
-        dial(code)
+        dial(code, limited: true, after: farewell)
     }
 
-    private func dial(_ code: SessionCode) {
+    /// `limited` for a code typed in: one that finds nothing in `searchLimit` says why. The links
+    /// are only turned round once `farewell` has gone out on them.
+    private func dial(_ code: SessionCode, limited: Bool = false, after farewell: Task<Void, Never>? = nil) {
+        searchDeadline?.cancel()
+        searchDeadline = nil
+        if limited { watchTheSearch(for: code) }
         waitingForTheRadio?.cancel()
         waitingForTheRadio = nil
         noticing?.cancel()
         noticing = nil
         wanted = code
         hasJoinedBefore = false
+        hostStoppedSharing = false
         // Whatever was through belonged to the last code.
         peers = 0
         bluetoothPeers = 0
-        link.startJoining(code: code)
-        bluetooth?.startJoining(code: code)
+        if let farewell {
+            Task { [weak self] in
+                await farewell.value
+                guard let self, self.wanted == code else { return }
+                self.link.startJoining(code: code)
+                self.bluetooth?.startJoining(code: code)
+            }
+        } else {
+            link.startJoining(code: code)
+            bluetooth?.startJoining(code: code)
+        }
         phase = .searching
         reportStandby()
+        checkTheHost()
     }
 
-    /// Stops sharing, or steps off somebody else's match, depending which end this is.
-    public func stop() {
-        cutLinks()
-        switch store.role {
-        case .host: store.stopSharing()
-        case .guest: store.leaveSharedSession()
-        // Solo on a match this end cannot end is following its own watch onto somebody else's,
-        // which the watch joined by itself. Leaving it is leaving it, whoever did the joining.
-        case .solo where !store.canEndSession && !store.log.isEmpty: store.leaveSharedSession()
-        case .solo: store.cancelJoining()
+    /// Stops sharing, or steps off somebody else's match, depending which end this is. A host
+    /// tells its guests before it lets go of them, or to each of them it looks like the host
+    /// walking off; what comes back is that telling, done once it has gone out or given up.
+    @discardableResult
+    public func stop() -> Task<Void, Never>? {
+        guard store.role == .host else {
+            cutLinks()
+            switch store.role {
+            case .guest: store.leaveSharedSession()
+            // Solo on a match this end cannot end is following its own watch onto somebody else's,
+            // which the watch joined by itself. Leaving it is leaving it, whoever did the joining.
+            case .solo where !store.canEndSession && !store.log.isEmpty: store.leaveSharedSession()
+            case .solo, .host: store.cancelJoining()
+            }
+            forgetWhatWasAskedFor()
+            standbyCode = nil
+            return nil
         }
+        let farewell = store.sayStoppedSharing()
+        store.stopSharing()
+        remember(.stoppedHosting)
         forgetWhatWasAskedFor()
         standbyCode = nil
+        Task { [weak self] in
+            await farewell.value
+            guard let self, self.hosted == nil, self.wanted == nil else { return }
+            self.cutLinks()
+        }
+        return farewell
+    }
+
+    /// The host let everybody go, and said so first: nothing to look for, and no code to keep.
+    private func stoppedByHost() {
+        cutLinks()
+        remember(.sharingStopped)
+        forgetWhatWasAskedFor()
+        standbyCode = nil
+        hostStoppedSharing = true
+    }
+
+    public func acknowledgeStoppedSharing() {
+        hostStoppedSharing = false
     }
 
     /// The store is stepping off as it says so, so there is nothing left to decide — only the
@@ -337,6 +455,31 @@ public final class SharedSession {
         noticing = nil
         waitingForTheRadio?.cancel()
         waitingForTheRadio = nil
+        searchDeadline?.cancel()
+        searchDeadline = nil
+        checkTheHost()
+    }
+
+    /// A guest with a match on screen and nothing reaching the host is on its own. Said so once
+    /// that has lasted `hostGrace`, as from when it began.
+    private func checkTheHost() {
+        let isOnItsOwn = wanted != nil && hosted == nil && !store.isJoining && store.state != nil
+            && !store.canEndSession && reachablePeers == 0
+        guard isOnItsOwn else {
+            hostLostAt = nil
+            watchingTheHost?.cancel()
+            watchingTheHost = nil
+            hostOutOfReachSince = nil
+            return
+        }
+        guard hostLostAt == nil else { return }
+        let lost = now()
+        hostLostAt = lost
+        watchingTheHost = Task { [weak self, sleep] in
+            await sleep(Self.hostGrace)
+            guard let self, !Task.isCancelled, self.hostLostAt == lost else { return }
+            self.hostOutOfReachSince = lost
+        }
     }
 
     /// Stops watching the transport. The app holds this for its whole life, so this is here
@@ -382,7 +525,10 @@ public final class SharedSession {
 
     /// Internal rather than private so the tests can drive the states a socket would.
     func apply(_ status: LocalNetworkTransport.Status) {
-        defer { reportStandby() }
+        defer {
+            checkTheHost()
+            reportStandby()
+        }
         // The transport reports on its own queue and this reads it later, so a status from
         // before `stop()` can land after it. Nothing asked for is nothing to report on.
         guard hosted != nil || wanted != nil else {
@@ -411,6 +557,7 @@ public final class SharedSession {
             hasLostTheMatch = false
             hasJoinedBefore = true
             phase = .joined
+            noteProven()
         case .failed(let failure):
             // A host's listener giving up is the network gone, not the match: the radio is still
             // advertising the same code, and the listener is put back when the app next comes to
@@ -459,6 +606,29 @@ public final class SharedSession {
         }
     }
 
+    /// With no Wi-Fi the network never says it has given up, so the search keeps its own time.
+    private func watchTheSearch(for code: SessionCode) {
+        searchDeadline = Task { [weak self, searchLimit, sleep] in
+            await sleep(searchLimit)
+            guard let self, !Task.isCancelled, self.wanted == code else { return }
+            self.searchDeadline = nil
+            guard !self.hasJoinedBefore, !self.hasTheMatch, self.bluetoothPeers == 0, self.peers == 0 else { return }
+            switch self.bluetooth?.availability {
+            case .off?: self.giveUp(.bluetoothOff)
+            case .denied?: self.giveUp(.bluetoothDenied)
+            default: self.giveUp(.notFound)
+            }
+        }
+    }
+
+    /// The host has as many guests as it takes. Whatever of its match came through first is
+    /// let go of the way a Leave would.
+    private func turnedAway() {
+        guard wanted != nil else { return }
+        if store.role == .guest { store.leaveSharedSession() }
+        giveUp(.noRoom)
+    }
+
     /// Nothing is left dialling: a radio still looking after the screen said "not found" would
     /// hand over the match later to a phone that no longer thinks it is joining.
     private func giveUp(_ failure: LocalNetworkTransport.Failure) {
@@ -471,7 +641,10 @@ public final class SharedSession {
     private func reportStandby() {
         let standby: SharingStandby?
         switch phase {
-        case .searching, .joined: standby = wanted.map { SharingStandby(code: $0, isThrough: reachablePeers > 0) }
+        case .searching, .joined:
+            standby = wanted.map {
+                SharingStandby(code: $0, isThrough: reachablePeers > 0, hostOutOfReachSince: hostOutOfReachSince)
+            }
         case .off, .hosting, .failed: standby = nil
         }
         guard !hasReportedStandby || standby != reportedStandby else { return }
@@ -500,6 +673,9 @@ extension LocalNetworkTransport.Failure {
         case .notFound: .notFound
         case .rejected: .rejected
         case .blocked: .blocked
+        case .noRoom: .noRoom
+        case .bluetoothOff: .bluetoothOff
+        case .bluetoothDenied: .bluetoothDenied
         }
     }
 }

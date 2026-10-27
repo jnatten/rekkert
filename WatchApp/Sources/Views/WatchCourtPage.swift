@@ -62,6 +62,11 @@ struct WatchCourtPage: View {
         if WatchDemoLaunch.link == "reconnecting" { return "Reconnecting…" }
         if WatchDemoLaunch.link == "down" { return "Not connected" }
         #endif
+        // The match first: a score of the wrist's own is the thing to know about.
+        if let since = model.standIn.hostOutOfReachSince {
+            return "Host out of reach since \(since.formatted(date: .omitted, time: .shortened))"
+        }
+        if model.standIn.phoneNeedsOpening { return "Open Rekkert on your iPhone" }
         return switch model.standIn.link {
         case .up: nil
         case .reconnecting: "Reconnecting…"

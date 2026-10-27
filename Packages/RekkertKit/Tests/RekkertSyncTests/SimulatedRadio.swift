@@ -80,6 +80,12 @@ nonisolated final class Airwaves: @unchecked Sendable {
     private var transmitting: [ObjectIdentifier: [Transmission]] = [:]
     private var freedSinceRefusal: [ObjectIdentifier: Int] = [:]
     private var refused: Set<ObjectIdentifier> = []
+    private var delivered: [ObjectIdentifier: Int] = [:]
+
+    /// Everything a host has got through to `radio` so far, in bytes.
+    func bytesDelivered(to radio: SimulatedRadio) -> Int {
+        lock.withLock { delivered[ObjectIdentifier(radio), default: 0] }
+    }
 
     private func canTalk(_ one: SimulatedRadio, _ other: SimulatedRadio) -> Bool {
         one.isAlive && other.isAlive && one.isInRange && other.isInRange && one.isRadioOn && other.isRadioOn
@@ -270,12 +276,14 @@ nonisolated final class Airwaves: @unchecked Sendable {
                         freedEnough = true
                     }
                 }
-                return (freedEnough, self._settings.latency, self.random.next() < self._settings.loss)
+                let lost = self.random.next() < self._settings.loss || head.connection.guest.missesIncoming
+                return (freedEnough, self._settings.latency, lost)
             }
             let connection = head.connection
             if !lost {
                 self.clock.run(after: latency) {
                     guard connection.isConnected, connection.isSubscribed else { return }
+                    self.lock.withLock { self.delivered[ObjectIdentifier(connection.guest), default: 0] += head.chunk.count }
                     connection.guest.tell { $0.received(head.chunk, from: connection.peripheral) }
                 }
             }
@@ -296,9 +304,13 @@ nonisolated final class Airwaves: @unchecked Sendable {
             return connection.guestWriteBusyUntil + latency
         }
         let host = connection.host
+        let goesMissing = guest.losesWrites
         clock.run(after: arrives - clock.now) {
             guard connection.isConnected else {
                 return guest.tell { $0.wrote(to: peripheral, failed: true) }
+            }
+            guard !goesMissing else {
+                return guest.tell { $0.wrote(to: peripheral, failed: false) }
             }
             let accepted = host.listener?.received(
                 writes: [(central: connection.central, offset: 0, value: chunk)],
@@ -324,11 +336,13 @@ nonisolated final class SimulatedRadio: Radio, @unchecked Sendable {
     private var _centralSession: Int?
     private var _isPublished = false
     private var _isScanning = false
-    private var _isRadioOn = true
+    private var _availability = RadioAvailability.on
     private var _isInRange = true
     private var _isSuspended = false
     private var _isAlive = true
     private var _isBackgrounded = false
+    private var _losesWrites = false
+    private var _missesIncoming = false
     private var held: [@Sendable () -> Void] = []
     private var reported: Set<UUID> = []
     private var handles: [UUID: Handle] = [:]
@@ -346,10 +360,22 @@ nonisolated final class SimulatedRadio: Radio, @unchecked Sendable {
     var isPublished: Bool { lock.withLock { _isPublished } }
     var isAdvertising: Bool { lock.withLock { _isPublished && _isAlive } }
     var isScanning: Bool { lock.withLock { _isScanning } }
-    var isRadioOn: Bool { lock.withLock { _isRadioOn } }
+    var isRadioOn: Bool { lock.withLock { _availability == .on } }
+    var availability: RadioAvailability { lock.withLock { _availability } }
     var isInRange: Bool { lock.withLock { _isInRange } }
     var isAlive: Bool { lock.withLock { _isAlive } }
     var isBackgrounded: Bool { lock.withLock { _isBackgrounded } }
+    /// Writes that report success and never arrive: a link that stays up while what this end
+    /// says on it goes nowhere.
+    var losesWrites: Bool {
+        get { lock.withLock { _losesWrites } }
+        set { lock.withLock { _losesWrites = newValue } }
+    }
+    /// Whatever a host sends this device never arrives, while the link stays up.
+    var missesIncoming: Bool {
+        get { lock.withLock { _missesIncoming } }
+        set { lock.withLock { _missesIncoming = newValue } }
+    }
 
     /// Hands an event to the listener through the clock, or keeps it while the app is suspended.
     func tell(_ event: @escaping @Sendable (any RadioListener) -> Void) {
@@ -397,8 +423,8 @@ nonisolated final class SimulatedRadio: Radio, @unchecked Sendable {
 
     func openPeripheral(session: Int) {
         lock.withLock { _peripheralSession = session }
-        let on = isRadioOn
-        tell { $0.peripheralState(poweredOn: on, session: session) }
+        let availability = availability
+        tell { $0.peripheralState(availability, session: session) }
     }
 
     func publish() {
@@ -423,8 +449,8 @@ nonisolated final class SimulatedRadio: Radio, @unchecked Sendable {
 
     func openCentral(session: Int) {
         lock.withLock { _centralSession = session }
-        let on = isRadioOn
-        tell { $0.centralState(poweredOn: on, session: session) }
+        let availability = availability
+        tell { $0.centralState(availability, session: session) }
     }
 
     func closeCentral() {
@@ -470,11 +496,21 @@ nonisolated final class SimulatedRadio: Radio, @unchecked Sendable {
     }
 
     func switchRadio(on: Bool) {
-        lock.withLock { _isRadioOn = on }
+        set(on ? .on : .off)
+    }
+
+    /// Bluetooth permission refused to the app.
+    func deny() {
+        set(.denied)
+    }
+
+    private func set(_ availability: RadioAvailability) {
+        lock.withLock { _availability = availability }
+        let on = availability == .on
         if !on { air.dropAll(involving: self) }
         let (peripheral, central) = (peripheralSession, centralSession)
-        if let peripheral { tell { $0.peripheralState(poweredOn: on, session: peripheral) } }
-        if let central { tell { $0.centralState(poweredOn: on, session: central) } }
+        if let peripheral { tell { $0.peripheralState(availability, session: peripheral) } }
+        if let central { tell { $0.centralState(availability, session: central) } }
         if on { rejoinTheAir() }
     }
 
