@@ -93,7 +93,7 @@ struct ScoreboardView<Badge: View>: View {
                 // of them rather than run underneath.
                 Color.clear.frame(width: 10, height: 0)
             }
-            .font(.system(size: 11))
+            .scaledFont(size: 11)
         }
     }
 

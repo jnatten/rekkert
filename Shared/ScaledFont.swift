@@ -1,8 +1,7 @@
 import SwiftUI
 
 extension View {
-    /// The small fixed sizes the watch's status lines are drawn at, grown with the wearer's text
-    /// size rather than held at it (FR-031).
+    /// A small fixed size, grown with the reader's text size rather than held at it (FR-031).
     func scaledFont(size: CGFloat, weight: Font.Weight = .regular) -> some View {
         modifier(ScaledFont(size: size, weight: weight))
     }
