@@ -572,3 +572,15 @@ Task: "Wrist taps in WatchApp/Sources/WatchHaptics.swift"
 - Principle II: no task changes the reducer, the merge or the event format. If one seems to
   need to, stop and amend the plan first.
 - Commit after each task or logical group, using jj and the conventional-commit style.
+
+---
+
+## Phase 9: Convergence
+
+- [ ] T079 Make a code typed on the watch say why within 15 s when its phone is reachable but finds nothing: today the phone's 14 s search and then the wrist's own 14 s search add up to about 26 s (`StandInPolicy` hands over on the phone's `notFound`; `SharedSession.searchLimit`), and pin it with a simulated test in `SyncTests/GuestWristTests.swift` per FR-008 (partial)
+- [ ] T080 Tell a guest already on the match that Bluetooth is off, or its permission denied, on the phone and on the watch, instead of only "out of reach": `RekkertSync/SharedSession.swift` gives `.bluetoothOff`/`.bluetoothDenied` only on a first join and otherwise just records `radioOff`, and `WatchStandIn.Status` has no such line; cover it with a simulated test per FR-008 and Edge Cases "Bluetooth off or denied" (partial)
+- [ ] T081 Add a simulated test of an americano over two courts with a host and seven guests, every guest's watch on, for at least 30 simulated minutes, checking that every phone and watch shows the host's score at each check and that points arrive within FR-002's times; the seven-guest tests today run without watches and on a traditional match (`IncidentTests`, `CapacityTests`). Use the current `SimulatedRadio` speed; its field calibration stays with the deferred T078 per US1/AC6, SC-009, SC-011 (partial)
+- [ ] T082 Tell a guest's watch when the host stops sharing, as the contract's status line "… stopped sharing. Saved in History.", not only its phone (`App/Sources/Views/RootView.swift`); `WatchStandIn` has no such status per US4/AC6, FR-028, contracts/watch-ui.md (missing)
+- [ ] T083 Add a simulated test in which a watch on the match without its phone, with no workout and Rekkert in the background, comes to the front and is in step within 10 s; `SyncTests/StandInHandBackTests.swift` covers only the workout and "phone needs opening" cases per FR-002, FR-021 (partial)
+- [ ] T084 Let the one-line status beneath the score on the watch grow with larger text sizes, as the menu's status lines now do; it is a fixed 11 pt in the compact header of `Shared/ScoreboardView.swift` per FR-031 (partial)
+- [ ] T085 Name the host in guest-facing texts as `contracts/watch-ui.md` writes them ("Your iPhone is on Ada's match", "Leave Ada's match?", "Ada stopped sharing", "You're on Ada's match"): guests are never told the host's name, so it has to travel from the host, with older builds left as they are per contracts/watch-ui.md, FR-016 (partial)
