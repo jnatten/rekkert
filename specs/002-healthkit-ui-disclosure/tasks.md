@@ -53,7 +53,7 @@ story can be built and checked on its own.
 
 **Purpose**: A known-good baseline, and the one asset no code can produce
 
-- [ ] T001 Run `swift test --package-path Packages/RekkertKit` and `./scripts/verify.sh` on
+- [X] T001 Run `swift test --package-path Packages/RekkertKit` and `./scripts/verify.sh` on
   the current commit and confirm both pass. Any failure found here is not this feature's, and
   must be raised before going on.
 - [X] T002 [P] [Manual] Download the Apple Health icon from Apple Design Resources
@@ -82,7 +82,7 @@ collect exactly what they did before, built from the disclosure instead of liter
 
 > Write these first. They must fail (not compile) before T006–T008.
 
-- [ ] T003 [P] Write `CoreTests/HealthDisclosureTests.swift` (Swift Testing, `@testable
+- [X] T003 [P] Write `CoreTests/HealthDisclosureTests.swift` (Swift Testing, `@testable
   import RekkertCore`). It asserts:
   - `HealthDisclosure.saved(on: .phone) == [.workout]`
   - `HealthDisclosure.saved(on: .watch) == [.workout, .activeEnergy, .restingEnergy, .effort]`
@@ -100,7 +100,7 @@ collect exactly what they did before, built from the disclosure instead of liter
 
   Add a comment on the two `watch` assertions: these are the sets at `rtxlwlsn`, and
   changing them changes what Rekkert collects (FR-019, SC-005).
-- [ ] T004 [P] Write `CoreTests/HealthReachTests.swift`. For all 16 combinations of
+- [X] T004 [P] Write `CoreTests/HealthReachTests.swift`. For all 16 combinations of
   `healthAvailable`, `canPairWatch`, `isPaired`, `watchAppInstalled`, it asserts the result
   of `HealthReach(...)`, evaluated top to bottom as in data-model.md:
   - `.unavailable` when `!healthAvailable`;
@@ -113,13 +113,13 @@ collect exactly what they did before, built from the disclosure instead of liter
   - `.canRecord` holds exactly when all four inputs are true (today's `isAvailable`);
   - each non-`.canRecord` case's `line` equals the data-model "Settings line" text;
   - `.canRecord.line == nil`.
-- [ ] T005 [P] Write `CoreTests/HealthAskTests.swift`. It asserts
+- [X] T005 [P] Write `CoreTests/HealthAskTests.swift`. It asserts
   `HealthAsk.explainFirst(.wouldAsk) == true`, `HealthAsk.explainFirst(.unknown) == true`
   and `HealthAsk.explainFirst(.alreadyAsked) == false`.
 
 ### Implementation for the foundation
 
-- [ ] T006 [P] Create `RekkertCore/Health/HealthDisclosure.swift`, per data-model.md:
+- [X] T006 [P] Create `RekkertCore/Health/HealthDisclosure.swift`, per data-model.md:
   - `public enum HealthData: CaseIterable, Sendable` with `title` and `reason` (the
     data-model table, verbatim);
   - `public enum HealthDevice { case phone, watch }`;
@@ -128,17 +128,17 @@ collect exactly what they did before, built from the disclosure instead of liter
 
   `changeAccess` starts as the two *Draft* lines of P-02, and is settled in T040. Make T003
   pass.
-- [ ] T007 [P] Create `RekkertCore/Health/HealthReach.swift`:
+- [X] T007 [P] Create `RekkertCore/Health/HealthReach.swift`:
   - `public enum HealthReach: Equatable, Sendable { case canRecord, unavailable, cannotPair, noWatch, watchAppMissing }`;
   - `public init(healthAvailable:canPairWatch:isPaired:watchAppInstalled:)`;
   - `public var line: String?`, with the data-model "Settings line" text verbatim.
 
   Make T004 pass.
-- [ ] T008 [P] Create `RekkertCore/Health/HealthAsk.swift`: `public enum HealthAsk` with a
+- [X] T008 [P] Create `RekkertCore/Health/HealthAsk.swift`: `public enum HealthAsk` with a
   nested `public enum Status: Sendable { case wouldAsk, alreadyAsked, unknown }`, and
   `public static func explainFirst(_ status: Status) -> Bool` returning
   `status != .alreadyAsked`. Make T005 pass.
-- [ ] T009 Create `Shared/HealthTypes.swift`, the only place `HealthData` meets HealthKit:
+- [X] T009 Create `Shared/HealthTypes.swift`, the only place `HealthData` meets HealthKit:
   - `extension HealthData { var objectType: HKObjectType; var sampleType: HKSampleType? }`,
     an exhaustive `switch` with no `default`:
     - `.workout` → `HKQuantityType.workoutType()`;
@@ -157,7 +157,7 @@ collect exactly what they did before, built from the disclosure instead of liter
     returning `.unknown` on a thrown error.
 
   Depends on T006 and T008.
-- [ ] T010 In `App/Sources/WorkoutController.swift`, replace both literal
+- [X] T010 In `App/Sources/WorkoutController.swift`, replace both literal
   `toShare: [HKQuantityType.workoutType()], read: []` sets (in `prepare()` and `start()`)
   with `HealthDisclosure.toShare(on: .phone)` and `HealthDisclosure.toRead(on: .phone)`. Add
   `var reach: HealthReach`, built from:
@@ -169,13 +169,13 @@ collect exactly what they did before, built from the disclosure instead of liter
   Keep `#if DEBUG pretendsAvailable` returning `.canRecord`. Redefine
   `isAvailable` as `reach == .canRecord`, so every existing gate behaves as before (D-11).
   Depends on T007 and T009.
-- [ ] T011 [P] In `WatchApp/Sources/WorkoutController.swift`, replace the bodies of
+- [X] T011 [P] In `WatchApp/Sources/WorkoutController.swift`, replace the bodies of
   `private static var shared` and `private static var read` with
   `HealthDisclosure.toShare(on: .watch)` and `HealthDisclosure.toRead(on: .watch)`. Keep the
   existing doc comments that explain why each type is there, moved onto
   `RekkertCore/Health/HealthDisclosure.swift`'s cases if they no longer sit next to code.
   Depends on T009.
-- [ ] T012 [P] Create `Shared/AppleHealthMark.swift`: `struct AppleHealthMark: View` with a
+- [X] T012 [P] Create `Shared/AppleHealthMark.swift`: `struct AppleHealthMark: View` with a
   `size: CGFloat` parameter (default: the body line height through `@ScaledMetric`). It draws
   `Image("AppleHealth").resizable().scaledToFit()` at `size`, then `Text("Apple Health")`, in
   an `HStack`. The HIG rules apply (D-3):
@@ -205,7 +205,7 @@ under 30 seconds.
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T013 [US1] Add `## Apple Health` to `README.md`, directly after the `## Workouts`
+- [X] T013 [US1] Add `## Apple Health` to `README.md`, directly after the `## Workouts`
   section. Cover:
   - where the Settings section is, and why it shows with no watch (2.5.1, D-1);
   - that every screen reads the one `HealthDisclosure` (D-2);
@@ -216,17 +216,17 @@ under 30 seconds.
 
 ### Implementation for User Story 1
 
-- [ ] T014 [US1] In `RekkertCore/Help/HelpCatalog.swift`, page `phone.settings`:
+- [X] T014 [US1] In `RekkertCore/Help/HelpCatalog.swift`, page `phone.settings`:
   - append `"Apple Health"` to `readme`;
   - add `HelpItem("Apple Health", what: "What Rekkert saves to and reads from Apple Health, and where to change it.", example: "You want to know what the workout reads before you start one.")`
     with no `symbol` and `needsWatch` left `false`.
 
   `what` must stay ≤ 80 characters and `example` ≤ 100 (`HelpTests.noWallsOfText`). Make
   T013's failure pass.
-- [ ] T015 [P] [US1] Add `case appleHealth` to `enum HomeRoute` in
+- [X] T015 [P] [US1] Add `case appleHealth` to `enum HomeRoute` in
   `App/Sources/Views/HistoryView.swift`. Route it to `AppleHealthView()` in the
   `navigationDestination` switch in `App/Sources/Views/HomeView.swift`.
-- [ ] T016 [P] [US1] Create `App/Sources/Views/AppleHealthView.swift`, the P-02 page. It is a
+- [X] T016 [P] [US1] Create `App/Sources/Views/AppleHealthView.swift`, the P-02 page. It is a
   `List` titled "Apple Health" (inline), containing in order:
   1. A header row: `AppleHealthMark(size: 48)`, centred. It is not a button.
   2. A section "Saved to Apple Health": one row per kind in the union of
@@ -239,7 +239,7 @@ under 30 seconds.
 
   It has no toggles, buttons or links (FR-005), and nothing on it triggers a request (FR-006).
   Depends on T012.
-- [ ] T017 [US1] In `App/Sources/Views/SettingsView.swift`, add the Apple Health section
+- [X] T017 [US1] In `App/Sources/Views/SettingsView.swift`, add the Apple Health section
   (P-01). It goes after the whole `if AppModel.canPairWatch { … }` block and before the
   `CommitLabel` section, with no condition around it (D-1). It contains:
   - **Header**: `AppleHealthMark()`.
@@ -250,7 +250,7 @@ under 30 seconds.
 
   It must not call `prepare()`, `start()` or any request (FR-006). Depends on T010, T012 and
   T015.
-- [ ] T018 [US1] In `App/Sources/Views/DemoLaunch.swift`, add
+- [X] T018 [US1] In `App/Sources/Views/DemoLaunch.swift`, add
   `static var openAppleHealth: Bool` for `-rekkert-demo-apple-health`. In `HomeView`'s
   `#if DEBUG` launch `.task`, set `path = [.settings, .appleHealth]` when it is on, beside
   the existing `openSettings` branch. Depends on T015.
@@ -270,7 +270,7 @@ simulators. Every listed point shows its words from the contract.
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T019 [US2] Write `CoreTests/HealthWordingTests.swift`, modelled on `HelpTests`' file
+- [X] T019 [US2] Write `CoreTests/HealthWordingTests.swift`, modelled on `HelpTests`' file
   scan, with the same `root` computation and `.swift` filter. It scans `App/Sources`,
   `WatchApp/Sources`, `Shared` and `Packages/RekkertKit/Sources/RekkertCore/Help` for string
   literals (`/"([^"\n]*)"/`). It fails a literal that contains "HealthKit" or "the Health
@@ -287,53 +287,53 @@ simulators. Every listed point shows its words from the contract.
 
 ### Implementation for User Story 2 (iPhone)
 
-- [ ] T020 [P] [US2] In `App/Sources/Views/HomeView.swift`, change the Workout section:
+- [X] T020 [P] [US2] In `App/Sources/Views/HomeView.swift`, change the Workout section:
   - **Header**: `HStack { Text("Workout"); Spacer(); AppleHealthMark() }`.
   - **Footer**: the P-03 text, keeping the `model.workout.failure ??` fallback.
 
   The mark is in the header, never in the Start/Hold buttons (D-3).
-- [ ] T021 [P] [US2] In `App/Sources/Views/MatchOptionsMenu.swift`, give the "Start workout"
+- [X] T021 [P] [US2] In `App/Sources/Views/MatchOptionsMenu.swift`, give the "Start workout"
   `Button` a two-`Text` label, so the menu shows "Saves to Apple Health" as its subtitle
   (P-04). Keep `systemImage` `figure.tennis` through a `Label`. "Stop workout", "Pause
   workout" and "Resume workout" are unchanged.
-- [ ] T022 [P] [US2] In `App/Sources/Views/RootView.swift`, change the "Start a workout?"
+- [X] T022 [P] [US2] In `App/Sources/Views/RootView.swift`, change the "Start a workout?"
   alert message to the P-05 text.
-- [ ] T023 [US2] In `App/Sources/Views/SettingsView.swift`, append the P-06 sentence to
+- [X] T023 [US2] In `App/Sources/Views/SettingsView.swift`, append the P-06 sentence to
   every non-empty `workoutFooter` result, including the nothing-chosen fallback. Depends on
   T017 (same file).
-- [ ] T024 [P] [US2] In `App/Sources/Views/WorkoutsView.swift`, use the P-07 footer and
+- [X] T024 [P] [US2] In `App/Sources/Views/WorkoutsView.swift`, use the P-07 footer and
   empty-state description.
-- [ ] T025 [P] [US2] In `App/Sources/Views/WorkoutDetailView.swift`, add
+- [X] T025 [P] [US2] In `App/Sources/Views/WorkoutDetailView.swift`, add
   `LabeledContent("Saved in", value: "Apple Health")` directly after the "Saved as" row, and
   change the effort footnote to the P-08 text.
-- [ ] T026 [P] [US2] In `App/Sources/Views/MatchTimelineSection.swift`:
+- [X] T026 [P] [US2] In `App/Sources/Views/MatchTimelineSection.swift`:
   - inside `heartRate(domain)`, add a caption "Heart rate from Apple Health" in
     `.caption`/secondary, above or below the chart to match the momentum chart's caption
     style;
   - change the footer hint to the P-09 text.
-- [ ] T027 [P] [US2] In `App/Sources/WorkoutController.swift`, in `start()`'s `catch`, map
+- [X] T027 [P] [US2] In `App/Sources/WorkoutController.swift`, in `start()`'s `catch`, map
   `HKError.errorAuthorizationDenied` and `.errorAuthorizationNotDetermined` to the P-13
   text. All other errors keep "Couldn't start on your watch" (FR-012).
 
 ### Implementation for User Story 2 (Apple Watch)
 
-- [ ] T028 [P] [US2] In `WatchApp/Sources/Views/WatchWorkoutButton.swift`, add a caption
+- [X] T028 [P] [US2] In `WatchApp/Sources/Views/WatchWorkoutButton.swift`, add a caption
   under `button` reading "Saves to Apple Health" (W-01). Show it only when
   `!model.workout.isTracking && model.workout.failure == nil`, so it shares the failure
   text's slot. Use the failure text's styling (`.system(size: 10)`, secondary, centred) and
   let it wrap. This covers the menu page, the idle screen and the result screen at once.
-- [ ] T029 [P] [US2] In `WatchApp/Sources/Views/WatchRootView.swift`, give the "Start a
+- [X] T029 [P] [US2] In `WatchApp/Sources/Views/WatchRootView.swift`, give the "Start a
   workout?" alert a `message:` reading "It's saved to Apple Health." (W-02).
-- [ ] T030 [P] [US2] In `WatchApp/Sources/Views/WatchWorkoutPage.swift`, add the caption
+- [X] T030 [P] [US2] In `WatchApp/Sources/Views/WatchWorkoutPage.swift`, add the caption
   "Saving to Apple Health" (W-03) above the `Spacer`, in `.system(size: 10)`, secondary,
   `lineLimit(1)`, `minimumScaleFactor(0.7)`. The page's "nothing scrolls" rule stands: check
   on a 40 mm simulator at the largest text size. If the page no longer fits without
   scrolling, stop and ask, rather than dropping the caption (FR-011) or making the page
   scroll.
-- [ ] T031 [P] [US2] In `WatchApp/Sources/WorkoutController.swift`, change
+- [X] T031 [P] [US2] In `WatchApp/Sources/WorkoutController.swift`, change
   `stopped(with:)`'s authorization case to the W-04 *Draft* text, "Turn on Apple Health
   access for Rekkert in Settings on your iPhone." It is settled in T040.
-- [ ] T032 [US2] In `RekkertCore/Help/HelpCatalog.swift`, reword three items: `watch.workout`
+- [X] T032 [US2] In `RekkertCore/Help/HelpCatalog.swift`, reword three items: `watch.workout`
   "Start workout" and "Stop workout" to the W-07 texts, and the `phone.home` "Start a
   workout" item to the P-12 second-row text (≤ 80 characters each). Depends on T014 (same
   file). With T020, T024, T025 and T031 this makes T019 pass.
@@ -357,7 +357,7 @@ while Apple Health would show its sheet, and permission strings that name Apple 
 
 ### Implementation for User Story 3 (iPhone)
 
-- [ ] T033 [US3] In `App/Sources/WorkoutController.swift`, route every request through
+- [X] T033 [US3] In `App/Sources/WorkoutController.swift`, route every request through
   `HealthAsk`:
   - Add `enum PendingAsk { case start, prepare(onGo: @MainActor () -> Void) }` and
     `var explaining: PendingAsk?`, observable.
@@ -372,7 +372,7 @@ while Apple Health would show its sheet, and permission strings that name Apple 
     On `false` it does nothing at all, so no `onGo`, no request and no start (FR-016).
 
   `isTracking` and `failure` behave exactly as before, once past the explainer.
-- [ ] T034 [P] [US3] Create `App/Sources/Views/HealthExplainer.swift`, the P-10 sheet:
+- [X] T034 [P] [US3] Create `App/Sources/Views/HealthExplainer.swift`, the P-10 sheet:
   - `AppleHealthMark(size: 60)` at the top, not a button;
   - the title "Rekkert works with Apple Health";
   - the body;
@@ -381,7 +381,7 @@ while Apple Health would show its sheet, and permission strings that name Apple 
 
   No toggles or per-item rows (FR-015). `.presentationDetents([.medium, .large])`;
   `.interactiveDismissDisabled()` is not used, and a swipe-down counts as Not now.
-- [ ] T035 [US3] Wire up the explainer. Depends on T033 and T034.
+- [X] T035 [US3] Wire up the explainer. Depends on T033 and T034.
   - In `App/Sources/Views/RootView.swift`, present `HealthExplainer` as a sheet bound to
     `model.workout.explaining != nil`. Follow the comment at line 148 about holding back
     while another sheet is up, and calling `answerExplainer(false)` on dismiss without an
@@ -399,7 +399,7 @@ while Apple Health would show its sheet, and permission strings that name Apple 
 
 ### Implementation for User Story 3 (Apple Watch)
 
-- [ ] T036 [US3] In `WatchApp/Sources/WorkoutController.swift`, apply the same gate as T033
+- [X] T036 [US3] In `WatchApp/Sources/WorkoutController.swift`, apply the same gate as T033
   with `askStatus(on: .watch)`. `PendingAsk` is `.start`, `.prepare` or `.ratings`, and
   every `requestAuthorization` goes through it: `start()`, `prepare()` and
   `writeWaitingRatings()`. `answerExplainer(false)` drops the pending action and changes
@@ -411,11 +411,11 @@ while Apple Health would show its sheet, and permission strings that name Apple 
   - Present it from `WatchApp/Sources/Views/WatchRootView.swift` as a sheet bound to
     `model.workout.explaining != nil`.
   - In `WatchApp/Sources/Views/WatchDemoLaunch.swift`, add `-rekkert-demo-health-explainer`.
-- [ ] T037 [P] [US3] In `Project.swift`, replace the four `NSHealth*UsageDescription`
+- [X] T037 [P] [US3] In `Project.swift`, replace the four `NSHealth*UsageDescription`
   strings with the P-11 texts (iOS target) and W-06 texts (watch target), verbatim. Update
   the comment above the iOS pair if it no longer matches. Run `tuist generate` (through
   `mise`) to check.
-- [ ] T038 [US3] In `scripts/verify.sh`, under "Assert both apps may talk to Health", assert
+- [X] T038 [US3] In `scripts/verify.sh`, under "Assert both apps may talk to Health", assert
   that each of the four keys' values contains "Apple Health", in `$plist` (watch) and
   `$iosplist` (iOS). Use `plutil -extract <key> raw -o -` on each and `grep -q 'Apple Health'`,
   printing `ok:` or `FAIL:` like the surrounding checks (D-7). Depends on T037.
@@ -434,7 +434,7 @@ physical devices, and settled access paths (FR-020 to FR-022).
 reaches the Apple Health section on the first try (SC-006). The recording shows every P- and
 W- point (SC-003) in under three minutes (SC-007).
 
-- [ ] T039 [P] [US4] In `fastlane/metadata/review_information/notes.txt`, replace the
+- [X] T039 [P] [US4] In `fastlane/metadata/review_information/notes.txt`, replace the
   "WORKOUTS (HEALTHKIT)" part (heading and paragraphs, up to "SHARING A MATCH") with the
   text block in [contracts/review-notes.md](contracts/review-notes.md), verbatim. Leave every
   other part unchanged.
@@ -482,23 +482,23 @@ W- point (SC-003) in under three minutes (SC-007).
 
 **Purpose**: The gates and documents that span stories
 
-- [ ] T043 In `scripts/verify.sh`, assert that the `AppleHealth.imageset` folder holds a
+- [X] T043 In `scripts/verify.sh`, assert that the `AppleHealth.imageset` folder holds a
   `.pdf`, `.svg` or `.png` beside its `Contents.json`, in both
   `App/Resources/Assets.xcassets/` and `WatchApp/Resources/Assets.xcassets/`. Fail with
   "FAIL: Apple Health icon missing from <catalog>; see specs/002-healthkit-ui-disclosure
   T002". Depends on T002 and T038 (same file).
-- [ ] T044 [P] In `docs/privacy/index.html`:
+- [X] T044 [P] In `docs/privacy/index.html`:
   - replace every bare "Health" that means the service with "Apple Health", and "the Health
     app" with "the Apple Health app";
   - add active and resting energy to what a workout saves, in the "Your workouts, to Apple
     Health" paragraph.
 
   Change no other claim (D-9).
-- [ ] T045 [P] In `README.md`, add `-rekkert-demo-apple-health` and
+- [X] T045 [P] In `README.md`, add `-rekkert-demo-apple-health` and
   `-rekkert-demo-health-explainer` to the debug launch-argument list.
 - [ ] T046 Run `swift test --package-path Packages/RekkertKit` and `./scripts/verify.sh`,
   then [quickstart.md](quickstart.md) §3 and §4 in full. Fix anything they find.
-- [ ] T047 If `001-fix-session-sharing` has reached `main` meanwhile, rebase this branch
+- [X] T047 If `001-fix-session-sharing` has reached `main` meanwhile, rebase this branch
   onto it with `jj rebase` and resolve the overlaps listed in plan.md Constraints. Keep both
   sides' strings and sections, and re-run T046.
 

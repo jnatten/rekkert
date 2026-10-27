@@ -6,9 +6,20 @@ On the start screen, pick one of the six modes (Match, Points, Winner court, Fri
 APPLE WATCH
 The watch app is embedded in the iPhone app and installs on the paired watch. A match started on either device shows up on the other, and a point scored on either one is scored on both.
 
-WORKOUTS (HEALTHKIT)
-A workout starts when the user taps Start workout, either on the watch or in the "..." menu on the iPhone. The user can also turn on Settings > Workout on your watch, which starts a workout, or asks first, when they start or join a match, and stops it, or asks first, when the match ends. Both settings are off by default. The iPhone hands the start to the watch with HKHealthStore.startWatchApp. The watch records the session with HKWorkoutSession as an indoor tennis workout, the closest activity type Health has to padel, and saves it to Health. While the workout runs, the watch reads heart rate and energy. To show heart-rate zones it also reads the user's date of birth and latest resting heart rate. When the workout ends, the watch sends its summary to the paired iPhone over WatchConnectivity, and the iPhone lists it under Workouts. Nothing is detected from the user's movement, and no health data leaves the user's own iPhone and watch.
-Workouts need a paired Apple Watch, so the control is hidden on iPad and on an iPhone without one.
+APPLE HEALTH (HEALTHKIT)
+Rekkert uses Apple Health for one thing: workouts. A workout the user starts is recorded on the Apple Watch and saved to Apple Health as indoor tennis, the nearest activity Apple Health has to padel, with its active and resting energy and an effort rating if the user gives one. While it runs, and once when it ends, the watch reads heart rate and energy; to show heart-rate zones it also reads the user's date of birth and latest resting heart rate. Nothing is read unless a workout is started, and nothing read leaves the user's own iPhone and Apple Watch.
+
+WHERE TO SEE IT, WITH NO APPLE WATCH (any iPhone or iPad)
+Tap the gear at the top right of the start screen. The Apple Health section, with the Apple Health icon, says what Rekkert does with Apple Health and why this device cannot record a workout. Tap "What Rekkert saves and reads" for the full list and where to change access.
+
+WHERE TO SEE IT, WITH A PAIRED APPLE WATCH
+- Start screen: the Workout section, marked with the Apple Health icon. Tap "Start a workout". The first time, Rekkert explains what Apple Health will ask, then Apple Health asks.
+- In a match: "..." menu > "Start workout", subtitled "Saves to Apple Health".
+- Settings > Workout on your watch: start and stop a workout with each match. The footer says the workouts go to Apple Health.
+- On the watch: "Start workout" on the menu page next to the score, and on the idle screen, captioned "Saves to Apple Health".
+- Afterwards: start screen > Workouts lists them and says they stay in Apple Health, each workout's page shows "Saved in: Apple Health", and the workout is in the Apple Health app.
+
+A screen recording on a physical iPhone and Apple Watch showing each of these is attached.
 
 SHARING A MATCH (LOCAL NETWORK AND BLUETOOTH BACKGROUND MODES)
 In a match, open the "..." menu and tap Share this match. The phone shows a six-digit code. On a second iPhone or iPad, tap Join a match on the start screen and enter the code. Both devices then show and score the same match.
