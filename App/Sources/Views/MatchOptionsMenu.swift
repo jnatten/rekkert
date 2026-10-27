@@ -152,6 +152,8 @@ struct SharingMenuItems: View {
         }
         if model.store.role == .guest {
             GuestMenuItems()
+        } else if model.store.role == .host {
+            IdentityPicker()
         }
     }
 }
@@ -163,6 +165,16 @@ private struct GuestMenuItems: View {
         if let note = model.store.access.guestNote {
             Text(note)
         }
+        IdentityPicker()
+    }
+}
+
+/// Who this phone is on the shared match: the host lists its guests by it, and the guests call
+/// the host's match by it.
+private struct IdentityPicker: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
         // A tournament asks who you are playing as already, and that answer is this one.
         if let names = model.store.state?.playerNames, !names.isEmpty, model.store.state?.isTournament == false {
             Picker("Who are you?", systemImage: "person.crop.circle", selection: identity) {

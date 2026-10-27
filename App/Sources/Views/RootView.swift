@@ -130,7 +130,7 @@ struct RootView: View {
             Text("Your watch shows the match once Rekkert is opened on it. Allow notifications for Rekkert and it will be told when you join.")
         }
         .alert(
-            "The host stopped sharing",
+            model.sharing.hostWhoStopped.map { "\($0) stopped sharing" } ?? "The host stopped sharing",
             isPresented: Binding(
                 get: { model.sharing.hostStoppedSharing },
                 set: { if !$0 { model.sharing.acknowledgeStoppedSharing() } }

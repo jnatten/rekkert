@@ -414,7 +414,10 @@ planned rounds are played. A guest's watch goes by its phone's level.
 Joining asks **Who are you?** once the match is on the phone, offering its players and *Just
 watching*; the match menu changes the answer later, and in a tournament it is the same choice
 as who you are playing as. The name is kept for the host's next match on the same code. A
-phone that has not said is listed as Phone 1, Phone 2 and so on.
+phone that has not said is listed as Phone 1, Phone 2 and so on. The host can answer it too,
+from the match menu, and the guests then call the match by it — "Ada's match" on their phones
+and watches, "Ada stopped sharing" at the end — where it would otherwise be a shared match and
+the host.
 
 It is a convention rather than a lock, like the host's sole right to finish: each phone hides
 what it has been told it may not do, and nothing stops a modified one. A phone on an older

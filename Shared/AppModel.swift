@@ -979,7 +979,7 @@ extension AppModel {
                 return
             }
             let content = UNMutableNotificationContent()
-            content.title = "You're on a shared match"
+            content.title = store.hostName.map { "You're on \($0)'s match" } ?? "You're on a shared match"
             content.body = "Tap to follow on your watch."
             content.categoryIdentifier = Self.followMatchCategory
             let id = "follow-\(session.uuidString)"

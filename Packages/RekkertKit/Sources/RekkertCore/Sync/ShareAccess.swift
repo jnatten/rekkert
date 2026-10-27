@@ -47,12 +47,17 @@ public struct ShareAccessTable: Codable, Sendable, Hashable {
     public var standard: ShareAccess
     /// Sorted by device, so equal tables encode to equal bytes.
     public private(set) var overrides: [Grant]
+    /// Who the host said they are, for the guests to call the match by: "Ada's match".
+    public private(set) var hostName: String?
 
-    public init(id: UUID = UUID(), revision: Int = 0, standard: ShareAccess, overrides: [Grant] = []) {
+    public init(
+        id: UUID = UUID(), revision: Int = 0, standard: ShareAccess, overrides: [Grant] = [], hostName: String? = nil
+    ) {
         self.id = id
         self.revision = revision
         self.standard = standard
         self.overrides = overrides.sorted { $0.device < $1.device }
+        self.hostName = hostName
     }
 
     public func override(for device: DeviceID) -> ShareAccess? {
@@ -81,6 +86,14 @@ public struct ShareAccessTable: Codable, Sendable, Hashable {
     public func with(standard: ShareAccess) -> ShareAccessTable {
         var next = self
         next.standard = standard
+        next.revision += 1
+        return next
+    }
+
+    public func with(hostName: String?) -> ShareAccessTable {
+        guard hostName != self.hostName else { return self }
+        var next = self
+        next.hostName = hostName
         next.revision += 1
         return next
     }

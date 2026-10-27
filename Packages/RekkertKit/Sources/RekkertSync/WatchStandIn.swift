@@ -169,6 +169,9 @@ public final class WatchStandIn {
         return statuses
     }
 
+    /// Who the host of the match the phone is on said they are, for the wrist to call it by.
+    public var phonesHostName: String? { phoneStandby?.hostName }
+
     /// What the phone is sharing, as it last said: the code, its picture, and who is on (D-14).
     public private(set) var hosting: HostingStatus?
 

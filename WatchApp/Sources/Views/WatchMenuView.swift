@@ -210,7 +210,11 @@ struct WatchMenuView: View {
         }
         .sheet(isPresented: $joiningAgain) { WatchJoinView() }
         .sheet(isPresented: $joiningAnother) { WatchJoinView() }
-        .confirmationDialog("Leave this match? Your iPhone leaves too.", isPresented: $confirmingLeave, titleVisibility: .visible) {
+        .confirmationDialog(
+            model.store.hostName.map { "Leave \($0)'s match? Your iPhone leaves too." } ?? "Leave this match? Your iPhone leaves too.",
+            isPresented: $confirmingLeave,
+            titleVisibility: .visible
+        ) {
             Button("Leave", role: .destructive) {
                 WKInterfaceDevice.current().play(.click)
                 model.sharing.leave()

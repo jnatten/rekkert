@@ -68,6 +68,24 @@ struct HostGoneAndStopTests {
         #expect(court.host.phone.store.state == board, "the host's own match carries on")
     }
 
+    /// The guests call the match by who the host said they are: "Ada's match", on the phone and
+    /// on the wrist, right up to "Ada stopped sharing".
+    @Test func theGuestsKnowTheHostByTheNameTheyGave() async {
+        let court = await sharedCourt(guests: 1, withWatches: true)
+        let guest = court.guests.first!
+        #expect(guest.phone.store.hostName == nil)
+
+        court.host.phone.store.identify(as: "Ada")
+        #expect(await court.until(within: .seconds(10)) {
+            guest.phone.store.hostName == "Ada" && guest.watch!.store.hostName == "Ada"
+                && guest.watch!.standIn!.phonesHostName == "Ada"
+        })
+        #expect(court.host.phone.store.hostName == nil, "the host's own match is not somebody else's")
+
+        court.host.phone.sharing.stop()
+        #expect(await court.until(within: .seconds(10)) { guest.phone.sharing.hostWhoStopped == "Ada" })
+    }
+
     /// A host from before this build cuts its links without a word. Its guests see it go as they
     /// would a host out of reach, and keep the match and the code to get back on.
     @Test func anOlderHostThatSaysNothingLeavesItsGuestsOutOfReach() async {

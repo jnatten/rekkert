@@ -170,7 +170,7 @@ struct WatchPhonesMatchBanner: View {
     var body: some View {
         if let elsewhere {
             VStack(spacing: 4) {
-                Text("Your iPhone is on a shared match")
+                Text(model.standIn.phonesHostName.map { "Your iPhone is on \($0)'s match" } ?? "Your iPhone is on a shared match")
                     .font(.footnote.weight(.semibold))
                     .multilineTextAlignment(.center)
                 switch elsewhere {
@@ -211,7 +211,8 @@ private struct AsksBeforeTakingThePhoneOff: ViewModifier {
 
     func body(content: Content) -> some View {
         content.confirmationDialog(
-            "This takes your iPhone off the shared match.",
+            (model.standIn.phonesHostName ?? model.store.hostName).map { "This takes your iPhone off \($0)'s match." }
+                ?? "This takes your iPhone off the shared match.",
             isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
             titleVisibility: .visible
         ) {

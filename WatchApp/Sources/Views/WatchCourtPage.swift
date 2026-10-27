@@ -67,7 +67,9 @@ struct WatchCourtPage: View {
         // One line fits, and the match comes first: in step, nothing is said at all.
         if let line = model.standIn.statuses.first(where: { $0 != .onTheHostsPhone })?.line { return line }
         // A match of the wrist's own, with its phone on the shared one (FR-016).
-        if model.standIn.phonesMatchElsewhere != nil { return "Your iPhone is on a shared match" }
+        if model.standIn.phonesMatchElsewhere != nil {
+            return model.standIn.phonesHostName.map { "Your iPhone is on \($0)'s match" } ?? "Your iPhone is on a shared match"
+        }
         // The host's: how many are on, counting nobody who has gone out of reach.
         guard model.store.canEndSession, let hosting = model.standIn.hosting, hosting.isSharing else { return nil }
         let on = hosting.participants.count { if case .outOfReach = $0.state { false } else { true } }

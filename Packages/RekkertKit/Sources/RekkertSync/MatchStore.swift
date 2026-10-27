@@ -175,6 +175,8 @@ public final class MatchStore {
     @ObservationIgnored private var heardStates: [ParticipantSummary] = []
     /// A guest arrived, went out of reach, or came back: what the host's watch shows changed.
     @ObservationIgnored public var onParticipantsChanged: (() -> Void)?
+    /// A guest heard who the host says they are.
+    @ObservationIgnored public var onHostNameChanged: (() -> Void)?
     @ObservationIgnored private let participantTick: Duration
 
     public init(
@@ -454,13 +456,14 @@ public final class MatchStore {
         guard role != .guest else { return }
         // Back from a relaunch, the phones on the old code are still somebody: keep what was said.
         if role != .host || accessTable == nil {
-            accessTable = ShareAccessTable(standard: defaultAccess)
+            accessTable = ShareAccessTable(standard: defaultAccess, hostName: identity)
             guests = []
             participants = Participants()
             linkOwners = [:]
             refusedLinks = []
         }
         role = .host
+        identifyAsMe()
         // A search left running underneath would conclude on the first guest to say hello
         // and make this phone a guest on its own match.
         isJoining = false
@@ -505,9 +508,13 @@ public final class MatchStore {
     private func rename(_ name: String?) {
         guard name != identity else { return }
         identity = name
+        if role == .host, let accessTable { self.accessTable = accessTable.with(hostName: name) }
         persist()
         shareAccess()
     }
+
+    /// Who the host of the match on screen said they are, when it is somebody else's.
+    public var hostName: String? { canEndSession ? nil : accessTable?.hostName }
 
     private func reidentify() {
         guard let identity, case .tournament(let tournament) = state,
@@ -774,7 +781,7 @@ public final class MatchStore {
     }
 
     private func identifyAsMe() {
-        guard role == .guest, case .tournament(let tournament) = state else { return }
+        guard role != .solo, case .tournament(let tournament) = state else { return }
         rename(me.flatMap(tournament.player)?.name)
     }
 
@@ -1710,8 +1717,10 @@ public final class MatchStore {
 
         case .access(let incoming):
             if takesAccess(from: packet), incoming.supersedes(accessTable) {
+                let hadHostName = hostName
                 accessTable = incoming
                 persist()
+                if hostName != hadHostName { onHostNameChanged?() }
                 if role == .guest, !packet.isFromPairedDevice {
                     let payload = encode(.access(incoming))
                     transport.queue(payload)

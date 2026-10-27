@@ -54,6 +54,22 @@ struct ShareAccessTests {
         #expect(table.supersedes(nil))
     }
 
+    @Test func theHostsNameTravelsWithTheTableAndIsNewer() throws {
+        let table = ShareAccessTable(standard: .full)
+        let named = table.with(hostName: "Ada")
+        #expect(named.supersedes(table))
+        #expect(named.with(hostName: "Ada") == named, "the same name again is no change")
+        #expect(try Wire.decode(Wire.access(named).encoded()) == .access(named))
+    }
+
+    /// A host from before names travelled sends a table without one, and it still reads.
+    @Test func aTableWithoutANameStillReads() throws {
+        let older = Data(#"{"id":"\#(UUID().uuidString)","revision":2,"standard":"score","overrides":[]}"#.utf8)
+        let table = try JSONCoding.decoder.decode(ShareAccessTable.self, from: older)
+        #expect(table.hostName == nil)
+        #expect(table.standard == .score)
+    }
+
     @Test func aFreshShareIsNotRefusedAsOlder() {
         let old = ShareAccessTable(standard: .full).with(standard: .score).with(standard: .readOnly)
         let fresh = ShareAccessTable(standard: .full)

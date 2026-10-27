@@ -63,6 +63,8 @@ public final class SharedSession {
     /// The host stopped sharing and said so: the copy here went to History, and that is worth
     /// saying once.
     public private(set) var hostStoppedSharing = false
+    /// Who the host that stopped said they were.
+    public private(set) var hostWhoStopped: String?
 
     /// Short of FR-026's fifteen seconds by the time a link can take to be found down.
     private static let hostGrace: Duration = .seconds(10)
@@ -177,6 +179,7 @@ public final class SharedSession {
         store.onRefused = { [weak self] _ in self?.turnedAway() }
         store.onStoppedByHost = { [weak self] in self?.stoppedByHost() }
         store.onParticipantsChanged = { [weak self] in self?.reportHostingStatus() }
+        store.onHostNameChanged = { [weak self] in self?.reportStandby() }
         if let bluetooth {
             radioAvailability = bluetooth.availability
             let availability = bluetooth.availabilityChanges
@@ -465,6 +468,7 @@ public final class SharedSession {
 
     /// The host let everybody go, and said so first: nothing to look for, and no code to keep.
     private func stoppedByHost() {
+        hostWhoStopped = store.hostName
         cutLinks()
         recorder?.note(.sharingStopped, on: hostLink, in: store.log.sessionID)
         remember(.sharingStopped)
@@ -475,6 +479,7 @@ public final class SharedSession {
 
     public func acknowledgeStoppedSharing() {
         hostStoppedSharing = false
+        hostWhoStopped = nil
     }
 
     /// The store is stepping off as it says so, so there is nothing left to decide — only the
@@ -786,7 +791,7 @@ public final class SharedSession {
                 let kept = kept?.code == code ? kept : nil
                 return SharingStandby(
                     code: code, isThrough: reachablePeers > 0, share: kept?.share, startedAt: kept?.startedAt,
-                    hostOutOfReachSince: hostOutOfReachSince, radioTrouble: radioTrouble
+                    hostOutOfReachSince: hostOutOfReachSince, radioTrouble: radioTrouble, hostName: store.hostName
                 )
             }
         case .off, .hosting, .failed: standby = nil

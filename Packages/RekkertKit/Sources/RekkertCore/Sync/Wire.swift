@@ -86,10 +86,12 @@ public struct SharingStandby: Codable, Sendable, Hashable {
     public var hostOutOfReachSince: Date?
     /// Bluetooth off or not allowed on the phone, with nothing else reaching the host (FR-008).
     public var radioTrouble: SharingFailure?
+    /// Who the host said they are, for the wrist to call the match by.
+    public var hostName: String?
 
     public init(
         code: SessionCode, isThrough: Bool, share: UUID? = nil, startedAt: Date? = nil,
-        hostOutOfReachSince: Date? = nil, radioTrouble: SharingFailure? = nil
+        hostOutOfReachSince: Date? = nil, radioTrouble: SharingFailure? = nil, hostName: String? = nil
     ) {
         self.code = code
         self.isThrough = isThrough
@@ -97,6 +99,7 @@ public struct SharingStandby: Codable, Sendable, Hashable {
         self.startedAt = startedAt
         self.hostOutOfReachSince = hostOutOfReachSince
         self.radioTrouble = radioTrouble
+        self.hostName = hostName
     }
 }
 

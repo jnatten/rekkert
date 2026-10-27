@@ -832,8 +832,8 @@ public enum HelpCatalog {
                 HelpItem(
                     "Who are you?",
                     symbol: "person.crop.circle",
-                    what: "Tells the host which player's phone this is.",
-                    example: "The host sees Ada rather than Phone 2."
+                    what: "Says which player's phone this is. On the host, it names the match.",
+                    example: "The host sees Ada, not Phone 2. Hosting, guests see Ada's match."
                 ),
                 HelpItem(
                     "Use my score everywhere",
