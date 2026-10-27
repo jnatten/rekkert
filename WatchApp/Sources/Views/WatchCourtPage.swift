@@ -352,6 +352,8 @@ extension WatchStandIn.Status {
     /// The words of `contracts/watch-ui.md`.
     var line: String {
         switch self {
+        case .phoneBluetoothOff: "Bluetooth is off on your iPhone"
+        case .phoneBluetoothDenied: "Rekkert can't use Bluetooth on your iPhone"
         case .hostOutOfReach(let since): "Host out of reach since \(since.formatted(date: .omitted, time: .shortened))"
         case .phoneNeedsOpening: "Open Rekkert on your iPhone"
         case .followingOnTheWatch: "Your iPhone's app was closed: following on the watch"

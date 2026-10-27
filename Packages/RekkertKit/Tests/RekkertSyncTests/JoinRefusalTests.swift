@@ -41,6 +41,44 @@ struct JoinRefusalTests {
         #expect(await court.until(within: .seconds(15)) { guest.sharing.phase == .failed(.bluetoothDenied) })
     }
 
+    /// FR-008: already on the match, Bluetooth switched off is said on the phone and its watch,
+    /// not left as "out of reach", and switched back on the guest is back on by itself.
+    @Test func bluetoothSwitchedOffOnTheMatchIsSaidOnThePhoneAndTheWatch() async {
+        let court = CourtHarness(guests: 1, withWatches: true)
+        court.startMatch()
+        court.share()
+        court.joinAll()
+        await court.until(within: .seconds(60)) { court.allInStep() }
+        let guest = court.guests.first!
+
+        guest.phone.radio.switchRadio(on: false)
+        #expect(await court.until(within: .seconds(15)) {
+            guest.phone.sharing.radioTrouble == .bluetoothOff
+                && guest.watch!.standIn!.statuses.first == .phoneBluetoothOff
+        })
+
+        guest.phone.radio.switchRadio(on: true)
+        court.score(on: court.host.phone)
+        #expect(await court.until(within: .seconds(30)) { court.allInStep() })
+        #expect(guest.phone.sharing.radioTrouble == nil)
+        #expect(!guest.watch!.standIn!.statuses.contains(.phoneBluetoothOff))
+    }
+
+    @Test func bluetoothRefusedOnTheMatchIsSaidOnThePhoneAndTheWatch() async {
+        let court = CourtHarness(guests: 1, withWatches: true)
+        court.startMatch()
+        court.share()
+        court.joinAll()
+        await court.until(within: .seconds(60)) { court.allInStep() }
+        let guest = court.guests.first!
+
+        guest.phone.radio.deny()
+        #expect(await court.until(within: .seconds(15)) {
+            guest.phone.sharing.radioTrouble == .bluetoothDenied
+                && guest.watch!.standIn!.statuses.first == .phoneBluetoothDenied
+        })
+    }
+
     @Test func twoCourtsSideBySideEachGuestLandsOnItsOwnHost() async {
         let first = CourtHarness(guests: 1, withWatches: false)
         let second = CourtHarness(guests: 1, withWatches: false, air: first.air, code: SessionCode("731604")!)

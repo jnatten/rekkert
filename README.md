@@ -725,7 +725,11 @@ Guests keep dialling on a timer rather than waiting for a Bonjour change that ne
 a reconnect merges rather than replaces — both sides keep whatever they scored while apart. If
 the merged score is one nobody recognises, the host can settle it from the match menu. A guest
 whose host has been gone for fifteen seconds says so, and since when — on the phone's sharing
-badge and on the watch — and goes on scoring meanwhile.
+badge and on the watch — and goes on scoring meanwhile. One with Bluetooth off, or not allowed,
+and nothing else reaching the host says that instead, since it is the thing to put right. The
+watch says it too while it still hears its phone; with Wi-Fi off, Bluetooth switched off in
+Settings takes the watch's link to its phone with it, and the watch can only say the phone is
+out of reach.
 
 The code is kept in the Keychain of every device that has been on the match: the host's phone,
 with the share id its keys are derived from, and each guest's phone and watch. It is kept for

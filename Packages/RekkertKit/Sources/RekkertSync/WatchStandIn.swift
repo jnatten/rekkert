@@ -138,6 +138,8 @@ public final class WatchStandIn {
 
     /// What the wrist says about somebody else's match it is on, the most pressing first.
     public enum Status: Sendable, Equatable {
+        case phoneBluetoothOff
+        case phoneBluetoothDenied
         case hostOutOfReach(since: Date)
         case phoneNeedsOpening
         case followingOnTheWatch
@@ -149,9 +151,13 @@ public final class WatchStandIn {
     public var statuses: [Status] {
         guard store.state != nil, !store.canEndSession else { return [] }
         var statuses: [Status] = []
+        let isOwnLinkUp = sharing.isSharing && sharing.reachablePeers > 0
+        // Before the host's line: it is why the host is out of reach, and what to do about it.
+        if store.isPairReachable, !isOwnLinkUp, let trouble = phoneStandby?.radioTrouble {
+            statuses.append(trouble == .bluetoothDenied ? .phoneBluetoothDenied : .phoneBluetoothOff)
+        }
         if let since = hostOutOfReachSince { statuses.append(.hostOutOfReach(since: since)) }
         if phoneNeedsOpening { statuses.append(.phoneNeedsOpening) }
-        let isOwnLinkUp = sharing.isSharing && sharing.reachablePeers > 0
         if isOwnLinkUp, !store.isPairReachable { statuses.append(.followingOnTheWatch) }
         if hostOutOfReachSince == nil {
             switch link {

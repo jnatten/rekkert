@@ -178,9 +178,11 @@ public final class SharedSession {
         store.onStoppedByHost = { [weak self] in self?.stoppedByHost() }
         store.onParticipantsChanged = { [weak self] in self?.reportHostingStatus() }
         if let bluetooth {
+            radioAvailability = bluetooth.availability
             let availability = bluetooth.availabilityChanges
             watchingTheRadio = Task { [weak self] in
                 for await change in availability {
+                    self?.radioAvailability = change
                     switch change {
                     case .on: self?.recorder?.note(.radioOn)
                     case .off: self?.recorder?.note(.radioOff)
@@ -229,6 +231,21 @@ public final class SharedSession {
 
     /// How many phones are on this match, over whichever link reaches them.
     public var reachablePeers: Int { max(peers, bluetoothPeers) }
+
+    private var radioAvailability = RadioAvailability.unknown {
+        didSet { if radioAvailability != oldValue { reportStandby() } }
+    }
+
+    /// What keeps a guest with nothing else reaching the host from getting back on, said rather
+    /// than left as "out of reach" (FR-008).
+    public var radioTrouble: SharingFailure? {
+        guard wanted != nil, reachablePeers == 0 else { return nil }
+        switch radioAvailability {
+        case .off: return .bluetoothOff
+        case .denied: return .bluetoothDenied
+        case .on, .unknown: return nil
+        }
+    }
 
     /// The code being read out, if this device is the one reading it.
     public var code: SessionCode? {
@@ -769,7 +786,7 @@ public final class SharedSession {
                 let kept = kept?.code == code ? kept : nil
                 return SharingStandby(
                     code: code, isThrough: reachablePeers > 0, share: kept?.share, startedAt: kept?.startedAt,
-                    hostOutOfReachSince: hostOutOfReachSince
+                    hostOutOfReachSince: hostOutOfReachSince, radioTrouble: radioTrouble
                 )
             }
         case .off, .hosting, .failed: standby = nil

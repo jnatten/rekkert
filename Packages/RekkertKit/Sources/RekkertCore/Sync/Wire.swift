@@ -84,16 +84,19 @@ public struct SharingStandby: Codable, Sendable, Hashable {
     public var startedAt: Date?
     /// Since when the host has been out of reach, once it has been long enough to say so.
     public var hostOutOfReachSince: Date?
+    /// Bluetooth off or not allowed on the phone, with nothing else reaching the host (FR-008).
+    public var radioTrouble: SharingFailure?
 
     public init(
         code: SessionCode, isThrough: Bool, share: UUID? = nil, startedAt: Date? = nil,
-        hostOutOfReachSince: Date? = nil
+        hostOutOfReachSince: Date? = nil, radioTrouble: SharingFailure? = nil
     ) {
         self.code = code
         self.isThrough = isThrough
         self.share = share
         self.startedAt = startedAt
         self.hostOutOfReachSince = hostOutOfReachSince
+        self.radioTrouble = radioTrouble
     }
 }
 
