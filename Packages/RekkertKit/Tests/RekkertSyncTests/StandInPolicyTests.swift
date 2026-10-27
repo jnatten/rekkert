@@ -77,6 +77,12 @@ struct StandInPolicyTests {
         #expect(StandInPolicy.next(asked(.own(since: start), after: 20), timing: timing) == .giveUp)
     }
 
+    @Test func theWristsOwnSearchSaysWhyAsSoonAsItKnows() {
+        var circumstances = asked(.own(since: start), after: 5)
+        circumstances.ownFailure = .bluetoothOff
+        #expect(StandInPolicy.next(circumstances, timing: timing) == .refused(.bluetoothOff))
+    }
+
     @Test func aMatchThePhoneIsCarryingIsLeftToIt() {
         #expect(StandInPolicy.next(onTheMatch(after: 60, phoneThrough: true), timing: timing) == .nothing)
     }

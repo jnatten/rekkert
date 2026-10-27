@@ -252,6 +252,17 @@ struct WatchIdleView: View {
                     .buttonStyle(.bordered)
                     .font(.footnote)
 
+                // Back on the match whose code is kept, without typing it (FR-024).
+                if model.standIn.canJoinAgain {
+                    Button("Join again", systemImage: "arrow.right.circle") {
+                        WKInterfaceDevice.current().play(.click)
+                        model.standIn.joinAgain()
+                        joining = true
+                    }
+                    .buttonStyle(.bordered)
+                    .font(.footnote)
+                }
+
                 // A workout is not tied to a match, so it has to be reachable with none on.
                 WatchWorkoutButton(isMenuRow: false)
 

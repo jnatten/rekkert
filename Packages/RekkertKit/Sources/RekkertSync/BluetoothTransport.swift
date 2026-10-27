@@ -64,6 +64,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     public func resumeHosting(code: SessionCode, share: UUID) { core.resumeHosting(code: code, share: share) }
     public func resumeJoining(code: SessionCode) { core.resumeJoining(code: code) }
     public func stop() { core.stop() }
+    public func stopAdmitting() { core.stopAdmitting() }
     public var availability: RadioAvailability { core.availability }
 
     public func activate() {}

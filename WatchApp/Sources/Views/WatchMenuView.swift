@@ -13,6 +13,8 @@ struct WatchMenuView: View {
     @State private var showingCode = false
     @State private var showingGuests = false
     @State private var confirmingStopSharing = false
+    @State private var confirmingLeave = false
+    @State private var joiningAnother = false
 
     private enum Confirmation: String, Identifiable {
         case endRound, nextRound, finish, discard
@@ -181,19 +183,24 @@ struct WatchMenuView: View {
                         confirming = .discard
                     }
                 } else {
-                    // The code dies with the app, and without the phone to repeat it the only
-                    // way back to the host is typing it again.
-                    if model.sharing.standbyCode == nil, !model.sharing.isSharing, !model.store.isPairReachable {
-                        action("Join again", systemImage: "arrow.right.circle") {
-                            joiningAgain = true
-                        }
-                    }
-
                     // Somebody else's match: step off it rather than end it for them.
                     action("Leave", systemImage: "rectangle.portrait.and.arrow.right") {
-                        WKInterfaceDevice.current().play(.click)
-                        model.sharing.leave()
+                        confirmingLeave = true
                     }
+                }
+
+                // Back on the match whose code is kept, without typing it (FR-024).
+                if model.standIn.canJoinAgain {
+                    action("Join again", systemImage: "arrow.right.circle") {
+                        WKInterfaceDevice.current().play(.click)
+                        model.standIn.joinAgain()
+                        joiningAgain = true
+                    }
+                }
+
+                // Joining replaces a match of the wrist's own, which goes to History (FR-021).
+                action("Join a match", systemImage: "person.2") {
+                    joiningAnother = true
                 }
 
                 CommitLabel()
@@ -202,6 +209,14 @@ struct WatchMenuView: View {
             .padding(.horizontal, 2)
         }
         .sheet(isPresented: $joiningAgain) { WatchJoinView() }
+        .sheet(isPresented: $joiningAnother) { WatchJoinView() }
+        .confirmationDialog("Leave this match? Your iPhone leaves too.", isPresented: $confirmingLeave, titleVisibility: .visible) {
+            Button("Leave", role: .destructive) {
+                WKInterfaceDevice.current().play(.click)
+                model.sharing.leave()
+            }
+            Button("Cancel", role: .cancel) {}
+        }
         .sheet(isPresented: $showingCode) { NavigationStack { WatchCodeView() } }
         .sheet(isPresented: $showingGuests) { NavigationStack { WatchGuestsView() } }
         .confirmationDialog("Stop sharing? Everyone else leaves this match.", isPresented: $confirmingStopSharing, titleVisibility: .visible) {

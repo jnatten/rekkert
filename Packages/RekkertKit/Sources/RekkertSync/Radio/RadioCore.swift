@@ -109,6 +109,7 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
     private var tick: (any RadioTimer)?
     private var lastRescan: Duration?
     private static var rescanEvery: Duration { .seconds(20) }
+    private var isAdmitting = true
     private var _availability = RadioAvailability.unknown
     private let availabilityUpdates = Broadcast<RadioAvailability>()
 
@@ -155,10 +156,17 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
 
     // MARK: - Opening and closing
 
+    /// Shown nobody new while a host that has stopped tells the guests it has: one let in
+    /// meanwhile was on a match nobody shares any more.
+    public func stopAdmitting() {
+        lock.withLock { isAdmitting = false }
+    }
+
     public func startHosting(code: SessionCode, share: UUID) {
         guard radio.canHost else { return }
         stop()
         let session = lock.withLock { () -> Int in
+            isAdmitting = true
             intent = .hosting(code: code, share: share)
             defer { nextSession += 1 }
             peripheralSession = nextSession
@@ -755,7 +763,7 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
     }
 
     public func greeting(session: Int) -> Data? {
-        guard lock.withLock({ peripheralSession == session }),
+        guard lock.withLock({ peripheralSession == session }), lock.withLock({ isAdmitting }),
               case .hosting(let code, let share) = lock.withLock({ intent })
         else { return nil }
         return try? JSONCoding.encoder.encode(Greeting(
@@ -764,7 +772,7 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
     }
 
     public func subscribed(_ central: RadioPeer, session: Int) {
-        guard lock.withLock({ peripheralSession == session }),
+        guard lock.withLock({ peripheralSession == session }), lock.withLock({ isAdmitting }),
               case .hosting(let code, let share) = lock.withLock({ intent })
         else { return }
         let peer = Peer(seal: LinkSeal(role: .host, code: code, share: share), central: central, now: scheduler.now)

@@ -81,6 +81,23 @@ public final class SharedSession {
         return kept.code
     }
 
+    /// The phone's code, kept on the wrist as well once the phone is through on it, so a watch
+    /// whose app was ended, or whose phone is gone, gets back on without it typed (FR-025).
+    public func keep(fromThePhone standby: SharingStandby) {
+        guard standby.isThrough else { return }
+        // An older phone says no time, and the one kept already is the better guess.
+        if standby.startedAt == nil, kept?.code == standby.code, kept?.role == .guest { return }
+        remember(.proven(KeptCode(
+            code: standby.code, share: standby.share, role: .guest, startedAt: standby.startedAt ?? now()
+        )))
+    }
+
+    /// The code of a match this device was a guest on, kept for joining again without typing it.
+    public var keptGuestCode: SessionCode? {
+        guard hosted == nil, let kept, kept.role == .guest, kept.current(now: now()) != nil else { return nil }
+        return kept.code
+    }
+
     private var recorder: (any LinkRecording)? { store.recorder }
     private var hostLink: LinkRecordEntry.Link { store.hostDevice.map { .host($0) } ?? .radio }
 
@@ -268,6 +285,10 @@ public final class SharedSession {
         case .guest where store.role == .guest:
             dial(kept.code)
             hasJoinedBefore = true
+        // A watch following its phone's match holds the code for standing in, not the guest's role:
+        // back from being ended, it is on standby with it, and stands in if its phone is not there.
+        case .guest where store.state != nil && !store.canEndSession:
+            standbyCode = kept.code
         default:
             break
         }
@@ -408,6 +429,10 @@ public final class SharedSession {
             return nil
         }
         recorder?.note(.sharingStopped, in: store.log.sessionID)
+        // Nobody new while the farewell goes out: a guest back on the code a moment later was let
+        // onto a match nobody shares any more.
+        link.stopAdmitting()
+        bluetooth?.stopAdmitting()
         let farewell = store.sayStoppedSharing()
         store.stopSharing()
         remember(.stoppedHosting)
@@ -693,6 +718,10 @@ public final class SharedSession {
         case .noRoom: recorder?.note(.refused(.noRoom), on: hostLink)
         case .notFound, .blocked, .bluetoothOff, .bluetoothDenied: break
         }
+        // Nothing there on the code kept for joining again: it is gone for good (FR-024).
+        if failure == .notFound || failure == .rejected, let kept, kept.role == .guest, kept.code == wanted {
+            remember(.sharingStopped)
+        }
         peers = 0
         if hosted == nil { cutLinks() }
         store.cancelJoining()
@@ -735,8 +764,13 @@ public final class SharedSession {
         let standby: SharingStandby?
         switch phase {
         case .searching, .joined:
-            standby = wanted.map {
-                SharingStandby(code: $0, isThrough: reachablePeers > 0, hostOutOfReachSince: hostOutOfReachSince)
+            // With what is kept of it, for the watch to keep the same (FR-025).
+            standby = wanted.map { code in
+                let kept = kept?.code == code ? kept : nil
+                return SharingStandby(
+                    code: code, isThrough: reachablePeers > 0, share: kept?.share, startedAt: kept?.startedAt,
+                    hostOutOfReachSince: hostOutOfReachSince
+                )
             }
         case .off, .hosting, .failed: standby = nil
         }

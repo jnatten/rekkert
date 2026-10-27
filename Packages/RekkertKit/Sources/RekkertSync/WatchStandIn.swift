@@ -32,6 +32,8 @@ nonisolated enum StandInPolicy {
         /// A workout running, or Rekkert in front: otherwise the system does not let the radio
         /// keep a link of the wrist's own.
         var mayUseTheRadio = true
+        /// The wrist's own search gave up, and said why.
+        var ownFailure: SharingFailure?
     }
 
     enum Move: Equatable {
@@ -54,6 +56,8 @@ nonisolated enum StandInPolicy {
                 if now.phoneFailure != nil || !now.isPairReachable { return .lookOnTheWrist }
                 return now.now - since >= timing.phoneWait ? .lookOnTheWrist : .nothing
             case .own(let since):
+                // Said as soon as the search has an answer, and in its words (FR-008).
+                if let failure = now.ownFailure { return .refused(failure) }
                 return now.now - since >= timing.ownWait ? .giveUp : .nothing
             }
         }
@@ -153,6 +157,11 @@ public final class WatchStandIn {
 
     public private(set) var hostingTrouble: HostingTrouble?
     @ObservationIgnored private var isAskingToHost = false
+
+    /// The wrist's own search, given up, and why.
+    private var ownFailure: SharingFailure? {
+        if case .failed(let failure) = sharing.phase.asShared { failure } else { nil }
+    }
 
     /// The phone does the sharing; the wrist only asks.
     public func startHosting() {
@@ -263,6 +272,21 @@ public final class WatchStandIn {
         }
     }
 
+    /// Off the match whose code is kept, and on nobody else's: one tap puts the wrist back on
+    /// (FR-024).
+    public var canJoinAgain: Bool {
+        sharing.keptGuestCode != nil && joining != .searching && (store.state == nil || store.canEndSession)
+    }
+
+    public func joinAgain() {
+        guard let code = sharing.keptGuestCode else { return }
+        join(code)
+    }
+
+    /// The phone is sharing this match, and joining another stops that for everyone on it
+    /// (FR-021), so the wrist asks first.
+    public var joiningStopsSharing: Bool { hosting?.isSharing == true }
+
     public func cancel() {
         attempt += 1
         switch pending {
@@ -299,6 +323,7 @@ public final class WatchStandIn {
         case .standby(let standby):
             phoneStandby = standby
             hasHeardStandby = true
+            if let standby { sharing.keep(fromThePhone: standby) }
             // The phone going quiet about a code the wrist is using is usually the wrist
             // having told it to stop.
             if pending == nil, let standby {
@@ -347,7 +372,8 @@ public final class WatchStandIn {
             hasCode: sharing.standbyCode != nil,
             isOnHostsMatch: store.state != nil && !store.canEndSession,
             isStandingIn: sharing.isSharing,
-            mayUseTheRadio: mayUseTheRadio()
+            mayUseTheRadio: mayUseTheRadio(),
+            ownFailure: ownFailure
         ), timing: timing)
         phoneNeedsOpening = move == .phoneNeedsOpening
 

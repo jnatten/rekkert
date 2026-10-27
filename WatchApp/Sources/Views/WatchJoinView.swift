@@ -1,4 +1,5 @@
 import RekkertCore
+import RekkertSync
 import SwiftUI
 import WatchKit
 
@@ -11,6 +12,8 @@ struct WatchJoinView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var typed = ""
+    /// A code typed while the phone is sharing a match: joining it ends that for everyone on it.
+    @State private var pendingCode: SessionCode?
 
     var body: some View {
         NavigationStack {
@@ -26,6 +29,17 @@ struct WatchJoinView: View {
                 .padding(.horizontal, 2)
             }
             .navigationTitle("Join")
+            .confirmationDialog(
+                "Joining another match stops sharing for everyone on yours.",
+                isPresented: Binding(get: { pendingCode != nil }, set: { if !$0 { pendingCode = nil } }),
+                titleVisibility: .visible
+            ) {
+                Button("Join", role: .destructive) {
+                    if let pendingCode { model.join(pendingCode) }
+                    pendingCode = nil
+                }
+                Button("Cancel", role: .cancel) { pendingCode = nil }
+            }
             .onAppear {
                 // A join that landed or failed last time is not this one.
                 if model.joining != .searching { model.stopJoining() }
@@ -142,7 +156,7 @@ struct WatchJoinView: View {
     private func submit() {
         guard let code = SessionCode(typed) else { return }
         WKInterfaceDevice.current().play(.click)
-        model.join(code)
+        if model.standIn.joiningStopsSharing { pendingCode = code } else { model.join(code) }
     }
 
     private func openDemo() {

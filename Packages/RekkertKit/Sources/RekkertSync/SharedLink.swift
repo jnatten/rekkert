@@ -17,6 +17,8 @@ public protocol SharedLink: Sendable {
     func startJoining(code: SessionCode)
     func resumeJoining(code: SessionCode)
     func stop()
+    /// Lets nobody new in, while the ones already on are told the sharing has stopped.
+    func stopAdmitting()
 
     /// Whether the radio under this link can be used at all.
     var availability: RadioAvailability { get }
@@ -25,6 +27,7 @@ public protocol SharedLink: Sendable {
 }
 
 extension SharedLink {
+    public func stopAdmitting() {}
     public var availability: RadioAvailability { .unknown }
     public var availabilityChanges: AsyncStream<RadioAvailability> { AsyncStream { $0.finish() } }
 }

@@ -85,6 +85,8 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         case joining(SessionCode)
     }
     private var intent: Intent = .none
+    /// Cleared while a host that has stopped tells its guests: nobody new is let in meanwhile.
+    private var isAdmitting = true
     /// Whether any link has reached ready since the code was typed in. Until one has, a
     /// connection that fails is the only evidence there is that the code was wrong;
     /// afterwards it is only evidence that a phone went into a pocket.
@@ -149,7 +151,10 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     /// whose phone is on court three.
     public func startHosting(code: SessionCode, share: UUID) {
         stop()
-        lock.withLock { intent = .hosting(code: code, share: share) }
+        lock.withLock {
+            intent = .hosting(code: code, share: share)
+            isAdmitting = true
+        }
         standUpListener(code: code, share: share)
     }
 
@@ -160,10 +165,15 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     /// host who glanced at a notification and came back would drop every guest on the way past.
     /// The listener is only replaced when it is actually gone — a working one is left alone
     /// rather than torn down and re-advertised.
+    public func stopAdmitting() {
+        lock.withLock { isAdmitting = false }
+    }
+
     public func resumeHosting(code: SessionCode, share: UUID) {
         sweepDeadLinks()
         lock.withLock {
             intent = .hosting(code: code, share: share)
+            isAdmitting = true
             // A fresh try: what failed before the app was put down says nothing about now.
             listenerAttempts = 0
         }
@@ -210,7 +220,8 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         // A listener already replaced can still hand over a connection it had in hand, made on the
         // old code; taken in, it put somebody on the new share who was never given that code.
         listener.newConnectionHandler = { [weak self, weak listener] connection in
-            guard let self, let listener, self.listener.current === listener else { return connection.cancel() }
+            guard let self, let listener, self.listener.current === listener, self.lock.withLock({ self.isAdmitting })
+            else { return connection.cancel() }
             self.accept(connection)
         }
         listener.stateUpdateHandler = { [weak self, weak listener] state in
@@ -788,6 +799,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     public func queue(_ payload: Data) {}
     public func startHosting(code: SessionCode, share: UUID) {}
     public func resumeHosting(code: SessionCode, share: UUID) {}
+    public func stopAdmitting() {}
     public func startJoining(code: SessionCode) {}
     public func resumeJoining(code: SessionCode) {}
     public func stop() {}

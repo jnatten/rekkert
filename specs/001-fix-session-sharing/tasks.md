@@ -422,7 +422,7 @@ needs the kept code from US1.
 
 ### Tests for User Story 5 ⚠️ write first, watch them fail
 
-- [ ] T066 [P] [US5] Write `SyncTests/GuestWristTests.swift`:
+- [X] T066 [P] [US5] Write `SyncTests/GuestWristTests.swift`:
   - the guest's watch keeps the code from `standby`, including `share` and `startedAt`, through `CodeKeeper`;
   - **Join again** works without typing while the match is shared;
   - with the phone in a bag (its app suspended), joining from the watch puts the watch and the phone on the match within 10 s of the last digit, on `TestClock` (SC-008);
@@ -435,19 +435,19 @@ needs the kept code from US1.
 
 ### Implementation for User Story 5
 
-- [ ] T067 [US5] Let the guest's watch keep the code, and stay on without its phone, in `RekkertSync/WatchStandIn.swift` and `RekkertSync/SharedSession.swift`.
+- [X] T067 [US5] Let the guest's watch keep the code, and stay on without its phone, in `RekkertSync/WatchStandIn.swift` and `RekkertSync/SharedSession.swift`.
   - The phone sends `standby` with `share` and `startedAt`, from `RekkertSync/SharedSession.swift` and `Shared/AppModel.swift`.
   - The guest's watch keeps it with `CodeKeeper` in `RekkertSync/WatchStandIn.swift`, under the same rules as T022.
   - On every watch launch, `restore()` (T024, run by T025 on the watch as well) hands an unexpired kept guest code to the stand-in. A watch whose app was ended goes back to the match by itself, without the code typed again (FR-025).
   - A watch on the match without its phone keeps its link while a workout runs. When Rekkert comes back in front after a suspension, it says hello, and dials again if the link has gone, so it catches up (FR-021).
-- [ ] T068 [US5] Change the guest's items in `WatchApp/Sources/Views/WatchMenuView.swift`.
+- [X] T068 [US5] Change the guest's items in `WatchApp/Sources/Views/WatchMenuView.swift`.
   - Add **Join a match** to the match menu.
   - Replace the narrow **Join again** condition (today WatchMenuView.swift:180): show it while an unexpired kept code exists and the watch is off that match.
   - **Leave** asks "Leave Ada's match? Your iPhone leaves too." and shows only on a guest's watch.
-- [ ] T069 [US5] Update `WatchApp/Sources/Views/WatchRootView.swift` and `WatchApp/Sources/Views/WatchJoinView.swift`.
+- [X] T069 [US5] Update `WatchApp/Sources/Views/WatchRootView.swift` and `WatchApp/Sources/Views/WatchJoinView.swift`.
   - Show **Join again** on the start screen too.
   - If the watch's phone is hosting, confirm before joining: "Joining another match stops sharing for everyone on yours."
-- [ ] T070 [US5] Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh`
+- [X] T070 [US5] Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh`
 
 **Checkpoint**: All five stories work on their own.
 
