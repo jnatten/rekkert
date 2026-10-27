@@ -159,12 +159,17 @@ final class CourtHarness {
         } else {
             sharing.publish = { [store] state in Task { await store.send(.state(state)) } }
             sharing.onStandby = { [store] standby in Task { await store.send(.standby(standby)) } }
+            sharing.onHostingStatus = { [store] status, isNews in
+                Task { if isNews { await store.sendDurably(.hostingStatus(status)) } else { await store.send(.hostingStatus(status)) } }
+            }
             store.onSharing = { [sharing] signal in
                 switch signal {
                 case .join(let code): sharing.join(code, forTheWatch: true)
                 case .cancel: sharing.cancelJoiningFromTheWatch()
                 case .followPhone: store.offerToThePair()
-                case .state, .standby, .hostingStatus, .startHosting, .stopHosting: break
+                case .startHosting: sharing.startHostingFromTheWatch()
+                case .stopHosting: sharing.stopHostingFromTheWatch()
+                case .state, .standby, .hostingStatus: break
                 }
             }
         }

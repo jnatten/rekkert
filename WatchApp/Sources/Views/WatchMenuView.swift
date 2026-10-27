@@ -10,6 +10,9 @@ struct WatchMenuView: View {
     @State private var confirming: Confirmation?
     @State private var choosingMe = false
     @State private var joiningAgain = false
+    @State private var showingCode = false
+    @State private var showingGuests = false
+    @State private var confirmingStopSharing = false
 
     private enum Confirmation: String, Identifiable {
         case endRound, nextRound, finish, discard
@@ -51,6 +54,8 @@ struct WatchMenuView: View {
                 }
 
                 status
+
+                sharing
 
                 WatchWorkoutButton()
 
@@ -197,6 +202,15 @@ struct WatchMenuView: View {
             .padding(.horizontal, 2)
         }
         .sheet(isPresented: $joiningAgain) { WatchJoinView() }
+        .sheet(isPresented: $showingCode) { NavigationStack { WatchCodeView() } }
+        .sheet(isPresented: $showingGuests) { NavigationStack { WatchGuestsView() } }
+        .confirmationDialog("Stop sharing? Everyone else leaves this match.", isPresented: $confirmingStopSharing, titleVisibility: .visible) {
+            Button("Stop sharing", role: .destructive) {
+                WKInterfaceDevice.current().play(.click)
+                model.standIn.stopHosting()
+            }
+            Button("Cancel", role: .cancel) {}
+        }
         // `presenting:` hands the pending action to the builder, so the button closure
         // captures it. Reading `confirming` inside the action instead would race the
         // dialog's own dismissal, which clears it — and the button would do nothing.
@@ -244,6 +258,25 @@ struct WatchMenuView: View {
     private var finishesFirst: Bool {
         guard case .tournament(let tournament)? = model.store.state else { return false }
         return tournament.plan?.isReached == true && model.store.canEndSession && hasResults
+    }
+
+    /// The host's: a match of the wrist's own, which the phone shares or can. None of it shows on
+    /// a guest's watch (FR-020).
+    @ViewBuilder
+    private var sharing: some View {
+        if model.store.state != nil, model.store.canEndSession {
+            if model.standIn.hosting?.isSharing == true {
+                action("Code", systemImage: "qrcode") { showingCode = true }
+                action("Who's on", systemImage: "person.2") { showingGuests = true }
+                action("Stop sharing", systemImage: "xmark.circle", tint: .red) { confirmingStopSharing = true }
+            } else {
+                action("Share match", systemImage: "square.and.arrow.up") {
+                    WKInterfaceDevice.current().play(.click)
+                    model.standIn.startHosting()
+                    showingCode = true
+                }
+            }
+        }
     }
 
     private var status: some View {

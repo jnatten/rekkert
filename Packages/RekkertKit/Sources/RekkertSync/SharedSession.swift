@@ -25,6 +25,7 @@ public final class SharedSession {
             guard phase != oldValue else { return }
             publish?(phase.asShared)
             reportStandby()
+            reportHostingStatus()
         }
     }
 
@@ -39,6 +40,11 @@ public final class SharedSession {
     @ObservationIgnored public var onStandby: ((SharingStandby?) -> Void)?
     /// A join got through, once per code dialled.
     @ObservationIgnored public var onJoined: (() -> Void)?
+    /// What the host's watch shows, each time it changes (D-14). `isNews` when sharing started,
+    /// stopped or changed code: worth queuing for a watch whose app is not running, and worth a
+    /// fresh picture of the code.
+    @ObservationIgnored public var onHostingStatus: ((_ status: HostingStatus, _ isNews: Bool) -> Void)?
+    @ObservationIgnored private var reportedHosting: HostingStatus?
     @ObservationIgnored private var reportedStandby: SharingStandby?
     @ObservationIgnored private var hasReportedStandby = false
     public private(set) var standbyCode: SessionCode?
@@ -153,6 +159,7 @@ public final class SharedSession {
         store.onLeft = { [weak self] in self?.letGo() }
         store.onRefused = { [weak self] _ in self?.turnedAway() }
         store.onStoppedByHost = { [weak self] in self?.stoppedByHost() }
+        store.onParticipantsChanged = { [weak self] in self?.reportHostingStatus() }
         if let bluetooth {
             let availability = bluetooth.availabilityChanges
             watchingTheRadio = Task { [weak self] in
@@ -690,6 +697,38 @@ public final class SharedSession {
         if hosted == nil { cutLinks() }
         store.cancelJoining()
         phase = .failed(failure)
+    }
+
+    /// What the host's watch shows, without the picture of the code, which the phone draws.
+    public var hostingStatus: HostingStatus {
+        HostingStatus(
+            isSharing: code != nil,
+            code: code,
+            joinLink: code?.joinLink,
+            participants: code == nil ? [] : store.participantStates(),
+            canShare: store.state != nil && store.role != .guest
+        )
+    }
+
+    /// The host's watch asked to share. Only a match that is on can be: otherwise it is told so.
+    public func startHostingFromTheWatch() {
+        guard store.state != nil, store.role != .guest else { return reportHostingStatus(force: true) }
+        if code == nil { host() } else { reportHostingStatus(force: true) }
+    }
+
+    public func stopHostingFromTheWatch() {
+        guard code != nil else { return reportHostingStatus(force: true) }
+        stop()
+    }
+
+    private func reportHostingStatus(force: Bool = false) {
+        let status = hostingStatus
+        guard force || status != reportedHosting else { return }
+        let isNews = status.isSharing != reportedHosting?.isSharing || status.code != reportedHosting?.code
+        reportedHosting = status
+        var stamped = status
+        stamped.issuedAt = now()
+        onHostingStatus?(stamped, isNews)
     }
 
     private func reportStandby() {

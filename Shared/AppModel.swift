@@ -176,6 +176,7 @@ final class AppModel {
         Task { [standIn] in await standIn.run() }
         #else
         sharing.publish = { [store] state in Task { await store.send(.state(state)) } }
+        sharing.onHostingStatus = { [weak self] status, isNews in self?.tellTheWatch(status, isNews: isNews) }
         sharing.onStandby = { [store] standby in Task { await store.send(.standby(standby)) } }
         sharing.onJoined = { [weak self] in self?.beckonTheWatch() }
         store.onSharing = { [weak self] signal in self?.joinFromWatch(signal) }
@@ -349,7 +350,9 @@ final class AppModel {
         case .state, .standby, .hostingStatus: break
         // "Get on it": the wrist asked for the match this phone is on.
         case .followPhone: store.offerToThePair()
-        case .startHosting, .stopHosting: break
+        // The host's wrist, with this phone in a bag. Answered with what is being shared.
+        case .startHosting: sharing.startHostingFromTheWatch()
+        case .stopHosting: sharing.stopHostingFromTheWatch()
         }
     }
     #endif
@@ -950,6 +953,19 @@ extension AppModel {
 
 #if os(iOS)
 extension AppModel {
+    /// What the host's watch shows (D-14), always with the picture of the code: a few hundred
+    /// bytes, and a watch whose app was ended has lost the last one. News is queued too, for a
+    /// watch whose app is not running to find when it is.
+    func tellTheWatch(_ status: HostingStatus, isNews: Bool) {
+        var status = status
+        status.qr = status.joinLink.flatMap(JoinQRImage.png)
+        guard isNews else {
+            Task { await store.send(.hostingStatus(status)) }
+            return
+        }
+        Task { await store.sendDurably(.hostingStatus(status)) }
+    }
+
     /// A phone cannot wake its watch, and a watch app that is not running hears of the match only
     /// when somebody opens it. A notification is what reaches the wrist with the phone in a bag
     /// (FR-027, D-13); a watch already in reach needs none.

@@ -381,7 +381,7 @@ Spec US4. Scenario 6 also needs T035 from US1.
 
 ### Tests for User Story 4 ⚠️ write first, watch them fail
 
-- [ ] T059 [P] [US4] Write `SyncTests/HostWatchSharingTests.swift`:
+- [X] T059 [P] [US4] Write `SyncTests/HostWatchSharingTests.swift`:
   - the phone sends `hostingStatus` live and in the context whenever sharing starts or stops, a participant's state changes, or the code changes (FR-019);
   - `.startHosting` works only while a match is on;
   - `.stopHosting` stops sharing and guests get `sharingStopped`;
@@ -390,22 +390,22 @@ Spec US4. Scenario 6 also needs T035 from US1.
 
 ### Implementation for User Story 4
 
-- [ ] T060 [US4] Publish `HostingStatus` from the phone, via `RekkertSync/SharedSession.swift` and `Shared/AppModel.swift`.
+- [X] T060 [US4] Publish `HostingStatus` from the phone, via `RekkertSync/SharedSession.swift` and `Shared/AppModel.swift`.
   - Build it in `RekkertSync/SharedSession.swift`, and send it from `Shared/AppModel.swift` on every relevant change, live and in the application context.
   - It carries `participants` from T009/T010 and the join link `https://rekkert.natten.dev/join#<code>`.
   - The QR image is drawn as a PNG by `App/Sources/JoinQRImage.swift` (new, Core Image `CIQRCodeGenerator`, iOS only), injected into `AppModel` so the watch build never links Core Image.
-- [ ] T061 [US4] Handle `.startHosting` and `.stopHosting` in `joinFromWatch` in `Shared/AppModel.swift`. They call `sharing.host()`, allowed only while a match is on, and `sharing.stop()`. Each answers with a `hostingStatus` carrying `failure` when nothing could be done.
-- [ ] T062 [P] [US4] Add `WatchApp/Sources/Views/WatchCodeView.swift`.
+- [X] T061 [US4] Handle `.startHosting` and `.stopHosting` in `joinFromWatch` in `Shared/AppModel.swift`. They call `sharing.host()`, allowed only while a match is on, and `sharing.stop()`. Each answers with a `hostingStatus` carrying `failure` when nothing could be done.
+- [X] T062 [P] [US4] Add `WatchApp/Sources/Views/WatchCodeView.swift`.
   - **Code:** six digits spanning the screen width, as `482 915`, on every supported watch size (FR-017).
   - **Below it:** the QR image, scannable by an iPhone camera from about 20 cm on the smallest watch (FR-018), and "Scan with the Camera to join".
   - **VoiceOver** reads the code digit by digit (FR-031).
   - Update it in place when the code changes.
-- [ ] T063 [P] [US4] Add `WatchApp/Sources/Views/WatchGuestsView.swift`: one row per participant, with name or "Phone 1"…, and **In step**, **Catching up** or **Out of reach since 20:41**, with VoiceOver labels.
-- [ ] T064 [US4] Add the host's items to `WatchApp/Sources/Views/WatchMenuView.swift`.
+- [X] T063 [P] [US4] Add `WatchApp/Sources/Views/WatchGuestsView.swift`: one row per participant, with name or "Phone 1"…, and **In step**, **Catching up** or **Out of reach since 20:41**, with VoiceOver labels.
+- [X] T064 [US4] Add the host's items to `WatchApp/Sources/Views/WatchMenuView.swift`.
   - **Items:** **Share match**, **Code**, **Who's on**, and **Stop sharing** with the confirmation "Stop sharing? Everyone else leaves this match."
   - **Visibility, quoted from contracts/watch-ui.md:** "**Share match** shows only while a match is on and the phone is not sharing. **Code**, **Who's on** and **Stop sharing** show only while it is. None of them shows on a guest's watch, and **Leave** never shows on the host's".
   - **Court page:** show "Sharing · 3 on" beneath the score, in `WatchApp/Sources/Views/WatchCourtPage.swift`.
-- [ ] T065 [US4] Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh`
+- [X] T065 [US4] Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh`
 
 **Checkpoint**: The host never needs the phone to share.
 

@@ -142,6 +142,53 @@ public final class WatchStandIn {
         return statuses
     }
 
+    /// What the phone is sharing, as it last said: the code, its picture, and who is on (D-14).
+    public private(set) var hosting: HostingStatus?
+
+    /// Why a request to share or stop sharing did nothing (FR-020).
+    public enum HostingTrouble: Sendable, Equatable {
+        case cannotReachPhone
+        case nothingToShare
+    }
+
+    public private(set) var hostingTrouble: HostingTrouble?
+    @ObservationIgnored private var isAskingToHost = false
+
+    /// The phone does the sharing; the wrist only asks.
+    public func startHosting() {
+        hostingTrouble = nil
+        isAskingToHost = true
+        Task { [store] in
+            guard await store.send(.startHosting) else {
+                isAskingToHost = false
+                hostingTrouble = .cannotReachPhone
+                return
+            }
+        }
+    }
+
+    public func stopHosting() {
+        hostingTrouble = nil
+        Task { [store] in
+            if !(await store.send(.stopHosting)) { hostingTrouble = .cannotReachPhone }
+        }
+    }
+
+    private func heard(hosting status: HostingStatus) {
+        if let held = hosting?.issuedAt, let issued = status.issuedAt, issued < held { return }
+        var status = status
+        // A status whose picture could not be drawn keeps the last one of the same code.
+        if status.qr == nil, status.code == hosting?.code { status.qr = hosting?.qr }
+        hosting = status
+        guard isAskingToHost else { return }
+        if status.isSharing {
+            isAskingToHost = false
+        } else if !status.canShare {
+            isAskingToHost = false
+            hostingTrouble = .nothingToShare
+        }
+    }
+
     /// The phone is on a shared match the wrist is not on (FR-016): whether one tap can fix it,
     /// and if not, why not.
     public enum PhonesMatch: Sendable, Equatable {
@@ -259,7 +306,9 @@ public final class WatchStandIn {
             } else if pending == nil, !sharing.isSharing {
                 sharing.keepOnStandby(nil)
             }
-        case .join, .cancel, .hostingStatus, .startHosting, .stopHosting, .followPhone:
+        case .hostingStatus(let status):
+            heard(hosting: status)
+        case .join, .cancel, .startHosting, .stopHosting, .followPhone:
             break
         }
         evaluate()

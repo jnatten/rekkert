@@ -21,7 +21,7 @@ struct JoinQRCode: View {
 
     private static let context = CIContext()
 
-    private static func render(_ link: URL) -> CGImage? {
+    static func render(_ link: URL) -> CGImage? {
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(link.absoluteString.utf8)
         filter.correctionLevel = "M"

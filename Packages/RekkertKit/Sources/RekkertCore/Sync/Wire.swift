@@ -117,6 +117,8 @@ public struct HostingStatus: Codable, Sendable, Hashable {
     public var participants: [ParticipantSummary]
     public var canShare: Bool
     public var failure: SharingFailure?
+    /// Sent both live and queued, so one can overtake the other: the older is the one ignored.
+    public var issuedAt: Date?
 
     public init(
         isSharing: Bool,
@@ -125,7 +127,8 @@ public struct HostingStatus: Codable, Sendable, Hashable {
         qr: Data? = nil,
         participants: [ParticipantSummary] = [],
         canShare: Bool,
-        failure: SharingFailure? = nil
+        failure: SharingFailure? = nil,
+        issuedAt: Date? = nil
     ) {
         self.isSharing = isSharing
         self.code = code
@@ -134,6 +137,7 @@ public struct HostingStatus: Codable, Sendable, Hashable {
         self.participants = participants
         self.canShare = canShare
         self.failure = failure
+        self.issuedAt = issuedAt
     }
 }
 

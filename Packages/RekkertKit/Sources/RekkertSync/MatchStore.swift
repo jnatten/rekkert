@@ -63,6 +63,7 @@ public final class MatchStore {
     /// either app is relaunched.
     @ObservationIgnored private var announcedWorkout: WorkoutSignal?
     @ObservationIgnored private var announcedStandby: SharingSignal?
+    @ObservationIgnored private var announcedHosting: SharingSignal?
 
     private var outbox: Outbox
     /// This install's own id. Public because an event carries its author's, and telling the
@@ -171,6 +172,9 @@ public final class MatchStore {
     public private(set) var pairsSharedMatch: UUID?
     @ObservationIgnored private var recordedPairReachable: Bool?
     @ObservationIgnored private var recordedOutOfReach: Set<DeviceID> = []
+    @ObservationIgnored private var heardStates: [ParticipantSummary] = []
+    /// A guest arrived, went out of reach, or came back: what the host's watch shows changed.
+    @ObservationIgnored public var onParticipantsChanged: (() -> Void)?
     @ObservationIgnored private let participantTick: Duration
 
     public init(
@@ -1114,11 +1118,18 @@ public final class MatchStore {
     private func watchParticipants() async {
         while !Task.isCancelled {
             try? await Task.sleep(for: participantTick)
-            guard role == .host, recorder != nil else {
+            guard role == .host else {
                 recordedOutOfReach = []
+                heardStates = []
                 continue
             }
-            let away = Set(participantStates().compactMap { summary -> DeviceID? in
+            let states = participantStates()
+            if states != heardStates {
+                heardStates = states
+                onParticipantsChanged?()
+            }
+            guard recorder != nil else { continue }
+            let away = Set(states.compactMap { summary -> DeviceID? in
                 if case .outOfReach = summary.state { summary.id } else { nil }
             })
             for guest in away.subtracting(recordedOutOfReach) {
@@ -2125,23 +2136,43 @@ public final class MatchStore {
     /// Live only. A request or a word on a join in progress goes stale: a `.join` queued and
     /// handed over twenty minutes later would go looking for a match that finished, and a
     /// `.searching` delivered after the fact would leave a watch spinning at a search nobody
-    /// is running. If it did not arrive, there is nothing worth saying late. A `.standby` is
-    /// the exception: it says what is true now, so it is said again on reconnect.
+    /// is running. If it did not arrive, there is nothing worth saying late. A `.standby` and a
+    /// `.hostingStatus` are the exceptions: they say what is true now, so they are said again on
+    /// reconnect.
     /// Answers whether it actually landed, which the other signals have no need of and this
     /// one does: a watch that asked and was not heard would otherwise sit watching a search
     /// nobody is running.
     @discardableResult
     public func send(_ signal: SharingSignal) async -> Bool {
-        if case .standby = signal { announcedStandby = signal }
+        keepToSayAgain(signal)
         return await sendLive(encode(.sharing(signal))) != nil
     }
 
+    /// Queued as well as sent: what a watch whose app is not running has to find when it is.
+    public func sendDurably(_ signal: SharingSignal) async {
+        keepToSayAgain(signal)
+        let payload = encode(.sharing(signal))
+        transport.queue(payload)
+        _ = await sendLive(payload)
+    }
+
+    private func keepToSayAgain(_ signal: SharingSignal) {
+        switch signal {
+        case .standby: announcedStandby = signal
+        case .hostingStatus: announcedHosting = signal
+        case .join, .cancel, .startHosting, .stopHosting, .followPhone, .state: break
+        }
+    }
+
+    /// A watch whose app was ended has forgotten both, and the queue it was sent them on has
+    /// long since been emptied.
     private func shareStandbyOnReconnect() {
-        guard announcedStandby != nil else { return }
-        // Read when it goes, not when it was asked for: one said in between would be overtaken.
+        guard announcedStandby != nil || announcedHosting != nil else { return }
+        // Read when they go, not when they were asked for: one said in between would be overtaken.
         Task {
-            guard let announcedStandby else { return }
-            _ = await sendLive(encode(.sharing(announcedStandby)))
+            for signal in [announcedStandby, announcedHosting].compactMap(\.self) {
+                _ = await sendLive(encode(.sharing(signal)))
+            }
         }
     }
 

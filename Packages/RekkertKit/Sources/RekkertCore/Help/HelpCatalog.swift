@@ -225,6 +225,44 @@ public enum HelpCatalog {
             ]
         ),
         HelpPage(
+            id: "watch.sharing",
+            chapter: .watch,
+            title: "Sharing from the wrist",
+            symbol: "square.and.arrow.up",
+            whereToFind: "In the menu, on a match of your own",
+            picture: .watchButtons,
+            items: [
+                HelpItem(
+                    "Share match",
+                    symbol: "square.and.arrow.up",
+                    what: "Shares the match on your iPhone, with the phone left in the bag.",
+                    example: "The next court wants to follow along. Share it from the wrist.",
+                    only: "Your own match"
+                ),
+                HelpItem(
+                    "Code",
+                    symbol: "qrcode",
+                    what: "The code to read out, and a picture of it to scan.",
+                    example: "A latecomer points their iPhone's Camera at your wrist.",
+                    only: "While sharing"
+                ),
+                HelpItem(
+                    "Who's on",
+                    symbol: "person.2",
+                    what: "Everyone on your match: in step, catching up, or out of reach.",
+                    example: "Ada's score looks stale. She's been out of reach since 20:41.",
+                    only: "While sharing"
+                ),
+                HelpItem(
+                    "Stop sharing",
+                    symbol: "xmark.circle",
+                    what: "Stops sharing. Everyone else leaves, with the match kept in their History.",
+                    example: "The evening's over, and the others are packing up.",
+                    only: "While sharing"
+                ),
+            ]
+        ),
+        HelpPage(
             id: "watch.wrist",
             chapter: .watch,
             title: "Your wrist",
