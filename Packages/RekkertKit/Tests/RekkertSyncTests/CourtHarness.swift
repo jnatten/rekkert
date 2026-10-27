@@ -197,9 +197,9 @@ final class CourtHarness {
 
     /// Taps a point on `device` and starts timing how long it takes to reach everybody else.
     @discardableResult
-    func score(on device: Device, team: TeamSide = .a) -> EventID? {
+    func score(on device: Device, court: Int = 0, team: TeamSide = .a) -> EventID? {
         let before = Set(device.store.log.events.keys)
-        device.store.tap(team: team)
+        device.store.tap(court: court, team: team)
         let new = device.store.log.events.keys.first { !before.contains($0) }
         if let new { scored[new] = clock.now }
         return new
