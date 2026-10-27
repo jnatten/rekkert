@@ -49,7 +49,9 @@ disclosure").
 - The union of both devices' `saved` and `read` is what the Apple Health page lists, so the
   page names everything either app asks for, and nothing else (FR-003, FR-022).
 - No string says "HealthKit", and every mention of the service is "Apple Health" or "the
-  Apple Health app" (tested with the wording scan, D-6).
+  Apple Health app" (tested in `HealthDisclosureTests`). `changeAccess` is exempt from the
+  "Apple" rule: it quotes the system's own menu names, such as "Settings › Privacy &
+  Security › Health", verbatim (FR-013).
 
 ## HealthReach
 
@@ -98,7 +100,7 @@ press (or automatic start, or app open with a start set)
  explainFirst? ──no──► system request (if any) ──► carry on as today
         │yes
         ▼
-   explainer  ──Not now──► nothing changes; a Settings picker goes back to Do nothing
+   explainer  ──Not now──► nothing changes; a Settings picker keeps the value it had
         │Continue
         ▼
  system request ──► carry on as today
@@ -108,7 +110,11 @@ press (or automatic start, or app open with a start set)
 
 - The explainer offers exactly two choices, with no per-item switches (FR-015).
 - After the system sheet has been shown once, the status is `alreadyAsked` and the explainer
-  does not return on that device (FR-017).
+  does not return on that device. The exception is a status query that fails (`unknown`),
+  when it explains again (FR-017).
+- A Settings picker's new value is stored only once the explainer is past: on Continue, or
+  at once when no explanation is needed. Not now leaves the stored value, and what the
+  watch has been told, untouched (FR-016).
 
 ## Identification point
 

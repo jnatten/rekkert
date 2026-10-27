@@ -154,7 +154,6 @@ App/
     ├── WorkoutController.swift       # types from the disclosure; status query; reach
     └── Views/
         ├── AppleHealthView.swift     # NEW: the full disclosure page (D-1)
-        ├── AppleHealthMark.swift     # NEW: icon + name, non-interactive (D-3)
         ├── HealthExplainer.swift     # NEW: the sheet before the first request (D-5)
         ├── SettingsView.swift        # Apple Health section, always shown; pickers' footer
         ├── HomeView.swift            # Workout section header and footer
@@ -176,7 +175,9 @@ WatchApp/
         ├── WatchRootView.swift         # "Start a workout?" message; explainer host
         └── WatchDemoLaunch.swift       # -rekkert-demo-health-explainer
 
-Shared/AppModel.swift                 # the watch's ask at open goes through HealthAsk
+Shared/
+├── HealthTypes.swift                 # NEW: HealthData ↔ HealthKit types, request status (D-2, D-5)
+└── AppleHealthMark.swift             # NEW: icon + name, non-interactive, on both apps (D-3)
 Project.swift                         # usage strings name Apple Health (D-7)
 scripts/verify.sh                     # assert the usage strings (D-7)
 README.md                             # Apple Health section, new demo flags (D-8)

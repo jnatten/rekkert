@@ -30,7 +30,7 @@ Two conventions apply throughout:
 | | | | | Footer | "Records your heart rate and energy on your Apple Watch and saves it to Apple Health as tennis, the nearest thing Apple Health has to padel. It runs on its own: start it when you walk on, stop it when you walk off, and play as many matches in between as you like. Settings can have it start and stop with the match instead." |
 | P-04 | A match's menu › Start workout | Match › ⋯ | Yes | Item subtitle | "Saves to Apple Health" |
 | P-05 | "Start a workout?" | Match start with Ask me | Yes | Alert message | "It runs on your watch while you play, and is saved to Apple Health." |
-| P-06 | Settings › Workout on your watch | Home › gear | Yes | Footer, appended | "The workouts it starts are saved to Apple Health." |
+| P-06 | Settings › Workout on your watch | Home › gear | Yes | Footer, appended | "The workouts it starts are saved to Apple Health; see Apple Health below." |
 | P-07 | Workouts list | Home › Workouts | Yes, and one workout | Footer | "Deleting one here removes Rekkert's copy. The workout itself stays in Apple Health." |
 | | | | | Empty state | "Start one from your Apple Watch and it shows up here and in Apple Health." |
 | P-08 | A workout's page | P-07 › a workout | Yes | Row after "Saved as" | "Saved in" · "Apple Health" |
@@ -52,7 +52,7 @@ Two conventions apply throughout:
 |---|---|---|---|---|
 | W-01 | Start workout, on the menu page, the idle screen and the result screen | Watch app | Caption under the button, while not running and with no failure text | "Saves to Apple Health" |
 | W-02 | "Start a workout?" | Match start with Ask me | Alert message | "It's saved to Apple Health." |
-| W-03 | Workout page | The page right of the score | Caption at the foot | "Saving to Apple Health" |
+| W-03 | Workout page | A page beside the score, while a workout runs | Caption at the foot | "Saving to Apple Health" |
 | W-04 | Start failed for access | Start workout with access off | Failure text | *Draft*: "Turn on Apple Health access for Rekkert in Settings on your iPhone." |
 | W-05 | Explainer | First Start workout, automatic start, or app open with a start set | Mark, title | "Rekkert works with Apple Health" |
 | | | | Body | "Workouts you start are saved to Apple Health. While one runs, Rekkert reads your heart rate and energy. Nothing leaves your watch and iPhone." |
@@ -72,6 +72,11 @@ The wording scan rejects these in user-facing string literals in `App/Sources`,
 
 Identifiers (`HKHealthStore`, `isHealthDataAvailable`) are not string literals and are not
 scanned.
+
+One exception: a system menu quoted as a path to follow keeps the system's own names, as
+in the "Change access" lines of P-02 ("Settings › Privacy & Security › Health › Rekkert").
+Those lines live in `HealthDisclosure.changeAccess`, outside the scanned folders, and
+`HealthDisclosureTests` exempts them from its own "Apple" rule.
 
 ## Accessibility
 

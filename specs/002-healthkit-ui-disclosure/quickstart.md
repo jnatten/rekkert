@@ -79,7 +79,7 @@ earlier install first.
    - **Continue**: the Apple Health sheet appears. Its text names Apple Health (P-11).
 3. **After the sheet.** Start a workout again: no explainer this time.
 4. **Settings.** Set "When a match starts" to Ask me on a fresh install. The explainer
-   appears; Not now puts the picker back to Do nothing.
+   appears. Not now leaves the picker on Do nothing; Continue sets it.
 5. **In a match.** Open "...": Start workout carries "Saves to Apple Health" (P-04).
 6. **On the watch.** Run `-rekkert-demo-watch-page menu`: the caption under Start workout
    reads "Saves to Apple Health" (W-01). `-rekkert-demo-workout` shows the workout page

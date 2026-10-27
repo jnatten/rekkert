@@ -193,8 +193,9 @@ From the HIG's HealthKit page
     nothing.
   - **Phone, Start workout** (Home, a match's menu, or answering "Start a workout?"): the
     explainer is a sheet; Not now starts nothing.
-  - **Phone, Settings picker set to Ask me or Start workout**: same sheet. Not now puts the
-    picker back to Do nothing (FR-016).
+  - **Phone, Settings picker set to Ask me or Start workout**: same sheet. The new value is
+    stored only on Continue, so Not now leaves the setting, and the watch, as they were
+    (FR-016).
   - **Watch, Start workout press, the automatic start, and the ask on opening the app**
     (`AppModel`): the explainer is a full-screen sheet. Not now leaves everything as it was,
     and it asks again next time.
@@ -220,8 +221,8 @@ From the HIG's HealthKit page
   [contracts/identification-points.md](contracts/identification-points.md). The patterns:
   - **Buttons**: a subtitle or caption beside them reads "Saves to Apple Health". This covers
     a match's menu (a `Button` whose label has a second `Text`, which iOS renders as the menu
-    item's subtitle) and the watch's Start workout (an 11 pt caption under the button,
-    hidden while the failure text shows).
+    item's subtitle) and the watch's Start workout (a 10 pt caption under the button,
+    matching the failure text and hidden while it shows).
   - **Section headers**: carry the mark (Home Workout).
   - **Prompts and footers**: say "Apple Health" in their text.
   - **Data screens**: say where the data lives ("Saved in Apple Health", "Heart rate from

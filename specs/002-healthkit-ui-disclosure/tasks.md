@@ -93,7 +93,8 @@ collect exactly what they did before, built from the disclosure instead of liter
   - `summary`, `when`, `whereItGoes` and `changeAccess` are non-empty, and `summary` equals
     the P-01 body text;
   - no string anywhere in the disclosure contains "HealthKit", and every "Health" in it is
-    preceded by "Apple ";
+    preceded by "Apple ", except in `changeAccess`, whose lines quote system menu names
+    such as "Settings › Privacy & Security › Health" verbatim (FR-013);
   - the union of both devices' `saved` and `read` is `Set(HealthData.allCases)`, so the page
     lists everything and nothing else.
 
@@ -247,7 +248,7 @@ under 30 seconds.
 
   It must not call `prepare()`, `start()` or any request (FR-006). Depends on T010, T012 and
   T015.
-- [ ] T018 [P] [US1] In `App/Sources/Views/DemoLaunch.swift`, add
+- [ ] T018 [US1] In `App/Sources/Views/DemoLaunch.swift`, add
   `static var openAppleHealth: Bool` for `-rekkert-demo-apple-health`. In `HomeView`'s
   `#if DEBUG` launch `.task`, set `path = [.settings, .appleHealth]` when it is on, beside
   the existing `openSettings` branch. Depends on T015.
@@ -357,16 +358,17 @@ while Apple Health would show its sheet, and permission strings that name Apple 
 
 - [ ] T033 [US3] In `App/Sources/WorkoutController.swift`, route every request through
   `HealthAsk`:
-  - Add `enum PendingAsk { case start, prepare(onDecline: () -> Void) }` and
+  - Add `enum PendingAsk { case start, prepare(onGo: @MainActor () -> Void) }` and
     `var explaining: PendingAsk?`, observable.
   - Add a private `ask(_ pending: PendingAsk)` that does
     `let status = await health.askStatus(on: .phone)`. If
     `HealthAsk.explainFirst(status)`, it sets `explaining = pending` and returns; otherwise
-    it proceeds as today.
-  - `start()` and `prepare()` call it. `prepare` takes an `onDecline` closure.
-  - Add `func answerExplainer(_ go: Bool)`. It clears `explaining`; on `true` it proceeds
-    (the request, then for `.start` the `startWatchApp` call); on `false` it calls
-    `onDecline` for `.prepare` and does nothing for `.start` (FR-016).
+    it goes on at once.
+  - Going on means: for `.prepare`, call `onGo` and then request access; for `.start`,
+    request access and then `startWatchApp`, as today.
+  - `start()` and `prepare(onGo:)` call `ask`.
+  - Add `func answerExplainer(_ go: Bool)`. It clears `explaining`. On `true` it goes on.
+    On `false` it does nothing at all, so no `onGo`, no request and no start (FR-016).
 
   `isTracking` and `failure` behave exactly as before, once past the explainer.
 - [ ] T034 [P] [US3] Create `App/Sources/Views/HealthExplainer.swift`, the P-10 sheet:
@@ -383,9 +385,14 @@ while Apple Health would show its sheet, and permission strings that name Apple 
     `model.workout.explaining != nil`. Follow the comment at line 148 about holding back
     while another sheet is up, and calling `answerExplainer(false)` on dismiss without an
     answer.
-  - In `App/Sources/Views/SettingsView.swift`, change `workoutOnMatchStart`'s setter to
-    call `model.workout.prepare(onDecline: { model.store.setHaptics(workoutOnMatchStart: .off) })`,
-    so Not now puts the picker back to Do nothing (FR-016).
+  - In `App/Sources/Views/SettingsView.swift`, change `workoutOnMatchStart`'s setter:
+    - for `.off`, store it at once, as today;
+    - for any other value, call
+      `model.workout.prepare(onGo: { model.store.setHaptics(workoutOnMatchStart: value) })`
+      and do not store it yet.
+
+    The picker keeps showing the stored value while the explainer is up. Not now leaves the
+    setting, and what the watch has been told, exactly as they were (FR-016).
   - In `App/Sources/Views/DemoLaunch.swift`, add `-rekkert-demo-health-explainer`, which sets
     `model.workout.explaining = .start` on launch in `#if DEBUG`.
 
@@ -440,11 +447,18 @@ W- point (SC-003) in under three minutes (SC-007).
   - P-02 and W-04 in [contracts/identification-points.md](contracts/identification-points.md).
 
   Re-run `swift test`.
-- [ ] T041 [US4] [Manual] Follow [quickstart.md](quickstart.md) R-1 and R-2 on the real
-  pair, with a release-configuration or TestFlight build of this branch that includes
-  T002's icon. Then make the recording per R-4 and the shot list in
-  [contracts/review-notes.md](contracts/review-notes.md), and tick every P- and W- point
-  against it.
+- [ ] T041 [US4] [Manual] On the real pair, with a release-configuration or TestFlight build
+  of this branch that includes T002's icon:
+  1. Follow [quickstart.md](quickstart.md) R-1 and R-2.
+  2. Do the two checks listed after the notes in
+     [contracts/review-notes.md](contracts/review-notes.md):
+     - confirm the watch menu page's side;
+     - have someone who has not used Rekkert follow the notes alone, on an iPhone with no
+       watch, to the Apple Health section (SC-006).
+
+     Correct the notes, and T039's copy, if either check fails.
+  3. Make the recording per R-4 and the shot list, and tick every P- and W- point against
+     it.
 - [ ] T042 [US4] [Manual] In App Store Connect, for the next build:
   - paste the review notes from T039;
   - attach the recording under App Review Information;

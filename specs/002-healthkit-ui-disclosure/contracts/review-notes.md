@@ -26,14 +26,21 @@ WHERE TO SEE IT, WITH A PAIRED APPLE WATCH
 - Start screen: the Workout section, marked with the Apple Health icon. Tap "Start a workout". The first time, Rekkert explains what Apple Health will ask, then Apple Health asks.
 - In a match: "..." menu > "Start workout", subtitled "Saves to Apple Health".
 - Settings > Workout on your watch: start and stop a workout with each match. The footer says the workouts go to Apple Health.
-- On the watch: "Start workout" on the menu page (the page left of the score) and on the idle screen, captioned "Saves to Apple Health".
-- Afterwards: start screen > Workouts lists them, each marked as saved in Apple Health, and the workout is in the Apple Health app.
+- On the watch: "Start workout" on the menu page next to the score, and on the idle screen, captioned "Saves to Apple Health".
+- Afterwards: start screen > Workouts lists them and says they stay in Apple Health, each workout's page shows "Saved in: Apple Health", and the workout is in the Apple Health app.
 
 A screen recording on a physical iPhone and Apple Watch showing each of these is attached.
 ```
 
 The rest of `notes.txt` (Getting started, Apple Watch, Sharing, TV, Live Activity, Encryption)
 is unchanged.
+
+Before submitting, check two things on the real watch during T041:
+
+- The menu page sits next to the score, and the notes don't say which side. If the side is
+  worth naming, use the direction the watch actually swipes.
+- Someone who has not used Rekkert, with an iPhone and no watch, reaches the Apple Health
+  section on the first try from these notes alone (SC-006).
 
 ## Recording: shot list
 
