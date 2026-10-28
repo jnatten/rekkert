@@ -155,14 +155,16 @@ App/
     └── Views/
         ├── AppleHealthView.swift     # NEW: the full disclosure page (D-1)
         ├── HealthExplainer.swift     # NEW: the sheet before the first request (D-5)
-        ├── SettingsView.swift        # Apple Health section, always shown; pickers' footer
+        ├── SettingsView.swift        # Apple Health section, always shown; pickers' footer;
+        │                             #   debug-only scroll to it for the review screenshot
         ├── HomeView.swift            # Workout section header and footer
         ├── MatchOptionsMenu.swift    # subtitle on Start workout
         ├── RootView.swift            # "Start a workout?" message
         ├── WorkoutsView.swift        # footer and empty state
         ├── WorkoutDetailView.swift   # "Saved in Apple Health"
         ├── MatchTimelineSection.swift# heart rate source
-        └── DemoLaunch.swift          # -rekkert-demo-apple-health, -rekkert-demo-health-explainer
+        └── DemoLaunch.swift          # -rekkert-demo-apple-health, -rekkert-demo-health-explainer,
+                                      #   -rekkert-demo-settings-apple-health
 
 WatchApp/
 ├── Resources/Assets.xcassets/AppleHealth.imageset   # NEW: same icon (D-3)

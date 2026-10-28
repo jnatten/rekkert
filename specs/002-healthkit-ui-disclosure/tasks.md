@@ -601,3 +601,8 @@ costs more than the extra day.
   `~/dev/rekkert`. Leave them alone, and stop and ask if they get in the way.
 - Words on screen come from the contract verbatim. If a word must change, change the
   contract in the same commit.
+
+## Phase 8: Convergence
+
+- [X] T048 Switch the watch's "Saves to Apple Health" caption (`WatchApp/Sources/Views/WatchWorkoutButton.swift`), its "Saving to Apple Health" caption (`WatchApp/Sources/Views/WatchWorkoutPage.swift`) and the failure text beside the first from `.font(.system(size: 10))` to `main`'s `.scaledFont(size: 10)`, so they grow with the wearer's text size; keep W-03 on one line with its `minimumScaleFactor`, update the contract's Accessibility section to match, and check the workout page still fits without scrolling on a 40 mm watch at the largest text size per spec Edge Cases: VoiceOver and larger text (partial)
+- [X] T049 Record the debug-only `-rekkert-demo-settings-apple-health` flag and the `ScrollViewReader` it adds around the Settings list (`App/Sources/Views/SettingsView.swift`, `App/Sources/Views/DemoLaunch.swift`) in plan.md's source tree and in contracts/review-notes.md as how the App Review screenshot is made, or remove them, per plan: Project Structure (unrequested)

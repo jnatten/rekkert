@@ -21,7 +21,7 @@ struct WatchWorkoutPage: View {
             if let zones = model.workout.zones { zoneBar(zones) }
             figures
             Text("Saving to Apple Health")
-                .font(.system(size: 10))
+                .scaledFont(size: 10)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)

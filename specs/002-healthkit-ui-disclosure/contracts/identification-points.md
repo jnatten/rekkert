@@ -85,9 +85,9 @@ Those lines live in `HealthDisclosure.changeAccess`, outside the scanned folders
   own, so the name is not read twice.
 - On the phone, every caption above uses a Dynamic Type text style and wraps at the largest
   size.
-- On the watch, W-01 and W-03 keep the fixed 10 pt size of the existing failure text, so
-  they do not grow with the text size:
-  - **W-01** wraps.
+- On the watch, W-01, W-03 and W-04 start at 10 pt and grow with the wearer's text size,
+  through the same `scaledFont(size:)` as the rest of the watch's small text (T048):
+  - **W-01** and **W-04** wrap.
   - **W-03** stays on one line and shrinks to fit, because the workout page must not scroll.
     If it no longer fits on the 40 mm case, T030 stops and asks rather than drop the caption
     or let the page scroll.

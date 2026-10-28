@@ -22,7 +22,7 @@ struct WatchWorkoutButton: View {
                 button
                 if !model.workout.isTracking && model.workout.failure == nil {
                     Text("Saves to Apple Health")
-                        .font(.system(size: 10))
+                        .scaledFont(size: 10)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
@@ -32,7 +32,7 @@ struct WatchWorkoutButton: View {
                     // setting. It says nothing at rest and nothing about a workout that is
                     // simply not running.
                     Text(failure)
-                        .font(.system(size: 10))
+                        .scaledFont(size: 10)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }

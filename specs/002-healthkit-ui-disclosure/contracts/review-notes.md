@@ -6,7 +6,8 @@ The submission after build 70 carries three things:
   `fastlane/metadata/review_information/notes.txt`;
 - one image, `fastlane/review_attachment.png`, uploaded as the App Review attachment by
   `scripts/release.sh --metadata`: the Apple Health section in Settings on an iPhone with no
-  watch, beside the explanation before the permission request;
+  watch, beside the explanation before the permission request (see "The attached image"
+  below);
 - a reply to the build 70 rejection with the same notes.
 
 All three are done by hand (research D-10). No screen recording is submitted: the build changes
@@ -45,3 +46,17 @@ Before submitting, check two things on the real watch during T041:
   worth naming, use the direction the watch actually swipes.
 - Someone who has not used Rekkert, with an iPhone and no watch, reaches the Apple Health
   section on the first try from these notes alone (SC-006).
+
+## The attached image
+
+Two iPhone screenshots side by side, each with a caption, from a debug build on a simulator
+with no watch paired, light appearance and a 9:41 status bar:
+
+- **Settings › Apple Health** (P-01), taken with `-rekkert-demo-settings-apple-health`. That
+  debug-only flag opens Settings scrolled to the section, which sits below the fold on an
+  iPhone and which `simctl` cannot scroll to.
+- **The explanation before the permission request** (P-10), taken with
+  `-rekkert-demo-health-explainer`.
+
+The file is gitignored, as the README says for every App Review attachment, so it is made
+again from these two flags whenever the screens change.
