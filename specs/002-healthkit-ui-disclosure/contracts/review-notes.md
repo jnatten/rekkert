@@ -22,19 +22,18 @@ to the guideline.
 
 ```text
 APPLE HEALTH (HEALTHKIT)
-Rekkert uses Apple Health for one thing: workouts. A workout the user starts is recorded on the Apple Watch and saved to Apple Health as indoor tennis, the nearest activity Apple Health has to padel, with its active and resting energy and an effort rating if the user gives one. While it runs, and once when it ends, the watch reads heart rate and energy; to show heart-rate zones it also reads the user's date of birth and latest resting heart rate. Nothing is read unless a workout is started, and nothing read leaves the user's own iPhone and Apple Watch.
+Used only for workouts the user starts. The Apple Watch saves each one to Apple Health as indoor tennis, with its energy and an optional effort rating. While it runs and when it ends, the watch reads heart rate and energy, plus date of birth and resting heart rate for heart-rate zones. Nothing read leaves the user's iPhone and Apple Watch.
 
-WHERE TO SEE IT, WITH NO APPLE WATCH (any iPhone or iPad)
-Tap the gear at the top right of the start screen. The Apple Health section, with the Apple Health icon, says what Rekkert does with Apple Health and why this device cannot record a workout. Tap "What Rekkert saves and reads" for the full list and where to change access.
+NO APPLE WATCH NEEDED (any iPhone or iPad)
+Tap the gear on the start screen. The Apple Health section, with the Apple Health icon, says what Rekkert saves and reads, and "What Rekkert saves and reads" lists it in full.
 
-WHERE TO SEE IT, WITH A PAIRED APPLE WATCH
-- Start screen: the Workout section, marked with the Apple Health icon. Tap "Start a workout". The first time, Rekkert explains what Apple Health will ask, then Apple Health asks.
-- In a match: "..." menu > "Start workout", subtitled "Saves to Apple Health".
-- Settings > Workout on your watch: start and stop a workout with each match. The footer says the workouts go to Apple Health.
-- On the watch: "Start workout" on the menu page next to the score, and on the idle screen, captioned "Saves to Apple Health".
-- Afterwards: start screen > Workouts lists them and says they stay in Apple Health, each workout's page shows "Saved in: Apple Health", and the workout is in the Apple Health app.
+WITH A PAIRED APPLE WATCH
+- Start screen: the Workout section carries the Apple Health icon. The first "Start a workout" explains what Apple Health will ask, then it asks.
+- In a match: "..." > "Start workout", subtitled "Saves to Apple Health".
+- On the watch: "Start workout", captioned "Saves to Apple Health".
+- Settings > Workout on your watch, start screen > Workouts, and each workout's page all name Apple Health.
 
-The attached image shows the Apple Health section in Settings on an iPhone with no Apple Watch, and the explanation Rekkert shows before Apple Health's permission request.
+The attached image shows the Apple Health section in Settings on an iPhone with no Apple Watch, and the explanation shown before the permission request.
 ```
 
 The rest of `notes.txt` (Getting started, Apple Watch, Sharing, TV, Live Activity, Encryption)
