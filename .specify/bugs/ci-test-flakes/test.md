@@ -4,21 +4,24 @@
 - **Tested**: 2026-10-28
 - **Assessment**: ./assessment.md
 - **Fix**: ./fix.md
-- **Result**: partial
+- **Result**: verified
 
 ## Summary
 
-Locally the bug no longer reproduces. Under the CPU load that reproduces the CI failures on `main`, the fix passed every full-suite run. `scripts/verify.sh` (what `test.yml` runs) passes, including both app builds, and no regressions were found.
+The bug no longer reproduces, locally or on CI, and no regressions were found.
 
-The result is **partial** only because the assessment's first reproduction, a GitHub Actions run on the hosted `xcode-27-arm64` runner, was not exercised: it needs a push, which was not authorized as part of this check.
+- **Locally:** under the CPU load that reproduces the CI failures on `main`, the fix passed every full-suite run, and `scripts/verify.sh` passes, including both app builds.
+- **On CI:** after the push, the Test workflow passed three times in a row on the hosted `xcode-27-arm64` runner, with the three tests that used to fail passing each time.
 
-All checks ran on commit `onuzxlvo` / `7d087c8c` ("fix(sync): steady the tests that kept failing on CI"), with an empty working copy on top.
+The local checks ran on commit `onuzxlvo` / `7d087c8c`, with an empty working copy on top. After the report was folded in, the commit was pushed as `296c2d75`: the same change, same content, new commit id. The CI runs are on that.
+
+*This report was first written as **partial**, because no CI run had been done yet. It was raised to verified after the three green runs below.*
 
 ## Checks Performed
 
 | Check | Command / Action | Result | Notes |
 |-------|------------------|--------|-------|
-| Reproduction on CI (assessment steps 1–2) | push, or dispatch `testflight.yml` | skipped | Pushing triggers outward-facing CI; it needs the user's go-ahead. |
+| Reproduction on CI (assessment steps 1–2) | `test.yml` on `296c2d75` ([run 40681751062](https://github.com/jnatten/rekkert/actions/runs/40681751062)); push, then `gh run rerun` twice | pass | 3/3 attempts green: 494 tests in 74 suites passed each time (180 s, 137 s, 146 s), with `aPhoneThatIsBack…`, `aScorerWarmsUp…` and `aWatchStandingIn…` passing in every attempt, and "All checks passed" from `verify.sh`. Before the fix, about half of recent runs failed on these tests. |
 | Reproduction under load, fix (assessment steps 3–4) | `swift test --skip-build --package-path Packages/RekkertKit` with 8 `yes` processes on a 14-core Mac, 3 runs | pass | 3/3 passed (494 tests in 74 suites, 73–84 s). No flaky test failed. |
 | Same load, `main` for comparison | the same command on a clean copy of 86ffb74 built in the scratchpad, alternating with the fix runs, 3 runs | reproduces | 1/3 failed `aScorerWarmsUpButDoesNotStartTheGame` (`AccessTests.swift:231`). In the `/speckit-bug-fix` comparison, `main` also failed `aPhoneThatIsBackButNotThroughIsNotHandedTheMatch` (`:495`/`:496`) under the same load. |
 | New / updated tests | `swift test --skip-build --package-path Packages/RekkertKit --filter '<the fix's tests and suites>'` ×5 | pass | 5/5 passed: 20 tests in 5 suites, including the deterministic `aThroughSaidBeforeThePhoneWentIsNotTakenForNow` and the four new `AccessTests`. |
@@ -28,6 +31,12 @@ All checks ran on commit `onuzxlvo` / `7d087c8c` ("fix(sync): steady the tests t
 ## Output Excerpts
 
 ```
+CI attempt 1:  ✔ Test run with 494 tests in 74 suites passed after 179.847 seconds.
+CI attempt 2:  ✔ Test run with 494 tests in 74 suites passed after 137.114 seconds.
+CI attempt 3:  ✔ Test run with 494 tests in 74 suites passed after 145.861 seconds.
+               ✔ Test aPhoneThatIsBackButNotThroughIsNotHandedTheMatch() passed after 4.232 seconds.
+               ✔ Test aWatchStandingInForAGuestAlreadyOnIsNotTurnedAway() passed after 0.478 seconds.
+               ✔ Test aScorerWarmsUpButDoesNotStartTheGame() passed after 0.660 seconds.
 targeted-1..5: Test run with 20 tests in 5 suites passed after 21.7–26.4 seconds
 verify:        Test run with 494 tests in 74 suites passed after 68.341 seconds | ==> All checks passed
 fix-load-1:    Test run with 494 tests in 74 suites passed after 75.342 seconds
@@ -45,11 +54,15 @@ Across this check and the comparison in `/speckit-bug-fix`, under the same load:
 
 ## Residual Risks
 
-- **CI hardware not exercised.** The hosted runner's core count is unknown, and its load is not the same as `yes` processes on a local Mac. The local load reproduces the CI failures on `main`, but only a CI run confirms the fix there.
+- **Three green runs is evidence, not proof.** Before the fix about half of runs failed, so three passes in a row would happen by chance about one time in eight. Together with the local runs under load (6/6 on the fix, against 2 failures in 5 on `main`), it is strong evidence, but the next few pushes are the real test.
 - **Live-offer path still has a window.** A joining guest that takes the host's match from a live offer, rather than from the answer to its own hello, gets the access list a round trip later, as before (see `fix.md`, Deviations 2). `Court.open` waits for the watch's list, so the test no longer depends on which path wins.
 - **The suite still depends on spare CPU.** At full saturation (14 `yes` on 14 cores) many more tests fail on both versions (assessment, Reproduction 3). New timing assumptions can still surface as CI flakes.
 - **Not checked on devices.** The new wire fields (`snapshot.access`, `standby.issuedAt`) were checked only by the round-trip tests and in-process links. They were not tried between real phones and watches, or against an older build.
 
 ## Recommendation
 
-Hold for one CI run, then close. Push the commit, or let the next push run `test.yml`. If the package-test step passes, preferably on two or three runs given the history of about half failing, mark this bug verified and close it. If any of `aPhoneThatIsBack…`, `aScorerWarmsUp…` or `aWatchStandingIn…` fails on CI again, reopen it and re-run `/speckit-bug-assess` with that run's log. A different test failing would be a new flake for its own assessment.
+Close the bug: it is verified locally and on CI. If any of `aPhoneThatIsBack…`, `aScorerWarmsUp…` or `aWatchStandingIn…` fails on CI again, reopen it and re-run `/speckit-bug-assess` with that run's log. A different test failing would be a new flake for its own assessment. The follow-ups in `fix.md` remain open:
+
+- answer an empty snapshot on the link it came from;
+- add a scheduled CI job that runs the sync tests under load;
+- silence the leaked-continuation warnings.
