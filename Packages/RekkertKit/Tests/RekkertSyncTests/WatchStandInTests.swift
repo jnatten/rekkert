@@ -496,6 +496,44 @@ struct WatchStandInTests {
         #expect(court.sharing.reachablePeers > 0)
     }
 
+    /// The phone's word that it was through, said before it went and handled on the wrist after
+    /// it came back: the two reach the store on separate streams, and under load they cross.
+    @Test func aThroughSaidBeforeThePhoneWentIsNotTakenForNow() async throws {
+        let court = Court()
+        let tasks = court.run()
+        defer { tasks.forEach { $0.cancel() } }
+        await court.phoneJoins()
+        let saidWhileThrough = Date()
+        court.phoneGoesAway()
+        await court.phone.send(.standby(SharingStandby(code: code, isThrough: false)))
+        await eventually { court.sharing.reachablePeers > 0 }
+
+        for link in [court.phoneToWatch, court.watchToPhone] { link.setReachable(true) }
+        await eventually { court.watch.isPairReachable }
+        let late = SharingStandby(code: code, isThrough: true, issuedAt: saidWhileThrough)
+        _ = await court.phoneToWatch.sendLive(try Wire.sharing(.standby(late)).encoded())
+
+        #expect(court.radio.stops == 0)
+        #expect(court.sharing.reachablePeers > 0)
+    }
+
+    @Test func anOlderPhoneThatDatesNothingIsTakenAtItsWord() async throws {
+        let court = Court()
+        let tasks = court.run()
+        defer { tasks.forEach { $0.cancel() } }
+        await court.phoneJoins()
+        court.phoneGoesAway()
+        await court.phone.send(.standby(SharingStandby(code: code, isThrough: false)))
+        await eventually { court.sharing.reachablePeers > 0 }
+
+        for link in [court.phoneToWatch, court.watchToPhone] { link.setReachable(true) }
+        await eventually { court.watch.isPairReachable }
+        let undated = SharingStandby(code: code, isThrough: true)
+        _ = await court.phoneToWatch.sendLive(try Wire.sharing(.standby(undated)).encoded())
+
+        #expect(court.radio.stops > 0, "handed back, as it always was")
+    }
+
     @Test func leavingForgetsTheCode() async throws {
         let court = Court()
         let tasks = court.run()

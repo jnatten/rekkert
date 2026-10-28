@@ -144,12 +144,26 @@ struct SharingSignalTests {
         let standby = SharingSignal.standby(SharingStandby(code: code, isThrough: true))
 
         await phone.send(standby)
-        await eventually { heard.all.contains(standby) }
-        let before = heard.all.count { $0 == standby }
+        await eventually { heard.all.map(undated).contains(standby) }
+        let first = try #require(heard.all.compactMap(issued).first, "dated as it goes")
+        let before = heard.all.map(undated).count { $0 == standby }
         await watch.synchronise()
-        await eventually { heard.all.count { $0 == standby } > before }
+        await eventually { heard.all.map(undated).count { $0 == standby } > before }
 
-        #expect(heard.all.count { $0 == standby } > before)
+        #expect(heard.all.map(undated).count { $0 == standby } > before)
+        let latest = try #require(heard.all.compactMap(issued).last)
+        #expect(latest > first, "and dated again when said again")
+    }
+
+    private func undated(_ signal: SharingSignal) -> SharingSignal {
+        guard case .standby(var standby?) = signal else { return signal }
+        standby.issuedAt = nil
+        return .standby(standby)
+    }
+
+    private func issued(_ signal: SharingSignal) -> Date? {
+        guard case .standby(let standby?) = signal else { return nil }
+        return standby.issuedAt
     }
 
     // MARK: - Not worth saying late

@@ -27,6 +27,8 @@ struct WireCompatibilityTests {
         #expect(try roundTrips(.sharing(.standby(SharingStandby(code: code, isThrough: true, share: UUID(), startedAt: Date(timeIntervalSince1970: 2_000))))))
         #expect(try roundTrips(.guestCard(GuestCard(device: DeviceID(), name: "Bob", pairedTo: DeviceID()))))
         #expect(try roundTrips(.snapshot(MatchLog(), role: .guest)))
+        #expect(try roundTrips(.snapshot(MatchLog(), role: .guest, access: ShareAccessTable(standard: .score, hostName: "Ada"))))
+        #expect(try roundTrips(.sharing(.standby(SharingStandby(code: code, isThrough: true, issuedAt: Date(timeIntervalSince1970: 3_000))))))
     }
 
     @Test func aCardFromAnOlderBuildStillReads() throws {
@@ -45,13 +47,16 @@ struct WireCompatibilityTests {
         #expect(standby.code == code)
         #expect(standby.share == nil)
         #expect(standby.startedAt == nil)
+        #expect(standby.issuedAt == nil)
     }
 
     @Test func aSnapshotWithoutARoleReadsAsBefore() throws {
         let payload = try Wire.snapshot(MatchLog()).encoded()
         #expect(!String(decoding: payload, as: UTF8.self).contains("role"))
-        guard case .snapshot(_, let role) = try Wire.decode(payload) else { Issue.record("not a snapshot"); return }
+        #expect(!String(decoding: payload, as: UTF8.self).contains("access"))
+        guard case .snapshot(_, let role, let access) = try Wire.decode(payload) else { Issue.record("not a snapshot"); return }
         #expect(role == nil)
+        #expect(access == nil)
     }
 
     @Test func aSharingSignalFromANewerBuildFailsToReadRatherThanTrapping() {

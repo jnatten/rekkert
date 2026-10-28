@@ -156,7 +156,7 @@ public final class MatchStore {
     @ObservationIgnored public var standsInForThePair = false {
         didSet { if standsInForThePair, !oldValue { Task { await introduceAsThePairs() } } }
     }
-    @ObservationIgnored private let now: @Sendable () -> Date
+    @ObservationIgnored let now: @Sendable () -> Date
     /// The host this was joining turned it away.
     @ObservationIgnored public var onRefused: ((SharingFailure) -> Void)?
     /// The host of the match on screen stopped sharing it, and said so. Called before this end
@@ -537,10 +537,12 @@ public final class MatchStore {
             let payload = encode(.access(accessTable))
             Task { _ = await sendLive(payload) }
         case .guest:
+            // For its own watch: the host ignores it, and over Bluetooth seven guests saying it at
+            // once as they join held the first point back.
             if let accessTable {
                 let payload = encode(.access(accessTable))
                 transport.queue(payload)
-                Task { _ = await sendLive(payload) }
+                Task { _ = await sendLiveBesideLinks(payload) }
             }
             // The host lists phones; a watch's own join is its phone's to speak for.
             guard keepsHistory, !isJoining else { return }
@@ -551,6 +553,19 @@ public final class MatchStore {
             }
         case .solo:
             break
+        }
+    }
+
+    private func take(_ incoming: ShareAccessTable, from packet: InboundPacket) {
+        guard takesAccess(from: packet), incoming.supersedes(accessTable) else { return }
+        let hadHostName = hostName
+        accessTable = incoming
+        persist()
+        if hostName != hadHostName { onHostNameChanged?() }
+        if role == .guest, !packet.isFromPairedDevice {
+            let payload = encode(.access(incoming))
+            transport.queue(payload)
+            Task { _ = await sendLiveBesideLinks(payload) }
         }
     }
 
@@ -1716,17 +1731,7 @@ public final class MatchStore {
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
         case .access(let incoming):
-            if takesAccess(from: packet), incoming.supersedes(accessTable) {
-                let hadHostName = hostName
-                accessTable = incoming
-                persist()
-                if hostName != hadHostName { onHostNameChanged?() }
-                if role == .guest, !packet.isFromPairedDevice {
-                    let payload = encode(.access(incoming))
-                    transport.queue(payload)
-                    Task { _ = await sendLive(payload) }
-                }
-            }
+            take(incoming, from: packet)
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
         case .guestCard(let card):
@@ -1774,7 +1779,7 @@ public final class MatchStore {
             if packet.isFromPairedDevice { onSharing?(signal) }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
-        case .snapshot(let incoming, let pairRole):
+        case .snapshot(let incoming, let pairRole, let access):
             if packet.isFromPairedDevice, let pairRole { heardThePairIsOn(incoming, as: pairRole) }
             if retired.contains(incoming.sessionID) {
                 guard let ended = overturnedEnding(of: incoming.sessionID, by: incoming.ordered) else {
@@ -1810,13 +1815,14 @@ public final class MatchStore {
                     // offers nothing.
                     let steppedOff = log.sessionID
                     let wasShared = !log.isEmpty && (role == .guest || pairedRole == .guest)
-                    adopt(incoming)
+                    let hadHostName = hostName
+                    adopt(incoming, publishing: false)
                     // Filed all the same, but nobody needs telling: the code was typed to get here.
                     replacedSessionTitle = nil
                     role = .guest
                     isJoining = false
                     joinRefuses = nil
-                    accessTable = nil
+                    accessTable = access
                     forgetLeaving(log.sessionID)
                     shareRole()
                     shareAccess()
@@ -1826,6 +1832,7 @@ public final class MatchStore {
                         tellThePairItLeft(steppedOff)
                     }
                     persist()
+                    if hostName != hadHostName { onHostNameChanged?() }
                     // The watch weighs this against its own match by the role it carries.
                     publishSnapshot(force: true)
                     announceJoined()
@@ -1909,6 +1916,12 @@ public final class MatchStore {
                 // so two devices can never sit pushing sessions at each other.
                 offerOurSession()
                 if packet.isFromPairedDevice { keep(incoming, handedOverBy: .refusedEnding) }
+            }
+            // With the match, so a guest is never on it without the host's say on what it may do.
+            // Only to fill in or bring up to date: a kept snapshot can be older than a list from a
+            // later share, which only `.access` replaces.
+            if let access, log.sessionID == incoming.sessionID, accessTable.map({ $0.id == access.id }) ?? true {
+                take(access, from: packet)
             }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
         }
@@ -2025,7 +2038,9 @@ public final class MatchStore {
 
     /// Replaces the local session with the peer's. Anything already scored locally is
     /// archived first, so a session is never silently destroyed.
-    private func adopt(_ incoming: MatchLog) {
+    ///
+    /// `publishing` false for a join, which says it once the role and the host's list are in.
+    private func adopt(_ incoming: MatchLog, publishing: Bool = true) {
         if keepsHistory, log.hasProgress, let state = SessionReducer.state(of: log) {
             file(state, from: log)
             replacedSessionTitle = state.title
@@ -2038,7 +2053,7 @@ public final class MatchStore {
         refresh()
         // Nothing else says so. A watch holding nothing would otherwise learn of the match
         // the phone just joined only from the next point scored on it.
-        publishSnapshot(force: true)
+        if publishing { publishSnapshot(force: true) }
     }
 
     /// Started by this phone or its watch rather than handed on from somebody else's: no event in
@@ -2154,13 +2169,13 @@ public final class MatchStore {
     @discardableResult
     public func send(_ signal: SharingSignal) async -> Bool {
         keepToSayAgain(signal)
-        return await sendLive(encode(.sharing(signal))) != nil
+        return await sendLive(encode(.sharing(stamped(signal)))) != nil
     }
 
     /// Queued as well as sent: what a watch whose app is not running has to find when it is.
     public func sendDurably(_ signal: SharingSignal) async {
         keepToSayAgain(signal)
-        let payload = encode(.sharing(signal))
+        let payload = encode(.sharing(stamped(signal)))
         transport.queue(payload)
         _ = await sendLive(payload)
     }
@@ -2173,6 +2188,13 @@ public final class MatchStore {
         }
     }
 
+    /// A standby is what is true when it goes, so it is dated then, replays included.
+    private func stamped(_ signal: SharingSignal) -> SharingSignal {
+        guard case .standby(var standby?) = signal else { return signal }
+        standby.issuedAt = now()
+        return .standby(standby)
+    }
+
     /// A watch whose app was ended has forgotten both, and the queue it was sent them on has
     /// long since been emptied.
     private func shareStandbyOnReconnect() {
@@ -2180,7 +2202,7 @@ public final class MatchStore {
         // Read when they go, not when they were asked for: one said in between would be overtaken.
         Task {
             for signal in [announcedStandby, announcedHosting].compactMap(\.self) {
-                _ = await sendLive(encode(.sharing(signal)))
+                _ = await sendLive(encode(.sharing(stamped(signal))))
             }
         }
     }
@@ -2237,7 +2259,7 @@ public final class MatchStore {
     private func offerOurSession(live: Bool = false) {
         guard !log.isEmpty else { return }
         transport.queue(snapshot())
-        if live { Task { _ = await sendLive(snapshot(forThePair: false)) } }
+        if live { Task { _ = await sendLive(snapshot(forThePair: false, withTheList: false)) } }
     }
 
     private func requestSnapshot(_ packet: InboundPacket) {
@@ -2248,8 +2270,14 @@ public final class MatchStore {
     /// that reads its phone is a guest takes the match without weighing the clocks. Nobody else
     /// is told the role, and over Bluetooth the bytes count: on a host answering seven guests at
     /// once, they were enough to hold the first point back.
-    private func snapshot(forThePair: Bool = true) -> Data {
-        encode(.snapshot(log, role: forThePair ? role : nil))
+    ///
+    /// The host's list goes with it to everybody, and a guest's copy to its own watch or phone:
+    /// what the match arrives in, the list arrives in too. Over Bluetooth that is only the answer
+    /// to a hello, since the radio does not carry a published one. Not in a live offer, which goes
+    /// to every link at once and, with seven joining, once for each of them.
+    private func snapshot(forThePair: Bool = true, withTheList: Bool = true) -> Data {
+        let access = (role == .host && withTheList) || (forThePair && role == .guest) ? accessTable : nil
+        return encode(.snapshot(log, role: forThePair ? role : nil, access: access))
     }
 
     /// Put down before anything is weighed. Only a guest is acted on here: the other roles carry

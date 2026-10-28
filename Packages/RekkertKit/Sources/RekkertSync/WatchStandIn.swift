@@ -114,6 +114,10 @@ public final class WatchStandIn {
     /// An older phone never says, and is trusted to be carrying the match as it always was.
     private var hasHeardStandby = false
     @ObservationIgnored private var phoneLastThrough = ContinuousClock.now
+    /// When the wrist last saw its phone go, by the store's clock, which is the one the phone
+    /// dates its standby by.
+    @ObservationIgnored private var pairLostAt: Date?
+    @ObservationIgnored private var wasPairReachable = false
 
     /// Whether the score on the wrist is still reaching the host, for a match somebody else is
     /// hosting. `down` is a watch with no way back: no phone, and no code to dial with.
@@ -375,6 +379,9 @@ public final class WatchStandIn {
             case .searching, .off: break
             }
         case .standby(let standby):
+            // Said before the phone went and handed over after it came back. It says again what is
+            // true now on its way back; an older phone dates nothing, and is taken at its word.
+            if let issued = standby?.issuedAt, let lost = pairLostAt, issued < lost { return }
             phoneStandby = standby
             hasHeardStandby = true
             if let standby { sharing.keep(fromThePhone: standby) }
@@ -406,6 +413,8 @@ public final class WatchStandIn {
     func evaluate() {
         let now = ContinuousClock.now
         let isPairReachable = store.isPairReachable
+        if wasPairReachable, !isPairReachable { pairLostAt = store.now() }
+        wasPairReachable = isPairReachable
         // Said before it went. It says it again on the way back.
         if !isPairReachable, phoneStandby?.isThrough == true { phoneStandby?.isThrough = false }
         let isPhoneThrough = isPairReachable && phoneStandby?.isThrough == true

@@ -276,10 +276,11 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         }
     }
 
-    /// The role is for this device's own watch or phone. Another phone is told the match.
+    /// The role, and a guest's copy of the host's list, are for this device's own watch or phone.
+    /// Another phone is told the match, and the host's list with it.
     private static func snapshot(_ payload: Data, for scope: Scope) -> Data {
-        guard !scope.isPairedDevice, case .snapshot(let log, _?)? = try? Wire.decode(payload),
-              let plain = try? Wire.snapshot(log).encoded()
+        guard !scope.isPairedDevice, case .snapshot(let log, let role?, let access)? = try? Wire.decode(payload),
+              let plain = try? Wire.snapshot(log, access: role == .host ? access : nil).encoded()
         else { return payload }
         return plain
     }

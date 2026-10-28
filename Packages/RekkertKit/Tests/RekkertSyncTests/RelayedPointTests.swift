@@ -43,7 +43,7 @@ nonisolated private final class SnapshotRecorder: PeerTransport, @unchecked Send
     func queue(_ payload: Data) {}
 
     func publishSnapshot(_ payload: Data) {
-        guard case .snapshot(let log, _)? = try? Wire.decode(payload) else { return }
+        guard case .snapshot(let log, _, _)? = try? Wire.decode(payload) else { return }
         lock.withLock { _snapshots.append(log) }
     }
 
@@ -155,7 +155,7 @@ struct QuietChildTests {
         _ = await sending.value
         let doneAfter = ContinuousClock.now - started
 
-        guard let payload = first?.payload, case .snapshot(let log, _)? = try? Wire.decode(payload) else {
+        guard let payload = first?.payload, case .snapshot(let log, _, _)? = try? Wire.decode(payload) else {
             Issue.record("the host's answer should have been handed on")
             return
         }

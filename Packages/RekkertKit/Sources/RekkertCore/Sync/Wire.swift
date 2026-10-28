@@ -91,10 +91,14 @@ public struct SharingStandby: Codable, Sendable, Hashable {
     public var radioTrouble: SharingFailure?
     /// Who the host said they are, for the wrist to call the match by.
     public var hostName: String?
+    /// When the phone said it, each time it said it. One said before the pair last lost each other
+    /// can be handled after they are back, and is no word on how things are now.
+    public var issuedAt: Date?
 
     public init(
         code: SessionCode, isThrough: Bool, share: UUID? = nil, startedAt: Date? = nil,
-        hostOutOfReachSince: Date? = nil, radioTrouble: SharingFailure? = nil, hostName: String? = nil
+        hostOutOfReachSince: Date? = nil, radioTrouble: SharingFailure? = nil, hostName: String? = nil,
+        issuedAt: Date? = nil
     ) {
         self.code = code
         self.isThrough = isThrough
@@ -103,6 +107,7 @@ public struct SharingStandby: Codable, Sendable, Hashable {
         self.hostOutOfReachSince = hostOutOfReachSince
         self.radioTrouble = radioTrouble
         self.hostName = hostName
+        self.issuedAt = issuedAt
     }
 }
 
@@ -185,7 +190,10 @@ public enum Wire: Codable, Sendable, Hashable {
     case events(sessionID: UUID, events: [MatchEvent])
     /// Whole-log backstop, used on the coalescing application-context channel. `role` is the
     /// sender's, for its own watch; absent from older builds and from what goes to other phones.
-    case snapshot(MatchLog, role: SessionRole? = nil)
+    /// `access` is the host's say on what each phone may do, so a guest has it the moment it has
+    /// the match: from the host to everybody, and from a guest to its own watch. Absent from older
+    /// builds, whose guests go on allowing everything until told.
+    case snapshot(MatchLog, role: SessionRole? = nil, access: ShareAccessTable? = nil)
     /// "The session you are offering ended here." Retiring a session is otherwise
     /// knowledge one device holds alone: it refuses every packet for that session, and a
     /// counterpart that never heard the ending goes on scoring into a match that can no

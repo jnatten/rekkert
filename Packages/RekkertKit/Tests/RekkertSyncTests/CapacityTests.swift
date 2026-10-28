@@ -97,7 +97,9 @@ struct CapacityTests {
         let watch = DeviceID()
         try guests.say(.guestCard(GuestCard(device: watch, name: nil, pairedTo: phones[0])), on: guests.links[7])
         try guests.say(.hello(sessionID: store.log.sessionID, vector: VersionVector(), from: watch), on: guests.links[7])
-        await quietPeriod()
+        // Every one of the nine is answered, the watch's two included, whether or not there is room.
+        await eventually { guests.told.count == 9 }
+        #expect(guests.told.count == 9)
         #expect(store.participants.all.count == 7)
         #expect(!guests.wasRefused(guests.links[7]))
     }

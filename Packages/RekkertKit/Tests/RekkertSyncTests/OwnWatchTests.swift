@@ -553,7 +553,7 @@ private final class CuttableLink: PeerTransport, @unchecked Sendable {
     func sendLive(_ payload: Data) async -> Data? { nil }
     func queue(_ payload: Data) {}
     func publishSnapshot(_ payload: Data) {
-        guard case .snapshot(let log, _)? = try? Wire.decode(payload) else { return }
+        guard case .snapshot(let log, _, _)? = try? Wire.decode(payload) else { return }
         lock.withLock { if connected { _published.append(log) } }
     }
 }

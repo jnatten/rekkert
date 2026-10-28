@@ -46,11 +46,64 @@ private final class Court {
         host.setDefaultAccess(access)
         host.startSharing()
         phone.beginJoining()
-        await eventually { phone.role == .guest && phone.accessTable != nil && !watch.canEndSession }
+        // The watch's list too: a match handed on from the host's live offer comes without one,
+        // and the list follows it.
+        await eventually {
+            phone.role == .guest && phone.accessTable != nil && !watch.canEndSession && watch.accessTable != nil
+        }
     }
 
     func close() {
         tasks.forEach { $0.cancel() }
+    }
+}
+
+/// A host that answers a hello with its match and its list and says nothing else, so whatever
+/// a guest knows of the list came with the match.
+nonisolated private final class ScriptedHost: PeerTransport, @unchecked Sendable {
+    let inbound = AsyncStream<InboundPacket> { _ in }
+    let reachability = AsyncStream<Bool> { _ in }
+    private let answer: Data
+    private let lock = NSLock()
+    private var snapshots: [Data] = []
+
+    init(answer: Wire) throws {
+        self.answer = try answer.encoded()
+    }
+
+    var isReachable: Bool { true }
+    func activate() {}
+    func sendLive(_ payload: Data) async -> Data? {
+        guard case .hello? = try? Wire.decode(payload) else { return nil }
+        return answer
+    }
+    func publishSnapshot(_ payload: Data) { lock.withLock { snapshots.append(payload) } }
+    func queue(_ payload: Data) {}
+
+    var published: [Wire] { lock.withLock { snapshots.compactMap { try? Wire.decode($0) } } }
+}
+
+/// Everything that reaches the far end of a link, for a test that wants to read what was said
+/// rather than have a store act on it.
+nonisolated private final class Overhearing: @unchecked Sendable {
+    private let lock = NSLock()
+    private var heard: [Wire] = []
+    private var listening: Task<Void, Never>?
+
+    init(_ end: LoopbackTransport) {
+        listening = Task { [weak self] in
+            for await packet in end.inbound {
+                if let wire = try? Wire.decode(packet.payload) { self?.lock.withLock { self?.heard.append(wire) } }
+            }
+        }
+    }
+
+    deinit { listening?.cancel() }
+
+    var snapshots: [(log: MatchLog, access: ShareAccessTable?)] {
+        lock.withLock {
+            heard.compactMap { if case .snapshot(let log, _, let access) = $0 { (log, access) } else { nil } }
+        }
     }
 }
 
@@ -234,5 +287,94 @@ struct AccessTests {
         await eventually { court.phone.state?.warmingUpSince == nil && court.watch.state?.warmingUpSince == nil }
         #expect(court.phone.state?.warmingUpSince == nil)
         #expect(court.watch.state?.warmingUpSince == nil)
+    }
+
+    @Test func aHostAnswersAJoinWithItsList() async throws {
+        let (hostEnd, guestEnd) = LoopbackTransport.pair()
+        let host = MatchStore(device: DeviceID(), transport: hostEnd, snapshotInterval: 0)
+        host.configure(winnerCourt)
+        host.setDefaultAccess(.score)
+        host.startSharing()
+        let run = Task { await host.run() }
+        defer { run.cancel() }
+
+        let hello = try Wire.hello(sessionID: UUID(), vector: VersionVector(), from: DeviceID()).encoded()
+        let answer = await guestEnd.sendLive(hello).flatMap { try? Wire.decode($0) }
+
+        guard case .snapshot(let log, _, let access)? = answer else { Issue.record("not a snapshot"); return }
+        #expect(log.sessionID == host.log.sessionID)
+        #expect(access == host.accessTable)
+    }
+
+    /// The list reached a joining phone after the match did, and its watch later still: a scorer
+    /// was briefly let do everything, and a watch that ended the warm-up in that moment ended it
+    /// on the host's match.
+    @Test func aJoiningGuestHasTheHostsListTheMomentItHasTheMatch() async throws {
+        var hostLog = MatchLog()
+        hostLog.append(.configure(winnerCourt), from: DeviceID())
+        let list = ShareAccessTable(standard: .score, hostName: "Ada")
+        let scripted = try ScriptedHost(answer: .snapshot(hostLog, access: list))
+        let (phoneToWatch, watchEnd) = LoopbackTransport.pair()
+        let toTheWatch = Overhearing(watchEnd)
+        let links = FanOutTransport()
+        links.attach(phoneToWatch, as: .pairedDevice)
+        links.attach(scripted, as: .sharedSession)
+        let phone = MatchStore(device: DeviceID(), transport: links, snapshotInterval: 0)
+        let run = Task { await phone.run() }
+        defer { run.cancel() }
+
+        phone.beginJoining()
+        await eventually { phone.role == .guest }
+        #expect(phone.role == .guest)
+        #expect(phone.access == .score, "from the answer alone: this host says nothing else")
+        #expect(phone.hostName == "Ada")
+
+        await eventually { toTheWatch.snapshots.contains { $0.log.sessionID == hostLog.sessionID } }
+        let handedOn = toTheWatch.snapshots.first { $0.log.sessionID == hostLog.sessionID }
+        #expect(handedOn?.access == list, "the watch is handed the list with the match")
+        let toOtherPhones = scripted.published.compactMap { if case .snapshot(_, _, let access) = $0 { access } else { nil } }
+        #expect(toOtherPhones.isEmpty, "a guest's copy is for its own watch")
+    }
+
+    @Test func aGuestsWatchHasTheListTheMomentItHasTheMatch() async throws {
+        var hostLog = MatchLog()
+        hostLog.append(.configure(winnerCourt), from: DeviceID())
+        let list = ShareAccessTable(standard: .score, hostName: "Ada")
+        let (phoneEnd, watchToPhone) = LoopbackTransport.pair()
+        let links = FanOutTransport()
+        links.attach(watchToPhone, as: .pairedDevice)
+        let watch = MatchStore(device: DeviceID(), transport: links, snapshotInterval: 0, keepsHistory: false)
+        let run = Task { await watch.run() }
+        defer { run.cancel() }
+        await eventually { watch.isPairReachable }
+
+        _ = await phoneEnd.sendLive(try Wire.snapshot(hostLog, role: .guest, access: list).encoded())
+
+        #expect(watch.log.sessionID == hostLog.sessionID)
+        #expect(!watch.canEndSession)
+        #expect(watch.access == .score)
+    }
+
+    /// What a link keeps for whoever connects next can be older than what was said since.
+    @Test func aKeptSnapshotDoesNotPutBackAnotherSharesList() async throws {
+        var hostLog = MatchLog()
+        hostLog.append(.configure(winnerCourt), from: DeviceID())
+        let current = ShareAccessTable(standard: .score, hostName: "Ada")
+        let earlier = ShareAccessTable(standard: .full, hostName: "Ada")
+        let (phoneEnd, watchToPhone) = LoopbackTransport.pair()
+        let links = FanOutTransport()
+        links.attach(watchToPhone, as: .pairedDevice)
+        let watch = MatchStore(device: DeviceID(), transport: links, snapshotInterval: 0, keepsHistory: false)
+        let run = Task { await watch.run() }
+        defer { run.cancel() }
+        await eventually { watch.isPairReachable }
+
+        _ = await phoneEnd.sendLive(try Wire.snapshot(hostLog, role: .guest, access: current).encoded())
+        _ = await phoneEnd.sendLive(try Wire.snapshot(hostLog, role: .guest, access: earlier).encoded())
+        #expect(watch.accessTable == current)
+
+        let readOnly = current.with(standard: .readOnly)
+        _ = await phoneEnd.sendLive(try Wire.snapshot(hostLog, role: .guest, access: readOnly).encoded())
+        #expect(watch.access == .readOnly, "the same list, brought up to date")
     }
 }

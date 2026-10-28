@@ -427,7 +427,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
     /// sees the score without waiting for a round trip of its own. Said to everybody only when it
     /// is another match: the next one, or a result taken back.
     public func publishSnapshot(_ payload: Data) {
-        let session: UUID? = if case .snapshot(let log, _)? = try? Wire.decode(payload) { log.sessionID } else { nil }
+        let session: UUID? = if case .snapshot(let log, _, _)? = try? Wire.decode(payload) { log.sessionID } else { nil }
         let isAnotherMatch = lock.withLock { () -> Bool in
             lastSnapshot = payload
             defer { broadcastSession = session }
