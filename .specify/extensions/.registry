@@ -16,7 +16,13 @@
           "speckit.git.commit"
         ]
       },
-      "registered_skills": [],
+      "registered_skills": [
+        "speckit-git-feature",
+        "speckit-git-validate",
+        "speckit-git-remote",
+        "speckit-git-initialize",
+        "speckit-git-commit"
+      ],
       "installed_at": "2026-10-27T06:47:03.277239+00:00"
     },
     "bug": {
@@ -32,7 +38,11 @@
           "speckit.bug.test"
         ]
       },
-      "registered_skills": [],
+      "registered_skills": [
+        "speckit-bug-assess",
+        "speckit-bug-fix",
+        "speckit-bug-test"
+      ],
       "installed_at": "2026-10-27T21:09:47.514311+00:00"
     }
   }

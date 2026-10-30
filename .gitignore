@@ -20,3 +20,8 @@ fastlane/README.md
 fastlane/report.xml
 fastlane/Preview.html
 fastlane/review_attachment.*
+
+# share the Spec Kit skills, but keep the rest of .claude/ local
+!/.claude/
+/.claude/*
+!/.claude/skills/
