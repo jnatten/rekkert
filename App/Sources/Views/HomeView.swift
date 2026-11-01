@@ -123,7 +123,7 @@ struct HomeView: View {
                         } label: {
                             Label {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(model.workout.isTracking ? "Stop the workout" : "Start a workout")
+                                    Text(workoutTitle)
                                         .foregroundStyle(.primary)
                                     Text(subtitle)
                                         .font(.caption).foregroundStyle(.secondary)
@@ -132,6 +132,7 @@ struct HomeView: View {
                                 Image(systemName: model.workout.isTracking ? "stop.circle" : "figure.tennis")
                             }
                         }
+                        .disabled(model.workout.isStarting)
                     } header: {
                         HStack {
                             Text("Workout")
@@ -273,9 +274,14 @@ struct HomeView: View {
         model.store.updatePreset(renaming.id) { $0.name = name }
     }
 
+    private var workoutTitle: String {
+        if model.workout.isTracking { return "Stop the workout" }
+        return model.workout.isStarting ? "Starting a workout…" : "Start a workout"
+    }
+
     private var subtitle: String {
         switch (model.workout.isTracking, model.workout.isPaused) {
-        case (false, _): "On your Apple Watch"
+        case (false, _): model.workout.isStarting ? "Waiting for your Apple Watch" : "On your Apple Watch"
         case (true, false): "Running on your Apple Watch"
         case (true, true): "Paused on your Apple Watch"
         }

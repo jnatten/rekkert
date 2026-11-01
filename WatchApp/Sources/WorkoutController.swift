@@ -218,11 +218,24 @@ final class WorkoutController {
         }
     }
 
-    /// The phone asked for one, by launching this app with a configuration. Same path as the
-    /// button here, so there is one way in — and the configuration it sends is the one this
-    /// would have built anyway.
+    /// The phone asked for one, by launching this app in the background. Not the button's path:
+    /// an explanation put up here would wait unseen, and Health cannot ask from the background
+    /// either, so it starts on access already given or tells the phone it could not.
     func handle(_ configuration: HKWorkoutConfiguration) {
-        start()
+        guard isAvailable else { return }
+        if isTracking, let startedAt {
+            let elapsed = builder?.elapsedTime ?? Date().timeIntervalSince(startedAt)
+            publish?(isPaused ? .paused(since: startedAt, elapsed: elapsed) : .running(since: startedAt))
+            return
+        }
+        guard !isStarting else { return }
+        failure = nil
+        do {
+            try begin()
+        } catch {
+            stopped(with: error)
+            if (error as? HKError)?.code == .errorAuthorizationDenied { prepare() }
+        }
     }
 
     /// What the phone has to say. It has no session of its own, so everything it can send is

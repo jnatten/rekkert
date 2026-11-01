@@ -298,6 +298,33 @@ struct WorkoutSyncTests {
         #expect(paired.workouts.last == .idle)
     }
 
+    /// The watch the phone launched to start a workout says it is running before its link to
+    /// the phone is up, and has to say it again once the link is, without waiting to be asked.
+    @Test func aRunningSaidOutOfReachIsSaidAgainOnceThePhoneIsBack() async throws {
+        let (watchEnd, phoneEnd) = LoopbackTransport.pair()
+        let receiving = MatchStore(device: DeviceID(), transport: phoneEnd, snapshotInterval: 0)
+        var seen: [WorkoutSignal] = []
+        receiving.onWorkout = { seen.append($0) }
+        let phoneTask = Task { await receiving.run() }
+        defer { phoneTask.cancel() }
+
+        watchEnd.setReachable(false)
+        let links = FanOutTransport()
+        links.attach(watchEnd, as: .pairedDevice)
+        let sending = MatchStore(device: DeviceID(), transport: links, snapshotInterval: 0, keepsHistory: false)
+        let watchTask = Task { await sending.run() }
+        defer { watchTask.cancel() }
+
+        let running = WorkoutSignal.running(since: Date(timeIntervalSince1970: 768_000_000))
+        sending.send(running)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(seen.isEmpty)
+
+        watchEnd.setReachable(true)
+        await eventually { seen.contains(running) }
+        #expect(seen.contains(running))
+    }
+
     /// A phone coming back mid-pause has to be told it is a pause. It may never have heard
     /// the start, and the one thing it must not be handed is the "running" that came before.
     @Test func aReconnectIsToldTheLastThingSaidRatherThanTheFirst() async {

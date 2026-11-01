@@ -60,13 +60,14 @@ struct MatchOptionsMenu: View {
                         Label("Stop workout", systemImage: "stop.circle")
                     } else {
                         Label {
-                            Text("Start workout")
+                            Text(model.workout.isStarting ? "Starting workout…" : "Start workout")
                             Text("Saves to Apple Health")
                         } icon: {
                             Image(systemName: "figure.tennis")
                         }
                     }
                 }
+                .disabled(model.workout.isStarting)
             }
             Toggle(isOn: $announcer.isEnabled) {
                 Label("Call the score", systemImage: "speaker.wave.2")

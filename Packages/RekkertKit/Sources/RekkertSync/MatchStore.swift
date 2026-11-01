@@ -1222,6 +1222,9 @@ public final class MatchStore {
                     recorder?.note(isPairReachable ? .proven : .dropped(.unknown), on: .pair)
                 }
                 recordedPairReachable = isPairReachable
+                // Not left for the phone's hello: a watch launched to start a workout has said
+                // so before its link was up, and the hello can be a while coming.
+                if isPairReachable { shareWorkoutOnReconnect() }
             }
             // Back, it says again what it holds. Until then it may have come back with less.
             if !transport.isReachableBesideLinks { heldBesideLinks = nil }

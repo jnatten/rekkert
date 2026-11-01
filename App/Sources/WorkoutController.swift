@@ -18,6 +18,7 @@ import WatchConnectivity
 @Observable
 final class WorkoutController {
     private(set) var isTracking = false
+    private(set) var isStarting = false
     /// Running but held. A separate flag rather than a third state, because everything that
     /// asks whether a workout is on still wants the answer yes.
     private(set) var isPaused = false
@@ -42,6 +43,7 @@ final class WorkoutController {
     @ObservationIgnored private let health = HKHealthStore()
     /// A summary arrives live and again off the queue, and the second must not ask again.
     @ObservationIgnored private var asked: Set<UUID> = []
+    @ObservationIgnored private var patience: Task<Void, Never>?
 
     /// There has to be a wrist for any of this to mean anything. Without one the control is
     /// not shown at all, rather than shown and then doing nothing when pressed.
@@ -68,7 +70,7 @@ final class WorkoutController {
     }
 
     func start() {
-        guard isAvailable, !isTracking, explaining == nil else { return }
+        guard isAvailable, !isTracking, !isStarting, explaining == nil else { return }
         failure = nil
         ask(.start)
     }
@@ -84,12 +86,12 @@ final class WorkoutController {
             if HealthAsk.explainFirst(await health.askStatus(on: .phone)) {
                 explaining = pending
             } else {
-                carryOn(pending)
+                carryOn(pending, asking: false)
             }
         }
     }
 
-    private func carryOn(_ pending: PendingAsk) {
+    private func carryOn(_ pending: PendingAsk, asking: Bool = true) {
         switch pending {
         case .prepare(let onGo):
             onGo()
@@ -99,31 +101,57 @@ final class WorkoutController {
                 )
             }
         case .start:
-            launch()
+            launch(asking: asking)
         }
     }
 
-    private func launch() {
+    private func launch(asking: Bool) {
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .tennis
         configuration.locationType = .indoor
+        isStarting = true
         Task {
             do {
-                // Sharing only. The phone never reads a workout back out of Health: it keeps
-                // its own copy of the summary, so a refused read cannot empty a list of
-                // workouts that plainly exist.
-                try await health.requestAuthorization(
-                    toShare: HealthDisclosure.toShare(on: .phone), read: HealthDisclosure.toRead(on: .phone)
-                )
+                if asking {
+                    // Sharing only. The phone never reads a workout back out of Health: it keeps
+                    // its own copy of the summary, so a refused read cannot empty a list of
+                    // workouts that plainly exist.
+                    try await health.requestAuthorization(
+                        toShare: HealthDisclosure.toShare(on: .phone), read: HealthDisclosure.toRead(on: .phone)
+                    )
+                }
                 try await health.startWatchApp(toHandle: configuration)
             } catch let error as HKError
                 where error.code == .errorAuthorizationDenied || error.code == .errorAuthorizationNotDetermined {
+                settle()
                 failure = "Turn on Apple Health access for Rekkert in Settings."
+                return
             } catch {
+                settle()
                 failure = "Couldn't start on your watch"
+                return
             }
+            waitForTheWatch()
         }
     }
+
+    private func waitForTheWatch() {
+        patience?.cancel()
+        patience = Task { [weak self] in
+            try? await Task.sleep(for: Self.startPatience)
+            guard !Task.isCancelled, let self, isStarting else { return }
+            settle()
+            failure = "No word from your Apple Watch yet. Check Rekkert there."
+        }
+    }
+
+    private func settle() {
+        isStarting = false
+        patience?.cancel()
+        patience = nil
+    }
+
+    private static let startPatience: Duration = .seconds(15)
 
     func stop() {
         guard isTracking else { return }
@@ -149,18 +177,24 @@ final class WorkoutController {
     func heard(_ signal: WorkoutSignal) {
         switch signal {
         case .running(let since):
+            settle()
             isTracking = true
             isPaused = false
             startedAt = since
             failure = nil
             askingForEffort = nil
         case .paused(let since, _):
+            settle()
             isTracking = true
             isPaused = true
             startedAt = since
             failure = nil
             askingForEffort = nil
         case .idle:
+            if isStarting {
+                settle()
+                failure = "Couldn't start on your Apple Watch. Check Rekkert there."
+            }
             isTracking = false
             isPaused = false
             startedAt = nil
