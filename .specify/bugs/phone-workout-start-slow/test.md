@@ -4,24 +4,23 @@
 - **Tested**: 2026-11-01
 - **Assessment**: ./assessment.md
 - **Fix**: ./fix.md
-- **Result**: partial
+- **Result**: verified
 
 ## Summary
 
-The main symptom (Path A, the regression from `b08f8c2`) reproduces with the pre-fix watch app and is gone with the fix. On the same paired simulators, minutes apart, the pre-fix watch app stalled on its Apple Health explainer and never started a session. The fixed one started a session 0.6 s after the phone's request, and the phone showed it running 2.6 s after the tap. All automated checks pass. The result is partial, not verified, for two reasons:
-- Path B (the watch refuses the start) was not exercised.
-- Nothing was run on a real iPhone and Apple Watch, where the report came from and where Bluetooth timing differs.
+The main symptom (Path A, the regression from `b08f8c2`) reproduces with the pre-fix watch app and is gone with the fix. On the same paired simulators, minutes apart, the pre-fix watch app stalled on its Apple Health explainer and never started a session. The fixed one started a session 0.6 s after the phone's request, and the phone showed it running 2.6 s after the tap. All automated checks pass, and the reporter has since tried the fix on a real iPhone and Apple Watch and says it worked. Path B (the watch refuses the start) was not tested separately; it was not part of the original report.
 
 ## Checks Performed
 
 | Check | Command / Action | Result | Notes |
 |-------|------------------|--------|-------|
 | Reproduction, pre-fix (Path A) | Pre-fix watch app (`28c4538`) on the paired watch simulator, fixed phone app, Start workout from the phone's match menu | fail (as expected) | Watch received the workout 0.6 s after the request, then started no session. It sat on the "Rekkert works with Apple Health" explainer. |
-| Reproduction, post-fix (Path A) | Same simulators and Apple Health state, fixed watch app (`6ebf12b`), same steps | pass | Session started 0.6 s after the request. The phone switched to Pause / Stop workout with the heart in the badge, 2.6 s after the tap. |
+| Reproduction, post-fix (Path A) | Same simulators and Apple Health state, fixed watch app (`082bb53`), same steps | pass | Session started 0.6 s after the request. The phone switched to Pause / Stop workout with the heart in the badge, 2.6 s after the tap. |
 | Phone "starting" state | Opened the match menu during a start | pass | "Starting workout…", greyed out, in both runs. |
 | Phone 15 s timeout | Pre-fix run above: the watch never answered | pass (partly seen) | The menu went back to an enabled "Start workout" within about 20 s. The failure text ("No word from your Apple Watch yet…") shows only on the Home screen, which wasn't on screen. |
 | Watch says "running" again when the phone becomes reachable | First fixed run (21:23), watch and phone logs | pass | Watch published "running" while WatchConnectivity reported `reachable: NO`; reachability flipped 11 ms later; the phone's first message from the watch came 2.3 s after that. The logs can't show whether the new resend or the existing resend on the phone's hello delivered it first. |
 | Stop from the phone | Stop workout from the match menu, both fixed runs | pass | Watch ended and finished the session. The phone asked "How hard was that?" (skipped). |
+| Real devices | Reporter started workouts from a physical iPhone with a physical Apple Watch | pass | Reported as: "seemed to work nicely when trying on physical devices". No timings or details of which starts were tried. |
 | Path B (watch refuses: another workout running, or access off) | — | not-run | Needs another app holding the watch's workout session, or Rekkert's access revoked on the simulators. Neither was set up. |
 | New test | `swift test --package-path Packages/RekkertKit --filter WorkoutSyncTests` | pass | 13/13, including `aRunningSaidOutOfReachIsSaidAgainOnceThePhoneIsBack`. During the fix this test failed with the new `MatchStore` line removed. |
 | Regression suite | `swift test --package-path Packages/RekkertKit` | pass | RekkertSyncTests 495, RekkertCoreTests 788, including `HealthWordingTests` |
@@ -60,7 +59,7 @@ Test run with 788 tests in 69 suites passed after 0.270 seconds.   (RekkertCoreT
 
 ## Residual Risks
 
-- **Real hardware not tested.** The simulator pair talks over a local channel, so the 2.6 s here says nothing about how long a cold launch over Bluetooth takes on a wrist. The original "slow" report is only partly addressed: the phone now shows that it's waiting, but the system's own launch time is unchanged.
+- **Real hardware checked only informally.** The reporter's device check has no timings, and the simulator's 2.6 s says nothing about a cold launch over Bluetooth. The phone now shows that it's waiting, but the system's own launch time is unchanged.
 - **Path B not exercised.** The fixed phone's reaction to `.idle` during a start ("Couldn't start on your Apple Watch…") is untested apart from compiling.
 - **Simulator explainer was visible.** On the simulator, the stalled explainer was on the watch screen because nothing else was in front. On a real watch with the wrist down it wouldn't be, which is how the original report reads ("sometimes it doesn't start"). The stall itself is the same either way.
 - **Apple Health state on the simulators.** Sharing permission came from the phone's grant, and the watch simulator was never asked for its own read types. This was the Path A condition in both runs. Heart rate and zones on a phone-started workout, for a watch that has never been asked, remain the open follow-up from `fix.md`.
@@ -68,8 +67,4 @@ Test run with 788 tests in 69 suites passed after 0.270 seconds.   (RekkertCoreT
 
 ## Recommendation
 
-Hold, then close after one real-device pass. The regression is fixed and the before/after on simulators shows it directly. Before closing, run the two device checks still open from `fix.md` on a real iPhone and Apple Watch:
-1. A phone start with the watch app closed and the wrist down.
-2. A phone start while Apple's Workout app holds the session (Path B).
-
-If both behave as they did here, mark the bug verified.
+Close the bug. The regression is fixed, the before/after on simulators shows it directly, and the reporter confirmed it on real devices. If a start from the phone ever silently fails again, try it while Apple's Workout app holds the session (Path B), which is the one path not tested.
