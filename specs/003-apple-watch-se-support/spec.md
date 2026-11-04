@@ -39,9 +39,9 @@ A trial build of the current app, set to accept watchOS 10, shows the gap is sma
   needs watchOS 26. The other is a small piece of bookkeeping inside the workout recorder,
   which needs watchOS 11. Both have watchOS 10 equivalents that behave the same for the
   player.
-- **Has no watchOS 10 equivalent.** Saving the player's 1–10 effort rating to Apple Health.
-  Apple Health added a place for effort ratings in watchOS 11, so a watchOS 10 watch has
-  nowhere to save one. On these watches the rating stays in Rekkert's own workout history
+- **Has no watchOS 10 equivalent.** Saving the player's 1–10 effort rating to Apple Health,
+  and asking Apple Health for permission to do so. Apple Health added a place for effort
+  ratings in watchOS 11, so a watchOS 10 watch has nowhere to save one. On these watches the rating stays in Rekkert's own workout history
   and is not saved to Apple Health (FR-008).
 
 Some things are outside the code. The current developer tools ship no simulator for the
@@ -113,8 +113,8 @@ phone.
 3. **Given** a workout is running and the wrist is lowered, **When** play continues for an hour,
    **Then** heart rate and energy keep being collected for the whole hour.
 4. **Given** a running workout, **When** the player ends it, **Then** it is saved to Apple Health
-   as tennis with active and resting energy, and its summary (duration, energy, heart rate,
-   zones) appears in Rekkert's Workouts list on the phone.
+   as tennis with active and resting energy, and its summary (duration, energy, heart rate)
+   appears in Rekkert's Workouts list on the phone, as it does for a watch on watchOS 26.
 
 ---
 
@@ -247,8 +247,10 @@ says why.
   button). It MUST keep collecting heart rate and energy with the wrist lowered, and save the
   workout to Apple Health as tennis with active and resting energy.
 - **FR-006**: The phone MUST show workouts recorded on an SE (1st generation) in its Workouts
-  list with the same summary as one from a current watch: duration, energy, heart rate, and
-  heart-rate zones.
+  list with the same summary as one from a watch on watchOS 26: duration, energy, and heart
+  rate. The watch MUST place the live heart rate in zones when the player's age is in Apple
+  Health. The time spent in each zone comes from Apple Health only on watchOS 27 and later,
+  so it is absent here, just as it is on a watchOS 26 watch today.
 - **FR-007**: When a timed round runs out, the SE (1st generation) MUST buzz and show that time
   is up if the app is in front, and MUST receive the time-up notification if the wrist is
   lowered, at the same moment as a current watch.
@@ -269,8 +271,10 @@ says why.
 - **FR-012**: The project's verification gate MUST fail when a change raises the watch app's
   minimum watch software above watchOS 10, or uses a watch capability that watchOS 10 lacks
   without a fallback.
-- **FR-013**: The README and the App Store listing's statement of supported watches MUST
-  name watchOS 10 as the minimum and mention the SE (1st generation).
+- **FR-013**: The README MUST name watchOS 10 as the watch app's minimum and mention the SE
+  (1st generation). The App Store's compatibility line, which the store derives from the
+  build, MUST read watchOS 10. The privacy page and the App Review notes MUST stop saying
+  every watch saves the effort rating to Apple Health.
 
 ### Key Entities
 

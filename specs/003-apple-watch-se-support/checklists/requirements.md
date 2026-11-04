@@ -36,6 +36,11 @@
 - Iteration 2: resolved FR-008 (option A: the rating stays in Rekkert's history and is never
   saved to Apple Health from these watches). Updated User Story 4, FR-002, FR-009, the effort
   edge cases, Key Entities, and added SC-009. All items pass.
+- Planning corrections (research R-3, R-6, R-12): the "What it takes" section now counts the
+  Apple Health permission request among the effort changes. FR-006 and User Story 2 scenario 4
+  now match a watchOS 26 watch: zone times exist only on watchOS 27. FR-013 now relies on the
+  store's own compatibility line and covers the privacy page and review notes. All items
+  still pass.
 - The "What it takes" section reports the outcome of a trial build in plain terms (which
   capabilities need newer watch software). It names watchOS versions, which are product
   facts the feature is defined by, and no code, APIs, or frameworks.
