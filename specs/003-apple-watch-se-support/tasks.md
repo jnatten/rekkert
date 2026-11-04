@@ -35,7 +35,7 @@ user-story phases then add what each story needs on top and verify it on the wat
 **Purpose**: Make the new floor part of the constitution before any code relies on it
 (research D-10).
 
-- [ ] T001 Amend `.specify/memory/constitution.md`.
+- [X] T001 Amend `.specify/memory/constitution.md`.
   - Replace the Platforms bullet's first sentence, "Targets build for iOS, watchOS, and
     macOS 26.", with the text in `specs/003-apple-watch-se-support/contracts/watch-floor.md`
     § Constitution. Keep the bullet's second sentence ("The engine must keep building…").
@@ -54,19 +54,19 @@ user-story phases then add what each story needs on top and verify it on the wat
 
 **⚠️ CRITICAL**: No user-story verification can begin until T009 passes.
 
-- [ ] T002 [P] In `Packages/RekkertKit/Package.swift`, change `platforms` from
+- [X] T002 [P] In `Packages/RekkertKit/Package.swift`, change `platforms` from
   `[.iOS(.v26), .watchOS(.v26), .macOS(.v26)]` to `[.iOS(.v26), .watchOS(.v10), .macOS(.v26)]`.
   Nothing else changes.
-- [ ] T003 [P] In `Project.swift`, change the `RekkertWatch` target's
+- [X] T003 [P] In `Project.swift`, change the `RekkertWatch` target's
   `deploymentTargets: .watchOS("26.0")` to `deploymentTargets: .watchOS("10.0")`. The
   `Rekkert` and `RekkertWidgets` targets stay at `.iOS("26.0")`.
-- [ ] T004 [P] In `WatchApp/Sources/WorkoutController.swift`, `first(of:orNilAfter:)`
+- [X] T004 [P] In `WatchApp/Sources/WorkoutController.swift`, `first(of:orNilAfter:)`
   (~line 882), replace `Mutex<CheckedContinuation<Value?, Never>?>(continuation)` with
   `OSAllocatedUnfairLock<CheckedContinuation<Value?, Never>?>(initialState: continuation)`.
   Keep `pending.withLock { waiting in … }` as it is, since the closure shape is the same
   (`inout` state). Replace `import Synchronization` (line 5) with `import os`. No
   `#available` branch (D-6).
-- [ ] T005 In `WatchApp/Sources/WorkoutController.swift`, keep the effort rating out of Apple
+- [X] T005 In `WatchApp/Sources/WorkoutController.swift`, keep the effort rating out of Apple
   Health below watchOS 11 (D-2, contracts/apple-health-access.md § Effort rating behaviour).
   Same file as T004, so do it after T004.
   - `save(_:to:)` (~line 280): after the existing `guard WorkoutEffort.range.contains(effort)`,
@@ -80,7 +80,7 @@ user-story phases then add what each story needs on top and verify it on the wat
     `if #available(watchOS 11, *)`.
   - Leave `rate(_:)`, `skipEffort()` and `heard(_:)` as they are. They still publish `.rated`
     or `.skipped` and clear the question. Only the Apple Health write is skipped.
-- [ ] T006 [P] In `Shared/HealthTypes.swift`, make `HealthData.objectType` return
+- [X] T006 [P] In `Shared/HealthTypes.swift`, make `HealthData.objectType` return
   `HKObjectType?`.
   - `.effort` returns `HKQuantityType(.workoutEffortScore)` only when
     `#available(watchOS 11, *)` and `nil` otherwise. On iOS that check is always true.
@@ -88,7 +88,7 @@ user-story phases then add what each story needs on top and verify it on the wat
   - `sampleType` stays `objectType as? HKSampleType`.
   - `HealthDisclosure.toRead(on:)` changes from `map(\.objectType)` to
     `compactMap(\.objectType)`. `toShare(on:)` already uses `compactMap(\.sampleType)`.
-- [ ] T007 [P] Create `Shared/ObservationChanges.swift`: a `@MainActor` function
+- [X] T007 [P] Create `Shared/ObservationChanges.swift`: a `@MainActor` function
   `observationChanges<Value: Sendable>(of read: @escaping @MainActor () -> Value) -> AsyncStream<Value>`
   (D-5, data-model.md § Round-alarm situation). Its contract:
   - yield `read()` once immediately;
@@ -99,7 +99,7 @@ user-story phases then add what each story needs on top and verify it on the wat
   - stop registering once the stream terminates (`continuation.onTermination`).
 
   It needs no availability annotation, since `Observation` exists from watchOS 10 and iOS 17.
-- [ ] T008 In `Shared/RoundAlarmFollower.swift`, `follow(_:)` (~line 28), keep the
+- [X] T008 In `Shared/RoundAlarmFollower.swift`, `follow(_:)` (~line 28), keep the
   `Observations { … }` loop under `if #available(iOS 26, watchOS 26, *)`.
   - In the `else` branch, iterate `observationChanges(of:)` (from T007) with the same
     `Situation(session: store.log.sessionID, state: store.state)` closure, and call the same
@@ -108,7 +108,7 @@ user-story phases then add what each story needs on top and verify it on the wat
     `else` branch, so the watchOS 26 and iOS 26 simulators can exercise the path an SE (1st
     generation) runs.
   - Depends on T007.
-- [ ] T009 Build at the new floor. Run `mise exec -- tuist generate --no-open`, then:
+- [X] T009 Build at the new floor. Run `mise exec -- tuist generate --no-open`, then:
   - `xcodebuild -workspace Rekkert.xcworkspace -scheme RekkertWatch -destination 'generic/platform=watchOS Simulator' build`
   - `xcodebuild -workspace Rekkert.xcworkspace -scheme Rekkert -destination 'generic/platform=iOS Simulator' build`
 
@@ -132,7 +132,7 @@ generation) on watchOS 10.
 The code for this story is in Phase 2. If a row fails, add a fix task to this phase naming the
 row, what was seen and the suspected file, and finish it before the checkpoint.
 
-- [ ] T010 [US1] Create `specs/003-apple-watch-se-support/validation.md`.
+- [X] T010 [US1] Create `specs/003-apple-watch-se-support/validation.md`.
   - A header records: the watch model and size, its watchOS version, the iPhone model and iOS
     version, the build (Xcode run or TestFlight number), and the date.
   - A table has one row for each of quickstart § 3 rows 1–18, with columns *Check*,
@@ -211,7 +211,7 @@ rows 13–14, plus row 9's effort note from T014.
 
 ### Tests for User Story 4 (write first; they must fail before T018)
 
-- [ ] T017 [US4] Extend `Packages/RekkertKit/Tests/RekkertCoreTests/HealthDisclosureTests.swift`
+- [X] T017 [US4] Extend `Packages/RekkertKit/Tests/RekkertCoreTests/HealthDisclosureTests.swift`
   (Swift Testing).
   - Add `theWatchOnWatchOS10LeavesEffortOut`. It expects:
     - `HealthDisclosure.saved(on: .watch, effortInAppleHealth: false) == [.workout, .activeEnergy, .restingEnergy]`;
@@ -227,28 +227,28 @@ rows 13–14, plus row 9's effort note from T014.
 
 ### Implementation for User Story 4
 
-- [ ] T018 [US4] In `Packages/RekkertKit/Sources/RekkertCore/Health/HealthDisclosure.swift`:
+- [X] T018 [US4] In `Packages/RekkertKit/Sources/RekkertCore/Health/HealthDisclosure.swift`:
   - Add `effortInAppleHealth: Bool = true` to `saved(on:)` and `read(on:)`. When it is
     `false`, leave `.effort` out of the result and keep every other kind in its current
     order (data-model.md § Apple Health disclosure rule).
   - Change `HealthData.effort.reason` to the string quoted in T017.
   - Run `swift test --package-path Packages/RekkertKit`. Everything passes, including
     `HealthWordingTests`. Depends on T017.
-- [ ] T019 [US4] In `Shared/HealthTypes.swift`, have `HealthDisclosure.toShare(on:)` and
+- [X] T019 [US4] In `Shared/HealthTypes.swift`, have `HealthDisclosure.toShare(on:)` and
   `toRead(on:)` pass `effortInAppleHealth: HealthData.effort.objectType != nil` to the core.
   That is `false` only on a watch below watchOS 11, given T006. This way `askStatus(on:)`
   and the watch's `WorkoutController.shared`/`.read` all follow the core rule. Depends on T006
   and T018.
-- [ ] T020 [P] [US4] In `docs/privacy/index.html`, in the "Your workouts, to Apple Health and
+- [X] T020 [P] [US4] In `docs/privacy/index.html`, in the "Your workouts, to Apple Health and
   to your own iPhone" paragraph (~line 124), replace "and, if you give one, how hard you rated
   it," with the wording in `specs/003-apple-watch-se-support/contracts/apple-health-access.md`
   § Privacy page, including its added sentence. Update the dateline's "Last updated" (~line
   94) to today's date.
-- [ ] T021 [P] [US4] In `fastlane/metadata/review_information/notes.txt` (line 10), apply the
+- [X] T021 [P] [US4] In `fastlane/metadata/review_information/notes.txt` (line 10), apply the
   Before → After change in `specs/003-apple-watch-se-support/contracts/apple-health-access.md`
   § App Review notes. Then confirm that
   `wc -m fastlane/metadata/review_information/notes.txt` is under 4000.
-- [ ] T022 [US4] Rebuild (`mise exec -- tuist generate --no-open` and `scripts/verify.sh`).
+- [X] T022 [US4] Rebuild (`mise exec -- tuist generate --no-open` and `scripts/verify.sh`).
   On the iOS 26 simulator, open Settings › Apple Health and confirm the Effort row shows the
   new sentence under both "Saved to Apple Health" and "Read from Apple Health". Record it in
   `specs/003-apple-watch-se-support/validation.md`. Depends on T018 and T019.
@@ -269,7 +269,7 @@ says so (SC-009, FR-009).
 
 **Independent Test**: [quickstart.md](quickstart.md) § 1, the SC-008 trial.
 
-- [ ] T024 [US5] In `scripts/verify.sh`, add a step after the "Assert the watch may record a
+- [X] T024 [US5] In `scripts/verify.sh`, add a step after the "Assert the watch may record a
   workout" block (after `check 'NSHealthUpdateUsageDescription'`, ~line 46) and before
   "Assert the iPhone app may look at the local network".
   - It prints `==> Assert the watch app still installs on watchOS 10`.
@@ -280,7 +280,7 @@ says so (SC-009, FR-009).
   - Add a two-line comment above the step saying why: losing the floor fails silently, so
     the app just stops being offered to those watches.
   - Run `scripts/verify.sh` and confirm it passes.
-- [ ] T025 [US5] Run the SC-008 trial exactly as in [quickstart.md](quickstart.md) § 1:
+- [X] T025 [US5] Run the SC-008 trial exactly as in [quickstart.md](quickstart.md) § 1:
   - `jj new -m "trial: raise the watch floor"`;
   - change `.watchOS("10.0")` to `.watchOS("11.0")` in `Project.swift`;
   - run `scripts/verify.sh` and confirm it fails at the new step with the message from T024;
@@ -295,7 +295,7 @@ generation) (SC-008).
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T026 [P] In `README.md`, after the opening paragraph (which ends "…if you ask it to."),
+- [X] T026 [P] In `README.md`, after the opening paragraph (which ends "…if you ask it to."),
   add a sentence. It says the iPhone app needs iOS 26 and the watch app runs on watchOS 10 or
   later, so it reaches the Apple Watch SE (1st generation), Series 4 and Series 5, which
   cannot update past watchOS 10 (FR-013).
@@ -307,7 +307,7 @@ generation) (SC-008).
   generation) on a full charge and play a 2-hour session scored on the wrist with a workout
   running throughout. At least 40% battery should be left (SC-006). Record the start and end
   battery in `specs/003-apple-watch-se-support/validation.md`. Depends on T011.
-- [ ] T029 Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh` one last
+- [X] T029 Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh` one last
   time. Check [quickstart.md](quickstart.md) § 4 (README, privacy page, review notes under
   4000 characters) and fill in the § 4 section of
   `specs/003-apple-watch-se-support/validation.md`.
