@@ -2,7 +2,7 @@ import Foundation
 import HealthKit
 import Observation
 import RekkertCore
-import Synchronization
+import os
 
 /// The workout, which only the watch can hold: it is the device with the sensors, and the
 /// system allows exactly one session across every app on the wrist.
@@ -160,7 +160,9 @@ final class WorkoutController {
         case .ratings:
             Task {
                 try? await health.requestAuthorization(toShare: Self.shared, read: Self.read)
-                for id in waiting.keys.compactMap(UUID.init(uuidString:)) { enqueue(id) }
+                if #available(watchOS 11, *) {
+                    for id in waiting.keys.compactMap(UUID.init(uuidString:)) { enqueue(id) }
+                }
             }
         case .start:
             guard !isTracking, !isStarting else { return }
@@ -273,18 +275,22 @@ final class WorkoutController {
     /// Ratings that could not go in when they arrived. With the app in front Health can ask
     /// for the access, which a watch updated since its last workout has never been asked for.
     func writeWaitingRatings() {
-        guard isAvailable, !waiting.isEmpty else { return }
+        guard #available(watchOS 11, *), isAvailable, !waiting.isEmpty else { return }
         ask(.ratings)
     }
 
+    /// Below watchOS 11 Health has no place for a rating, so it stays in Rekkert's own record,
+    /// which `.rated` has already reached.
     private func save(_ effort: Int, to id: UUID) {
         guard WorkoutEffort.range.contains(effort) else { return }
+        guard #available(watchOS 11, *) else { return }
         waiting[id.uuidString] = effort
         enqueue(id)
     }
 
     /// One at a time for each workout, behind whatever is already going in: two in flight
     /// would both find nothing of ours to replace and leave two answers on it.
+    @available(watchOS 11, *)
     private func enqueue(_ id: UUID) {
         let earlier = writing[id]
         writing[id] = Task {
@@ -294,6 +300,7 @@ final class WorkoutController {
     }
 
     /// The newest rating waiting for this workout, whichever copy of whichever rating asked.
+    @available(watchOS 11, *)
     private func writeWaiting(_ id: UUID) async {
         guard let effort = waiting[id.uuidString] else { return }
         switch health.authorizationStatus(for: HKQuantityType(.workoutEffortScore)) {
@@ -319,6 +326,7 @@ final class WorkoutController {
 
     /// Replaces rather than adds: a second rating from this app would leave Health holding
     /// two answers to one question.
+    @available(watchOS 11, *)
     private func write(_ effort: Int, to workout: HKWorkout) async throws {
         let type = HKQuantityType(.workoutEffortScore)
         let earlier = HKSampleQueryDescriptor(
@@ -883,7 +891,7 @@ private func first<Value: Sendable>(
     of work: @escaping @Sendable () async -> Value?, orNilAfter limit: Duration
 ) async -> Value? {
     await withCheckedContinuation { continuation in
-        let pending = Mutex<CheckedContinuation<Value?, Never>?>(continuation)
+        let pending = OSAllocatedUnfairLock<CheckedContinuation<Value?, Never>?>(initialState: continuation)
         let answer: @Sendable (Value?) -> Void = { value in
             pending.withLock { waiting in
                 waiting?.resume(returning: value)

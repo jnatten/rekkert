@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "RekkertKit",
-    platforms: [.iOS(.v26), .watchOS(.v26), .macOS(.v26)],
+    platforms: [.iOS(.v26), .watchOS(.v10), .macOS(.v26)],
     products: [
         .library(name: "RekkertCore", targets: ["RekkertCore"]),
         .library(name: "RekkertSync", targets: ["RekkertSync"]),

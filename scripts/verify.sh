@@ -45,6 +45,16 @@ check '"workout-processing"'
 check 'NSHealthShareUsageDescription'
 check 'NSHealthUpdateUsageDescription'
 
+echo "==> Assert the watch app still installs on watchOS 10"
+# Raising the floor fails nothing at build time: the App Store just stops offering the app to
+# the watches that cannot update past watchOS 10.6.1, and nobody on a newer watch notices.
+min=$(plutil -extract MinimumOSVersion raw -o - "$plist")
+test "$min" = "10.0" || {
+  echo "FAIL: the watch app's minimum is $min, not watchOS 10.0 — it would no longer install on Apple Watch SE (1st generation), Series 4 or Series 5"
+  exit 1
+}
+echo '  ok: "MinimumOSVersion" => "10.0"'
+
 echo "==> Assert the iPhone app may look at the local network"
 # Without these two, sharing a match fails at runtime with nothing in the UI to explain it.
 iosplist="$APP/Info.plist"

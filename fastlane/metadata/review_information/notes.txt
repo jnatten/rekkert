@@ -7,7 +7,7 @@ APPLE WATCH
 The watch app is embedded in the iPhone app and installs on the paired watch. A match started on either device shows up on the other, and a point scored on either one is scored on both.
 
 APPLE HEALTH (HEALTHKIT)
-Used only for workouts the user starts. The Apple Watch saves each one to Apple Health as indoor tennis, with its energy and an optional effort rating. While it runs and when it ends, the watch reads heart rate and energy, plus date of birth and resting heart rate for heart-rate zones. Nothing read leaves the user's iPhone and Apple Watch.
+Used only for workouts the user starts. The Apple Watch saves each one to Apple Health as indoor tennis, with its energy and, on watchOS 11 or later, an optional effort rating. While it runs and when it ends, the watch reads heart rate and energy, plus date of birth and resting heart rate for heart-rate zones. Nothing read leaves the user's iPhone and Apple Watch.
 
 NO APPLE WATCH NEEDED (any iPhone or iPad)
 Tap the gear on the start screen. The Apple Health section, with the Apple Health icon, says what Rekkert saves and reads, and "What Rekkert saves and reads" lists it in full.

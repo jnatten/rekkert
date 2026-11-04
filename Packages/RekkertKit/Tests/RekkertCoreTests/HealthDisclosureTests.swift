@@ -19,12 +19,31 @@ struct HealthDisclosureTests {
         )
     }
 
+    /// Health has nowhere to keep a rating before watchOS 11, so that watch neither saves one
+    /// nor asks to.
+    @Test func theWatchOnWatchOS10LeavesEffortOut() {
+        #expect(HealthDisclosure.saved(on: .watch, effortInAppleHealth: false) == [.workout, .activeEnergy, .restingEnergy])
+        #expect(
+            HealthDisclosure.read(on: .watch, effortInAppleHealth: false)
+                == [.heartRate, .activeEnergy, .restingEnergy, .restingHeartRate, .dateOfBirth, .workout]
+        )
+    }
+
+    @Test(arguments: [true, false])
+    func thePhoneIsTheSameEitherWay(effortInAppleHealth: Bool) {
+        #expect(HealthDisclosure.saved(on: .phone, effortInAppleHealth: effortInAppleHealth) == [.workout])
+        #expect(HealthDisclosure.read(on: .phone, effortInAppleHealth: effortInAppleHealth) == [])
+    }
+
     @Test func everyKindSaysWhatItIsAndWhy() {
         let expected: [HealthData: (title: String, reason: String)] = [
             .workout: ("Workouts", "The session you played, saved as indoor tennis"),
             .activeEnergy: ("Active energy", "What the session burned, saved with the workout and shown on it"),
             .restingEnergy: ("Resting energy", "Added to active energy for the total, as the Workout app does"),
-            .effort: ("Effort", "How hard you rated it, on the 1–10 scale"),
+            .effort: (
+                "Effort",
+                "How hard you rated it, on the 1–10 scale. From a watch on watchOS 10 it stays in Rekkert and is not saved to Apple Health."
+            ),
             .heartRate: ("Heart rate", "Shown on your wrist while you play, and on the match afterwards"),
             .restingHeartRate: ("Resting heart rate", "To place your heart rate in zones"),
             .dateOfBirth: ("Date of birth", "Your age, to estimate the top of your zones"),

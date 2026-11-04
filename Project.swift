@@ -130,7 +130,7 @@ let project = Project(
             destinations: [.appleWatch],
             product: .app,
             bundleId: "\(iosBundleID).watchkitapp",
-            deploymentTargets: .watchOS("26.0"),
+            deploymentTargets: .watchOS("10.0"),
             // Spelled out rather than generated. `WKBackgroundModes` is an array and has no
             // `INFOPLIST_KEY_` of its own, so the generator cannot express it — and mixing a
             // generated plist with a real one relies on merge behaviour that has moved

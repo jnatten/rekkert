@@ -4,6 +4,10 @@ Padel and tennis score tracking for iPhone and Apple Watch. The score syncs both
 between the two, so it does not matter which one you tap. The watch will record the session
 as an Apple Health workout, if you ask it to.
 
+The iPhone app needs iOS 26. The watch app runs on watchOS 10 or later, so it reaches the
+Apple Watch SE (1st generation), Series 4 and Series 5, which cannot update past watchOS 10;
+on those, an effort rating stays in Rekkert rather than going to Apple Health.
+
 ## Modes
 
 **Match** — real padel/tennis scoring: points, games, sets, match. Configurable sets to

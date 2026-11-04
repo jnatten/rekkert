@@ -27,12 +27,21 @@ final class RoundAlarmFollower {
 
     func follow(_ store: MatchStore) {
         guard following == nil else { return }
-        let changes = Observations { @MainActor in
-            Situation(session: store.log.sessionID, state: store.state)
-        }
-        following = Task { [weak self] in
-            for await situation in changes {
-                self?.heard(situation.state, session: situation.session)
+        if #available(iOS 26, watchOS 26, *), !Self.forcesFallback {
+            let changes = Observations { @MainActor in
+                Situation(session: store.log.sessionID, state: store.state)
+            }
+            following = Task { [weak self] in
+                for await situation in changes {
+                    self?.heard(situation.state, session: situation.session)
+                }
+            }
+        } else {
+            let changes = observationChanges { Situation(session: store.log.sessionID, state: store.state) }
+            following = Task { [weak self] in
+                for await situation in changes {
+                    self?.heard(situation.state, session: situation.session)
+                }
             }
         }
     }
@@ -118,6 +127,15 @@ final class RoundAlarmFollower {
         content.sound = .default
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, bell.endsAt.timeIntervalSinceNow), repeats: false)
         return UNNotificationRequest(identifier: identifier(bell), content: content, trigger: trigger)
+    }
+
+    /// `-rekkert-observation-fallback` runs a current simulator down the path a watchOS 10 watch takes.
+    nonisolated private static var forcesFallback: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-rekkert-observation-fallback")
+        #else
+        false
+        #endif
     }
 
     /// A demo is screenshotted, and a permission prompt over it is nothing simctl can tap away.
