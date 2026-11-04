@@ -289,7 +289,10 @@ struct WorkoutSyncTests {
         store.send(.idle)
         store.send(rated)
         store.send(.skipped(workoutID: record.id))
-        await eventually { paired.workouts.count >= 3 }
+        // Each goes live on a task of its own, the rating is queued by the store and again by the
+        // fan-out when nobody answers, and the store says `.idle` once more on coming up to find
+        // its pair in reach. Any of the six still on its way passes for what the reconnect says.
+        await eventually { paired.workouts.count >= 6 }
 
         let announced = paired.workouts.count
         paired.deliver(.hello(sessionID: UUID(), vector: VersionVector()))
@@ -339,7 +342,8 @@ struct WorkoutSyncTests {
         let held = WorkoutSignal.paused(since: since, elapsed: 1_284)
         store.send(.running(since: since))
         store.send(held)
-        await eventually { paired.workouts.contains(held) }
+        // Both live, and `held` once more as the store comes up to find its pair in reach.
+        await eventually { paired.workouts.count >= 3 }
 
         let announced = paired.workouts.count
         paired.deliver(.hello(sessionID: UUID(), vector: VersionVector()))
