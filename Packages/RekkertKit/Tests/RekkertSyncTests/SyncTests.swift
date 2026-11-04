@@ -14,13 +14,17 @@ private struct Pair {
     let phoneLink: LoopbackTransport
     let watchLink: LoopbackTransport
 
-    init() {
+    init(retryInterval: Duration = .seconds(4)) {
         let (one, two) = LoopbackTransport.pair()
         phoneLink = one
         watchLink = two
         let session = ActiveSession(log: MatchLog(sessionID: UUID(uuidString: "33333333-0000-0000-0000-000000000000")!))
-        phone = MatchStore(device: DeviceID(), transport: one, session: session, snapshotInterval: 0)
-        watch = MatchStore(device: DeviceID(), transport: two, session: session, snapshotInterval: 0)
+        phone = MatchStore(
+            device: DeviceID(), transport: one, session: session, snapshotInterval: 0, retryInterval: retryInterval
+        )
+        watch = MatchStore(
+            device: DeviceID(), transport: two, session: session, snapshotInterval: 0, retryInterval: retryInterval
+        )
     }
 
     func run() -> [Task<Void, Never>] {
@@ -105,7 +109,7 @@ struct SyncTests {
     }
 
     @Test func tapsMadeWhileDisconnectedArriveOnReconnect() async throws {
-        let pair = Pair()
+        let pair = Pair(retryInterval: .milliseconds(50))
         let tasks = pair.run()
         defer { tasks.forEach { $0.cancel() } }
 
@@ -114,6 +118,10 @@ struct SyncTests {
 
         pair.phoneLink.setDroppingOutgoing(true)
         pair.watchLink.setDroppingOutgoing(true)
+        // What cannot go live goes on the durable queue instead, and a dropped link still lets
+        // that through. Held, the reconnect is the only way across.
+        pair.phoneLink.setHoldingQueue(true)
+        pair.watchLink.setHoldingQueue(true)
         await waitOutAnswers(pair.phoneLink, pair.watchLink)
         for _ in 0 ..< 3 { pair.phone.tap(team: .a) }
         await quietPeriod()
