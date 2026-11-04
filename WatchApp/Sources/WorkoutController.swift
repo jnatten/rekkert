@@ -206,9 +206,13 @@ final class WorkoutController {
             guard let recovered = try? await health.recoverActiveWorkoutSession(),
                   recovered.state == .running || recovered.state == .paused
             else { return }
-            // Collection has been going the whole time — beginning it again here would start
-            // a second one over the top of it.
+            // The session and its builder outlive the process, but the data source died with it,
+            // and a builder without one hears nothing more. Collection itself is still going —
+            // beginning it again here would start a second one over the top of it.
             attach(recovered)
+            if let builder, builder.dataSource == nil {
+                collect(into: builder, for: recovered.workoutConfiguration)
+            }
             let startedAt = recovered.startDate ?? .now
             // Health's own count rather than the wall clock: a session picked back up may
             // have spent some of its life held, and that is the part that does not count.
@@ -370,16 +374,7 @@ final class WorkoutController {
         let session = try HKWorkoutSession(healthStore: health, configuration: Self.configuration)
         attach(session)
         guard let builder else { return }
-        // Apple's own defaults for tennis, rather than a hand-picked list: this is what
-        // makes the calories and the heart rate the same numbers the Workout app would have
-        // recorded for the same hour.
-        let dataSource = HKLiveWorkoutDataSource(
-            healthStore: health, workoutConfiguration: Self.configuration
-        )
-        // Tennis collects the resting burn by default, but the defaults move with the
-        // person's settings and total calories is nothing without it.
-        dataSource.enableCollection(for: HKQuantityType(.basalEnergyBurned), predicate: nil)
-        builder.dataSource = dataSource
+        collect(into: builder, for: Self.configuration)
 
         let now = Date()
         session.startActivity(with: now)
@@ -388,6 +383,17 @@ final class WorkoutController {
             Task { @MainActor in self?.stopped(with: error) }
         }
         adopted(startedAt: now, elapsed: 0, paused: false)
+    }
+
+    /// Apple's own defaults for tennis, rather than a hand-picked list: this is what makes the
+    /// calories and the heart rate the same numbers the Workout app would have recorded for the
+    /// same hour.
+    private func collect(into builder: HKLiveWorkoutBuilder, for configuration: HKWorkoutConfiguration) {
+        let dataSource = HKLiveWorkoutDataSource(healthStore: health, workoutConfiguration: configuration)
+        // Tennis collects the resting burn by default, but the defaults move with the
+        // person's settings and total calories is nothing without it.
+        dataSource.enableCollection(for: HKQuantityType(.basalEnergyBurned), predicate: nil)
+        builder.dataSource = dataSource
     }
 
     private func attach(_ session: HKWorkoutSession) {
