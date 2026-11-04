@@ -420,3 +420,9 @@ the rating to Apple Health, which would be untrue for these watches.
   result in `validation.md`.
 - A failing on-wrist row becomes a new task in its story's phase. Do not paper over it in
   `validation.md`.
+
+---
+
+## Phase 9: Convergence
+
+- [ ] T031 On the real SE (1st generation), lock the watch (or take it off the wrist), then tap Start workout on the phone. The phone should say it couldn't start on the Apple Watch, and should not show a workout running. Add this as row 19 in `specs/003-apple-watch-se-support/validation.md` and record the result per Spec Edge Cases (phone-started workout while the SE is locked) and FR-005 (partial)
