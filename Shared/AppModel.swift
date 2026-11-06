@@ -485,6 +485,43 @@ final class AppModel {
                 store.tap(team: .b)
             }
         }
+        // `-rekkert-demo-late-finish 20`, `-rekkert-demo-late-next 40` and
+        // `-rekkert-demo-late-answer stay 30` finish the match, start the next one and answer the
+        // question on time, so the questions between matches can be looked at on simulators.
+        if let index = arguments.firstIndex(of: "-rekkert-demo-late-finish"),
+           index + 1 < arguments.count, let delay = Int(arguments[index + 1]) {
+            Task { [store] in
+                try? await Task.sleep(for: .seconds(delay))
+                store.finish()
+            }
+        }
+        if let index = arguments.firstIndex(of: "-rekkert-demo-late-next"),
+           index + 1 < arguments.count, let delay = Int(arguments[index + 1]) {
+            Task { [store] in
+                try? await Task.sleep(for: .seconds(delay))
+                store.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
+            }
+        }
+        #if os(iOS)
+        // `-rekkert-demo-share-empty 482915` shares on a pinned code with nothing on, which the
+        // match-seeding `-rekkert-share-host` below cannot.
+        if let index = arguments.firstIndex(of: "-rekkert-demo-share-empty"), index + 1 < arguments.count,
+           let code = SessionCode(arguments[index + 1]) {
+            sharing.host(code: code)
+        }
+        #endif
+        if let index = arguments.firstIndex(of: "-rekkert-demo-late-answer"), index + 2 < arguments.count,
+           let choice = BetweenMatchesAnswer.Choice(rawValue: arguments[index + 1]),
+           let delay = Int(arguments[index + 2]) {
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(delay))
+                #if os(watchOS)
+                self?.standIn.answer(choice)
+                #else
+                self?.sharing.answer(choice)
+                #endif
+            }
+        }
 
         guard let flag = arguments.firstIndex(of: "-rekkert-demo"), flag + 1 < arguments.count else { return }
         store.startNewSession()
