@@ -111,6 +111,7 @@ The rules a test pins down:
 | `SharingSignal.answered(BetweenMatchesAnswer)` | **New**, pair only |
 | `SharingSignal.newMatch(NewMatchNotice)` | **New**, pair only, phone → watch |
 | `HostingStatus` | `canShare` becomes `role != .guest`, with no match needed (D-8). `endedBy: SharingStopReason?` is **new**, so the host's watch can say sharing stopped after 30 minutes. |
+| `GuestCard` | `leaving: Bool?` is **new**. A guest that leaves sends a card with `leaving: true` to its host before cutting its links, and the host drops it from its list (D-16). |
 
 The full message table and the compatibility rules are in
 [contracts/wire-protocol.md](contracts/wire-protocol.md).
@@ -134,8 +135,10 @@ Each case gets its `text` and its `init(text:)` parse. The rendered lines are in
 | Member | Change |
 |---|---|
 | `betweenMatches: BetweenMatches` | **New**, read by the views |
-| `answer(_ choice:)` | **New.** It applies a choice to the open question or notice, says it to the pair (D-4) and records it. Stop and Leave are carried out by `SharedSession`, which the app calls. |
-| `joinedBetweenMatches()` | **New**, called by `SharedSession` when a join is proven with nothing on (D-9) |
+| `answer(_ choice:)` | **New.** It applies a choice to the open question or notice, says it to the pair (D-4) and records it. It carries out nothing else: `SharedSession.answer(_:)` and `WatchStandIn.answer(_:)` call it first, then stop or leave. Views never call it directly. |
+| `joinedBetweenMatches(access:)` | **New**, private. Called from `handle(.snapshot)` when a joining store with an empty log is handed an empty snapshot on a non-pair link: the host has nothing on (D-9). It also takes the access list that came with it. |
+| `.guestCard` handling | On the host, a card with `leaving == true` calls `participants.remove(card.device)` and `onParticipantsChanged` (D-16) |
+| `leaveSharedSession()` | On a guest, it first sends the goodbye card on each host link, waiting up to 2 s (D-16) |
 | `startingOwnMatchLeavesSharing: Bool` | **New**: true on a phone whose role is `.guest`, or on a watch where `startingOwnMatchTakesPhoneOff` (D-15) |
 | `canScore`, `canRunRounds` | They are now also false while `betweenMatches.blocksScoring` |
 | `.sharingStopped` handling | It also acts for an empty-log guest on a non-pair link (D-7) |
@@ -150,6 +153,13 @@ Each case gets its `text` and its `init(text:)` parse. The rendered lines are in
 | `stoppedForIdle: Bool`, `acknowledgeIdleStop()` | **New**: the host is told at the next look (FR-026) |
 | `hostStopReason: SharingStopReason?` | **New**, beside `hostWhoStopped`, for the guest's notice |
 | The idle watch | **New**: a task on the injected `sleep` every 30 s, and a check at the top of `restore()` and `resume()` (D-10) |
+| `answer(_ choice:)` | **New**, the phone's one entry point for every answer (D-4). It calls `store.answer(choice)` first, then `stop()` for `.stopSharing`, and the guest's leave path for `.leave`. |
+
+## Changed: `WatchStandIn` surface (RekkertSync)
+
+| Member | Change |
+|---|---|
+| `answer(_ choice:)` | **New**, the watch's one entry point (D-4). `.stopSharing` goes to `stopHosting()`, and the question closes only once the phone reports it is no longer sharing, so it stays open on "Can't reach your iPhone" (FR-007). `.leave` goes to the watch's `SharedSession.leave()`, after `store.answer(.leave)`. Every other choice goes to `store.answer`. |
 
 ## Unchanged
 

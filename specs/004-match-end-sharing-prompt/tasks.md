@@ -38,6 +38,10 @@ story can be built, tested and shipped on its own.
   new files in existing targets, so new files need no project or package changes.
 - All UI text comes verbatim from [contracts/screens.md](contracts/screens.md). "Ada" there
   stands for the host's name, or "the host" when there is none.
+- The new-match popup has three names: the engine calls it a notice (`NewMatchNotice`), the
+  spec a dialog, and the screens show it as an alert. They are one thing.
+- Views never carry out an answer themselves. They forward it to `SharedSession.answer(_:)`
+  on the phone or `WatchStandIn.answer(_:)` on the watch (T010, D-4).
 
 ---
 
@@ -101,7 +105,7 @@ store's plumbing for asking and answering. Every story needs these.
   - `idleStop`.
 
   Add a write → export → `init(text:)` round trip for each in `CoreTests/LinkRecordTests.swift`.
-- [ ] T008 Add `betweenMatches: BetweenMatches?` to `ActiveSession` in `RekkertCore/Persistence/SessionStore.swift`. Decode it with `decodeIfPresent`, so an older `active.json` reads as empty. Add a decode test of an older file to the existing session-store suite in `CoreTests/`.
+- [ ] T008 Add `betweenMatches: BetweenMatches?` to `ActiveSession` in `RekkertCore/Persistence/SessionStore.swift`. Decode it with `decodeIfPresent`, so an older `active.json` reads as empty. Add a test to `SyncTests/RestoreTests.swift` that an older `active.json` restores with an empty `betweenMatches`.
 - [ ] T009 Give `RekkertSync/MatchStore.swift` its between-matches plumbing (depends on T003–T008):
   - `public private(set) var betweenMatches: BetweenMatches`, loaded from and saved with `ActiveSession` in `persist()` and at init.
   - `public func answer(_ choice: BetweenMatchesAnswer.Choice)`. It applies `answered` for the open `ask` or `newMatch`, and notes `endOfMatchAnswered` or `newMatchAnswered` on the recorder. It sends `.sharing(.answered(…))` to the pair through the durable path used by `sendDurably`, and persists.
@@ -112,10 +116,22 @@ store's plumbing for asking and answering. Every story needs these.
     Still pass both to `onSharing`.
   - `canScore` and `canRunRounds` also return false while `betweenMatches.blocksScoring` (FR-013).
   - An injectable `participantCount: () -> Int` (default `participantStates().count`). The watch's `AppModel` sets it from `standIn.hosting?.participants.count`.
-- [ ] T010 Add helpers to `SyncTests/CourtHarness.swift`:
+  - `MatchStore.answer` carries out nothing but the answer itself. Stopping and leaving belong to T010.
+- [ ] T010 Add the one engine entry point per device for every answer (D-4, Principle I). Depends on T009.
+  - **`SharedSession.answer(_ choice:)`** in `RekkertSync/SharedSession.swift`:
+    1. call `store.answer(choice)` first, so the answer is recorded and sent to the pair while the question still exists;
+    2. then for `.stopSharing` call `stop()`, and for `.leave` take the guest's leave path, which is `stop()` for a guest's phone;
+    3. do nothing more for `.keepSharing`, `.stay` and `.ok`.
+  - **`WatchStandIn.answer(_ choice:)`** in `RekkertSync/WatchStandIn.swift`:
+    - for `.leave`, call `store.answer(.leave)` and then the watch's own `SharedSession.leave()`;
+    - for `.stopSharing`, call `stopHosting()` (T016 adds the wait for the phone to confirm);
+    - for every other choice, call `store.answer`.
+
+  Expose both through the watch's and the phone's `AppModel` as `model.sharing` and `model.standIn`, as today.
+- [ ] T011 Add helpers to `SyncTests/CourtHarness.swift`:
   - `finish(on:)`, which finishes from a given device;
   - `discard(on:)`;
-  - `answer(_ choice:on:)`;
+  - `answer(_ choice:on:)`, which calls `SharedSession.answer` on a phone and `WatchStandIn.answer` on a watch (T010), as the views do;
   - `betweenMatches(of:)`;
   - `isWaiting(_:)`, true for a `.guest` role with an empty log;
   - `canScore(on:)`.
@@ -138,11 +154,11 @@ guests stay on and get the next match.
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T011 [US1] Write the host half of `SyncTests/EndOfMatchQuestionTests.swift` on `CourtHarness(guests: 2, withWatches: true)`. Each test fails on `9d930e27` because nothing is asked:
+- [ ] T012 [US1] Write the host half of `SyncTests/EndOfMatchQuestionTests.swift` on `CourtHarness(guests: 2, withWatches: true)`. Each test fails on `9d930e27` because nothing is asked:
   - `hostIsAskedWithTheGuestCount`: after `finish(on: host.phone)`, the host phone's and the host watch's `ask` is `.host(guestsOn: 2)`. With no guests joined, it is `.host(guestsOn: 0)`.
   - `callingOffAsksToo`: same, after `discard`.
   - `aTournamentRoundDoesNotAsk`: ending a round of an americano opens nothing; finishing the tournament does.
-  - `stopFromTheQuestionTellsEveryGuest`: `answer(.stopSharing)` plus `sharing.stop()` on the host. Every guest gets the stop notice, keeps the match in History, and forgets the code. Nothing asks twice (FR-003).
+  - `stopFromTheQuestionTellsEveryGuest`: `answer(.stopSharing, on: host.phone)`. Every guest gets the stop notice, keeps the match in History, and forgets the code. Nothing asks twice (FR-003). The host's record has `endOfMatchAnswered(stopSharing)`, written before sharing stopped.
   - `keepChangesNothing`: the code, the participants and their access are unchanged.
   - `anAnswerOnTheWatchClosesThePhone`: within 10 s of being in touch (FR-005).
   - `stopOnTheWatchWithThePhoneOutOfReachChangesNothing`: the watch's `ask` stays open, and sharing is still on (FR-007).
@@ -151,30 +167,30 @@ guests stay on and get the next match.
 
 ### Implementation for User Story 1
 
-- [ ] T012 [US1] In `RekkertSync/MatchStore.swift` `concludeIfFinished` (MS:945-985), right where the log is replaced:
+- [ ] T013 [US1] In `RekkertSync/MatchStore.swift` `concludeIfFinished` (MS:945-985), right where the log is replaced:
   - when `BetweenMatches.side(role:pairedRole:isWatch: !keepsHistory)` is `.host`, call `betweenMatches.matchEnded(session:side: .host(guestsOn: participantCount()), now:)`;
   - note `endOfMatchAsked`;
   - persist.
 
-  In `startNewSession` and `configure` on the host side, call `betweenMatches.matchBegan()`.
-- [ ] T013 [US1] In `MatchStore.answer(_:)`, for `.keepSharing` on a store whose role is `.host`:
+  In `startNewSession`, `configure` and `start(_:)` on the host side, call `betweenMatches.matchBegan()`. T038 covers the remaining paths.
+- [ ] T014 [US1] In `MatchStore.answer(_:)`, for `.keepSharing` on a store whose role is `.host`:
   - set `accessTable = accessTable.keepingSharing(after: ask.session)`;
   - `persist()`;
   - `shareAccess()` (D-5).
 
-  `.stopSharing` only closes the question; the caller stops sharing.
-- [ ] T014 [US1] Give `SharedSession.stop` in `RekkertSync/SharedSession.swift` a `reason: SharingStopReason = .host` parameter, and pass it through a new `reason` parameter on `MatchStore.sayStoppedSharing(within:reason:)` into `Wire.sharingStopped(sessionID:reason:)`.
-- [ ] T015 [US1] In `RekkertSync/WatchStandIn.swift`, a host watch answering Stop sharing at the end of the match:
+  `.stopSharing` only closes the question; `SharedSession.answer` (T010) then stops sharing.
+- [ ] T015 [US1] Give `SharedSession.stop` in `RekkertSync/SharedSession.swift` a `reason: SharingStopReason = .host` parameter, and pass it through a new `reason` parameter on `MatchStore.sayStoppedSharing(within:reason:)` into `Wire.sharingStopped(sessionID:reason:)`.
+- [ ] T016 [US1] Finish `WatchStandIn.answer(.stopSharing)` (T010) in `RekkertSync/WatchStandIn.swift`, for a host watch answering at the end of the match:
   - it calls `stopHosting()`;
   - it calls `store.answer(.stopSharing)` only once `hosting?.isSharing == false` comes back;
   - on `.cannotReachPhone` the question stays open (FR-007).
-- [ ] T016 [US1] Add the host's end-of-match alert to `App/Sources/Views/RootView.swift`, driven by `model.store.betweenMatches.ask` with a `.host` side. Use the title, message and buttons from contracts/screens.md, "End of match, host":
-  - **Keep sharing** → `store.answer(.keepSharing)`;
-  - **Stop sharing** (destructive) → `store.answer(.stopSharing)`, then `model.sharing.stop()`.
+- [ ] T017 [US1] Add the host's end-of-match alert to `App/Sources/Views/RootView.swift`, driven by `model.store.betweenMatches.ask` with a `.host` side. Use the title, message and buttons from contracts/screens.md, "End of match, host":
+  - **Keep sharing** → `model.sharing.answer(.keepSharing)`;
+  - **Stop sharing** (destructive) → `model.sharing.answer(.stopSharing)`.
 
   Present it after the finish confirmation has gone, using the same delayed-task pattern as the "Start a workout?" alert. Extend `isPresenting` so the effort sheet waits while the question is open.
-- [ ] T017 [US1] In `WatchApp/Sources/Views/WatchResultView.swift`, while a `.host` question is open, replace **Done** with "Keep sharing?", the guest count, **Keep sharing** and **Stop sharing** (T015's path). Show "Can't reach your iPhone" when `standIn.hostingTrouble == .cannotReachPhone`. When the match was called off and there is no result, show the same choices as a `confirmationDialog` on `WatchIdleView` in `WatchApp/Sources/Views/WatchRootView.swift`.
-- [ ] T018 [US1] Run `swift test --package-path Packages/RekkertKit --filter EndOfMatchQuestion`. T011 passes, and the whole package stays green.
+- [ ] T018 [US1] In `WatchApp/Sources/Views/WatchResultView.swift`, while a `.host` question is open, replace **Done** with "Keep sharing?", the guest count, **Keep sharing** and **Stop sharing**, each calling `model.standIn.answer(_:)` (T010, T016). Show "Can't reach your iPhone" when `standIn.hostingTrouble == .cannotReachPhone`. When the match was called off and there is no result, show the same choices as a `confirmationDialog` on `WatchIdleView` in `WatchApp/Sources/Views/WatchRootView.swift`.
+- [ ] T019 [US1] Run `swift test --package-path Packages/RekkertKit --filter EndOfMatchQuestion`. T012 passes, and the whole package stays green.
 
 **Checkpoint**: The host is asked on whichever device ended the match, and Stop ends sharing
 in one tap from the result (SC-003).
@@ -183,7 +199,8 @@ in one tap from the result (SC-003).
 
 ## Phase 4: User Story 2 - Each guest is asked, and the next match never arrives unannounced (Priority: P1)
 
-**Goal**: Guests are asked to stay or leave within 15 s of the match ending. The host's next
+**Goal**: Guests are asked to stay or leave within 30 s of the match ending, and within 5 s for
+most. The host's next
 match arrives with a one-tap dialog that blocks scoring until OK, and with a notification
 when neither device has Rekkert in front.
 
@@ -193,17 +210,19 @@ dialog naming the host, and scoring waits for OK.
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T019 [US2] Add the guest half to `SyncTests/EndOfMatchQuestionTests.swift`:
-  - `guestsAreAskedWithinFifteenSeconds`: each guest phone's and watch's `ask` is `.guest(hostName:, hostKeepsSharing: false)`, within 15 s of `finish(on: host.phone)` (SC-006). Fails today.
-  - `leaveTakesThePhoneAndTheWatchOff`: Leave on the guest phone. Both devices leave, History holds the match, and the host's participants drop the guest within 15 s (FR-009).
+- [ ] T020 [US2] Add the guest half to `SyncTests/EndOfMatchQuestionTests.swift`:
+  - `guestsAreAskedWithinThirtySeconds`: each guest phone's and watch's `ask` is `.guest(hostName:, hostKeepsSharing: false)` within 30 s of `finish(on: host.phone)`. Run it over the simulated Bluetooth path too (SC-006). Fails today.
+  - `leaveTakesThePhoneAndTheWatchOff`: Leave on the guest phone. Both devices leave, History holds the match, the code is kept for Join again, and the host's participants drop the guest within 15 s (FR-009). Fails today: the host shows the guest out of reach (R-13) until T026.
+  - `aGuestOutOfReachAtTheEndIsAskedOnReturn`: a guest out of range when the host finishes is asked once back in range while the host is still between matches. If the host has started the next match by then, the guest gets the new-match notice instead, and its record has `endOfMatchUnanswered`.
   - `aLeaverNeverGetsTheNextMatch`: still in range, the host keeps sharing and starts a match. The leaver's log stays empty (FR-015, SC-001).
   - `stayWaitsForTheNextMatch`: `isWaiting` is true until the host's next match.
   - `unansweredIsStay`: no answer; the next match arrives with a notice. The guest's record has `endOfMatchUnanswered` (FR-012).
-  - `keepIsToldToGuests`: after the host's Keep (T013), the guest's open `ask` has `hostKeepsSharing == true` on the phone and the watch (D-5).
+  - `keepIsToldToGuests`: after the host's Keep (T014), the guest's open `ask` has `hostKeepsSharing == true` on the phone and the watch (D-5).
   - `aStopReplacesTheQuestion`: the host stops while a guest's question is open. The question closes, and the stop notice is raised (FR-008).
   - `leaveWinsOverStay`: the guest's phone and watch are separated. The phone says Stay and the watch says Leave. On reuniting, both have left (FR-011).
-- [ ] T020 [P] [US2] Write `SyncTests/NextMatchNoticeTests.swift`:
+- [ ] T021 [P] [US2] Write `SyncTests/NextMatchNoticeTests.swift`:
   - `theNextMatchArrivesWithANotice`: the host keeps sharing and starts a match. Every guest phone and watch has `newMatch` naming the host, and the guest's record has `newMatchShown`. Fails today.
+  - `aBluetoothGuestGetsTheNextMatchWithinThirtySeconds`: with only the simulated Bluetooth path, a waiting guest holds the host's next match, with its notice, within 30 s on the `TestClock` (FR-014, spec 001 FR-002).
   - `scoringWaitsForOK`: `canScore(on:)` is false on a guest until `answer(.ok)`. Points scored on the host and on other guests still reach that guest, and every device converges (Principle II).
   - `okOnTheWatchClosesThePhone`: within 10 s of being in touch (FR-013).
   - `leaveFromTheNotice`: both devices leave, and the host's list drops the guest.
@@ -213,9 +232,9 @@ dialog naming the host, and scoring waits for OK.
 
 ### Implementation for User Story 2
 
-- [ ] T021 [US2] In `MatchStore.concludeIfFinished`, when the side is `.guest`, call `betweenMatches.matchEnded(session:side: .guest(hostName: accessTable?.hostName, hostKeepsSharing: accessTable?.keptSharingAfter == session), now:)` and note `endOfMatchAsked`. This works on a guest's phone through `role`, and on its watch through `pairedRole`. Use `accessTable?.hostName`, not `hostName`, which is nil when `canEndSession`.
-- [ ] T022 [US2] In `MatchStore.take(_:from:)` (MS:559), when the incoming table's `keptSharingAfter` equals an open `ask.session`, set that ask's `hostKeepsSharing` to true and persist.
-- [ ] T023 [US2] In `MatchStore.handle(_:)`'s `.snapshot` branch where an empty log adopts (MS:1853-1876), when the incoming match is the host's next one, do all of the following. "The host's next one" means `role == .guest` (or `pairedRole == .guest` on a watch standing in), `!packet.isFromPairedDevice`, `!isJoining` and `incoming.takesBack == nil`.
+- [ ] T022 [US2] In `MatchStore.concludeIfFinished`, when the side is `.guest`, call `betweenMatches.matchEnded(session:side: .guest(hostName: accessTable?.hostName, hostKeepsSharing: accessTable?.keptSharingAfter == session), now:)` and note `endOfMatchAsked`. This works on a guest's phone through `role`, and on its watch through `pairedRole`. Use `accessTable?.hostName`, not `hostName`, which is nil when `canEndSession`.
+- [ ] T023 [US2] In `MatchStore.take(_:from:)` (MS:559), when the incoming table's `keptSharingAfter` equals an open `ask.session`, set that ask's `hostKeepsSharing` to true and persist.
+- [ ] T024 [US2] In `MatchStore.handle(_:)`'s `.snapshot` branch where an empty log adopts (MS:1853-1876), when the incoming match is the host's next one, do all of the following. "The host's next one" means `role == .guest` (or `pairedRole == .guest` on a watch standing in), `!packet.isFromPairedDevice`, `!isJoining` and `incoming.takesBack == nil`.
   - Call `betweenMatches.hostsNextMatchArrived(NewMatchNotice(session:hostName: accessTable?.hostName, arrivedAt: now()))`.
   - Note `endOfMatchUnanswered` if it closed an open question, and `newMatchShown`.
   - Fire `onMatch?(.nextFromHost(id))` in place of `announceBegan()`'s `.began`.
@@ -223,25 +242,32 @@ dialog naming the host, and scoring waits for OK.
   - Persist.
 
   In `offerToThePair()`, re-send the open notice, so a watch woken by the notification gets it (D-11).
-- [ ] T024 [US2] Make `MatchStore.answer(_:)` close a `.guest` question on `.stay` and `.leave`, and the notice on `.ok` and `.leave`. Stay and OK change nothing else; Leave is carried out by the caller through `SharedSession.leave()` on a watch or `stop()` on a phone, the existing paths.
-- [ ] T025 [US2] In `Shared/AppModel.swift` (iOS), on `onMatch(.nextFromHost(session))`, post a notification when `BetweenMatches.wantsNotification(appIsActive: <scene phase is active>, watchReachable: store.isPairReachable)` (D-11):
+- [ ] T025 [US2] Make `MatchStore.answer(_:)` close a `.guest` question on `.stay` and `.leave`, and the notice on `.ok` and `.leave`. Stay and OK change nothing else. Leave is carried out after it by `SharedSession.answer` or `WatchStandIn.answer` (T010), through the existing leave paths.
+- [ ] T026 [US2] Make a leaving guest say goodbye (D-16, FR-009):
+  - add `leaving: Bool?` to `GuestCard` in `RekkertCore/Sync/ShareAccess.swift`, defaulting to nil in `init`, and a round trip with and without the key in `CoreTests/WireCompatibilityTests.swift`;
+  - in `RekkertSync/MatchStore.swift` `leaveSharedSession()`, when the role is `.guest` (or `pairedRole == .guest` on a watch standing in), first send `guestCard(GuestCard(device:name:pairedTo:leaving: true))` live on each host link. Wait up to 2 s, as `sayStoppedSharing` does, before `SharedSession` cuts the links;
+  - in `handle(_:)`'s `.guestCard` case (MS:1740), on the host, when `card.leaving == true`, call `participants.remove(card.device)`, which also drops its paired watch, then `onParticipantsChanged`. Add no admission for that card in `noteParticipant` (MS:440).
+
+  This makes T020's `leaveTakesThePhoneAndTheWatchOff` and T021's `leaveFromTheNotice` pass.
+- [ ] T027 [US2] In `Shared/AppModel.swift` (iOS), on `onMatch(.nextFromHost(session))`, post a notification when `BetweenMatches.wantsNotification(appIsActive: UIApplication.shared.applicationState == .active, watchReachable: store.isPairReachable)` (D-11). `AppModel` already reads `applicationState` this way (AM:145).
   - permission through `RoundAlarmFollower.askToNotify()`;
   - category `rekkert.followMatch`, identifier `next-<session>`;
   - title "Ada started a new match", or "The host started a new match" with no name; body "Tap to open it.";
   - note `notificationPosted`.
 
   Withdraw it, both delivered and pending, as soon as `store.betweenMatches.newMatch` closes, on either device. Follow the `beckonTheWatch` (AM:973-1000) shape.
-- [ ] T026 [US2] Check `WatchApp/Sources/RekkertWatchApp.swift`'s `didReceive`. A tap on a `next-…` notification takes the existing `standIn.followThePhone()` path, and the watch then shows the notice re-sent by T023's `offerToThePair`. Add nothing else unless that path drops the identifier.
-- [ ] T027 [US2] In `App/Sources/Views/RootView.swift`:
-  - **The guest's end-of-match alert**: title "Stay for Ada's next match?", message per contracts/screens.md, **Stay** → `answer(.stay)`, **Leave** → `answer(.leave)` then `model.sharing.stop()`.
-  - **The new-match alert**: "Ada started a new match", **OK** → `answer(.ok)`, **Leave** → `answer(.leave)` then `model.sharing.stop()`.
+- [ ] T028 [US2] Check `WatchApp/Sources/RekkertWatchApp.swift`'s `didReceive`. A tap on a `next-…` notification takes the existing `standIn.followThePhone()` path, and the watch then shows the notice re-sent by T024's `offerToThePair`. Add nothing else unless that path drops the identifier.
+- [ ] T029 [US2] In `App/Sources/Views/RootView.swift`:
+  - **The guest's end-of-match alert**: title "Stay for Ada's next match?", message per contracts/screens.md, **Stay** → `model.sharing.answer(.stay)`, **Leave** → `model.sharing.answer(.leave)`.
+  - **The new-match alert**: "Ada started a new match", **OK** → `model.sharing.answer(.ok)`, **Leave** → `model.sharing.answer(.leave)`.
   - The new-match alert replaces an open question, and the "stopped sharing" alert replaces either.
-- [ ] T028 [US2] On the watch:
-  - In `WatchApp/Sources/Views/WatchResultView.swift`, guest answers in place of **Done**: **Stay** → `answer(.stay)`; **Leave** → `answer(.leave)` and `model.sharing.leave()`.
-  - In `WatchApp/Sources/Views/WatchRootView.swift`, the full-screen new-match alert, with the same answers.
+  - The "Start a workout?" alert, which `.nextFromHost` also raises (T006), waits until the new-match alert is answered. Hold it back in the same delayed-task check that `isPresenting` drives, as T017 does for the effort sheet.
+- [ ] T030 [US2] On the watch:
+  - In `WatchApp/Sources/Views/WatchResultView.swift`, guest answers in place of **Done**: **Stay** → `model.standIn.answer(.stay)`; **Leave** → `model.standIn.answer(.leave)`.
+  - In `WatchApp/Sources/Views/WatchRootView.swift`, the full-screen new-match alert: **OK** → `model.standIn.answer(.ok)`; **Leave** → `model.standIn.answer(.leave)`. The watch's "Start a workout?" alert waits until it is answered.
   - Add a `newMatch()` cue to `WatchApp/Sources/WatchHaptics.swift` that plays `.notification` through its existing `play` and honours `preferences()`, called when the alert opens.
   - The court page's taps already read `store.canScore` (WatchCourtPage:98, 122), so scoring waits by itself; check the phone's match views do too (TraditionalMatchView:18, 99 and the others).
-- [ ] T029 [US2] Run `swift test --package-path Packages/RekkertKit --filter "EndOfMatchQuestion|NextMatchNotice"`. T019 and T020 pass, and the whole package stays green.
+- [ ] T031 [US2] Run `swift test --package-path Packages/RekkertKit --filter "EndOfMatchQuestion|NextMatchNotice"`. T020 and T021 pass, and the whole package stays green.
 
 **Checkpoint**: No guest's screen changes to a new match without the dialog (SC-002), and
 every guest who stays gets each next match while every leaver gets none (SC-001).
@@ -260,34 +286,35 @@ stops by itself and everyone is told why.
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T030 [P] [US3] Write `SyncTests/HostWithNoMatchTests.swift`:
+- [ ] T032 [P] [US3] Write `SyncTests/HostWithNoMatchTests.swift`:
   - `shareFromThePhoneWithNoMatchOn`: `sharing.host()` with `store.state == nil` gives a code, and guests can join. Fails today (SS:267).
   - `shareFromTheWristWithNoMatchOn`: `.startHosting` from the host watch gives the watch a `hostingStatus` with a code and `canShare == true`. Fails today (SS:769).
   - `theFirstMatchReachesEveryGuest`.
   - `aGuestsPhoneStillCannotHost`.
 
   In `SyncTests/HostWatchSharingTests.swift`, rewrite `sharingStartsFromTheWristOnlyWithAMatchOn` (:41) to the new rule, as `sharingStartsFromTheWristWithOrWithoutAMatch`.
-- [ ] T031 [P] [US3] Write `SyncTests/StopBetweenMatchesTests.swift`:
+- [ ] T033 [P] [US3] Write `SyncTests/StopBetweenMatchesTests.swift`:
   - `stopWithNoMatchOnReachesEveryGuest`: finish, have every guest choose Stay, then `sharing.stop()` on the host. Every guest gets `hostStoppedSharing`, forgets the code, has role `.solo`, and does not get the host's next match. Fails today (R-3).
   - `theStopSaysWhy`: the guests' `hostStopReason` is `.host`.
   - `aGuestStillJoiningIgnoresIt`.
   - `anOlderHostsStopReachesNewGuests`: deliver `Wire.sharingStopped(sessionID: UUID(), reason: nil)` on the host link to a waiting guest. It leaves.
-- [ ] T032 [P] [US3] Write `SyncTests/IdleStopTests.swift` on `TestClock` (FR-026, SC-008). Each fails today, except `matchesPauseTheClock`:
+- [ ] T034 [P] [US3] Write `SyncTests/IdleStopTests.swift` on `TestClock` (FR-026, SC-008). Each fails today, except `matchesPauseTheClock`:
   - `thirtyMinutesWithNoMatchStopsSharing`: by 31 min after the last match, the host is not sharing, `stoppedForIdle` is true, and every guest got `reason == .idle`. The host's and guests' records hold `idleStop`.
   - `matchesPauseTheClock`: a 45-minute match, then a 25-minute break, is still sharing.
   - `aRelaunchAfterThirtyMinutesDoesNotShare`: `endApp` the host with no match on, advance 31 min, `relaunch`. Nothing goes back up.
   - `aResumeAfterThirtyMinutesDoesNotShare`: suspend the host, advance 31 min, `resume()`. Same result.
   - `aGuestLeavesByItself`: the host is out of range. At 30 min the waiting guest leaves on its own, keeps History, and forgets the code.
+  - `aGuestRelaunchedAfterThirtyMinutesDoesNotRejoin`: `endApp` a waiting guest, advance 31 min, `relaunch`. It does not redial, and it has left.
   - `stayAndKeepDoNotResetTheClock`.
 
 ### Implementation for User Story 3
 
-- [ ] T033 [US3] Remove the need for a match on (D-8):
+- [ ] T035 [US3] Remove the need for a match on (D-8):
   - In `RekkertSync/SharedSession.swift`, drop the `store.state != nil` guard from `host(code:)` (SS:267).
   - In `startHostingFromTheWatch` (SS:769), guard only on `store.role != .guest`.
   - In `hostingStatus` (SS:763), set `canShare: store.role != .guest`.
   - In `RekkertSync/MatchStore.swift` `startSharing()`, call `betweenMatches.sharingStarted(now:)` when the log is empty.
-- [ ] T034 [US3] Let Stop reach a waiting guest (D-7):
+- [ ] T036 [US3] Let Stop reach a waiting guest (D-7):
   - In `MatchStore.handle(_:)` `.sharingStopped` (MS:1765-1771), also act when `role == .guest && log.isEmpty && !isJoining && !packet.isFromPairedDevice`, whatever session it names.
   - Pass `reason` to a widened `onStoppedByHost: ((SharingStopReason?) -> Void)?`.
   - On an empty log, leave without filing: `leaveSharedSession()` already files only a log with progress.
@@ -295,39 +322,44 @@ stops by itself and everyone is told why.
   - In `SharedSession.stoppedByHost`, take the reason and set a new `public private(set) var hostStopReason: SharingStopReason?`, cleared by `acknowledgeStoppedSharing()`.
   - In `Shared/AppModel.swift`, send `.hostStoppedSharing(host:, reason:)` to the watch (AM:182).
   - In `RekkertSync/WatchStandIn.swift`, keep the reason beside `hostStoppedSharing`.
-- [ ] T035 [US3] Add the idle watch to `RekkertSync/SharedSession.swift` (D-10):
+- [ ] T037 [US3] Add the idle watch to `RekkertSync/SharedSession.swift` (D-10):
   - A task on the injected `sleep`, every 30 s, while hosting or while the store is a guest with an empty log, that checks `store.betweenMatches.isIdleExpired(now:matchOn: store.state != nil)`. When it is expired:
     - **On the host**: `stop(reason: .idle)`, set `public private(set) var stoppedForIdle = true`, and note `idleStop`.
     - **On a guest**: run the stopped-by-host path locally with `.idle` (cut links, forget the code, `store.leaveSharedSession()`), and note `idleStop`.
   - Run the same check at the top of `restore()` (SS:295) and `resume()` (SS:368), before anything is revived.
   - Add `acknowledgeIdleStop()`.
   - Set `HostingStatus.endedBy = .idle` while `stoppedForIdle` is true.
-- [ ] T036 [US3] In `RekkertSync/MatchStore.swift`, make every path that puts a match in play call `betweenMatches.matchBegan()` and persist: `configure`, `start(_:)`, the join adoption (MS:1803) and T023's adoption. Make `sharingEnded()` run on `stopSharing()`, `dropSession()` and `follow(_:)`.
-- [ ] T037 [US3] Add the host's rows to the "Play together" section of `App/Sources/Views/HomeView.swift`, per contracts/screens.md "Between matches: the phone's Home":
+- [ ] T038 [US3] In `RekkertSync/MatchStore.swift`, make the paths T013 did not cover also call `betweenMatches.matchBegan()` and persist: the join adoption (MS:1803), T024's adoption, and History's resume (`AppModel.resume(_:)` reaches the store through `configure` or its own path; follow it). Make `sharingEnded()` run on `stopSharing()`, `dropSession()` and `follow(_:)`.
+- [ ] T039 [US3] Add the host's rows to the "Play together" section of `App/Sources/Views/HomeView.swift`, per contracts/screens.md "Between matches: the phone's Home":
   - **Share**, when `model.sharing.code == nil` and the role is not `.guest`. It calls `model.sharing.host()` and sets `model.showingShareCode = true`.
   - "Sharing on 482 915" with "N on · until you stop", opening `ShareCodeSheet`.
   - **Stop sharing**, with the confirmation "Stop sharing? Everyone else stops following your matches.", then `model.sharing.stop()`.
   - The new footer text.
-- [ ] T038 [US3] Add the line "Shared with N on <code>" above **Start** in `App/Sources/Views/NewSessionView.swift`, and above the presets section in `HomeView.swift`, while `model.sharing.code != nil` (FR-020). Nothing offers to start unshared.
-- [ ] T039 [US3] Add the idle-stop alerts.
+- [ ] T040 [US3] Add the line "Shared with N on <code>" while `model.sharing.code != nil` (FR-020) in three places:
+  - above **Start** in `App/Sources/Views/NewSessionView.swift`;
+  - above the presets section in `HomeView.swift`;
+  - beside **Resume** in `App/Sources/Views/HistoryDetailView.swift` (:138).
+
+  Nothing offers to start unshared.
+- [ ] T041 [US3] Add the idle-stop alerts.
   - **On the phone**, in `App/Sources/Views/RootView.swift`:
     - the host's "Sharing stopped" alert, driven by `sharing.stoppedForIdle` and acknowledged with `acknowledgeIdleStop()`;
     - the guest's "Ada's sharing has ended" variant of the stop alert when `hostStopReason == .idle`.
   - **On the watch**, the same pair of messages in `WatchApp/Sources/Views/WatchRootView.swift`, from `standIn.hosting?.endedBy` and the kept reason.
   - Texts from contracts/screens.md "Sharing stopped".
-- [ ] T040 [US3] Add the host card to the top of `WatchIdleView` in `WatchApp/Sources/Views/WatchRootView.swift`:
+- [ ] T042 [US3] Add the host card to the top of `WatchIdleView` in `WatchApp/Sources/Views/WatchRootView.swift`:
   - **Share**, which calls `standIn.startHosting()` and opens the code page;
   - "Sharing · N on";
   - **Code**, which opens the `WatchCodeView` sheet;
   - **Stop sharing**, behind a confirmation;
   - shown only when the phone's side is not `.guest`.
 
-  In `WatchApp/Sources/Views/WatchCodeView.swift`, `.nothingToShare` now means only "your iPhone is on someone else's sharing"; reword it to match.
-- [ ] T041 [P] [US3] Apply the wording table in contracts/screens.md, "Wording that moves from 'this match' to 'sharing'" (FR-022), to:
+  Put the "Sharing · N on" line at the top of `WatchPresetsView` (WatchRootView.swift:324-377) too, so a preset started there says it will be shared (FR-020). In `WatchApp/Sources/Views/WatchCodeView.swift`, `.nothingToShare` now means only "your iPhone is on someone else's sharing"; reword it to match.
+- [ ] T043 [P] [US3] Apply the wording table in contracts/screens.md, "Wording that moves from 'this match' to 'sharing'" (FR-022), to:
   - `App/Sources/Views/MatchOptionsMenu.swift` ("Share", "Share again");
   - `App/Sources/Views/ShareCodeSheet.swift` (title "Sharing");
   - `WatchApp/Sources/Views/WatchMenuView.swift` ("Share", the Stop confirmation and the Leave confirmation).
-- [ ] T042 [US3] Run `swift test --package-path Packages/RekkertKit --filter "HostWithNoMatch|StopBetweenMatches|IdleStop|HostWatchSharing"`. T030–T032 pass, and the whole package stays green.
+- [ ] T044 [US3] Run `swift test --package-path Packages/RekkertKit --filter "HostWithNoMatch|StopBetweenMatches|IdleStop|HostWatchSharing"`. T032–T034 pass, and the whole package stays green.
 
 **Checkpoint**: A host can share, show the code and stop with no match on, in at most two
 taps (SC-005), and a forgotten share ends by itself (SC-008).
@@ -345,8 +377,9 @@ screen, and the phone leaves too; the host's next match does not arrive.
 
 ### Tests for User Story 4 ⚠️
 
-- [ ] T043 [US4] Write `SyncTests/JoinBetweenMatchesTests.swift`:
-  - `aJoinWithNoMatchOnWaitsAsAGuest`: once the join link is proven, the guest phone has role `.guest`, `isJoining == false`, `accessTable?.hostName` set, and `betweenMatches.idleSince` set. Fails today (R-5).
+- [ ] T045 [US4] Write `SyncTests/JoinBetweenMatchesTests.swift`:
+  - `aJoinWithNoMatchOnWaitsAsAGuest`: once the host's empty answer to the guest's hello arrives, the guest phone has role `.guest`, `isJoining == false`, `accessTable?.hostName` set, and `betweenMatches.idleSince` set. Fails today (R-5).
+  - `aJoinMidMatchIsStillAJoin`: the host has a match on, and the guest's link comes up before the host's snapshot arrives (R-14). The guest never becomes a waiting guest, adopts the match through the join branch, and has no `newMatch`.
   - `itsWatchWaitsToo`: the watch's `pairedRole == .guest`, and it has the host's name.
   - `theFirstMatchArrives`: the host starts a match, and the waiting guest adopts it.
   - `leavingWhileWaitingTakesThePhoneAndTheWatch`: the host keeps sharing with the other guests.
@@ -356,26 +389,27 @@ screen, and the phone leaves too; the host's next match does not arrive.
 
 ### Implementation for User Story 4
 
-- [ ] T044 [US4] Add `public func joinedBetweenMatches()` to `RekkertSync/MatchStore.swift` (D-9). It acts only when `isJoining && log.isEmpty`, and then:
+- [ ] T046 [US4] Add a private `joinedBetweenMatches(access:)` to `RekkertSync/MatchStore.swift` (D-9). Call it from the `incoming.isEmpty` branch of `handle(_:)`'s `.snapshot` case (MS:1794-1802), when `isJoining && log.isEmpty && !packet.isFromPairedDevice`: the host has answered the guest's hello with nothing on. It then:
   - sets `role = .guest`;
   - sets `isJoining = false` and `joinRefuses = nil`;
+  - takes the `access` that came with the snapshot, through `take(_:from:)`, now that the role admits it;
   - calls `betweenMatches.joinedBetweenMatches(now:)`;
   - calls `persist()`, `shareRole()` and `shareAccess()`.
 
-  Call it from `SharedSession.noteProven()` (SS:320-326) when the store is joining with an empty log.
-- [ ] T045 [US4] Add `public var startingOwnMatchLeavesSharing: Bool` to `RekkertSync/MatchStore.swift`. It is `keepsHistory ? role == .guest : startingOwnMatchTakesPhoneOff` (D-15).
-- [ ] T046 [US4] Add the guest's rows to the "Play together" section of `App/Sources/Views/HomeView.swift`:
+  Do not call it from `SharedSession.noteProven()`, which runs before the host's match arrives (R-14). Keep that branch's `offerOurSession(live: !isJoining)` as it is.
+- [ ] T047 [US4] Add `public var startingOwnMatchLeavesSharing: Bool` to `RekkertSync/MatchStore.swift`. It is `keepsHistory ? role == .guest : startingOwnMatchTakesPhoneOff` (D-15).
+- [ ] T048 [US4] Add the guest's rows to the "Play together" section of `App/Sources/Views/HomeView.swift`:
   - "On Ada's sharing" with "Waiting for Ada's next match", when `model.store.role == .guest && model.store.state == nil`;
   - **Leave**, with the confirmation "Leave Ada's sharing? Your watch leaves too.", then `model.sharing.stop()`;
   - **Join again**, when `model.sharing.keptGuestCode` is set and the phone is not on it, which joins that code.
-- [ ] T047 [US4] In `App/Sources/Views/ConnectionBadge.swift` `SharingBadge`, remove the between-matches guest `Menu` (55-70), since Home's section replaces it. Keep the glyph and every in-match branch.
-- [ ] T048 [US4] In `App/Sources/Views/NewSessionView.swift` (**Start**) and `App/Sources/Views/HomeView.swift` (preset taps), when `model.store.startingOwnMatchLeavesSharing` is true, ask first with "Start your own match? This takes you off Ada's sharing.", offering **Start anyway** and **Cancel** (FR-021).
-- [ ] T049 [US4] Add the guest card to `WatchIdleView` in `WatchApp/Sources/Views/WatchRootView.swift`:
+- [ ] T049 [US4] In `App/Sources/Views/ConnectionBadge.swift` `SharingBadge`, remove the between-matches guest `Menu` (55-70), since Home's section replaces it. Keep the glyph and every in-match branch.
+- [ ] T050 [US4] In `App/Sources/Views/NewSessionView.swift` (**Start**), `App/Sources/Views/HomeView.swift` (preset taps) and `App/Sources/Views/HistoryDetailView.swift` (**Resume**, :138), when `model.store.startingOwnMatchLeavesSharing` is true, ask first with "Start your own match? This takes you off Ada's sharing.", offering **Start anyway** and **Cancel** (FR-021).
+- [ ] T051 [US4] Add the guest card to `WatchIdleView` in `WatchApp/Sources/Views/WatchRootView.swift`:
   - "On Ada's sharing" and "Waiting for the next match";
   - **Leave**, with the confirmation "Leave Ada's sharing? Your iPhone leaves too.", then `model.sharing.leave()`.
 
   Reword `AsksBeforeTakingThePhoneOff` to "This takes your iPhone off Ada's sharing."
-- [ ] T050 [US4] Run `swift test --package-path Packages/RekkertKit --filter JoinBetweenMatches`. T043 passes, and the whole package stays green.
+- [ ] T052 [US4] Run `swift test --package-path Packages/RekkertKit --filter JoinBetweenMatches`. T045 passes, and the whole package stays green.
 
 **Checkpoint**: A guest can join, see the wait and leave between matches, in at most two
 taps (SC-004).
@@ -386,22 +420,23 @@ taps (SC-004).
 
 **Purpose**: Mixed versions, docs, accessibility, and the gate
 
-- [ ] T051 [P] Write `SyncTests/OlderBuildBetweenMatchesTests.swift` (D-13). Each case works on payloads with the new keys stripped or with nil values, so no real older build is needed:
+- [ ] T053 [P] Write `SyncTests/OlderBuildBetweenMatchesTests.swift` (D-13). Each case works on payloads with the new keys stripped or with nil values, so no real older build is needed:
   - an older host never sets `keptSharingAfter`, so the guest's question asks only stay or leave;
   - an older host's `sharingStopped` without `reason` stops a waiting new guest, reading as `.host`;
-  - a guest whose pair drops the `.answered` and `.newMatch` signals still leaves on Leave, through the existing path, and is asked on each device separately without stalling.
-- [ ] T052 [P] Update `README.md`'s "How syncing works" and the sharing sections around lines 339–423 and 748–762:
+  - a guest whose pair drops the `.answered` and `.newMatch` signals still leaves on Leave, through the existing path, and is asked on each device separately without stalling;
+  - a guest card without `leaving` reads as an ordinary card, and a host that ignores the key shows the leaver out of reach after 15 s, as today.
+- [ ] T054 [P] Update `README.md`'s "How syncing works" and the sharing sections around lines 339–423 and 748–762:
   - sharing lasts until it is stopped, or for 30 minutes with no match on;
   - the host and the guests are asked at the end of every match;
   - the next match arrives with a dialog;
   - Home and the watch's start screen carry the sharing controls.
-- [ ] T053 Make an accessibility pass over every new row, card and alert (FR-023):
+- [ ] T055 Make an accessibility pass over every new row, card and alert (FR-023):
   - combined VoiceOver labels as in contracts/screens.md, with digits read one by one;
   - `scaledFont` on the watch;
   - check at the largest Dynamic Type size on both simulators that nothing truncates.
-- [ ] T054 Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh`. Both pass with no new Info.plist key or entitlement. If one turned out to be needed, add its assertion to `scripts/verify.sh` in the same change.
-- [ ] T055 Walk [quickstart.md](quickstart.md) level 3 with `scripts/share.sh --keep`, steps 1–7, against contracts/screens.md. Note anything off as a new task.
-- [ ] T056 Walk quickstart.md level 4, a real-device evening with a host and three guests, and record the outcome against SC-001 – SC-008 in `specs/004-match-end-sharing-prompt/validation.md`, in the shape of `specs/003-apple-watch-se-support/validation.md`.
+- [ ] T056 Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh`. Both pass with no new Info.plist key or entitlement. If one turned out to be needed, add its assertion to `scripts/verify.sh` in the same change.
+- [ ] T057 Walk [quickstart.md](quickstart.md) level 3 with `scripts/share.sh --keep`, steps 1–7, against contracts/screens.md. Note anything off as a new task.
+- [ ] T058 Walk quickstart.md level 4, a real-device evening with a host and three guests, and record the outcome against SC-001 – SC-008 in `specs/004-match-end-sharing-prompt/validation.md`, in the shape of `specs/003-apple-watch-se-support/validation.md`.
 
 ---
 
@@ -412,25 +447,27 @@ taps (SC-004).
 - **Setup (Phase 1)**: none.
 - **Foundational (Phase 2)**: needs Setup, and blocks every story.
 - **US1 (Phase 3)** and **US2 (Phase 4)**: need Foundational.
-  - US2's `keepIsToldToGuests` (T019) needs US1's T013, and its stop-replaces-question test uses today's Stop.
+  - US2's `keepIsToldToGuests` (T020) needs US1's T014, and its stop-replaces-question test uses today's Stop.
+  - US2's waiting state for a guest who chose Stay is drawn by US4's T048 and T051. Until US4 lands, a guest who stays sees Home as it does today, and US2's tests check the engine state (`isWaiting`).
   - Otherwise they are independent.
-- **US3 (Phase 5)**: needs Foundational. T034's widened `onStoppedByHost` and T014's `stop(reason:)` meet in `SharedSession`, so do T014 first if US1 has not landed.
-- **US4 (Phase 6)**: needs Foundational. It does not need US3, but the guest idle leave (T035) covers waiting guests from either story.
+- **US3 (Phase 5)**: needs Foundational. T036's widened `onStoppedByHost` and T015's `stop(reason:)` meet in `SharedSession`, so do T015 first if US1 has not landed.
+- **US4 (Phase 6)**: needs Foundational. It does not need US3, but the guest idle leave (T037) covers waiting guests from either story.
 - **Polish (Phase 7)**: after the stories that are shipping.
 
 ### Within Each User Story
 
 - Tests first, and they must fail for the stated reason.
 - `RekkertCore` before `RekkertSync`, and `RekkertSync` before `Shared/` and the views.
-- The story's test run (T018, T029, T042, T050) closes it.
+- The story's test run (T019, T031, T044, T052) closes it.
 
 ### Parallel Opportunities
 
-- **Phase 2**: T002, T004, T005, T006 and T007 touch different files and run in parallel. T003 follows T002. T008–T010 follow T003–T007.
-- **Phase 3 onwards**: within US2, T020 runs beside T019.
-- **Phase 5**: T030, T031 and T032 are three new files and run in parallel. T041 is wording only, and can land any time after Phase 2.
+- **Phase 2**: T002, T004, T005, T006 and T007 touch different files and run in parallel. T003 follows T002. T008–T011 follow T003–T007, with T010 after T009.
+- **The views** call only `SharedSession.answer` and `WatchStandIn.answer` for answers, so T017, T018, T029 and T030 need T010.
+- **Phase 3 onwards**: within US2, T021 runs beside T020.
+- **Phase 5**: T032, T033 and T034 are three new files and run in parallel. T043 is wording only, and can land any time after Phase 2.
 - **Across stories**: US1 and US3 touch different views (`RootView`/`WatchResultView` against `HomeView`/`WatchRootView` idle), but both change `MatchStore.swift` and `SharedSession.swift`. Run them one after the other unless the store edits are coordinated.
-- **Phase 7**: T051 and T052 run in parallel.
+- **Phase 7**: T053 and T054 run in parallel.
 
 ### Parallel Example: Foundational
 
@@ -445,9 +482,9 @@ Task: "T007 LinkEvent kinds in RekkertCore/Sync/LinkRecord.swift"
 ### Parallel Example: User Story 3 tests
 
 ```text
-Task: "T030 SyncTests/HostWithNoMatchTests.swift"
-Task: "T031 SyncTests/StopBetweenMatchesTests.swift"
-Task: "T032 SyncTests/IdleStopTests.swift"
+Task: "T032 SyncTests/HostWithNoMatchTests.swift"
+Task: "T033 SyncTests/StopBetweenMatchesTests.swift"
+Task: "T034 SyncTests/IdleStopTests.swift"
 ```
 
 ---
@@ -469,7 +506,7 @@ Task: "T032 SyncTests/IdleStopTests.swift"
 3. US3 → test → demo. Sharing before the first match, Stop between matches that works, and
    the 30-minute stop.
 4. US4 → test → demo. Waiting and leaving are visible on both devices.
-5. Polish, then the real-device evening (T056).
+5. Polish, then the real-device evening (T058).
 
 ### Notes
 

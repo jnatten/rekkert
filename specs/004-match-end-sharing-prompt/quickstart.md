@@ -28,16 +28,21 @@ the tree at `9d930e27` for the reason given (Principle III).
 |---|---|---|
 | `BetweenMatchesTests` (RekkertCoreTests) | Who is asked on each side; one question per session; Leave wins over Stay; the idle clock starts at the end of a match, pauses during one, and expires at 30 min | n/a: new type |
 | `StopBetweenMatchesTests.stopWithNoMatchOnReachesEveryGuest` | R-3: a host that stops between matches is heard by every waiting guest, which forgets the code and shows the stop notice | **Yes**: guests ignore it |
-| `JoinBetweenMatchesTests.joinWithNoMatchOnWaitsAsAGuest` | R-5: a guest joining a host with nothing on becomes a guest at once, with the host's name, and gets the first match | **Yes**: it stays joining |
-| `NextMatchNoticeTests.nextMatchArrivesWithANotice` | The host's next match opens a notice on the guest's phone and watch, and scoring waits for OK | **Yes**: it arrives silently |
+| `JoinBetweenMatchesTests.aJoinWithNoMatchOnWaitsAsAGuest` | R-5: a guest joining a host with nothing on becomes a guest at once, with the host's name, and gets the first match | **Yes**: it stays joining |
+| `JoinBetweenMatchesTests.aJoinMidMatchIsStillAJoin` | R-14: a link that is up before the host's match arrives does not make a waiting guest, and no popup shows | n/a |
+| `NextMatchNoticeTests.theNextMatchArrivesWithANotice` | The host's next match opens a notice on the guest's phone and watch, and scoring waits for OK | **Yes**: it arrives silently |
+| `NextMatchNoticeTests.aBluetoothGuestGetsTheNextMatchWithinThirtySeconds` | FR-014: the next match reaches a Bluetooth-only guest within spec 001's 30 s | n/a |
 | `NextMatchNoticeTests.okOnTheWatchClosesThePhone` | One answer for the pair, within 10 s of being in touch (FR-013) | n/a |
-| `EndOfMatchQuestionTests.hostAndGuestsAreAsked` | Host asked keep or stop with the count; each guest asked stay or leave within 15 s (SC-006) | **Yes**: nobody is asked |
-| `EndOfMatchQuestionTests.leaverNeverGetsTheNextMatch` | FR-015 and SC-001: a guest who left stays off, even in range | n/a |
+| `EndOfMatchQuestionTests.hostIsAskedWithTheGuestCount` | The host is asked keep or stop, with the count | **Yes**: nobody is asked |
+| `EndOfMatchQuestionTests.guestsAreAskedWithinThirtySeconds` | Each guest is asked stay or leave within 30 s, and within 5 s for at least 95% (SC-006) | **Yes**: nobody is asked |
+| `EndOfMatchQuestionTests.leaveTakesThePhoneAndTheWatchOff` | FR-009: both devices leave, the code is kept for Join again, and the host's list drops the guest within 15 s | **Yes**: the host shows it out of reach (R-13) |
+| `EndOfMatchQuestionTests.aLeaverNeverGetsTheNextMatch` | FR-015 and SC-001: a guest who left stays off, even in range | n/a |
 | `EndOfMatchQuestionTests.unansweredIsStay` | FR-012: no answer, then the next match arrives with the notice, and the record says unanswered | n/a |
 | `EndOfMatchQuestionTests.keepIsToldToGuests` | D-5: a guest's open question learns "keeping it shared" | n/a |
-| `HostWithNoMatchTests.shareFromHomeAndFromTheWrist` | FR-016: sharing starts with no match on, from the phone and from the watch. Replaces `sharingStartsFromTheWristOnlyWithAMatchOn`. | **Yes**: refused |
+| `HostWithNoMatchTests.shareFromThePhoneWithNoMatchOn`, `shareFromTheWristWithNoMatchOn` | FR-016: sharing starts with no match on, from the phone and from the watch. Replaces `sharingStartsFromTheWristOnlyWithAMatchOn`. | **Yes**: refused |
 | `IdleStopTests.thirtyMinutesWithNoMatchStopsSharing` | FR-026, SC-008: with `TestClock`, stopped by 31 min, guests told with `idle`, host flagged | **Yes**: never stops |
-| `IdleStopTests.relaunchAfterThirtyMinutesDoesNotShare` | The morning edge case: `endApp`, 31 min, `relaunch`, and nothing goes up | **Yes**: it resumes |
+| `IdleStopTests.aRelaunchAfterThirtyMinutesDoesNotShare` | The morning edge case: `endApp`, 31 min, `relaunch`, and nothing goes up | **Yes**: it resumes |
+| `IdleStopTests.aGuestRelaunchedAfterThirtyMinutesDoesNotRejoin` | The same for a waiting guest's app | **Yes**: it redials |
 | `IdleStopTests.matchesPauseTheClock` | A 45-minute match, then a 25-minute break, still shares | n/a |
 | `OlderBuildBetweenMatchesTests` | D-13: an older guest, or an older host, sees today's behaviour, and nothing stalls | n/a |
 
@@ -70,7 +75,8 @@ the host on a pinned code. Then, by hand, against [contracts/screens.md](contrac
 1. On the host, finish the match.
    - The host gets "Keep sharing for the next match?" over the result, with "1 person is
      on".
-   - The guest gets "Stay for the host's next match?" within 15 s.
+   - The guest gets "Stay for the host's next match?" within a few seconds, and within 30 s
+     at most.
 2. On the guest, choose **Stay**. Its Home shows "On … sharing · waiting".
 3. On the host, choose **Keep sharing**, then start a new match.
    - The guest gets "… started a new match".

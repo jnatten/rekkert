@@ -14,7 +14,8 @@ match merges.
 | `sharingStopped(sessionID, reason?)` | host → guests | **Extended, and accepted more widely** | `reason` (optional): `host` or `idle`. A guest now acts on it when it holds the named match, as before, **or** when it is a guest with an empty log, not joining, and the notice came on a non-pair link, whatever session it names (D-7). Either way it files nothing new (the last match is already filed), forgets the code, and shows the stop notice with the reason. |
 | `access(ShareAccessTable)`, `snapshot(…, access?)` | host → guests, guest phone → its watch | **Extended** | The table carries `keptSharingAfter` (optional): the session after which the host answered Keep sharing. It travels with a revision bump, and arrives and is replayed the way the table already is (D-5). |
 | `snapshot(log)` of the host's next match | host → guests | **Unchanged on the wire** | A guest that adopts it at MS:1853 now also opens a new-match notice (D-6). |
-| A host with no match on answering a joining guest | host → guest | **Unchanged on the wire** | The guest now completes its join when the link is proven, rather than when a match arrives (D-9). |
+| A host with no match on answering a joining guest | host → guest | **Unchanged on the wire** | The host's answer to the guest's hello is its empty match, with the access list. The guest now completes its join on that answer, and becomes a waiting guest with the host's name, rather than waiting for a match to arrive (D-9). |
+| `guestCard(device, name, pairedTo?, leaving?)` | guest → host | **Extended** | `leaving` (optional): `true` on the goodbye a guest sends on each host link before it cuts them, waiting up to 2 s. The host drops that guest, and its paired watch, from its list (D-16, FR-009). |
 
 No new `Wire` case is added, so `Scope.sharedSession` and `keepsOverDelay` (FO:49-63,
 256-264) only see the extended ones.
@@ -47,3 +48,7 @@ nothing again on reconnect, since the durable queue already carries them.
 4. **Decoding an older `hostStoppedSharing` or `sharingStopped`** gives a nil `reason`,
    which reads as `host`.
 5. **The event format, the merge and the reducer are unchanged** (Principle II).
+6. **An older host** ignores `leaving` on a guest card. The card reads as an ordinary one,
+   so the leaver shows as out of reach after 15 s, as it does today.
+7. **An older guest** sends no goodbye, so a new host shows it as out of reach when it
+   leaves, as it does today.

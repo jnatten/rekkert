@@ -105,8 +105,9 @@ naming the host, and the unanswered question is gone.
 **Acceptance Scenarios**:
 
 1. **Given** a guest on a shared match, **When** the host finishes it, **Then** within
-   15 seconds the guest's phone or watch shows the result and asks whether to stay for the
-   host's next match or leave, naming the host where the host gave a name.
+   30 seconds, and within 5 seconds for most guests, the guest's phone or watch shows the
+   result and asks whether to stay for the host's next match or leave, naming the host where
+   the host gave a name.
 2. **Given** that question, **When** the guest chooses Leave, **Then** the guest's phone and
    watch both leave, the finished match stays in the guest's History, and the host's list shows
    the guest gone within 15 seconds while the other guests stay on.
@@ -251,15 +252,16 @@ start screen, and confirms the phone left too and the host's next match does not
 
 **Each guest, at the end of a shared match**
 
-- **FR-008**: When the host's shared match ends, each guest in reach MUST, within 15 seconds,
-  see the result and be asked whether to stay for the host's next match or leave, naming the
-  host where the host gave a name. If the host has already chosen Keep sharing, the question
+- **FR-008**: When the host's shared match ends, each guest in reach MUST see the result and
+  be asked whether to stay for the host's next match or leave, naming the host where the host
+  gave a name, within the times spec 001 FR-002 sets for a point: 5 seconds for at least 95%
+  of guests, and 30 seconds at most. If the host has already chosen Keep sharing, the question
   MUST say so. If the host chose Stop sharing, the guest MUST get only the notice that the host
   stopped sharing, not the question.
 - **FR-009**: Choosing Leave MUST take the guest's phone and watch off the host's sharing
-  together, keep the finished match in the guest's History, and forget the code. The host's
-  sharing MUST carry on for everyone else, and the host's list MUST show the guest gone within
-  15 seconds.
+  together and keep the finished match in the guest's History. The code is kept for Join again
+  (spec 001 FR-024) for as long as the host shares on it. The host's sharing MUST carry on for
+  everyone else, and the host's list MUST show the guest gone within 15 seconds.
 - **FR-010**: Choosing Stay MUST keep the guest on the host's sharing, showing the waiting
   state of FR-018 until the host's next match arrives or sharing stops.
 - **FR-011**: A guest's phone and watch are asked once together: an answer on either MUST take
@@ -367,7 +369,8 @@ start screen, and confirms the phone left too and the host's next match does not
   confirmation, from the phone's Home screen or the watch's start screen.
 - **SC-005**: With no match on, a host can show the code in at most two taps from the phone's
   Home screen or the watch's start screen.
-- **SC-006**: Every guest in reach is asked within 15 seconds of the host ending the match.
+- **SC-006**: Every guest in reach is asked within 30 seconds of the host ending the match,
+  and at least 95% of them within 5 seconds.
 - **SC-007**: Asked afterwards whether anything appeared on their phone or watch that they did
   not expect, players in that evening report no match arriving by surprise.
 - **SC-008**: A share left on with no match on stops within 31 minutes of the last match, with

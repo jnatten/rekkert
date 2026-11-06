@@ -163,6 +163,21 @@ stands in for its phone (WatchStandIn:468-474) has a radio link of its own to th
 
 There are no UI test targets. Strings are English literals in the views.
 
+### R-13. The host never drops a guest who leaves
+
+`Participants.remove` (ParticipantState.swift:88) has no caller. A guest's Leave cuts its
+links and sends nothing to the host: `.left` goes only between a phone and its own watch
+(FO:49-63). The host's list therefore shows a leaver as out of reach after 15 s, and never
+as gone.
+
+### R-14. A join is "proven" before the host's match arrives
+
+`noteProven()` runs as soon as a link is up: on `.joined(count)` from the local network
+(SS:655-665) and on Bluetooth reachability (SS:204). The host's match, if it has one, comes
+after. A joining guest's hello is answered by `requestSnapshot` with the host's whole log,
+an empty one included (MS:2268-2270), so a joining guest does hear when the host has nothing
+on: an empty snapshot from a link that is not its pair's.
+
 ## Decisions
 
 ### D-1. One between-matches state, kept in RekkertCore
@@ -244,6 +259,15 @@ What each choice does:
 
 "Leave wins" (FR-011) falls out of this: Stay changes nothing, so a Leave heard after a
 Stay still leaves.
+
+**Views never carry out a choice themselves.** Each device has one entry point:
+
+- on the phone, `SharedSession.answer(_:)`;
+- on the watch, `WatchStandIn.answer(_:)`.
+
+Each first records the answer and tells the other device (`MatchStore.answer`), and only then
+stops sharing or leaves. Done the other way round, leaving would clear the question before
+the answer was recorded or sent. Views forward one call (Principle I).
 
 **Alternatives considered**: putting the answer in the application context. It is
 overwritten by the next snapshot, and it is not heard live.
@@ -329,17 +353,29 @@ the section replaces it.
 
 ### D-9. A join with no match on completes, into waiting
 
-**Decision**: when `SharedSession` proves the join link (`noteProven`, SS:320-326) and the
-store is still joining with an empty log, it calls a new `MatchStore.joinedBetweenMatches()`.
-That sets the role to `.guest`, clears `isJoining`, persists, and starts the idle clock.
+**Decision**: the join completes into waiting when the host says it has nothing on. That is
+when a joining store with an empty log is handed an empty snapshot on a link that is not its
+pair's: the `incoming.isEmpty` branch of `handle(.snapshot)` (MS:1794-1802). There the store
+calls a new `MatchStore.joinedBetweenMatches()`, which:
 
-Once the role is `.guest`, `takesAccess` admits the host's `.access`, so the host's name
-arrives. If the host's match arrives first, today's join branch (MS:1803) adopts it as
-before. A guest that joins with a match of its own still on keeps today's behaviour: it waits
-in the join sheet, and its match is filed when the host's arrives.
+1. sets the role to `.guest` and clears `isJoining`;
+2. takes the access list that came with the snapshot, which `takesAccess` refused while
+   joining, so the host's name arrives with it;
+3. persists, and starts the idle clock.
 
-**Rationale**: proving the link is proof the code was right. Waiting for a match to prove it
-is what leaves the guest looking at nothing.
+If the host has a match on, its snapshot is not empty, and today's join branch (MS:1803)
+adopts it as before, with no new-match notice. A guest that joins with a match of its own
+still on keeps today's behaviour: it waits in the join sheet, and its match is filed when the
+host's arrives.
+
+**Rationale**: an empty answer from the host is the host saying it has nothing on, and only a
+link sealed with the right code can deliver it. Waiting for a match is what leaves the guest
+looking at nothing.
+
+**Alternatives considered**: completing the join in `noteProven()`. It runs as soon as a link
+is up, before the host's match arrives (R-14). A guest joining mid-match would become a
+waiting guest first, and would then take the host's current match for its next one, with a
+popup and without the join branch's work.
 
 ### D-10. Sharing stops after 30 minutes with no match on
 
@@ -404,7 +440,7 @@ existing rule holds (Principle V). See [contracts/sharing-record.md](contracts/s
 | Older device | What happens |
 |---|---|
 | Guest | Ignores `keptSharingAfter` and the `reason` key, and behaves as today (FR-025) |
-| Host | Never sets `keptSharingAfter`. A new guest's question just asks stay or leave. Its between-matches Stop now reaches new guests (D-7) |
+| Host | Never sets `keptSharingAfter`. A new guest's question just asks stay or leave. Its between-matches Stop now reaches new guests (D-7). It ignores a guest's goodbye, so it shows a leaver as out of reach rather than gone (D-16) |
 | Watch or phone of the same pair | Fails to decode `.answered` and `.newMatch`, and answers with a hello (R-9). The other half asks on its own, which is harmless. Watch and phone ship together, so this lasts only until both update |
 
 ### D-14. Tests first, on the harness that exists
@@ -432,3 +468,27 @@ The UI has no test target. It is checked against [quickstart.md](quickstart.md) 
   whose role is `.guest`. On a watch it is the existing `startingOwnMatchTakesPhoneOff`. Home's
   presets and `NewSessionView` ask once through a confirmation when it is true, as the watch
   already does with `asksBeforeTakingThePhoneOff`.
+- **Both apply to History's Resume** too (HistoryDetailView.swift:138, `model.resume(record)`),
+  which starts a match like any other.
+
+### D-16. A leaving guest says goodbye
+
+**Decision**: `GuestCard` gains an optional `leaving: Bool?`.
+
+- **The guest.** Before cutting its links, a guest that leaves sends
+  `guestCard(GuestCard(device:name:pairedTo:leaving: true))` live on each host link. It waits
+  up to 2 s, as `sayStoppedSharing` does. A watch standing in sends its own, with `pairedTo`.
+- **The host.** It calls `participants.remove(card.device)`, which also drops the paired
+  watch, then `onParticipantsChanged`. The guest is gone from the list on the next read
+  (FR-009).
+
+**Rationale**: the guest card is already the message by which a guest names itself to the
+host, and an optional key is the established way to grow a message (R-9). An older host
+ignores the key, and the leaver shows as out of reach after 15 s, as today.
+
+**Alternatives considered**:
+
+- Sending `.left` on host links. It is a pair-only message (FO:49-63), and widening its scope
+  would change what every build does with a message it already knows.
+- Dropping a participant when its link closes. A link also closes when a phone is pocketed or
+  out of range, and the guest is still on.
