@@ -15,7 +15,7 @@ match merges.
 | `access(ShareAccessTable)`, `snapshot(…, access?)` | host → guests, guest phone → its watch | **Extended** | The table carries `keptSharingAfter` (optional): the session after which the host answered Keep sharing. It travels with a revision bump, and arrives and is replayed the way the table already is (D-5). |
 | `snapshot(log)` of the host's next match | host → guests | **Unchanged on the wire** | A guest that adopts it at MS:1853 now also opens a new-match notice (D-6). |
 | A host with no match on answering a joining guest | host → guest | **Unchanged on the wire** | The host's answer to the guest's hello is its empty match, with the access list. The guest now completes its join on that answer, and becomes a waiting guest with the host's name, rather than waiting for a match to arrive (D-9). |
-| `guestCard(device, name, pairedTo?, leaving?)` | guest → host | **Extended** | `leaving` (optional): `true` on the goodbye a guest sends on each host link before it cuts them, waiting up to 2 s. The host drops that guest, and its paired watch, from its list (D-16, FR-009). |
+| `guestCard(device, name, pairedTo?, leaving?)` | guest → host | **Extended** | `leaving` (optional): `true` on the goodbye a guest sends on each host link before it cuts them, waiting up to 2 s. It goes out on Leave, on stepping off to a match of its own, and on a Leave that started on the guest's watch. The host drops that guest, and its paired watch, from its list (D-16, FR-009). |
 
 No new `Wire` case is added, so `Scope.sharedSession` and `keepsOverDelay` (FO:49-63,
 256-264) only see the extended ones.
@@ -29,6 +29,7 @@ No new `Wire` case is added, so `Scope.sharedSession` and `keepsOverDelay` (FO:4
 | `sharing.hostStoppedSharing(host?, reason?)` | phone → watch | **Extended** | `reason` (optional), so the watch can say "after 30 minutes without a match" |
 | `sharing.hostingStatus(HostingStatus)` | phone → watch | **Extended** | `canShare` no longer needs a match on. `endedBy` (optional): `idle` when sharing stopped by itself, so the host's watch can tell its wearer. |
 | `sharing.startHosting` | watch → phone | **Changed rule** | Honoured with no match on. Still refused on a guest's phone. |
+| `left(sessionID)` | watch → phone | **Accepted more widely** | A guest's phone with an empty log now acts on it whatever session it names, so a Leave on the watch between matches takes the phone off too (D-17, FR-009, FR-019). With a match on, the rule is as before. |
 
 The two new cases are added to `SharingSignal`. In `MatchStore.keepToSayAgain` they say
 nothing again on reconnect, since the durable queue already carries them.

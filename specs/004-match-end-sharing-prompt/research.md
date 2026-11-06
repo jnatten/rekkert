@@ -178,6 +178,19 @@ after. A joining guest's hello is answered by `requestSnapshot` with the host's 
 an empty one included (MS:2268-2270), so a joining guest does hear when the host has nothing
 on: an empty snapshot from a link that is not its pair's.
 
+### R-15. A Leave from the watch does not reach the phone between matches
+
+A watch's Leave tells its phone with `.left(sessionID:)`. The phone acts on it only when
+`sessionID == log.sessionID, !log.isEmpty` (MS:1673-1677). Between matches, the phone and the
+watch each hold an empty log with an id of its own, so the phone ignores it and stays on the
+host's sharing. This is R-3's mismatch again, on the pair's own message.
+
+A guest's Leave also cuts its links before the store hears of it: `leave()` and a guest's
+`stop()` call `cutLinks()` before `store.leaveSharedSession()` (SS:439-449, 514-519). A Leave
+that starts on the other half arrives through `onLeft`, which runs `letGo()` (SS:180), after
+the store has already dropped the match. Anything a guest wants to say to its host on the way
+out has to be said by `SharedSession`, before it cuts.
+
 ## Decisions
 
 ### D-1. One between-matches state, kept in RekkertCore
@@ -269,6 +282,9 @@ Each first records the answer and tells the other device (`MatchStore.answer`), 
 stops sharing or leaves. Done the other way round, leaving would clear the question before
 the answer was recorded or sent. Views forward one call (Principle I).
 
+A Leave carried out on the watch reaches the phone through `.left`, which D-17 makes work
+with no match on. `.answered(.leave)` only closes the phone's question.
+
 **Alternatives considered**: putting the answer in the application context. It is
 overwritten by the next snapshot, and it is not heard live.
 
@@ -356,9 +372,10 @@ the section replaces it.
 **Decision**: the join completes into waiting when the host says it has nothing on. That is
 when a joining store with an empty log is handed an empty snapshot on a link that is not its
 pair's: the `incoming.isEmpty` branch of `handle(.snapshot)` (MS:1794-1802). There the store
-calls a new `MatchStore.joinedBetweenMatches()`, which:
+calls a new private `MatchStore.joinedBetweenMatches(access:)`, which:
 
-1. sets the role to `.guest` and clears `isJoining`;
+1. sets the role to `.guest`, and clears `isJoining` and `joiningForThePair` as
+   `cancelJoining()` does;
 2. takes the access list that came with the snapshot, which `takesAccess` refused while
    joining, so the host's name arrives with it;
 3. persists, and starts the idle clock.
@@ -475,9 +492,17 @@ The UI has no test target. It is checked against [quickstart.md](quickstart.md) 
 
 **Decision**: `GuestCard` gains an optional `leaving: Bool?`.
 
-- **The guest.** Before cutting its links, a guest that leaves sends
-  `guestCard(GuestCard(device:name:pairedTo:leaving: true))` live on each host link. It waits
-  up to 2 s, as `sayStoppedSharing` does. A watch standing in sends its own, with `pairedTo`.
+- **The guest.** `SharedSession` says it, because the store cannot: by the time the store
+  hears of a Leave, the links are already cut or about to be (R-15).
+  - A new `MatchStore.sayLeaving(within:) -> Task`, shaped like `sayStoppedSharing`, sends
+    `guestCard(GuestCard(device:name:pairedTo:leaving: true))` live on each host link and
+    finishes once each has answered, or after 2 s.
+  - `SharedSession` calls it at the top of a guest's `stop()`, of `leave()` and of `letGo()`,
+    and cuts the links once it finishes, as the host's `stop()` already does with its
+    farewell. The store's own leaving runs at once, so nothing on screen waits.
+  - `letGo()` is also how a guest steps off by starting a match of its own (MS:909), so that
+    goodbye comes for free.
+  - A watch standing in sends its own card, with `pairedTo`.
 - **The host.** It calls `participants.remove(card.device)`, which also drops the paired
   watch, then `onParticipantsChanged`. The guest is gone from the list on the next read
   (FR-009).
@@ -492,3 +517,26 @@ ignores the key, and the leaver shows as out of reach after 15 s, as today.
   would change what every build does with a message it already knows.
 - Dropping a participant when its link closes. A link also closes when a phone is pocketed or
   out of range, and the guest is still on.
+- Sending the card from `leaveSharedSession()`. It is synchronous, and every caller has
+  already cut, or is about to cut, the links it would go out on (R-15).
+
+### D-17. A Leave from the watch reaches the phone between matches
+
+**Decision**: the phone's `.left` handler (MS:1673) also acts when all of these hold:
+
+- the message came from its own watch;
+- the phone's role is `.guest`;
+- its log is empty;
+
+whatever session the message names. It then takes the same steps as its own Leave, minus
+telling the watch, which already knows: `dropSession()`, then `onLeft?()`. That sends
+`SharedSession.letGo()` the goodbye of D-16, and cuts the links.
+
+**Rationale**: it is D-7's fix for the pair's own message. The watch has no other way to
+take its phone off a sharing with nothing on, and FR-009, FR-011 and FR-019 all need it.
+There is no loop: the phone's `dropSession()` tells the watch nothing new, and the watch's
+side is already `.solo` once its phone's role arrives.
+
+**Alternatives considered**: carrying out `.answered(.leave)` on the phone. It covers only an
+end-of-match answer, and not the watch's Leave from its start screen (FR-019), which answers
+no question.

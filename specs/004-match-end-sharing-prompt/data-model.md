@@ -136,9 +136,10 @@ Each case gets its `text` and its `init(text:)` parse. The rendered lines are in
 |---|---|
 | `betweenMatches: BetweenMatches` | **New**, read by the views |
 | `answer(_ choice:)` | **New.** It applies a choice to the open question or notice, says it to the pair (D-4) and records it. It carries out nothing else: `SharedSession.answer(_:)` and `WatchStandIn.answer(_:)` call it first, then stop or leave. Views never call it directly. |
-| `joinedBetweenMatches(access:)` | **New**, private. Called from `handle(.snapshot)` when a joining store with an empty log is handed an empty snapshot on a non-pair link: the host has nothing on (D-9). It also takes the access list that came with it. |
+| `joinedBetweenMatches(access:)` | **New**, private. Called from `handle(.snapshot)` when a joining store with an empty log is handed an empty snapshot on a non-pair link: the host has nothing on (D-9). It clears `isJoining` and `joiningForThePair`, and takes the access list that came with the snapshot. |
 | `.guestCard` handling | On the host, a card with `leaving == true` calls `participants.remove(card.device)` and `onParticipantsChanged` (D-16) |
-| `leaveSharedSession()` | On a guest, it first sends the goodbye card on each host link, waiting up to 2 s (D-16) |
+| `sayLeaving(within:) -> Task` | **New**: the guest's goodbye card, live on each host link, done once each has answered or `within` (2 s) is up. Shaped like `sayStoppedSharing`. Called by `SharedSession`, never by the store's own leaving (D-16). |
+| `.left` handling | From its own watch, on a phone whose role is `.guest` and whose log is empty, it now acts whatever session it names: `dropSession()`, then `onLeft?()` (D-17) |
 | `startingOwnMatchLeavesSharing: Bool` | **New**: true on a phone whose role is `.guest`, or on a watch where `startingOwnMatchTakesPhoneOff` (D-15) |
 | `canScore`, `canRunRounds` | They are now also false while `betweenMatches.blocksScoring` |
 | `.sharingStopped` handling | It also acts for an empty-log guest on a non-pair link (D-7) |
@@ -154,6 +155,7 @@ Each case gets its `text` and its `init(text:)` parse. The rendered lines are in
 | `hostStopReason: SharingStopReason?` | **New**, beside `hostWhoStopped`, for the guest's notice |
 | The idle watch | **New**: a task on the injected `sleep` every 30 s, and a check at the top of `restore()` and `resume()` (D-10) |
 | `answer(_ choice:)` | **New**, the phone's one entry point for every answer (D-4). It calls `store.answer(choice)` first, then `stop()` for `.stopSharing`, and the guest's leave path for `.leave`. |
+| A guest's `stop()`, `leave()` and `letGo()` | They now start `store.sayLeaving()` first, and cut the links once it finishes, as the host's `stop()` does with its farewell (D-16) |
 
 ## Changed: `WatchStandIn` surface (RekkertSync)
 

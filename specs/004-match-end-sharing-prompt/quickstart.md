@@ -36,6 +36,7 @@ the tree at `9d930e27` for the reason given (Principle III).
 | `EndOfMatchQuestionTests.hostIsAskedWithTheGuestCount` | The host is asked keep or stop, with the count | **Yes**: nobody is asked |
 | `EndOfMatchQuestionTests.guestsAreAskedWithinThirtySeconds` | Each guest is asked stay or leave within 30 s, and within 5 s for at least 95% (SC-006) | **Yes**: nobody is asked |
 | `EndOfMatchQuestionTests.leaveTakesThePhoneAndTheWatchOff` | FR-009: both devices leave, the code is kept for Join again, and the host's list drops the guest within 15 s | **Yes**: the host shows it out of reach (R-13) |
+| `EndOfMatchQuestionTests.leaveOnTheWatchBetweenMatchesTakesThePhoneOff` | FR-009, FR-011, FR-019: a Leave on the watch with nothing on takes the phone off too, and the host drops the guest | **Yes**: the phone ignores it (R-15) |
 | `EndOfMatchQuestionTests.aLeaverNeverGetsTheNextMatch` | FR-015 and SC-001: a guest who left stays off, even in range | n/a |
 | `EndOfMatchQuestionTests.unansweredIsStay` | FR-012: no answer, then the next match arrives with the notice, and the record says unanswered | n/a |
 | `EndOfMatchQuestionTests.keepIsToldToGuests` | D-5: a guest's open question learns "keeping it shared" | n/a |

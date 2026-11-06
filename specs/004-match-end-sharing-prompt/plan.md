@@ -44,12 +44,15 @@ The approach:
   nobody falls out of step. A `NewMatchNotice` blocks scoring on that device until **OK**.
   The phone tells its watch, and posts a notification when neither is in front, reusing
   spec 001's notification path (D-6, D-11).
-- **Fix the three gaps, and a fourth.**
+- **Fix the three gaps, and two more found on the way.**
   - An empty-log guest accepts the host's Stop on its host link (D-7).
   - Hosting needs no match on (D-8).
   - A join that the host answers with an empty match becomes a waiting guest at once (D-9).
   - A guest that leaves says goodbye, so the host's list drops it rather than showing it out
-    of reach (R-13, D-16).
+    of reach. `SharedSession` says it before cutting the links, since the store hears of a
+    Leave only after they are cut (R-13, R-15, D-16).
+  - A guest's phone accepts its watch's Leave with no match on, the same mismatch as Stop's
+    (R-15, D-17).
 - **Stop a forgotten share.** After 30 minutes with no match on, sharing stops. It is checked
   on a timer and again whenever the app comes back, so an app suspended overnight does not
   resume (D-10).
@@ -127,7 +130,7 @@ evenings of several matches.
 |---|---|---|---|
 | I. Domain logic lives in RekkertCore | Rules stay out of views and platform adapters | **Pass.** The feature is mostly "who is asked what, and when". | **Pass.** These rules are pure functions of `BetweenMatches` and the role in `RekkertCore` (D-1, D-2, D-10): who is asked, once per session, Leave winning, the idle limit, and scoring blocked by a notice. `MatchStore` and `SharedSession` call them where events happen. The views render alerts and rows, and forward taps. |
 | II. Deterministic, convergent state (NON-NEGOTIABLE) | Every device that has seen the same events computes the same state; reconciliation is monotonic | **Pass.** | **Pass.** The host's next match is adopted exactly as today (D-6); the notice gates taps on one device, and changes no match state. Stop between matches (D-7) and the idle stop (D-10) end sharing, not a match: the last match is already filed. A join completing early (D-9) changes the role, which today is set on adopt anyway. The reducer, the events and the merge are untouched, and the convergence suites run unchanged. |
-| III. Test the engine, test-first | Device-free tests pin every rule; bug fixes start with a failing test | **Pass.** | **Pass.** R-2's silent arrival, R-3, R-4, R-5 and R-7 each become a test that fails on `9d930e27` and passes after ([quickstart.md](quickstart.md)). `BetweenMatchesTests` pins the pure rules. The 30-minute rule runs on `TestClock`. One existing test that encodes the old rule (`sharingStartsFromTheWristOnlyWithAMatchOn`) is rewritten, because the spec reverses it. |
+| III. Test the engine, test-first | Device-free tests pin every rule; bug fixes start with a failing test | **Pass.** | **Pass.** R-2's silent arrival, R-3, R-4, R-5, R-7, R-13 and R-15 each become a test that fails on `9d930e27` and passes after ([quickstart.md](quickstart.md)). `BetweenMatchesTests` pins the pure rules. The 30-minute rule runs on `TestClock`. One existing test that encodes the old rule (`sharingStartsFromTheWristOnlyWithAMatchOn`) is rewritten, because the spec reverses it. |
 | IV. verify.sh is the gate | Green means `scripts/verify.sh`; silent runtime invariants are asserted | **Pass.** | **Pass.** No new Info.plist key, entitlement or background mode: local notifications and their category exist already (R-11). The new tests run inside `swift test`, which `verify.sh` calls. If implementation finds a key is needed, its assertion lands in the same change. |
 | V. Local-first, private by construction | No servers; nothing leaves the devices at the court unasked | **Pass.** | **Pass.** No new data flow. The host's Keep travels to the guests' devices on links that already carry its name (D-5). The notification is local, on the guest's own phone and watch. The record's new lines hold no names, scores or codes (D-12). Nothing is sent anywhere else. |
 
@@ -140,7 +143,7 @@ No violations. The Complexity Tracking table is not needed.
 ```text
 specs/004-match-end-sharing-prompt/
 ├── plan.md              # This file
-├── research.md          # Phase 0: what the code does today, and decisions D-1 – D-16
+├── research.md          # Phase 0: what the code does today, and decisions D-1 – D-17
 ├── data-model.md        # Phase 1: BetweenMatches, and the fields added elsewhere
 ├── quickstart.md        # Phase 1: how to prove it works
 ├── contracts/
@@ -169,11 +172,12 @@ Packages/RekkertKit/
 ├── Sources/RekkertSync/
 │   ├── MatchStore.swift          # raise the question at conclusion; answer(_:); the notice on the
 │   │                             #   next match; canScore gate; Stop accepted between matches;
-│   │                             #   an empty answer to a join → waiting; the guest's goodbye and
-│   │                             #   the host dropping it; startingOwnMatchLeavesSharing
+│   │                             #   an empty answer to a join → waiting; sayLeaving() and the
+│   │                             #   host dropping a leaver; the watch's Leave accepted between
+│   │                             #   matches; startingOwnMatchLeavesSharing
 │   ├── SharedSession.swift       # answer(_:), the phone's one entry point; host with no match on;
-│   │                             #   stop(reason:); the idle watch, and the checks in restore()
-│   │                             #   and resume()
+│   │                             #   stop(reason:); the goodbye before letting go; the idle
+│   │                             #   watch, and the checks in restore() and resume()
 │   └── WatchStandIn.swift        # answer(_:), the watch's one entry point; a notice and answers
 │                                 #   from the phone; hosting card with no match
 └── Tests/
