@@ -59,7 +59,7 @@ struct ShareCodeSheet: View {
                 .controlSize(.large)
                 .padding(.bottom)
             }
-            .navigationTitle("Share this match")
+            .navigationTitle("Sharing")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

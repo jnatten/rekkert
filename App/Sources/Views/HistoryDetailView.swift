@@ -138,7 +138,7 @@ private struct RecordDetail: View {
             Button("Resume") { resume() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("It comes back as the session in play on both devices, with the score it had. The copy here stays in History.")
+            Text(resumeMessage)
         }
     }
 
@@ -295,6 +295,17 @@ private struct RecordDetail: View {
         return record.state.canResume
             ? "This one never ran its course, so there is more of it to play."
             : "This one was played out to the end, so there is nothing left to resume."
+    }
+
+    private var resumeMessage: String {
+        let back = "It comes back as the session in play on both devices, with the score it had. The copy here stays in History."
+        if let code = model.sharing.code {
+            return back + " It's shared with \(model.store.participantStates().count) on \(code.readOut)."
+        }
+        if model.store.startingOwnMatchLeavesSharing {
+            return back + " This takes you off \(model.store.hostName.map { "\($0)'s" } ?? "the host's") sharing."
+        }
+        return back
     }
 
     private func resume() {

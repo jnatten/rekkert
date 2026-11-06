@@ -53,15 +53,18 @@ struct HomeView: View {
                     } header: {
                         Text("Presets")
                     } footer: {
-                        Text(editMode.isEditing
-                             ? "Drag to reorder. Tap one to change it."
-                             : AppModel.canPairWatch
-                             ? "Saved setups, ready on your Apple Watch in the same order. Press and hold one to edit or rename it."
-                             : "Saved setups. Press and hold one to edit or rename it.")
+                        VStack(alignment: .leading, spacing: 4) {
+                            SharedWithLine()
+                            Text(editMode.isEditing
+                                 ? "Drag to reorder. Tap one to change it."
+                                 : AppModel.canPairWatch
+                                 ? "Saved setups, ready on your Apple Watch in the same order. Press and hold one to edit or rename it."
+                                 : "Saved setups. Press and hold one to edit or rename it.")
+                        }
                     }
                 }
 
-                Section("Start") {
+                Section {
                     ForEach(GameMode.allCases) { mode in
                         Button {
                             newMatch = mode
@@ -76,27 +79,13 @@ struct HomeView: View {
                             }
                         }
                     }
+                } header: {
+                    Text("Start")
+                } footer: {
+                    SharedWithLine()
                 }
 
-                Section {
-                    Button {
-                        model.showingJoin = true
-                    } label: {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Join a match").foregroundStyle(.primary)
-                                Text("Scan or type the host's code")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: "person.2.wave.2")
-                        }
-                    }
-                } header: {
-                    Text("Play together")
-                } footer: {
-                    Text("Everyone at the court sees the same scoreboard and can score it. Whoever shared it is the one who finishes it.")
-                }
+                SharingSection()
 
                 if model.workout.isAvailable {
                     Section {

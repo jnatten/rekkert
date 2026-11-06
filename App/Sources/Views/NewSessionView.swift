@@ -103,6 +103,9 @@ struct NewSessionView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if editing == nil, model.sharing.code != nil {
+                    Section { SharedWithLine() }
+                }
                 if editing != nil { presetSection }
                 switch mode {
                 case .traditional: traditionalSections

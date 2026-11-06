@@ -211,7 +211,7 @@ struct WatchMenuView: View {
         .sheet(isPresented: $joiningAgain) { WatchJoinView() }
         .sheet(isPresented: $joiningAnother) { WatchJoinView() }
         .confirmationDialog(
-            model.store.hostName.map { "Leave \($0)'s match? Your iPhone leaves too." } ?? "Leave this match? Your iPhone leaves too.",
+            model.store.hostName.map { "Leave \($0)'s sharing? Your iPhone leaves too." } ?? "Leave the host's sharing? Your iPhone leaves too.",
             isPresented: $confirmingLeave,
             titleVisibility: .visible
         ) {
@@ -228,7 +228,7 @@ struct WatchMenuView: View {
             #endif
         }
         .sheet(isPresented: $showingGuests) { NavigationStack { WatchGuestsView() } }
-        .confirmationDialog("Stop sharing? Everyone else leaves this match.", isPresented: $confirmingStopSharing, titleVisibility: .visible) {
+        .confirmationDialog("Stop sharing? Everyone else stops following your matches.", isPresented: $confirmingStopSharing, titleVisibility: .visible) {
             Button("Stop sharing", role: .destructive) {
                 WKInterfaceDevice.current().play(.click)
                 model.standIn.stopHosting()
@@ -294,7 +294,7 @@ struct WatchMenuView: View {
                 action("Who's on", systemImage: "person.2") { showingGuests = true }
                 action("Stop sharing", systemImage: "xmark.circle", tint: .red) { confirmingStopSharing = true }
             } else {
-                action("Share match", systemImage: "square.and.arrow.up") {
+                action("Share", systemImage: "square.and.arrow.up") {
                     WKInterfaceDevice.current().play(.click)
                     model.standIn.startHosting()
                     showingCode = true

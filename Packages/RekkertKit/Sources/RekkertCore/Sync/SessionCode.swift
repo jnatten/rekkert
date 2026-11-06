@@ -140,3 +140,13 @@ extension SessionCode {
         self.init(fragment)
     }
 }
+
+extension SessionCode {
+    /// `482 915`: two groups, as it is read out.
+    public var readOut: String { description.replacingOccurrences(of: "-", with: " ") }
+
+    /// One digit at a time, for VoiceOver (FR-031).
+    public var digitByDigit: String {
+        description.filter(\.isNumber).map(String.init).joined(separator: " ")
+    }
+}

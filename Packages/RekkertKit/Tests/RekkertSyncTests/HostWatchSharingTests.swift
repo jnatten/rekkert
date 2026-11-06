@@ -38,18 +38,22 @@ struct HostWatchSharingTests {
         #expect(await court.until(within: .seconds(5)) { watch.hosting?.code == next })
     }
 
-    @Test func sharingStartsFromTheWristOnlyWithAMatchOn() async {
+    /// FR-016: with a match on or not, the wrist can start sharing.
+    @Test func sharingStartsFromTheWristWithOrWithoutAMatch() async {
         let court = CourtHarness(guests: 1, withWatches: true)
         let watch = hostWatch(court)
         watch.startHosting()
-        #expect(await court.until(within: .seconds(5)) { watch.hostingTrouble == .nothingToShare })
-        #expect(court.host.phone.sharing.code == nil)
+        #expect(await court.until(within: .seconds(5)) { watch.hosting?.isSharing == true })
+        #expect(court.host.phone.store.state == nil)
+        #expect(court.host.phone.sharing.code != nil)
+        #expect(watch.hostingTrouble == nil)
 
+        court.host.phone.sharing.stop()
+        await court.run(for: .seconds(1))
         court.startMatch()
         await court.run(for: .seconds(1))
         watch.startHosting()
         #expect(await court.until(within: .seconds(5)) { watch.hosting?.isSharing == true })
-        #expect(court.host.phone.sharing.code != nil)
         #expect(watch.hostingTrouble == nil)
     }
 

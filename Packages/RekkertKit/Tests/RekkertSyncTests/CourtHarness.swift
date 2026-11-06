@@ -17,6 +17,7 @@ final class CourtHarness {
         var radioGrace: Duration = .seconds(30)
         var standIn = StandInPolicy.Timing()
         var standInTick: Duration = .milliseconds(100)
+        var idleCheck: Duration = .seconds(30)
     }
 
     @MainActor
@@ -140,6 +141,7 @@ final class CourtHarness {
             store: store, link: LocalNetworkTransport(), bluetooth: core,
             graceBeforeNotice: timing.graceBeforeNotice, radioGrace: timing.radioGrace,
             keeper: device.keeper, now: { CourtHarness.epoch.addingTimeInterval(clock.now.seconds) },
+            idleCheck: timing.idleCheck,
             sleep: { duration in
                 let until = clock.now + duration
                 while clock.now < until, !Task.isCancelled { try? await Task.sleep(for: .milliseconds(1)) }
@@ -328,6 +330,7 @@ final class CourtHarness {
 
     /// The system ended the app: its process and its links are gone, what it wrote to disk is not.
     func endApp(_ device: Device) {
+        device.sharing?.close()
         for task in device.tasks { task.cancel() }
         device.tasks = []
         device.radio.end()

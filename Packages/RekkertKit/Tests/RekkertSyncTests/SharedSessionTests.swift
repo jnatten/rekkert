@@ -36,12 +36,15 @@ struct SharedSessionTests {
         #expect(sharing.code == code, "and sharing again keeps it")
     }
 
-    @Test func thereIsNothingToShareBeforeAMatchStarts() {
-        let (sharing, _) = make()
+    /// FR-016: sharing lasts across matches, so it can start before the first one.
+    @Test func sharingCanStartBeforeAMatch() {
+        let (sharing, store) = make()
         sharing.host()
 
-        #expect(sharing.isSharing == false)
-        #expect(sharing.code == nil)
+        #expect(sharing.isSharing)
+        #expect(sharing.code != nil)
+        #expect(store.role == .host)
+        #expect(store.betweenMatches.idleSince != nil)
     }
 
     @Test func hostingGivesOutACodeAndTakesTheRole() throws {

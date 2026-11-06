@@ -289,19 +289,19 @@ stops by itself and everyone is told why.
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T033 [P] [US3] Write `SyncTests/HostWithNoMatchTests.swift`:
+- [X] T033 [P] [US3] Write `SyncTests/HostWithNoMatchTests.swift`:
   - `shareFromThePhoneWithNoMatchOn`: `sharing.host()` with `store.state == nil` gives a code, and guests can join. Fails today (SS:267).
   - `shareFromTheWristWithNoMatchOn`: `.startHosting` from the host watch gives the watch a `hostingStatus` with a code and `canShare == true`. Fails today (SS:769).
   - `theFirstMatchReachesEveryGuest`.
   - `aGuestsPhoneStillCannotHost`.
 
   In `SyncTests/HostWatchSharingTests.swift`, rewrite `sharingStartsFromTheWristOnlyWithAMatchOn` (:41) to the new rule, as `sharingStartsFromTheWristWithOrWithoutAMatch`.
-- [ ] T034 [P] [US3] Write `SyncTests/StopBetweenMatchesTests.swift`:
+- [X] T034 [P] [US3] Write `SyncTests/StopBetweenMatchesTests.swift`:
   - `stopWithNoMatchOnReachesEveryGuest`: finish, have every guest choose Stay, then `sharing.stop()` on the host. Every guest gets `hostStoppedSharing`, forgets the code, has role `.solo`, and does not get the host's next match. Fails today (R-3).
   - `theStopSaysWhy`: the guests' `hostStopReason` is `.host`.
   - `aGuestStillJoiningIgnoresIt`.
   - `anOlderHostsStopReachesNewGuests`: deliver `Wire.sharingStopped(sessionID: UUID(), reason: nil)` on the host link to a waiting guest. It leaves.
-- [ ] T035 [P] [US3] Write `SyncTests/IdleStopTests.swift` on `TestClock` (FR-026, SC-008). Each fails today, except `matchesPauseTheClock`:
+- [X] T035 [P] [US3] Write `SyncTests/IdleStopTests.swift` on `TestClock` (FR-026, SC-008). Each fails today, except `matchesPauseTheClock`:
   - `thirtyMinutesWithNoMatchStopsSharing`: by 31 min after the last match, the host is not sharing, `stoppedForIdle` is true, and every guest got `reason == .idle`. The host's and guests' records hold `idleStop`.
   - `matchesPauseTheClock`: a 45-minute match, then a 25-minute break, is still sharing.
   - `aRelaunchAfterThirtyMinutesDoesNotShare`: `endApp` the host with no match on, advance 31 min, `relaunch`. Nothing goes back up.
@@ -312,12 +312,12 @@ stops by itself and everyone is told why.
 
 ### Implementation for User Story 3
 
-- [ ] T036 [US3] Remove the need for a match on (D-8):
+- [X] T036 [US3] Remove the need for a match on (D-8):
   - In `RekkertSync/SharedSession.swift`, drop the `store.state != nil` guard from `host(code:)` (SS:267).
   - In `startHostingFromTheWatch` (SS:769), guard only on `store.role != .guest`.
   - In `hostingStatus` (SS:763), set `canShare: store.role != .guest`.
   - In `RekkertSync/MatchStore.swift` `startSharing()`, call `betweenMatches.sharingStarted(now:)` when the log is empty.
-- [ ] T037 [US3] Let Stop reach a waiting guest (D-7):
+- [X] T037 [US3] Let Stop reach a waiting guest (D-7):
   - In `MatchStore.handle(_:)` `.sharingStopped` (MS:1765-1771), also act when `role == .guest && log.isEmpty && !isJoining && !packet.isFromPairedDevice`, whatever session it names.
   - Pass `reason` to a widened `onStoppedByHost: ((SharingStopReason?) -> Void)?`.
   - On an empty log, leave without filing: `leaveSharedSession()` already files only a log with progress.
@@ -325,32 +325,32 @@ stops by itself and everyone is told why.
   - In `SharedSession.stoppedByHost`, take the reason and set a new `public private(set) var hostStopReason: SharingStopReason?`, cleared by `acknowledgeStoppedSharing()`.
   - In `Shared/AppModel.swift`, send `.hostStoppedSharing(host:, reason:)` to the watch (AM:182).
   - In `RekkertSync/WatchStandIn.swift`, keep the reason beside `hostStoppedSharing`.
-- [ ] T038 [US3] Add the idle watch to `RekkertSync/SharedSession.swift` (D-10):
+- [X] T038 [US3] Add the idle watch to `RekkertSync/SharedSession.swift` (D-10):
   - A task on the injected `sleep`, every 30 s, while hosting or while the store is a guest with an empty log, that checks `store.betweenMatches.isIdleExpired(now:matchOn: store.state != nil)`. When it is expired:
     - **On the host**: `stop(reason: .idle)`, set `public private(set) var stoppedForIdle = true`, and note `idleStop`.
     - **On a guest**: run the stopped-by-host path locally with `.idle` (cut links, forget the code, `store.leaveSharedSession()`), and note `idleStop`.
   - Run the same check at the top of `restore()` (SS:295) and `resume()` (SS:368), before anything is revived.
   - Add `acknowledgeIdleStop()`.
   - Set `HostingStatus.endedBy = .idle` while `stoppedForIdle` is true.
-- [ ] T039 [US3] In `RekkertSync/MatchStore.swift`, make the paths T013 did not cover also call `betweenMatches.matchBegan()` and persist: the join adoption (MS:1803), T024's adoption, and History's resume, `MatchStore.resume(_:from:)`, which `AppModel.resume(_:)` calls (AM:850-855). Make `sharingEnded()` run on `stopSharing()`, `dropSession()` and `follow(_:)`.
-- [ ] T040 [US3] Add the host's rows to the "Play together" section of `App/Sources/Views/HomeView.swift`, per contracts/screens.md "Between matches: the phone's Home":
+- [X] T039 [US3] In `RekkertSync/MatchStore.swift`, make the paths T013 did not cover also call `betweenMatches.matchBegan()` and persist: the join adoption (MS:1803), T024's adoption, and History's resume, `MatchStore.resume(_:from:)`, which `AppModel.resume(_:)` calls (AM:850-855). Make `sharingEnded()` run on `stopSharing()`, `dropSession()` and `follow(_:)`.
+- [X] T040 [US3] Add the host's rows to the "Play together" section of `App/Sources/Views/HomeView.swift`, per contracts/screens.md "Between matches: the phone's Home":
   - **Share**, when `model.sharing.code == nil` and the role is not `.guest`. It calls `model.sharing.host()` and sets `model.showingShareCode = true`.
   - "Sharing on 482 915" with "N on · until you stop", opening `ShareCodeSheet`.
   - **Stop sharing**, with the confirmation "Stop sharing? Everyone else stops following your matches.", then `model.sharing.stop()`.
   - The new footer text.
-- [ ] T041 [US3] Add the line "Shared with N on <code>" while `model.sharing.code != nil` (FR-020) in three places:
+- [X] T041 [US3] Add the line "Shared with N on <code>" while `model.sharing.code != nil` (FR-020) in three places:
   - above **Start** in `App/Sources/Views/NewSessionView.swift`;
   - above the presets section in `HomeView.swift`;
   - beside **Resume** in `App/Sources/Views/HistoryDetailView.swift` (:138).
 
   Nothing offers to start unshared.
-- [ ] T042 [US3] Add the idle-stop alerts.
+- [X] T042 [US3] Add the idle-stop alerts.
   - **On the phone**, in `App/Sources/Views/RootView.swift`:
     - the host's "Sharing stopped" alert, driven by `sharing.stoppedForIdle` and acknowledged with `acknowledgeIdleStop()`;
     - the guest's "Ada's sharing has ended" variant of the stop alert when `hostStopReason == .idle`.
   - **On the watch**, the same pair of messages in `WatchApp/Sources/Views/WatchRootView.swift`, from `standIn.hosting?.endedBy` and the kept reason.
   - Texts from contracts/screens.md "Sharing stopped".
-- [ ] T043 [US3] Add the host card to the top of `WatchIdleView` in `WatchApp/Sources/Views/WatchRootView.swift`:
+- [X] T043 [US3] Add the host card to the top of `WatchIdleView` in `WatchApp/Sources/Views/WatchRootView.swift`:
   - **Share**, which calls `standIn.startHosting()` and opens the code page;
   - "Sharing · N on";
   - **Code**, which opens the `WatchCodeView` sheet;
@@ -358,11 +358,11 @@ stops by itself and everyone is told why.
   - shown only when the phone's side is not `.guest`.
 
   Put the "Sharing · N on" line at the top of `WatchPresetsView` (WatchRootView.swift:324-377) too, so a preset started there says it will be shared (FR-020). In `WatchApp/Sources/Views/WatchCodeView.swift`, `.nothingToShare` now means only "your iPhone is on someone else's sharing"; reword it to match.
-- [ ] T044 [P] [US3] Apply the wording table in contracts/screens.md, "Wording that moves from 'this match' to 'sharing'" (FR-022), to:
+- [X] T044 [P] [US3] Apply the wording table in contracts/screens.md, "Wording that moves from 'this match' to 'sharing'" (FR-022), to:
   - `App/Sources/Views/MatchOptionsMenu.swift` ("Share", "Share again");
   - `App/Sources/Views/ShareCodeSheet.swift` (title "Sharing");
   - `WatchApp/Sources/Views/WatchMenuView.swift` ("Share", the Stop confirmation and the Leave confirmation).
-- [ ] T045 [US3] Run `swift test --package-path Packages/RekkertKit --filter "HostWithNoMatch|StopBetweenMatches|IdleStop|HostWatchSharing"`. T033–T035 pass, and the whole package stays green.
+- [X] T045 [US3] Run `swift test --package-path Packages/RekkertKit --filter "HostWithNoMatch|StopBetweenMatches|IdleStop|HostWatchSharing"`. T033–T035 pass, and the whole package stays green.
 
 **Checkpoint**: A host can share, show the code and stop with no match on, in at most two
 taps (SC-005), and a forgotten share ends by itself (SC-008).

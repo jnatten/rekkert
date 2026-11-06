@@ -133,7 +133,7 @@ struct SharingMenuItems: View {
             } else {
                 // The role outlives the app, the code does not. Back from a relaunch, the
                 // match is still this phone's to share, on a code that has to be read out again.
-                Button("Share this match again", systemImage: "person.2.wave.2") {
+                Button("Share again", systemImage: "person.2.wave.2") {
                     model.sharing.host()
                     model.showingShareCode = true
                 }
@@ -149,7 +149,7 @@ struct SharingMenuItems: View {
                 model.showingJoin = true
             }
         } else if model.store.canEndSession {
-            Button("Share this match", systemImage: "person.2.wave.2") {
+            Button("Share", systemImage: "person.2.wave.2") {
                 model.sharing.host()
                 model.showingShareCode = true
             }

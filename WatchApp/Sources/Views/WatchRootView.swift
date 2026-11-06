@@ -7,6 +7,7 @@ struct WatchRootView: View {
     @Environment(AppModel.self) private var model
     @State private var selection = 0
     @State private var askingToStartWorkout = false
+    @State private var seenIdleStop: Date?
 
     var body: some View {
         content
@@ -53,7 +54,9 @@ struct WatchRootView: View {
                 Text("It's saved to Apple Health.")
             }
             .alert(
-                model.standIn.hostWhoStopped.map { "\($0) stopped sharing" } ?? "The host stopped sharing",
+                model.standIn.hostStopReason == .idle
+                    ? "\(model.standIn.hostWhoStopped ?? "The host")'s sharing ended after 30 minutes without a match."
+                    : model.standIn.hostWhoStopped.map { "\($0) stopped sharing" } ?? "The host stopped sharing",
                 isPresented: Binding(
                     get: { model.standIn.hostStoppedSharing },
                     set: { if !$0 { model.standIn.acknowledgeStoppedSharing() } }
@@ -62,6 +65,15 @@ struct WatchRootView: View {
                 Button("OK") { model.standIn.acknowledgeStoppedSharing() }
             } message: {
                 Text("Your copy of the match is saved in History on your iPhone.")
+            }
+            .alert(
+                "Sharing stopped after 30 minutes without a match.",
+                isPresented: Binding(
+                    get: { model.standIn.hosting?.endedBy == .idle && seenIdleStop != model.standIn.hosting?.issuedAt },
+                    set: { if !$0 { seenIdleStop = model.standIn.hosting?.issuedAt } }
+                )
+            ) {
+                Button("OK") { seenIdleStop = model.standIn.hosting?.issuedAt }
             }
             .sheet(item: Binding(
                 get: { model.workout.askingForEffort },
@@ -246,8 +258,8 @@ private struct AsksBeforeTakingThePhoneOff: ViewModifier {
 
     func body(content: Content) -> some View {
         content.confirmationDialog(
-            (model.standIn.phonesHostName ?? model.store.hostName).map { "This takes your iPhone off \($0)'s match." }
-                ?? "This takes your iPhone off the shared match.",
+            (model.standIn.phonesHostName ?? model.store.hostName).map { "This takes your iPhone off \($0)'s sharing." }
+                ?? "This takes your iPhone off the host's sharing.",
             isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
             titleVisibility: .visible
         ) {
@@ -278,6 +290,8 @@ struct WatchIdleView: View {
                 WatchWorkoutFollowCard()
 
                 WatchPhonesMatchBanner()
+
+                WatchSharingCard()
 
                 connection
 
@@ -364,6 +378,11 @@ struct WatchPresetsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 8) {
+                if let hosting = model.standIn.hosting, hosting.isSharing {
+                    Text("Sharing · \(hosting.participants.count) on")
+                        .scaledFont(size: 11)
+                        .foregroundStyle(.secondary)
+                }
                 if model.store.presets.isEmpty {
                     empty
                 } else {

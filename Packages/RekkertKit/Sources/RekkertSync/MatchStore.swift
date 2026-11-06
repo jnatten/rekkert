@@ -423,6 +423,9 @@ public final class MatchStore {
         return accessTable.access(for: [device, pairedDevice])
     }
 
+    /// Which side of a shared match this device is on: its own role on a phone, its phone's on a watch.
+    public var side: SessionRole? { BetweenMatches.side(role: role, pairedRole: pairedRole, isWatch: !keepsHistory) }
+
     public var canScore: Bool { access.canScore && !betweenMatches.blocksScoring }
     public var canRunRounds: Bool { access.canRunRounds && !betweenMatches.blocksScoring }
 
@@ -562,6 +565,7 @@ public final class MatchStore {
             refusedLinks = []
         }
         role = .host
+        if log.isEmpty { betweenMatches.sharingStarted(now: now()) }
         identifyAsMe()
         // A search left running underneath would conclude on the first guest to say hello
         // and make this phone a guest on its own match.
@@ -708,6 +712,9 @@ public final class MatchStore {
     /// A watch whose phone is a guest: a match started here takes the phone off the shared one
     /// (FR-030), so the wrist asks first.
     public var startingOwnMatchTakesPhoneOff: Bool { !keepsHistory && pairedRole == .guest }
+
+    /// Starting a match of its own takes this device off the host's sharing (FR-021).
+    public var startingOwnMatchLeavesSharing: Bool { keepsHistory ? role == .guest : startingOwnMatchTakesPhoneOff }
 
     /// "Get on it": whatever said the phone's match was left no longer does, and the phone is
     /// asked to offer it again.
@@ -1963,6 +1970,7 @@ public final class MatchStore {
                     isJoining = false
                     joinRefuses = nil
                     accessTable = access
+                    betweenMatches.matchBegan()
                     forgetLeaving(log.sessionID)
                     shareRole()
                     shareAccess()

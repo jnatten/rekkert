@@ -33,7 +33,7 @@ struct WatchCodeView: View {
                 } else if model.standIn.hostingTrouble == .cannotReachPhone {
                     WatchHostingTrouble(text: "Can't reach your iPhone")
                 } else if model.standIn.hostingTrouble == .nothingToShare {
-                    WatchHostingTrouble(text: "Nothing on your iPhone to share")
+                    WatchHostingTrouble(text: "Your iPhone is on someone else's sharing")
                 } else {
                     ProgressView()
                     Text("Sharing…")
@@ -61,15 +61,5 @@ struct WatchHostingTrouble: View {
                 .multilineTextAlignment(.center)
         }
         .padding(.top, 8)
-    }
-}
-
-private extension SessionCode {
-    /// `482 915`: two groups, as it is read out.
-    var readOut: String { description.replacingOccurrences(of: "-", with: " ") }
-
-    /// One digit at a time, for VoiceOver (FR-031).
-    var digitByDigit: String {
-        description.filter(\.isNumber).map(String.init).joined(separator: " ")
     }
 }

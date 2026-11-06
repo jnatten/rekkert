@@ -26,6 +26,7 @@ public final class SharedSession {
             publish?(phase.asShared)
             reportStandby()
             reportHostingStatus()
+            watchForIdleness()
         }
     }
 
@@ -68,6 +69,8 @@ public final class SharedSession {
     /// Who the host that stopped said they were.
     public private(set) var hostWhoStopped: String?
     public private(set) var hostStopReason: SharingStopReason?
+    /// Sharing stopped by itself after half an hour with nothing on, for the host to be told.
+    public private(set) var stoppedForIdle = false
 
     /// Short of FR-026's fifteen seconds by the time a link can take to be found down.
     private static let hostGrace: Duration = .seconds(10)
@@ -147,6 +150,9 @@ public final class SharedSession {
     /// is off can only be reached over Bluetooth, and finding it there takes its own time.
     private let radioGrace: Duration
     private var waitingForTheRadio: Task<Void, Never>?
+    private let idleCheck: Duration
+    private var watchingIdleness: Task<Void, Never>?
+    private var isClosed = false
 
     public init(
         store: MatchStore,
@@ -157,8 +163,10 @@ public final class SharedSession {
         keeper: (any CodeKeeping)? = nil,
         now: @escaping @Sendable () -> Date = { Date() },
         searchLimit: Duration = .seconds(14),
+        idleCheck: Duration = .seconds(30),
         sleep: @escaping @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0) }
     ) {
+        self.idleCheck = idleCheck
         self.store = store
         self.link = link
         self.bluetooth = bluetooth
@@ -265,7 +273,8 @@ public final class SharedSession {
     /// and starting another keeps the same code — nobody has to be told a new one halfway
     /// through an evening.
     public func host(code requested: SessionCode? = nil) {
-        guard store.state != nil else { return }
+        guard store.role != .guest else { return }
+        stoppedForIdle = false
         // A search still running underneath — the join sheet swiped away mid-look — would
         // conclude on the first guest to say hello and make this phone a guest on its own
         // match.
@@ -296,6 +305,9 @@ public final class SharedSession {
     public func restore() {
         guard case .off = phase, hosted == nil, wanted == nil, let kept = keeper?.read(now: now()) else { return }
         recorder?.note(.appHadBeenEnded)
+        if store.betweenMatches.isIdleExpired(now: now(), matchOn: store.state != nil) {
+            return endedWhileAway(kept)
+        }
         switch kept.role {
         case .host where store.role == .host:
             let share = kept.share ?? UUID()
@@ -367,6 +379,7 @@ public final class SharedSession {
     /// answer to "did the system take it away?" is to stop asking a question nothing can answer
     /// in time and simply put it back every time.
     public func resume() {
+        checkIdleness()
         switch revival {
         case .nothing:
             break
@@ -497,6 +510,60 @@ public final class SharedSession {
         hostStopReason = nil
     }
 
+    public func acknowledgeIdleStop() {
+        stoppedForIdle = false
+        reportHostingStatus()
+    }
+
+    private func watchForIdleness() {
+        guard isSharing, !isClosed else {
+            watchingIdleness?.cancel()
+            watchingIdleness = nil
+            return
+        }
+        guard watchingIdleness == nil else { return }
+        watchingIdleness = Task { [weak self, sleep, idleCheck] in
+            while !Task.isCancelled {
+                await sleep(idleCheck)
+                guard !Task.isCancelled else { return }
+                self?.checkIdleness()
+            }
+        }
+    }
+
+    private func checkIdleness() {
+        guard store.betweenMatches.isIdleExpired(now: now(), matchOn: store.state != nil) else { return }
+        if hosted != nil {
+            recorder?.note(.idleStop, in: store.log.sessionID)
+            stoppedForIdle = true
+            stop(reason: .idle)
+        } else if store.role == .guest {
+            recorder?.note(.idleStop, on: hostLink, in: store.log.sessionID)
+            stoppedByHost(.idle)
+            store.leaveSharedSession()
+        }
+    }
+
+    /// Back after the half hour, with nobody to tell: whoever was on has been told by their own
+    /// clock.
+    private func endedWhileAway(_ kept: KeptCode) {
+        recorder?.note(.idleStop, in: store.log.sessionID)
+        switch kept.role {
+        case .host where store.role == .host:
+            stoppedForIdle = true
+            store.stopSharing()
+            remember(.stoppedHosting)
+        case .guest where store.role == .guest:
+            remember(.sharingStopped)
+            hostStopReason = .idle
+            hostStoppedSharing = true
+            store.leaveSharedSession()
+        default:
+            break
+        }
+        reportHostingStatus()
+    }
+
     /// The store is stepping off as it says so, so there is nothing left to decide — only the
     /// links to let go of. Not `stop()`, which decides by what is on the store
     /// when it runs, and by then that can be the match this end has just started.
@@ -619,6 +686,9 @@ public final class SharedSession {
     /// Stops watching the transport. The app holds this for its whole life, so this is here
     /// for tests rather than for the app.
     public func close() {
+        isClosed = true
+        watchingIdleness?.cancel()
+        watchingIdleness = nil
         watching?.cancel()
         watching = nil
         watchingBluetooth?.cancel()
@@ -791,13 +861,14 @@ public final class SharedSession {
             code: code,
             joinLink: code?.joinLink,
             participants: code == nil ? [] : store.participantStates(),
-            canShare: store.state != nil && store.role != .guest
+            canShare: store.role != .guest,
+            endedBy: stoppedForIdle ? .idle : nil
         )
     }
 
     /// The host's watch asked to share. Only a match that is on can be: otherwise it is told so.
     public func startHostingFromTheWatch() {
-        guard store.state != nil, store.role != .guest else { return reportHostingStatus(force: true) }
+        guard store.role != .guest else { return reportHostingStatus(force: true) }
         if code == nil { host() } else { reportHostingStatus(force: true) }
     }
 

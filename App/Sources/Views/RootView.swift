@@ -133,7 +133,7 @@ struct RootView: View {
             Text("Your watch shows the match once Rekkert is opened on it. Allow notifications for Rekkert and it will be told when you join.")
         }
         .alert(
-            model.sharing.hostWhoStopped.map { "\($0) stopped sharing" } ?? "The host stopped sharing",
+            stoppedTitle,
             isPresented: Binding(
                 get: { model.sharing.hostStoppedSharing },
                 set: { if !$0 { model.sharing.acknowledgeStoppedSharing() } }
@@ -141,7 +141,20 @@ struct RootView: View {
         ) {
             Button("OK") { model.sharing.acknowledgeStoppedSharing() }
         } message: {
-            Text("The match as it stood is saved in History.")
+            Text(model.sharing.hostStopReason == .idle
+                 ? "Nobody had a match on for 30 minutes. Your matches are in History."
+                 : "The match as it stood is saved in History.")
+        }
+        .alert(
+            "Sharing stopped",
+            isPresented: Binding(
+                get: { model.sharing.stoppedForIdle && !model.sharing.isSharing },
+                set: { if !$0 { model.sharing.acknowledgeIdleStop() } }
+            )
+        ) {
+            Button("OK") { model.sharing.acknowledgeIdleStop() }
+        } message: {
+            Text("Nobody had a match on for 30 minutes, so Rekkert stopped sharing. Share again to carry on.")
         }
         .alert(
             "Switched to the newer match",
@@ -277,6 +290,14 @@ struct RootView: View {
         }
         linkedCode = code
         if !model.showingJoin { present { model.showingJoin = true } }
+    }
+
+    private var stoppedTitle: String {
+        let host = model.sharing.hostWhoStopped
+        if model.sharing.hostStopReason == .idle {
+            return host.map { "\($0)'s sharing has ended" } ?? "The host's sharing has ended"
+        }
+        return host.map { "\($0) stopped sharing" } ?? "The host stopped sharing"
     }
 
     private var isPresenting: Bool {
