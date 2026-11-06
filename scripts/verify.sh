@@ -8,6 +8,17 @@ DD=.build/dd
 APP="$DD/Build/Products/Debug-iphonesimulator/Rekkert.app"
 WATCH_APP="$APP/Watch/RekkertWatch.app"
 
+echo "==> Assert no delay on the watch is counted in Int nanoseconds"
+# Watches older than Series 9 and Ultra 2 run the 32-bit slice, where Int holds 2.1 s of
+# nanoseconds. Anything longer traps there and nowhere else: the simulators, the test host and
+# the watch used for Debug runs are all 64-bit.
+if hits=$(grep -rn --include='*.swift' '\.nanoseconds(' Packages/RekkertKit/Sources Shared WatchApp); then
+  echo "$hits"
+  echo "FAIL: build the deadline as .now() + duration / .seconds(1), or with .seconds/.milliseconds"
+  exit 1
+fi
+echo "  ok: no .nanoseconds( in code the watch runs"
+
 echo "==> Package tests (macOS, no simulator)"
 swift test --package-path Packages/RekkertKit
 

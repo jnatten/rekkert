@@ -78,10 +78,11 @@ struct FramingTests {
     }
 
     /// Refused on the claim rather than on delivery, so nothing allocates what a hostile or
-    /// broken peer asked for.
-    @Test func anImpossibleLengthIsRefusedBeforeAnythingIsAllocated() {
+    /// broken peer asked for. Lengths past `Int32.max` are the ones a 32-bit watch's `Int` cannot
+    /// hold, and they are refused the same way rather than trapping before the check.
+    @Test(arguments: [UInt32(FrameCodec.maximumPayload + 1), 0x8000_0000, .max])
+    func anImpossibleLengthIsRefusedBeforeAnythingIsAllocated(absurd: UInt32) {
         var buffer = Data()
-        let absurd = UInt32(FrameCodec.maximumPayload + 1)
         buffer.append(contentsOf: [
             UInt8(truncatingIfNeeded: absurd >> 24), UInt8(truncatingIfNeeded: absurd >> 16),
             UInt8(truncatingIfNeeded: absurd >> 8), UInt8(truncatingIfNeeded: absurd),

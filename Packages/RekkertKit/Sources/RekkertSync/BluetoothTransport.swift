@@ -88,9 +88,9 @@ nonisolated private struct DispatchScheduler: RadioScheduler {
 
     func run(after delay: Duration, _ work: @escaping @Sendable () -> Void) -> any RadioTimer {
         let item = DispatchWorkItem(block: work)
-        let (seconds, attoseconds) = delay.components
-        let nanoseconds = Int(seconds) * 1_000_000_000 + Int(attoseconds / 1_000_000_000)
-        queue.asyncAfter(deadline: .now() + .nanoseconds(nanoseconds), execute: item)
+        // Never through `Int`: on a 32-bit watch it holds 2.1 s of nanoseconds, and the
+        // timeouts here run to 15 s.
+        queue.asyncAfter(deadline: .now() + delay / .seconds(1), execute: item)
         return DispatchTimer(item: item)
     }
 }

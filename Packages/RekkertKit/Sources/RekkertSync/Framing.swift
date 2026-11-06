@@ -64,8 +64,9 @@ nonisolated public enum FrameCodec {
         var offset = buffer.startIndex
 
         while buffer.endIndex - offset >= headerSize {
-            let length = Int(buffer.readingBigEndian(at: offset))
-            guard length <= maximumPayload else { throw Fault.oversized }
+            let claimed = buffer.readingBigEndian(at: offset)
+            guard claimed <= maximumPayload else { throw Fault.oversized }
+            let length = Int(claimed)
             guard buffer.endIndex - offset >= headerSize + length else { break }
 
             let raw = buffer[offset + 4]
