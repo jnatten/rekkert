@@ -163,7 +163,7 @@ public final class MatchStore {
     @ObservationIgnored public var onRefused: ((SharingFailure) -> Void)?
     /// The host of the match on screen stopped sharing it, and said so. Called before this end
     /// lets go of it, as `onLeft` is.
-    @ObservationIgnored public var onStoppedByHost: (() -> Void)?
+    @ObservationIgnored public var onStoppedByHost: ((SharingStopReason?) -> Void)?
     /// The sharing record, told what happens to each link as it happens.
     @ObservationIgnored public var recorder: (any LinkRecording)?
     /// The device on the far end of each link, as its first hello named it.
@@ -234,6 +234,7 @@ public final class MatchStore {
         // matches, or one still waiting on a join, is stepping off — as starting a preset is.
         if log.isEmpty, role == .guest || isJoining { startNewSession() }
         resetDisplayForNewMatch()
+        betweenMatches.matchBegan()
         record(.configure(setup, at: Date(), warmup: warmup ? true : nil))
         announceBegan()
     }
@@ -431,14 +432,33 @@ public final class MatchStore {
         let answer = BetweenMatchesAnswer(session: session, choice: choice)
         betweenMatches.answered(answer)
         recorder?.note(notice == nil ? .endOfMatchAnswered(choice) : .newMatchAnswered(choice), in: session)
+        if choice == .keepSharing { keepSharing(after: session) }
         persist()
         Task { await sendDurably(.answered(answer)) }
+    }
+
+    private func askAtTheEnd(of session: UUID) {
+        guard BetweenMatches.side(role: role, pairedRole: pairedRole, isWatch: !keepsHistory) == .host else { return }
+        let guestsOn = participantCount?() ?? participantStates().count
+        if betweenMatches.matchEnded(session: session, side: .host(guestsOn: guestsOn), now: now()) {
+            recorder?.note(.endOfMatchAsked, in: session)
+        }
+    }
+
+    private func keepSharing(after session: UUID) {
+        guard role == .host, let accessTable else { return }
+        let kept = accessTable.keepingSharing(after: session)
+        guard kept != accessTable else { return }
+        self.accessTable = kept
+        persist()
+        shareAccess()
     }
 
     private func hearThePair(_ signal: SharingSignal) {
         switch signal {
         case .answered(let answer):
             betweenMatches.answered(answer)
+            if answer.choice == .keepSharing { keepSharing(after: answer.session) }
             persist()
         case .newMatch(let notice):
             guard betweenMatches.newMatch != notice else { return }
@@ -506,6 +526,7 @@ public final class MatchStore {
     public func stopSharing() {
         guard role == .host else { return }
         role = .solo
+        betweenMatches.sharingEnded()
         forgetSharing()
         persist()
         shareRole()
@@ -684,6 +705,7 @@ public final class MatchStore {
     /// follow the same phone back in.
     private func dropSession() {
         let dropped = sessionInPlay
+        betweenMatches.sharingEnded()
         if keepsHistory, log.hasProgress, let state = SessionReducer.state(of: log) {
             file(state, from: log)
         }
@@ -929,6 +951,7 @@ public final class MatchStore {
             counterpartLeftSessionID = nil
         }
         clearSession()
+        betweenMatches.matchBegan()
         if role == .guest {
             role = .solo
             forgetSharing()
@@ -998,12 +1021,14 @@ public final class MatchStore {
         lastSnapshotPublished = Date()
         Task { _ = await sendLive(farewell) }
 
-        concludedSessionID = log.sessionID
-        retire(log.sessionID, archive: wasAskedToArchive)
+        let ended = log.sessionID
+        concludedSessionID = ended
+        retire(ended, archive: wasAskedToArchive)
         remember(farewell: log)
         log = MatchLog()
         outbox = Outbox()
         state = nil
+        askAtTheEnd(of: ended)
         persist()
         return true
     }
@@ -1534,8 +1559,8 @@ public final class MatchStore {
 
     /// Tells every phone on a link that this match is no longer shared, and is done once each has
     /// said it heard or `patience` is up. Said to the links up now, before anything turns them round.
-    public func sayStoppedSharing(within patience: Duration = .seconds(2)) -> Task<Void, Never> {
-        let notice = encode(.sharingStopped(sessionID: log.sessionID))
+    public func sayStoppedSharing(within patience: Duration = .seconds(2), reason: SharingStopReason = .host) -> Task<Void, Never> {
+        let notice = encode(.sharingStopped(sessionID: log.sessionID, reason: reason))
         let links = transport.links
         let transport = transport
         return Task {
@@ -1793,11 +1818,15 @@ public final class MatchStore {
                 shareAccess()
             }
 
-        case .sharingStopped(let sessionID, _):
+        case .sharingStopped(let sessionID, let reason):
             // The host letting everybody go, and saying so first. Kept in History as it stood,
-            // as a Leave keeps it, and the watch on the same wrist goes with it.
-            if !packet.isFromPairedDevice, sessionID == log.sessionID, !log.isEmpty, !canEndSession {
-                onStoppedByHost?()
+            // as a Leave keeps it, and the watch on the same wrist goes with it. Between matches
+            // the host's empty log and this one's have ids of their own, so a guest waiting for
+            // the next match takes it whatever it names: only its host's links reach it.
+            let holdsTheMatch = sessionID == log.sessionID && !log.isEmpty && !canEndSession
+            let isWaiting = role == .guest && log.isEmpty && !isJoining
+            if !packet.isFromPairedDevice, holdsTheMatch || isWaiting {
+                onStoppedByHost?(reason)
                 leaveSharedSession()
             }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
@@ -2156,6 +2185,7 @@ public final class MatchStore {
         role = .solo
         adopt(incoming)
         guard wasShared else { return }
+        betweenMatches.sharingEnded()
         forgetSharing()
         shareRole()
         onLeft?()

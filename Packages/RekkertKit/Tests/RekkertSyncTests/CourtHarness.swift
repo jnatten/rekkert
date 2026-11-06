@@ -160,7 +160,7 @@ final class CourtHarness {
         } else {
             sharing.publish = { [store] state in Task { await store.send(.state(state)) } }
             sharing.onStandby = { [store] standby in Task { await store.send(.standby(standby)) } }
-            sharing.onStoppedByHost = { [store] host in Task { await store.sendDurably(.hostStoppedSharing(host: host)) } }
+            sharing.onStoppedByHost = { [store] host, reason in Task { await store.sendDurably(.hostStoppedSharing(host: host, reason: reason)) } }
             sharing.onHostingStatus = { [store] status, isNews in
                 Task { if isNews { await store.sendDurably(.hostingStatus(status)) } else { await store.send(.hostingStatus(status)) } }
             }

@@ -154,7 +154,7 @@ guests stay on and get the next match.
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T012 [US1] Write the host half of `SyncTests/EndOfMatchQuestionTests.swift` on `CourtHarness(guests: 2, withWatches: true)`. Each test fails on `9d930e27` because nothing is asked:
+- [X] T012 [US1] Write the host half of `SyncTests/EndOfMatchQuestionTests.swift` on `CourtHarness(guests: 2, withWatches: true)`. Each test fails on `9d930e27` because nothing is asked:
   - `hostIsAskedWithTheGuestCount`: after `finish(on: host.phone)`, the host phone's and the host watch's `ask` is `.host(guestsOn: 2)`. With no guests joined, it is `.host(guestsOn: 0)`.
   - `callingOffAsksToo`: same, after `discard`.
   - `aTournamentRoundDoesNotAsk`: ending a round of an americano opens nothing; finishing the tournament does.
@@ -167,30 +167,30 @@ guests stay on and get the next match.
 
 ### Implementation for User Story 1
 
-- [ ] T013 [US1] In `RekkertSync/MatchStore.swift` `concludeIfFinished` (MS:945-985), right where the log is replaced:
+- [X] T013 [US1] In `RekkertSync/MatchStore.swift` `concludeIfFinished` (MS:945-985), right where the log is replaced:
   - when `BetweenMatches.side(role:pairedRole:isWatch: !keepsHistory)` is `.host`, call `betweenMatches.matchEnded(session:side: .host(guestsOn: participantCount()), now:)`;
   - note `endOfMatchAsked`;
   - persist.
 
   In `startNewSession`, `configure` and `start(_:)` on the host side, call `betweenMatches.matchBegan()`. T039 covers the remaining paths.
-- [ ] T014 [US1] In `MatchStore.answer(_:)`, for `.keepSharing` on a store whose role is `.host`:
+- [X] T014 [US1] In `MatchStore.answer(_:)`, for `.keepSharing` on a store whose role is `.host`:
   - set `accessTable = accessTable.keepingSharing(after: ask.session)`;
   - `persist()`;
   - `shareAccess()` (D-5).
 
   `.stopSharing` only closes the question; `SharedSession.answer` (T010) then stops sharing.
-- [ ] T015 [US1] Give `SharedSession.stop` in `RekkertSync/SharedSession.swift` a `reason: SharingStopReason = .host` parameter, and pass it through a new `reason` parameter on `MatchStore.sayStoppedSharing(within:reason:)` into `Wire.sharingStopped(sessionID:reason:)`.
-- [ ] T016 [US1] Finish `WatchStandIn.answer(.stopSharing)` (T010) in `RekkertSync/WatchStandIn.swift`, for a host watch answering at the end of the match:
+- [X] T015 [US1] Give `SharedSession.stop` in `RekkertSync/SharedSession.swift` a `reason: SharingStopReason = .host` parameter, and pass it through a new `reason` parameter on `MatchStore.sayStoppedSharing(within:reason:)` into `Wire.sharingStopped(sessionID:reason:)`.
+- [X] T016 [US1] Finish `WatchStandIn.answer(.stopSharing)` (T010) in `RekkertSync/WatchStandIn.swift`, for a host watch answering at the end of the match:
   - it calls `stopHosting()`;
   - it calls `store.answer(.stopSharing)` only once `hosting?.isSharing == false` comes back;
   - on `.cannotReachPhone` the question stays open (FR-007).
-- [ ] T017 [US1] Add the host's end-of-match alert to `App/Sources/Views/RootView.swift`, driven by `model.store.betweenMatches.ask` with a `.host` side. Use the title, message and buttons from contracts/screens.md, "End of match, host":
+- [X] T017 [US1] Add the host's end-of-match alert to `App/Sources/Views/RootView.swift`, driven by `model.store.betweenMatches.ask` with a `.host` side. Use the title, message and buttons from contracts/screens.md, "End of match, host":
   - **Keep sharing** → `model.sharing.answer(.keepSharing)`;
   - **Stop sharing** (destructive) → `model.sharing.answer(.stopSharing)`.
 
   Present it after the finish confirmation has gone, using the same delayed-task pattern as the "Start a workout?" alert. Extend `isPresenting` so the effort sheet waits while the question is open.
-- [ ] T018 [US1] In `WatchApp/Sources/Views/WatchResultView.swift`, while a `.host` question is open, replace **Done** with "Keep sharing?", the guest count, **Keep sharing** and **Stop sharing**, each calling `model.standIn.answer(_:)` (T010, T016). Show "Can't reach your iPhone" when `standIn.hostingTrouble == .cannotReachPhone`. When the match was called off and there is no result, show the same choices as a `confirmationDialog` on `WatchIdleView` in `WatchApp/Sources/Views/WatchRootView.swift`.
-- [ ] T019 [US1] Run `swift test --package-path Packages/RekkertKit --filter EndOfMatchQuestion`. T012 passes, and the whole package stays green.
+- [X] T018 [US1] In `WatchApp/Sources/Views/WatchResultView.swift`, while a `.host` question is open, replace **Done** with "Keep sharing?", the guest count, **Keep sharing** and **Stop sharing**, each calling `model.standIn.answer(_:)` (T010, T016). Show "Can't reach your iPhone" when `standIn.hostingTrouble == .cannotReachPhone`. When the match was called off and there is no result, show the same choices as a `confirmationDialog` on `WatchIdleView` in `WatchApp/Sources/Views/WatchRootView.swift`.
+- [X] T019 [US1] Run `swift test --package-path Packages/RekkertKit --filter EndOfMatchQuestion`. T012 passes, and the whole package stays green.
 
 **Checkpoint**: The host is asked on whichever device ended the match, and Stop ends sharing
 in one tap from the result (SC-003).

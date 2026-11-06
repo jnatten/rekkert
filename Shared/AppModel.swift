@@ -180,7 +180,7 @@ final class AppModel {
         sharing.onHostingStatus = { [weak self] status, isNews in self?.tellTheWatch(status, isNews: isNews) }
         sharing.onStandby = { [store] standby in Task { await store.send(.standby(standby)) } }
         sharing.onJoined = { [weak self] in self?.beckonTheWatch() }
-        sharing.onStoppedByHost = { [store] host in Task { await store.sendDurably(.hostStoppedSharing(host: host)) } }
+        sharing.onStoppedByHost = { [store] host, reason in Task { await store.sendDurably(.hostStoppedSharing(host: host, reason: reason)) } }
         store.onSharing = { [weak self] signal in self?.joinFromWatch(signal) }
         liveScore.follow(store)
         #endif

@@ -41,7 +41,7 @@ public final class SharedSession {
     /// A join got through, once per code dialled.
     @ObservationIgnored public var onJoined: (() -> Void)?
     /// The host stopped sharing the match this device was a guest on, for its watch to hear.
-    @ObservationIgnored public var onStoppedByHost: ((_ host: String?) -> Void)?
+    @ObservationIgnored public var onStoppedByHost: ((_ host: String?, _ reason: SharingStopReason?) -> Void)?
     /// What the host's watch shows, each time it changes (D-14). `isNews` when sharing started,
     /// stopped or changed code: worth queuing for a watch whose app is not running, and worth a
     /// fresh picture of the code.
@@ -67,6 +67,7 @@ public final class SharedSession {
     public private(set) var hostStoppedSharing = false
     /// Who the host that stopped said they were.
     public private(set) var hostWhoStopped: String?
+    public private(set) var hostStopReason: SharingStopReason?
 
     /// Short of FR-026's fifteen seconds by the time a link can take to be found down.
     private static let hostGrace: Duration = .seconds(10)
@@ -179,7 +180,7 @@ public final class SharedSession {
         // to a host with nothing on, which takes it up as its own.
         store.onLeft = { [weak self] in self?.letGo() }
         store.onRefused = { [weak self] _ in self?.turnedAway() }
-        store.onStoppedByHost = { [weak self] in self?.stoppedByHost() }
+        store.onStoppedByHost = { [weak self] reason in self?.stoppedByHost(reason) }
         store.onParticipantsChanged = { [weak self] in self?.reportHostingStatus() }
         store.onHostNameChanged = { [weak self] in self?.reportStandby() }
         if let bluetooth {
@@ -436,7 +437,7 @@ public final class SharedSession {
     /// tells its guests before it lets go of them, or to each of them it looks like the host
     /// walking off; what comes back is that telling, done once it has gone out or given up.
     @discardableResult
-    public func stop() -> Task<Void, Never>? {
+    public func stop(reason: SharingStopReason = .host) -> Task<Void, Never>? {
         guard store.role == .host else {
             cutLinks()
             switch store.role {
@@ -455,7 +456,7 @@ public final class SharedSession {
         // onto a match nobody shares any more.
         link.stopAdmitting()
         bluetooth?.stopAdmitting()
-        let farewell = store.sayStoppedSharing()
+        let farewell = store.sayStoppedSharing(reason: reason)
         store.stopSharing()
         remember(.stoppedHosting)
         forgetWhatWasAskedFor()
@@ -477,20 +478,22 @@ public final class SharedSession {
     }
 
     /// The host let everybody go, and said so first: nothing to look for, and no code to keep.
-    private func stoppedByHost() {
+    private func stoppedByHost(_ reason: SharingStopReason?) {
         hostWhoStopped = store.hostName
+        hostStopReason = reason ?? .host
         cutLinks()
         recorder?.note(.sharingStopped, on: hostLink, in: store.log.sessionID)
         remember(.sharingStopped)
         forgetWhatWasAskedFor()
         standbyCode = nil
         hostStoppedSharing = true
-        onStoppedByHost?(hostWhoStopped)
+        onStoppedByHost?(hostWhoStopped, hostStopReason)
     }
 
     public func acknowledgeStoppedSharing() {
         hostStoppedSharing = false
         hostWhoStopped = nil
+        hostStopReason = nil
     }
 
     /// The store is stepping off as it says so, so there is nothing left to decide — only the

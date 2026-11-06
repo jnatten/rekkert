@@ -302,6 +302,27 @@ struct WatchIdleView: View {
         }
         .sheet(isPresented: $joining) { WatchJoinView() }
         .asksBeforeTakingThePhoneOff($pendingStart)
+        // A match called off has no result screen to ask on.
+        .confirmationDialog(
+            model.store.betweenMatches.ask?.watchTitle ?? "",
+            isPresented: Binding(
+                get: { model.store.lastResult == nil && model.store.betweenMatches.ask != nil },
+                set: { _ in }
+            ),
+            titleVisibility: .visible,
+            presenting: model.store.betweenMatches.ask
+        ) { ask in
+            switch ask.side {
+            case .host:
+                Button("Keep sharing") { model.standIn.answer(.keepSharing) }
+                Button("Stop sharing", role: .destructive) { model.standIn.answer(.stopSharing) }
+            case .guest:
+                Button("Stay") { model.standIn.answer(.stay) }
+                Button("Leave", role: .destructive) { model.standIn.answer(.leave) }
+            }
+        } message: { ask in
+            if let line = ask.watchLine { Text(line) }
+        }
         .task {
             #if DEBUG
             if WatchDemoLaunch.joinCode != nil { joining = true }

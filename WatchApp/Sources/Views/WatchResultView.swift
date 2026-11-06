@@ -48,10 +48,14 @@ struct WatchResultView: View {
 
                 WatchWorkoutFollowCard()
 
-                Button("Done") { model.store.acknowledgeResult() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(tint)
-                    .padding(.top, 4)
+                if let ask = model.store.betweenMatches.ask {
+                    WatchEndOfMatchQuestion(ask: ask)
+                } else {
+                    Button("Done") { model.store.acknowledgeResult() }
+                        .buttonStyle(.borderedProminent)
+                        .tint(tint)
+                        .padding(.top, 4)
+                }
 
                 if let rewind = model.store.resultRewind, model.store.canScore {
                     Button(rewind.undoesAPoint ? "Undo last point" : "Back to it") {

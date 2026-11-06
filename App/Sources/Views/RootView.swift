@@ -7,6 +7,7 @@ struct RootView: View {
     @State private var askingToStartWorkout = false
     @State private var askingForEffort: EffortQuestion?
     @State private var explainingHealth = false
+    @State private var askingAtTheEnd: EndOfMatchAsk?
     /// A code that arrived as a link, for the join sheet to send as it opens — or to show
     /// first, when joining it would take this phone off a shared match.
     @State private var linkedCode: SessionCode?
@@ -152,6 +153,31 @@ struct RootView: View {
         } message: {
             Text("“\(model.store.replacedSessionTitle ?? "")” was started earlier elsewhere and has been saved to History.")
         }
+        // After the finish confirmation has gone, which an alert put up under never shows over.
+        .task(id: model.store.betweenMatches.ask) {
+            guard model.store.betweenMatches.ask != nil else {
+                askingAtTheEnd = nil
+                return
+            }
+            repeat {
+                try? await Task.sleep(for: .milliseconds(300))
+            } while !Task.isCancelled && isPresenting
+            askingAtTheEnd = model.store.betweenMatches.ask
+        }
+        .alert(
+            "Keep sharing for the next match?",
+            isPresented: Binding(
+                get: { askingAtTheEnd?.isTheHosts == true },
+                set: { if !$0 { askingAtTheEnd = nil } }
+            ),
+            presenting: askingAtTheEnd
+        ) { _ in
+            Button("Keep sharing") { model.sharing.answer(.keepSharing) }
+                .keyboardShortcut(.defaultAction)
+            Button("Stop sharing", role: .destructive) { model.sharing.answer(.stopSharing) }
+        } message: { ask in
+            Text(ask.guestsOnLine)
+        }
         // Delayed so the sheet the match was started or joined from has gone; an alert put up
         // under it never shows.
         .task(id: model.follower.isAskingToStart) {
@@ -177,7 +203,7 @@ struct RootView: View {
             }
             repeat {
                 try? await Task.sleep(for: .milliseconds(600))
-            } while !Task.isCancelled && isPresenting
+            } while !Task.isCancelled && (isPresenting || model.store.betweenMatches.ask != nil)
             askingForEffort = model.workout.askingForEffort
         }
         .sheet(item: $askingForEffort, onDismiss: { model.workout.skipEffort() }) { question in
@@ -225,5 +251,20 @@ struct RootView: View {
             root.presentedViewController != nil
         else { return show() }
         root.dismiss(animated: true) { Task { show() } }
+    }
+}
+
+private extension EndOfMatchAsk {
+    var isTheHosts: Bool {
+        if case .host = side { true } else { false }
+    }
+
+    var guestsOnLine: String {
+        guard case .host(let guestsOn) = side else { return "" }
+        switch guestsOn {
+        case 0: return "Nobody is on yet."
+        case 1: return "1 person is on. They get your next match unless you stop."
+        default: return "\(guestsOn) people are on. They get your next match unless you stop."
+        }
     }
 }

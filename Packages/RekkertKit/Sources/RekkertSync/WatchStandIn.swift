@@ -177,12 +177,15 @@ public final class WatchStandIn {
     /// from the host itself (US4 AS6). Worth saying once.
     public var hostStoppedSharing: Bool { heardHostStopped || sharing.hostStoppedSharing }
     public var hostWhoStopped: String? { heardHostStopped ? heardStoppingHost : sharing.hostWhoStopped }
+    public var hostStopReason: SharingStopReason? { heardHostStopped ? heardStopReason : sharing.hostStopReason }
     private var heardHostStopped = false
     private var heardStoppingHost: String?
+    private var heardStopReason: SharingStopReason?
 
     public func acknowledgeStoppedSharing() {
         heardHostStopped = false
         heardStoppingHost = nil
+        heardStopReason = nil
         sharing.acknowledgeStoppedSharing()
     }
 
@@ -200,6 +203,7 @@ public final class WatchStandIn {
 
     public private(set) var hostingTrouble: HostingTrouble?
     @ObservationIgnored private var isAskingToHost = false
+    @ObservationIgnored private var isAnsweringStop = false
 
     /// The wrist's own search, given up, and why.
     private var ownFailure: SharingFailure? {
@@ -232,7 +236,15 @@ public final class WatchStandIn {
             store.answer(.leave)
             sharing.leave()
         case .stopSharing:
-            stopHosting()
+            hostingTrouble = nil
+            isAnsweringStop = true
+            Task { [store] in
+                guard await store.send(.stopHosting) else {
+                    isAnsweringStop = false
+                    hostingTrouble = .cannotReachPhone
+                    return
+                }
+            }
         case .keepSharing, .stay, .ok:
             store.answer(choice)
         }
@@ -244,6 +256,10 @@ public final class WatchStandIn {
         // A status whose picture could not be drawn keeps the last one of the same code.
         if status.qr == nil, status.code == hosting?.code { status.qr = hosting?.qr }
         hosting = status
+        if isAnsweringStop, !status.isSharing {
+            isAnsweringStop = false
+            store.answer(.stopSharing)
+        }
         guard isAskingToHost else { return }
         if status.isSharing {
             isAskingToHost = false
@@ -406,9 +422,10 @@ public final class WatchStandIn {
             }
         case .hostingStatus(let status):
             heard(hosting: status)
-        case .hostStoppedSharing(let host, _):
+        case .hostStoppedSharing(let host, let reason):
             heardHostStopped = true
             heardStoppingHost = host
+            heardStopReason = reason ?? .host
         case .join, .cancel, .startHosting, .stopHosting, .followPhone, .answered, .newMatch:
             break
         }
