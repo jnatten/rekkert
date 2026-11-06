@@ -25,8 +25,23 @@ struct WatchRootView: View {
                     askingToStartWorkout = false
                     return
                 }
-                try? await Task.sleep(for: .milliseconds(600))
+                repeat {
+                    try? await Task.sleep(for: .milliseconds(600))
+                } while !Task.isCancelled && model.store.betweenMatches.newMatch != nil
                 askingToStartWorkout = model.follower.isAskingToStart
+            }
+            .onChange(of: model.store.betweenMatches.newMatch?.session) { _, session in
+                if session != nil { model.haptics.newMatch() }
+            }
+            .alert(
+                model.store.betweenMatches.newMatch.map { "\($0.hostName ?? "The host") started a new match" } ?? "",
+                isPresented: Binding(
+                    get: { model.store.betweenMatches.newMatch != nil },
+                    set: { _ in }
+                )
+            ) {
+                Button("OK") { model.standIn.answer(.ok) }
+                Button("Leave", role: .destructive) { model.standIn.answer(.leave) }
             }
             .alert("Start a workout?", isPresented: $askingToStartWorkout) {
                 Button("Start") {

@@ -8,6 +8,7 @@ struct RootView: View {
     @State private var askingForEffort: EffortQuestion?
     @State private var explainingHealth = false
     @State private var askingAtTheEnd: EndOfMatchAsk?
+    @State private var announcingNewMatch: NewMatchNotice?
     /// A code that arrived as a link, for the join sheet to send as it opens — or to show
     /// first, when joining it would take this phone off a shared match.
     @State private var linkedCode: SessionCode?
@@ -178,6 +179,43 @@ struct RootView: View {
         } message: { ask in
             Text(ask.guestsOnLine)
         }
+        .alert(
+            askingAtTheEnd?.stayTitle ?? "",
+            isPresented: Binding(
+                get: { askingAtTheEnd?.isTheHosts == false },
+                set: { if !$0 { askingAtTheEnd = nil } }
+            ),
+            presenting: askingAtTheEnd
+        ) { _ in
+            Button("Stay") { model.sharing.answer(.stay) }
+                .keyboardShortcut(.defaultAction)
+            Button("Leave", role: .destructive) { model.sharing.answer(.leave) }
+        } message: { ask in
+            Text(ask.stayLine)
+        }
+        .task(id: model.store.betweenMatches.newMatch) {
+            guard model.store.betweenMatches.newMatch != nil else {
+                announcingNewMatch = nil
+                return
+            }
+            repeat {
+                try? await Task.sleep(for: .milliseconds(300))
+            } while !Task.isCancelled && isPresenting
+            announcingNewMatch = model.store.betweenMatches.newMatch
+        }
+        .alert(
+            announcingNewMatch.map { "\($0.hostName ?? "The host") started a new match" } ?? "",
+            isPresented: Binding(
+                get: { announcingNewMatch != nil },
+                set: { if !$0 { announcingNewMatch = nil } }
+            )
+        ) {
+            Button("OK") { model.sharing.answer(.ok) }
+                .keyboardShortcut(.defaultAction)
+            Button("Leave", role: .destructive) { model.sharing.answer(.leave) }
+        } message: {
+            Text("You're on it. Leave if you're done for the evening.")
+        }
         // Delayed so the sheet the match was started or joined from has gone; an alert put up
         // under it never shows.
         .task(id: model.follower.isAskingToStart) {
@@ -185,7 +223,9 @@ struct RootView: View {
                 askingToStartWorkout = false
                 return
             }
-            try? await Task.sleep(for: .milliseconds(600))
+            repeat {
+                try? await Task.sleep(for: .milliseconds(600))
+            } while !Task.isCancelled && model.store.betweenMatches.newMatch != nil
             askingToStartWorkout = model.follower.isAskingToStart
         }
         .alert("Start a workout?", isPresented: $askingToStartWorkout) {
@@ -257,6 +297,17 @@ struct RootView: View {
 private extension EndOfMatchAsk {
     var isTheHosts: Bool {
         if case .host = side { true } else { false }
+    }
+
+    var stayTitle: String {
+        guard case .guest(let host, _) = side else { return "" }
+        return host.map { "Stay for \($0)'s next match?" } ?? "Stay for the host's next match?"
+    }
+
+    var stayLine: String {
+        guard case .guest(let host, let keeps) = side else { return "" }
+        if keeps { return "\(host ?? "The host") is keeping it shared." }
+        return host.map { "If you stay, \($0)'s next match comes here." } ?? "If you stay, the host's next match comes here."
     }
 
     var guestsOnLine: String {

@@ -198,7 +198,12 @@ final class AppModel {
         store.onPoint = { [haptics] point in haptics.heard(point) }
         standIn.onJoined = { [follower] session in follower.heard(.began(session)) }
         #endif
-        store.onMatch = { [follower] moment in follower.heard(moment) }
+        store.onMatch = { [weak self, follower] moment in
+            follower.heard(moment)
+            #if os(iOS)
+            if case .nextFromHost(let session) = moment { self?.announceTheNextMatch(session) }
+            #endif
+        }
         #if !os(watchOS)
         roundAlarm.onRing = { [announcer] in announcer.callTime() }
         #endif
@@ -1003,6 +1008,31 @@ extension AppModel {
             try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
             recorder.note(.notificationPosted, in: session)
             await withdraw(id, onceTheWatchIsOn: session)
+        }
+    }
+
+    /// Only for somebody looking at neither device (FR-027): one in front shows the alert itself.
+    func announceTheNextMatch(_ session: UUID) {
+        guard BetweenMatches.wantsNotification(
+            appIsActive: UIApplication.shared.applicationState == .active,
+            watchReachable: store.isPairReachable
+        ) else { return }
+        let host = store.betweenMatches.newMatch?.hostName
+        Task {
+            guard await RoundAlarmFollower.askToNotify() else { return }
+            let content = UNMutableNotificationContent()
+            content.title = host.map { "\($0) started a new match" } ?? "The host started a new match"
+            content.body = "Tap to open it."
+            content.categoryIdentifier = Self.followMatchCategory
+            let id = "next-\(session.uuidString)"
+            try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
+            recorder.note(.notificationPosted, in: session)
+            while store.betweenMatches.newMatch?.session == session {
+                try? await Task.sleep(for: .seconds(2))
+            }
+            let center = UNUserNotificationCenter.current()
+            center.removeDeliveredNotifications(withIdentifiers: [id])
+            center.removePendingNotificationRequests(withIdentifiers: [id])
         }
     }
 

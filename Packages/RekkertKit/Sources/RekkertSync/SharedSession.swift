@@ -439,7 +439,7 @@ public final class SharedSession {
     @discardableResult
     public func stop(reason: SharingStopReason = .host) -> Task<Void, Never>? {
         guard store.role == .host else {
-            cutLinks()
+            let goodbye = store.sayLeaving()
             switch store.role {
             case .guest: store.leaveSharedSession()
             // Solo on a match this end cannot end is following its own watch onto somebody else's,
@@ -449,6 +449,7 @@ public final class SharedSession {
             }
             forgetWhatWasAskedFor()
             standbyCode = nil
+            cutLinks(after: goodbye)
             return nil
         }
         recorder?.note(.sharingStopped, in: store.log.sessionID)
@@ -500,10 +501,20 @@ public final class SharedSession {
     /// links to let go of. Not `stop()`, which decides by what is on the store
     /// when it runs, and by then that can be the match this end has just started.
     private func letGo() {
-        cutLinks()
+        // Still a guest only when its watch stepped off first; once something of its own is on,
+        // the links go at once, before its first snapshot can reach the host.
+        guard store.role == .guest else {
+            cutLinks()
+            store.cancelJoining()
+            forgetWhatWasAskedFor()
+            standbyCode = nil
+            return
+        }
+        let goodbye = store.sayLeaving()
         store.cancelJoining()
         forgetWhatWasAskedFor()
         standbyCode = nil
+        cutLinks(after: goodbye)
     }
 
     /// Gives up looking, and nothing more. A guest that is back from a relaunch still holds
@@ -523,10 +534,11 @@ public final class SharedSession {
 
     /// Not `stop()`, which goes by the role: a watch following its phone's match is solo on it.
     public func leave() {
-        cutLinks()
+        let goodbye = store.sayLeaving()
         store.leaveSharedSession()
         forgetWhatWasAskedFor()
         standbyCode = nil
+        cutLinks(after: goodbye)
     }
 
     public func keepOnStandby(_ code: SessionCode?) {
@@ -552,6 +564,14 @@ public final class SharedSession {
         link.stop()
         bluetooth?.stop()
         bluetoothPeers = 0
+    }
+
+    private func cutLinks(after goodbye: Task<Void, Never>) {
+        Task { [weak self] in
+            await goodbye.value
+            guard let self, self.hosted == nil, self.wanted == nil else { return }
+            self.cutLinks()
+        }
     }
 
     private func forgetWhatWasAskedFor() {

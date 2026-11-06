@@ -210,7 +210,7 @@ dialog naming the host, and scoring waits for OK.
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T020 [US2] Add the guest half to `SyncTests/EndOfMatchQuestionTests.swift`:
+- [X] T020 [US2] Add the guest half to `SyncTests/EndOfMatchQuestionTests.swift`:
   - `guestsAreAskedWithinThirtySeconds`: each guest phone's and watch's `ask` is `.guest(hostName:, hostKeepsSharing: false)` within 30 s of `finish(on: host.phone)`. Run it over the simulated Bluetooth path too (SC-006). Fails today.
   - `leaveTakesThePhoneAndTheWatchOff`: Leave on the guest phone. Both devices leave, History holds the match, the code is kept for Join again, and the host's participants drop the guest within 15 s (FR-009). Fails today: the host shows the guest out of reach (R-13) until T026.
   - `aGuestOutOfReachAtTheEndIsAskedOnReturn`: a guest out of range when the host finishes is asked once back in range while the host is still between matches. If the host has started the next match by then, the guest gets the new-match notice instead, and its record has `endOfMatchUnanswered`.
@@ -221,7 +221,7 @@ dialog naming the host, and scoring waits for OK.
   - `aStopReplacesTheQuestion`: the host stops while a guest's question is open. The question closes, and the stop notice is raised (FR-008).
   - `leaveWinsOverStay`: the guest's phone and watch are separated. The phone says Stay and the watch says Leave. On reuniting, both have left (FR-011). Fails until T027.
   - `leaveOnTheWatchBetweenMatchesTakesThePhoneOff`: with nothing on, Leave on the guest's watch (`answer(.leave, on: guest.watch)`). The phone leaves too, keeps the code for Join again, and the host's list drops the guest within 15 s (FR-009, FR-019). Fails today: the phone ignores the watch's `.left` (R-15).
-- [ ] T021 [P] [US2] Write `SyncTests/NextMatchNoticeTests.swift`:
+- [X] T021 [P] [US2] Write `SyncTests/NextMatchNoticeTests.swift`:
   - `theNextMatchArrivesWithANotice`: the host keeps sharing and starts a match. Every guest phone and watch has `newMatch` naming the host, and the guest's record has `newMatchShown`. Fails today.
   - `aBluetoothGuestGetsTheNextMatchWithinThirtySeconds`: with only the simulated Bluetooth path, a waiting guest holds the host's next match, with its notice, within 30 s on the `TestClock` (FR-014, spec 001 FR-002).
   - `scoringWaitsForOK`: `canScore(on:)` is false on a guest until `answer(.ok)`. Points scored on the host and on other guests still reach that guest, and every device converges (Principle II).
@@ -233,9 +233,9 @@ dialog naming the host, and scoring waits for OK.
 
 ### Implementation for User Story 2
 
-- [ ] T022 [US2] In `MatchStore.concludeIfFinished`, when the side is `.guest`, call `betweenMatches.matchEnded(session:side: .guest(hostName: accessTable?.hostName, hostKeepsSharing: accessTable?.keptSharingAfter == session), now:)` and note `endOfMatchAsked`. This works on a guest's phone through `role`, and on its watch through `pairedRole`. Use `accessTable?.hostName`, not `hostName`, which is nil when `canEndSession`.
-- [ ] T023 [US2] In `MatchStore.take(_:from:)` (MS:559), when the incoming table's `keptSharingAfter` equals an open `ask.session`, set that ask's `hostKeepsSharing` to true and persist.
-- [ ] T024 [US2] In `MatchStore.handle(_:)`'s `.snapshot` branch where an empty log adopts (MS:1853-1876), when the incoming match is the host's next one, do all of the following. "The host's next one" means `role == .guest` (or `pairedRole == .guest` on a watch standing in), `!packet.isFromPairedDevice`, `!isJoining` and `incoming.takesBack == nil`.
+- [X] T022 [US2] In `MatchStore.concludeIfFinished`, when the side is `.guest`, call `betweenMatches.matchEnded(session:side: .guest(hostName: accessTable?.hostName, hostKeepsSharing: accessTable?.keptSharingAfter == session), now:)` and note `endOfMatchAsked`. This works on a guest's phone through `role`, and on its watch through `pairedRole`. Use `accessTable?.hostName`, not `hostName`, which is nil when `canEndSession`.
+- [X] T023 [US2] In `MatchStore.take(_:from:)` (MS:559), when the incoming table's `keptSharingAfter` equals an open `ask.session`, set that ask's `hostKeepsSharing` to true and persist.
+- [X] T024 [US2] In `MatchStore.handle(_:)`'s `.snapshot` branch where an empty log adopts (MS:1853-1876), when the incoming match is the host's next one, do all of the following. "The host's next one" means `role == .guest` (or `pairedRole == .guest` on a watch standing in), `!packet.isFromPairedDevice`, `!isJoining` and `incoming.takesBack == nil`.
   - Call `betweenMatches.hostsNextMatchArrived(NewMatchNotice(session:hostName: accessTable?.hostName, arrivedAt: now()))`.
   - Note `endOfMatchUnanswered` if it closed an open question, and `newMatchShown`.
   - Fire `onMatch?(.nextFromHost(id))` in place of `announceBegan()`'s `.began`.
@@ -243,34 +243,34 @@ dialog naming the host, and scoring waits for OK.
   - Persist.
 
   In `offerToThePair()`, re-send the open notice, so a watch woken by the notification gets it (D-11).
-- [ ] T025 [US2] Make `MatchStore.answer(_:)` close a `.guest` question on `.stay` and `.leave`, and the notice on `.ok` and `.leave`. Stay and OK change nothing else. Leave is carried out after it by `SharedSession.answer` or `WatchStandIn.answer` (T010), through the existing leave paths.
-- [ ] T026 [US2] Make a leaving guest say goodbye (D-16, FR-009):
+- [X] T025 [US2] Make `MatchStore.answer(_:)` close a `.guest` question on `.stay` and `.leave`, and the notice on `.ok` and `.leave`. Stay and OK change nothing else. Leave is carried out after it by `SharedSession.answer` or `WatchStandIn.answer` (T010), through the existing leave paths.
+- [X] T026 [US2] Make a leaving guest say goodbye (D-16, FR-009):
   - add `leaving: Bool?` to `GuestCard` in `RekkertCore/Sync/ShareAccess.swift`, defaulting to nil in `init`, and a round trip with and without the key in `CoreTests/WireCompatibilityTests.swift`;
   - add `public func sayLeaving(within patience: Duration = .seconds(2)) -> Task<Void, Never>` to `RekkertSync/MatchStore.swift`, shaped like `sayStoppedSharing` (MS:1506-1520). It sends `guestCard(GuestCard(device:name:pairedTo:leaving: true))` live on each link in `transport.links`, and finishes once each has answered or `patience` is up. It does nothing when the role is not `.guest` (or `pairedRole == .guest` on a watch standing in);
   - in `RekkertSync/SharedSession.swift`, start `store.sayLeaving()` at the top of a guest's `stop()`, of `leave()` and of `letGo()`, before anything else. Keep the store's leaving immediate, and move `cutLinks()` into a task that runs once the goodbye finishes, as the host's `stop()` does with its farewell (SS:463-467). Skip the deferred cut if a new join or hosting has started by then, the same guard the host's `stop()` uses;
   - in `handle(_:)`'s `.guestCard` case (MS:1740), on the host, when `card.leaving == true`, call `participants.remove(card.device)`, which also drops its paired watch, then `onParticipantsChanged`. Add no admission for that card in `noteParticipant` (MS:440).
 
   `letGo()` also runs when a guest steps off to a match of its own (MS:909), so that path says goodbye too. This makes T020's `leaveTakesThePhoneAndTheWatchOff` and T021's `leaveFromTheNotice` pass.
-- [ ] T027 [US2] Let the watch's Leave reach the phone between matches (D-17, R-15). In `RekkertSync/MatchStore.swift` `handle(_:)`'s `.left` case (MS:1673-1677), when `packet.isFromPairedDevice && role == .guest && log.isEmpty && !isJoining`, act whatever session the message names: `dropSession()`, then `onLeft?()`, so `SharedSession.letGo()` sends T026's goodbye and cuts the links. Leave the rule for a match that is on unchanged, and do not tell the watch back. This makes T020's `leaveWinsOverStay` and `leaveOnTheWatchBetweenMatchesTakesThePhoneOff`, and T046's `leavingWhileWaitingTakesThePhoneAndTheWatch`, pass.
-- [ ] T028 [US2] In `Shared/AppModel.swift` (iOS), on `onMatch(.nextFromHost(session))`, post a notification when `BetweenMatches.wantsNotification(appIsActive: UIApplication.shared.applicationState == .active, watchReachable: store.isPairReachable)` (D-11). `AppModel` already reads `applicationState` this way (AM:145).
+- [X] T027 [US2] Let the watch's Leave reach the phone between matches (D-17, R-15). In `RekkertSync/MatchStore.swift` `handle(_:)`'s `.left` case (MS:1673-1677), when `packet.isFromPairedDevice && role == .guest && log.isEmpty && !isJoining`, act whatever session the message names: `dropSession()`, then `onLeft?()`, so `SharedSession.letGo()` sends T026's goodbye and cuts the links. Leave the rule for a match that is on unchanged, and do not tell the watch back. This makes T020's `leaveWinsOverStay` and `leaveOnTheWatchBetweenMatchesTakesThePhoneOff`, and T046's `leavingWhileWaitingTakesThePhoneAndTheWatch`, pass.
+- [X] T028 [US2] In `Shared/AppModel.swift` (iOS), on `onMatch(.nextFromHost(session))`, post a notification when `BetweenMatches.wantsNotification(appIsActive: UIApplication.shared.applicationState == .active, watchReachable: store.isPairReachable)` (D-11). `AppModel` already reads `applicationState` this way (AM:145).
   - permission through `RoundAlarmFollower.askToNotify()`;
   - category `rekkert.followMatch`, identifier `next-<session>`;
   - title "Ada started a new match", or "The host started a new match" with no name; body "Tap to open it.";
   - note `notificationPosted`.
 
   Withdraw it, both delivered and pending, as soon as `store.betweenMatches.newMatch` closes, on either device. Follow the `beckonTheWatch` (AM:973-1000) shape.
-- [ ] T029 [US2] Check `WatchApp/Sources/RekkertWatchApp.swift`'s `didReceive`. A tap on a `next-…` notification takes the existing `standIn.followThePhone()` path, and the watch then shows the notice re-sent by T024's `offerToThePair`. Add nothing else unless that path drops the identifier.
-- [ ] T030 [US2] In `App/Sources/Views/RootView.swift`:
+- [X] T029 [US2] Check `WatchApp/Sources/RekkertWatchApp.swift`'s `didReceive`. A tap on a `next-…` notification takes the existing `standIn.followThePhone()` path, and the watch then shows the notice re-sent by T024's `offerToThePair`. Add nothing else unless that path drops the identifier.
+- [X] T030 [US2] In `App/Sources/Views/RootView.swift`:
   - **The guest's end-of-match alert**: title "Stay for Ada's next match?", message per contracts/screens.md, **Stay** → `model.sharing.answer(.stay)`, **Leave** → `model.sharing.answer(.leave)`.
   - **The new-match alert**: "Ada started a new match", **OK** → `model.sharing.answer(.ok)`, **Leave** → `model.sharing.answer(.leave)`.
   - The new-match alert replaces an open question, and the "stopped sharing" alert replaces either.
   - The "Start a workout?" alert, which `.nextFromHost` also raises (T006), waits until the new-match alert is answered. Hold it back in the same delayed-task check that `isPresenting` drives, as T017 does for the effort sheet.
-- [ ] T031 [US2] On the watch:
+- [X] T031 [US2] On the watch:
   - In `WatchApp/Sources/Views/WatchResultView.swift`, guest answers in place of **Done**: **Stay** → `model.standIn.answer(.stay)`; **Leave** → `model.standIn.answer(.leave)`.
   - In `WatchApp/Sources/Views/WatchRootView.swift`, the full-screen new-match alert: **OK** → `model.standIn.answer(.ok)`; **Leave** → `model.standIn.answer(.leave)`. The watch's "Start a workout?" alert waits until it is answered.
   - Add a `newMatch()` cue to `WatchApp/Sources/WatchHaptics.swift` that plays `.notification` through its existing `play` and honours `preferences()`, called when the alert opens.
   - The court page's taps already read `store.canScore` (WatchCourtPage:98, 122), so scoring waits by itself; check the phone's match views do too (TraditionalMatchView:18, 99 and the others).
-- [ ] T032 [US2] Run `swift test --package-path Packages/RekkertKit --filter "EndOfMatchQuestion|NextMatchNotice"`. T020 and T021 pass, and the whole package stays green.
+- [X] T032 [US2] Run `swift test --package-path Packages/RekkertKit --filter "EndOfMatchQuestion|NextMatchNotice"`. T020 and T021 pass, and the whole package stays green.
 
 **Checkpoint**: No guest's screen changes to a new match without the dialog (SC-002), and
 every guest who stays gets each next match while every leaver gets none (SC-001).

@@ -65,6 +65,11 @@ final class WatchHaptics {
         play(buzz)
     }
 
+    func newMatch() {
+        guard preferences().mode != .off else { return }
+        play(Buzz(taps: 1, strength: .strong))
+    }
+
     /// One sequence at a time. A fast exchange would otherwise overlap two of them and the
     /// watch would roll the lot into one long shudder — the very thing the pause is for.
     @ObservationIgnored private var sequence: Task<Void, Never>?

@@ -144,6 +144,8 @@ public final class MatchStore {
     public private(set) var participants = Participants()
     @ObservationIgnored private var linkOwners: [LinkID: DeviceID] = [:]
     @ObservationIgnored private var refusedLinks: Set<LinkID> = []
+    @ObservationIgnored private var departedLinks: Set<LinkID> = []
+    @ObservationIgnored private var isSayingGoodbye = false
     /// What the phone on each link holds of `heldSession`, from its hellos and its answers, so it
     /// is sent what it lacks and nothing more. Forgotten with the link.
     @ObservationIgnored private var heldOnLink: [LinkID: VersionVector] = [:]
@@ -438,10 +440,50 @@ public final class MatchStore {
     }
 
     private func askAtTheEnd(of session: UUID) {
-        guard BetweenMatches.side(role: role, pairedRole: pairedRole, isWatch: !keepsHistory) == .host else { return }
-        let guestsOn = participantCount?() ?? participantStates().count
-        if betweenMatches.matchEnded(session: session, side: .host(guestsOn: guestsOn), now: now()) {
+        let side: EndOfMatchAsk.Side
+        switch BetweenMatches.side(role: role, pairedRole: pairedRole, isWatch: !keepsHistory) {
+        case .host: side = .host(guestsOn: participantCount?() ?? participantStates().count)
+        case .guest: side = .guest(hostName: accessTable?.hostName, hostKeepsSharing: accessTable?.keptSharingAfter == session)
+        case .solo, nil: return
+        }
+        if betweenMatches.matchEnded(session: session, side: side, now: now()) {
             recorder?.note(.endOfMatchAsked, in: session)
+        }
+    }
+
+    /// The host's next match landed on this guest: it plays on at once, so nobody falls out of
+    /// step, and waits on this device for an OK.
+    private func announceTheHostsNextMatch(_ session: UUID) {
+        let notice = NewMatchNotice(session: session, hostName: accessTable?.hostName, arrivedAt: now())
+        let open = betweenMatches.ask?.session
+        if betweenMatches.hostsNextMatchArrived(notice) { recorder?.note(.endOfMatchUnanswered, in: open) }
+        if betweenMatches.newMatch == notice { recorder?.note(.newMatchShown, in: session) }
+        persist()
+        if keepsHistory { Task { await sendDurably(.newMatch(notice)) } }
+        guard let sessionInPlay, sessionInPlay == log.sessionID else { return }
+        onMatch?(.nextFromHost(sessionInPlay))
+    }
+
+    /// The guest's goodbye, so the host drops it from its list rather than waiting for it to go
+    /// quiet. `SharedSession` says it before cutting the links: by the time the store hears of a
+    /// Leave they are cut, or about to be.
+    public func sayLeaving(within patience: Duration = .seconds(2)) -> Task<Void, Never> {
+        let links = transport.links
+        guard role != .host, !links.isEmpty else { return Task {} }
+        let card = encode(.guestCard(GuestCard(
+            device: device, name: identity, pairedTo: standsInForThePair ? pairedDevice : nil, leaving: true
+        )))
+        isSayingGoodbye = true
+        let transport = transport
+        return Task { [weak self] in
+            await withTaskGroup(of: Void.self) { group in
+                for link in links {
+                    group.addTask {
+                        _ = await Self.answer(within: patience) { await transport.sendLive(card, on: link) }
+                    }
+                }
+            }
+            self?.isSayingGoodbye = false
         }
     }
 
@@ -466,6 +508,9 @@ public final class MatchStore {
             if betweenMatches.hostsNextMatchArrived(notice) { recorder?.note(.endOfMatchUnanswered, in: hadAsk) }
             if betweenMatches.newMatch == notice { recorder?.note(.newMatchShown, in: notice.session) }
             persist()
+        case .hostStoppedSharing:
+            betweenMatches.sharingEnded()
+            persist()
         default:
             break
         }
@@ -481,8 +526,11 @@ public final class MatchStore {
     private func noteParticipant(_ wire: Wire, from packet: InboundPacket) -> Bool {
         guard role == .host, !packet.isFromPairedDevice, let link = packet.link else { return true }
         guard !refusedLinks.contains(link) else { return false }
+        guard !departedLinks.contains(link) else { return true }
         let admission: Participants.Admission
         switch wire {
+        case .guestCard(let card) where card.leaving == true:
+            return true
         case .hello(_, let vector, let sender):
             guard sender != device else { return true }
             let owner = sender ?? linkOwners[link] ?? DeviceID(link.raw)
@@ -612,6 +660,7 @@ public final class MatchStore {
         guard takesAccess(from: packet), incoming.supersedes(accessTable) else { return }
         let hadHostName = hostName
         accessTable = incoming
+        if let kept = incoming.keptSharingAfter { betweenMatches.hostKeepsSharing(after: kept) }
         persist()
         if hostName != hadHostName { onHostNameChanged?() }
         if role == .guest, !packet.isFromPairedDevice {
@@ -676,6 +725,7 @@ public final class MatchStore {
         let offer = snapshot()
         transport.queue(offer)
         Task { _ = await sendLiveBesideLinks(offer) }
+        if let notice = betweenMatches.newMatch { Task { await sendDurably(.newMatch(notice)) } }
     }
 
     public func followPairedDevice() {
@@ -1180,6 +1230,7 @@ public final class MatchStore {
     private func consumeLinkChanges() async {
         for await change in transport.linkChanges {
             guard case .down(let link, let reason) = change else { continue }
+            departedLinks.remove(link)
             heldOnLink[link] = nil
             delivering[link] = nil
             acknowledgeOutbox()
@@ -1597,6 +1648,11 @@ public final class MatchStore {
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
             return
         }
+        // Off the host's match and only saying so: nothing it sends now is for this device.
+        if isSayingGoodbye, !packet.isFromPairedDevice {
+            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+            return
+        }
         guard noteParticipant(wire, from: packet) else {
             packet.reply?(encode(.noRoom(sessionID: log.sessionID)))
             if let link = packet.link {
@@ -1730,7 +1786,13 @@ public final class MatchStore {
             // Only ever from this device's own phone or watch — the shared scope does not
             // carry it — so the one match it can name is the one mirrored from there. A host
             // is not taken off its own match: that is ending it, and a watch cannot do that.
-            if sessionID == log.sessionID, !log.isEmpty {
+            // Between matches the two halves hold empty logs of their own, so a guest waiting
+            // for the next match goes with its watch whatever the notice names.
+            if packet.isFromPairedDevice, role == .guest, log.isEmpty, !isJoining {
+                onLeft?()
+                counterpartLeftSessionID = sessionID
+                dropSession()
+            } else if sessionID == log.sessionID, !log.isEmpty {
                 if role == .host || isThePairsOwn(log, strictly: true) {
                     // The watch has already dropped its copy on a role it had wrong: a Leave
                     // names somebody else's match, and this one is not. Told who holds the
@@ -1795,6 +1857,18 @@ public final class MatchStore {
 
         case .guestCard(let card):
             guard role == .host, !packet.isFromPairedDevice, card.device != device else {
+                packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+                return
+            }
+            if card.leaving == true {
+                participants.remove(card.device)
+                guests.removeAll { $0.device == card.device }
+                if let link = packet.link {
+                    departedLinks.insert(link)
+                    linkOwners[link] = nil
+                }
+                persist()
+                onParticipantsChanged?()
                 packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
                 return
             }
@@ -1933,10 +2007,13 @@ public final class MatchStore {
                 } else {
                     publishSnapshot(force: true)
                     if role == .guest, packet.isFromPairedDevice, !isJoining { offerOurSession(live: true) }
-                    // The host's next match on a code kept all evening.
-                    if role == .guest, !packet.isFromPairedDevice, incoming.takesBack == nil {
+                    // The host's next match on a code kept all evening, or on a watch standing in
+                    // for its phone.
+                    let isTheHostsNext = !packet.isFromPairedDevice && !isJoining && incoming.takesBack == nil
+                        && (role == .guest || (!keepsHistory && pairedRole == .guest))
+                    if isTheHostsNext {
                         reidentify()
-                        announceBegan()
+                        announceTheHostsNextMatch(incoming.sessionID)
                     }
                 }
             } else if incoming.sessionID == log.sessionID {

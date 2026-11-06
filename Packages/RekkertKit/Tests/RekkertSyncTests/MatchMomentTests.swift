@@ -30,6 +30,7 @@ private final class Moments {
     }
 
     var began: [UUID] { said.compactMap { if case .began(let id) = $0 { id } else { nil } } }
+    var nextFromHost: [UUID] { said.compactMap { if case .nextFromHost(let id) = $0 { id } else { nil } } }
     var inPlay: [UUID] { said.compactMap { if case .inPlay(let id) = $0 { id } else { nil } } }
     var ended: [UUID] { said.compactMap { if case .ended(let id) = $0 { id } else { nil } } }
 }
@@ -325,7 +326,8 @@ struct MatchMomentTests {
         await eventually { court.phone.log.sessionID == next && court.watch.log.sessionID == next }
         await quietPeriod()
 
-        #expect(court.onPhone.began == [first, next], "the code lasts the evening")
+        #expect(court.onPhone.began == [first], "joined once")
+        #expect(court.onPhone.nextFromHost == [next], "the code lasts the evening, and the next match is announced")
         #expect(court.onWatch.began.isEmpty, "and the phone is the one that joined")
     }
 }

@@ -173,4 +173,156 @@ struct EndOfMatchQuestionTests {
         #expect(court.host.phone.sharing.code == court.code)
         #expect(await court.until(within: .seconds(30)) { court.allInStep() })
     }
+
+    // MARK: - The guests
+
+    private func isAskedToStay(_ device: CourtHarness.Device, keeps: Bool = false) -> Bool {
+        guard case .guest(_, let hostKeepsSharing) = device.store.betweenMatches.ask?.side else { return false }
+        return hostKeepsSharing == keeps
+    }
+
+    private func everyGuestDevice(_ court: CourtHarness) -> [CourtHarness.Device] {
+        court.guests.flatMap { [$0.phone] + ($0.watch.map { [$0] } ?? []) }
+    }
+
+    @Test func guestsAreAskedWithinThirtySeconds() async {
+        let court = await sharedCourt()
+        let ended = court.host.phone.store.log.sessionID
+        court.finish(on: court.host.phone)
+        #expect(await court.until(within: .seconds(30)) { everyGuestDevice(court).allSatisfy { isAskedToStay($0) } })
+        #expect(everyGuestDevice(court).allSatisfy { court.betweenMatches(of: $0).ask?.session == ended })
+        #expect(recorded(.endOfMatchAsked, on: court.guests.first!.phone))
+    }
+
+    @Test func leaveTakesThePhoneAndTheWatchOff() async {
+        let court = await sharedCourt()
+        let leaver = court.guests.first!
+        let ended = court.host.phone.store.log.sessionID
+        await court.until(within: .seconds(20)) { court.host.phone.store.participantStates().count == 2 }
+        court.finish(on: court.host.phone)
+        #expect(await court.until(within: .seconds(30)) { isAskedToStay(leaver.phone) })
+        court.answer(.leave, on: leaver.phone)
+        #expect(leaver.phone.store.role == .solo)
+        #expect(history(of: leaver.phone, ended) != nil)
+        #expect(leaver.phone.keeper.read(now: court.wallClock) != nil, "kept for Join again")
+        #expect(recorded(.endOfMatchAnswered(.leave), on: leaver.phone))
+        #expect(await court.until(within: .seconds(10)) { court.betweenMatches(of: leaver.watch!).ask == nil })
+        #expect(await court.until(within: .seconds(15)) { court.host.phone.store.participantStates().count == 1 })
+        #expect(court.guests.last!.phone.store.role == .guest)
+    }
+
+    @Test func leaveOnTheWatchBetweenMatchesTakesThePhoneOff() async {
+        let court = await sharedCourt()
+        let leaver = court.guests.first!
+        await court.until(within: .seconds(20)) { court.host.phone.store.participantStates().count == 2 }
+        court.finish(on: court.host.phone)
+        #expect(await court.until(within: .seconds(30)) { isAskedToStay(leaver.watch!) })
+        court.answer(.leave, on: leaver.watch!)
+        #expect(await court.until(within: .seconds(10)) { leaver.phone.store.role == .solo })
+        #expect(leaver.phone.keeper.read(now: court.wallClock) != nil, "kept for Join again")
+        #expect(await court.until(within: .seconds(15)) { court.host.phone.store.participantStates().count == 1 })
+    }
+
+    @Test func aLeaverNeverGetsTheNextMatch() async {
+        let court = await sharedCourt()
+        let leaver = court.guests.first!
+        let stayer = court.guests.last!
+        court.finish(on: court.host.phone)
+        #expect(await court.until(within: .seconds(30)) { isAskedToStay(leaver.phone) })
+        court.answer(.leave, on: leaver.phone)
+        court.answer(.keepSharing, on: court.host.phone)
+        court.startMatch()
+        #expect(await court.until(within: .seconds(30)) { court.inStep(stayer.phone, with: court.host.phone) })
+        await court.run(for: .seconds(10))
+        #expect(leaver.phone.store.log.isEmpty)
+        #expect(leaver.watch!.store.log.isEmpty)
+    }
+
+    @Test func stayWaitsForTheNextMatch() async {
+        let court = await sharedCourt(guests: 1)
+        let guest = court.guests.first!
+        court.finish(on: court.host.phone)
+        #expect(await court.until(within: .seconds(30)) { isAskedToStay(guest.phone) })
+        court.answer(.stay, on: guest.phone)
+        #expect(court.betweenMatches(of: guest.phone).ask == nil)
+        #expect(court.isWaiting(guest.phone))
+        #expect(await court.until(within: .seconds(10)) { court.betweenMatches(of: guest.watch!).ask == nil })
+        court.startMatch()
+        #expect(await court.until(within: .seconds(30)) { court.inStep(guest.phone, with: court.host.phone) })
+    }
+
+    @Test func unansweredIsStay() async {
+        let court = await sharedCourt(guests: 1)
+        let guest = court.guests.first!
+        court.finish(on: court.host.phone)
+        #expect(await court.until(within: .seconds(30)) { isAskedToStay(guest.phone) })
+        court.startMatch()
+        let next = court.host.phone.store.log.sessionID
+        #expect(await court.until(within: .seconds(30)) { court.betweenMatches(of: guest.phone).newMatch?.session == next })
+        #expect(court.betweenMatches(of: guest.phone).ask == nil)
+        #expect(recorded(.endOfMatchUnanswered, on: guest.phone))
+    }
+
+    @Test func keepIsToldToGuests() async {
+        let court = await sharedCourt(guests: 1)
+        let guest = court.guests.first!
+        court.finish(on: court.host.phone)
+        #expect(await court.until(within: .seconds(30)) { isAskedToStay(guest.phone) && isAskedToStay(guest.watch!) })
+        court.answer(.keepSharing, on: court.host.phone)
+        #expect(await court.until(within: .seconds(15)) {
+            isAskedToStay(guest.phone, keeps: true) && isAskedToStay(guest.watch!, keeps: true)
+        })
+    }
+
+    @Test func aStopReplacesTheQuestion() async {
+        let court = await sharedCourt(guests: 1)
+        let guest = court.guests.first!
+        court.finish(on: court.host.phone)
+        #expect(await court.until(within: .seconds(30)) { isAskedToStay(guest.phone) })
+        court.answer(.stopSharing, on: court.host.phone)
+        #expect(await court.until(within: .seconds(10)) { guest.phone.sharing.hostStoppedSharing })
+        #expect(court.betweenMatches(of: guest.phone).ask == nil)
+        #expect(await court.until(within: .seconds(10)) { court.betweenMatches(of: guest.watch!).ask == nil })
+    }
+
+    @Test func leaveWinsOverStay() async {
+        let court = await sharedCourt(guests: 1)
+        let guest = court.guests.first!
+        court.finish(on: court.host.phone)
+        #expect(await court.until(within: .seconds(30)) { isAskedToStay(guest.phone) && isAskedToStay(guest.watch!) })
+        court.separate(guest)
+        court.answer(.stay, on: guest.phone)
+        court.answer(.leave, on: guest.watch!)
+        court.reunite(guest)
+        #expect(await court.until(within: .seconds(20)) { guest.phone.store.role == .solo })
+        #expect(court.betweenMatches(of: guest.phone).ask == nil)
+        #expect(court.betweenMatches(of: guest.watch!).ask == nil)
+    }
+
+    @Test func aGuestOutOfReachAtTheEndIsAskedOnReturn() async {
+        let court = await sharedCourt()
+        let away = court.guests.first!
+        court.outOfRange(away.phone)
+        if let watch = away.watch { court.outOfRange(watch) }
+        court.finish(on: court.host.phone)
+        #expect(await court.until(within: .seconds(30)) { isAskedToStay(court.guests.last!.phone) })
+        #expect(court.betweenMatches(of: away.phone).ask == nil)
+        court.backInRange(away.phone)
+        if let watch = away.watch { court.backInRange(watch) }
+        #expect(await court.until(within: .seconds(60)) { isAskedToStay(away.phone) })
+    }
+
+    @Test func aGuestBackAfterTheNextMatchStartedGetsItWithTheNotice() async {
+        let court = await sharedCourt(guests: 1, withWatches: false)
+        let away = court.guests.first!
+        court.outOfRange(away.phone)
+        court.finish(on: court.host.phone)
+        court.answer(.keepSharing, on: court.host.phone)
+        court.startMatch()
+        let next = court.host.phone.store.log.sessionID
+        await court.run(for: .seconds(5))
+        court.backInRange(away.phone)
+        #expect(await court.until(within: .seconds(60)) { court.betweenMatches(of: away.phone).newMatch?.session == next })
+        #expect(court.betweenMatches(of: away.phone).ask == nil)
+    }
 }
