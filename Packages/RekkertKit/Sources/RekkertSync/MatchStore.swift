@@ -490,6 +490,20 @@ public final class MatchStore {
         }
     }
 
+    /// A host answered with nothing on, and with its word on who may do what: the code was right,
+    /// and this is a guest waiting for its first match rather than a search still looking.
+    private func joinedBetweenMatches(access: ShareAccessTable, from packet: InboundPacket) {
+        role = .guest
+        isJoining = false
+        joiningForThePair = false
+        joinRefuses = nil
+        take(access, from: packet)
+        betweenMatches.joinedBetweenMatches(now: now())
+        persist()
+        shareRole()
+        shareAccess()
+    }
+
     private func keepSharing(after session: UUID) {
         guard role == .host, let accessTable else { return }
         let kept = accessTable.keepingSharing(after: session)
@@ -1943,6 +1957,9 @@ public final class MatchStore {
                 // saying this over Bluetooth would otherwise wait for its next hello, which
                 // is its next unlock. Not while joining, though: that nothing is the host
                 // between matches, and what this end holds is not what it went looking for.
+                if isJoining, log.isEmpty, !packet.isFromPairedDevice, let access {
+                    joinedBetweenMatches(access: access, from: packet)
+                }
                 offerOurSession(live: !isJoining)
             } else if isJoining, !packet.isFromPairedDevice {
                 if incoming.sessionID == joinRefuses {
@@ -2016,8 +2033,10 @@ public final class MatchStore {
                     publishSnapshot(force: true)
                     if role == .guest, packet.isFromPairedDevice, !isJoining { offerOurSession(live: true) }
                     // The host's next match on a code kept all evening, or on a watch standing in
-                    // for its phone.
-                    let isTheHostsNext = !packet.isFromPairedDevice && !isJoining && incoming.takesBack == nil
+                    // for its phone. A watch with a link of its own may hear it first and hand it
+                    // to its phone, which announces it all the same.
+                    let fromTheHost = !packet.isFromPairedDevice || (keepsHistory && !isThePairsOwn(incoming))
+                    let isTheHostsNext = fromTheHost && !isJoining && incoming.takesBack == nil
                         && (role == .guest || (!keepsHistory && pairedRole == .guest))
                     if isTheHostsNext {
                         reidentify()

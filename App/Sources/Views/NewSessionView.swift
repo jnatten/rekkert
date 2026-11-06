@@ -71,6 +71,7 @@ struct NewSessionView: View {
         _playersB = State(initialValue: slots(teams.b.players))
     }
 
+    @State private var confirmingStepOff = false
     @State private var rules = TraditionalRules()
     @State private var singles = false
     @State private var teamA = "Us"
@@ -119,13 +120,17 @@ struct NewSessionView: View {
             }
             .navigationTitle(mode.title)
             .navigationBarTitleDisplayMode(.inline)
+            .stepOffConfirmation(isPresented: $confirmingStepOff) { start() }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if editing == nil {
-                        Button("Start", action: start).disabled(!canStart)
+                        Button("Start") {
+                            if model.store.startingOwnMatchLeavesSharing { confirmingStepOff = true } else { start() }
+                        }
+                        .disabled(!canStart)
                     } else {
                         Button("Save", action: save).disabled(!canStart || trimmedPresetName.isEmpty)
                     }

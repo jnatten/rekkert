@@ -9,6 +9,7 @@ struct HomeView: View {
     @State private var editingPreset: Preset?
     @State private var renaming: Preset?
     @State private var renameText = ""
+    @State private var pendingPreset: Preset?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -19,6 +20,8 @@ struct HomeView: View {
                             Button {
                                 if editMode.isEditing {
                                     editingPreset = preset
+                                } else if model.store.startingOwnMatchLeavesSharing {
+                                    pendingPreset = preset
                                 } else {
                                     model.store.start(preset)
                                 }
@@ -199,6 +202,13 @@ struct HomeView: View {
             }
             .sheet(item: $newMatch) { mode in
                 NewSessionView(mode: mode)
+            }
+            .stepOffConfirmation(isPresented: Binding(
+                get: { pendingPreset != nil },
+                set: { if !$0 { pendingPreset = nil } }
+            )) {
+                if let pendingPreset { model.store.start(pendingPreset) }
+                pendingPreset = nil
             }
             .sheet(item: $editingPreset) { preset in
                 NewSessionView(editing: preset)

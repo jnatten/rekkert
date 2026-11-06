@@ -142,9 +142,17 @@ final class CourtHarness {
             graceBeforeNotice: timing.graceBeforeNotice, radioGrace: timing.radioGrace,
             keeper: device.keeper, now: { CourtHarness.epoch.addingTimeInterval(clock.now.seconds) },
             idleCheck: timing.idleCheck,
+            // Woken by the clock rather than polling it: a court of sixteen devices, each with
+            // timers asleep for minutes, would otherwise spend its time asking what time it is.
             sleep: { duration in
-                let until = clock.now + duration
-                while clock.now < until, !Task.isCancelled { try? await Task.sleep(for: .milliseconds(1)) }
+                let (woken, wake) = AsyncStream<Void>.makeStream()
+                let timer = clock.run(after: duration) { wake.finish() }
+                await withTaskCancellationHandler {
+                    for await _ in woken {}
+                } onCancel: {
+                    timer.cancel()
+                    wake.finish()
+                }
             }
         )
         device.core = core

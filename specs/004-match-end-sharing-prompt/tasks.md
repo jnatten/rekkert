@@ -380,7 +380,7 @@ screen, and the phone leaves too; the host's next match does not arrive.
 
 ### Tests for User Story 4 ⚠️
 
-- [ ] T046 [US4] Write `SyncTests/JoinBetweenMatchesTests.swift`:
+- [X] T046 [US4] Write `SyncTests/JoinBetweenMatchesTests.swift`:
   - `aJoinWithNoMatchOnWaitsAsAGuest`: once the host's empty answer to the guest's hello arrives, the guest phone has role `.guest`, `isJoining == false`, `accessTable?.hostName` set, and `betweenMatches.idleSince` set. Fails today (R-5).
   - `aJoinMidMatchIsStillAJoin`: the host has a match on, and the guest's link comes up before the host's snapshot arrives (R-14). The guest never becomes a waiting guest, adopts the match through the join branch, and has no `newMatch`.
   - `itsWatchWaitsToo`: the watch's `pairedRole == .guest`, and it has the host's name.
@@ -393,7 +393,7 @@ screen, and the phone leaves too; the host's next match does not arrive.
 
 ### Implementation for User Story 4
 
-- [ ] T047 [US4] Add a private `joinedBetweenMatches(access:)` to `RekkertSync/MatchStore.swift` (D-9). Call it from the `incoming.isEmpty` branch of `handle(_:)`'s `.snapshot` case (MS:1794-1802), when `isJoining && log.isEmpty && !packet.isFromPairedDevice`: the host has answered the guest's hello with nothing on. It then:
+- [X] T047 [US4] Add a private `joinedBetweenMatches(access:)` to `RekkertSync/MatchStore.swift` (D-9). Call it from the `incoming.isEmpty` branch of `handle(_:)`'s `.snapshot` case (MS:1794-1802), when `isJoining && log.isEmpty && !packet.isFromPairedDevice`: the host has answered the guest's hello with nothing on. It then:
   - sets `role = .guest`;
   - sets `isJoining = false`, `joiningForThePair = false` and `joinRefuses = nil`, as `cancelJoining()` does;
   - takes the `access` that came with the snapshot, through `take(_:from:)`, now that the role admits it;
@@ -401,19 +401,19 @@ screen, and the phone leaves too; the host's next match does not arrive.
   - calls `persist()`, `shareRole()` and `shareAccess()`.
 
   Do not call it from `SharedSession.noteProven()`, which runs before the host's match arrives (R-14). Keep that branch's `offerOurSession(live: !isJoining)` as it is.
-- [ ] T048 [US4] Add `public var startingOwnMatchLeavesSharing: Bool` to `RekkertSync/MatchStore.swift`. It is `keepsHistory ? role == .guest : startingOwnMatchTakesPhoneOff` (D-15).
-- [ ] T049 [US4] Add the guest's rows to the "Play together" section of `App/Sources/Views/HomeView.swift`:
+- [X] T048 [US4] Add `public var startingOwnMatchLeavesSharing: Bool` to `RekkertSync/MatchStore.swift`. It is `keepsHistory ? role == .guest : startingOwnMatchTakesPhoneOff` (D-15).
+- [X] T049 [US4] Add the guest's rows to the "Play together" section of `App/Sources/Views/HomeView.swift`:
   - "On Ada's sharing" with "Waiting for Ada's next match", when `model.store.role == .guest && model.store.state == nil`;
   - **Leave**, with the confirmation "Leave Ada's sharing? Your watch leaves too.", then `model.sharing.stop()`;
   - **Join again**, when `model.sharing.keptGuestCode` is set and the phone is not on it, which joins that code.
-- [ ] T050 [US4] In `App/Sources/Views/ConnectionBadge.swift` `SharingBadge`, remove the between-matches guest `Menu` (55-70), since Home's section replaces it. Keep the glyph and every in-match branch.
-- [ ] T051 [US4] In `App/Sources/Views/NewSessionView.swift` (**Start**), `App/Sources/Views/HomeView.swift` (preset taps) and `App/Sources/Views/HistoryDetailView.swift` (**Resume**, :138), when `model.store.startingOwnMatchLeavesSharing` is true, ask first with "Start your own match? This takes you off Ada's sharing.", offering **Start anyway** and **Cancel** (FR-021).
-- [ ] T052 [US4] Add the guest card to `WatchIdleView` in `WatchApp/Sources/Views/WatchRootView.swift`:
+- [X] T050 [US4] In `App/Sources/Views/ConnectionBadge.swift` `SharingBadge`, remove the between-matches guest `Menu` (55-70), since Home's section replaces it. Keep the glyph and every in-match branch.
+- [X] T051 [US4] In `App/Sources/Views/NewSessionView.swift` (**Start**), `App/Sources/Views/HomeView.swift` (preset taps) and `App/Sources/Views/HistoryDetailView.swift` (**Resume**, :138), when `model.store.startingOwnMatchLeavesSharing` is true, ask first with "Start your own match? This takes you off Ada's sharing.", offering **Start anyway** and **Cancel** (FR-021).
+- [X] T052 [US4] Add the guest card to `WatchIdleView` in `WatchApp/Sources/Views/WatchRootView.swift`:
   - "On Ada's sharing" and "Waiting for the next match";
   - **Leave**, with the confirmation "Leave Ada's sharing? Your iPhone leaves too.", then `model.sharing.leave()`.
 
   Reword `AsksBeforeTakingThePhoneOff` to "This takes your iPhone off Ada's sharing."
-- [ ] T053 [US4] Run `swift test --package-path Packages/RekkertKit --filter JoinBetweenMatches`. T046 passes, and the whole package stays green.
+- [X] T053 [US4] Run `swift test --package-path Packages/RekkertKit --filter JoinBetweenMatches`. T046 passes, and the whole package stays green.
 
 **Checkpoint**: A guest can join, see the wait and leave between matches, in at most two
 taps (SC-004).

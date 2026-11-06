@@ -123,3 +123,27 @@ struct SharedWithLine: View {
         }
     }
 }
+
+private struct StepOffConfirmation: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Binding var isPresented: Bool
+    let start: () -> Void
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(
+            "Start your own match? This takes you off \(model.store.hostName.map { "\($0)'s" } ?? "the host's") sharing.",
+            isPresented: $isPresented,
+            titleVisibility: .visible
+        ) {
+            Button("Start anyway", role: .destructive, action: start)
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+}
+
+extension View {
+    /// FR-021: a guest asked once before starting a match of its own takes it off the host's sharing.
+    func stepOffConfirmation(isPresented: Binding<Bool>, start: @escaping () -> Void) -> some View {
+        modifier(StepOffConfirmation(isPresented: isPresented, start: start))
+    }
+}
