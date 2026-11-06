@@ -38,6 +38,15 @@ struct WireCompatibilityTests {
         #expect(try roundTrips(.sharing(.hostingStatus(ended))))
     }
 
+    @Test func aCardWithoutLeavingIsAnOrdinaryCard() throws {
+        let device = DeviceID()
+        let card = try JSONCoding.encoder.encode(Wire.guestCard(GuestCard(device: device, name: "Ada")))
+        #expect(!String(decoding: card, as: UTF8.self).contains("leaving"))
+        guard case .guestCard(let read) = try Wire.decode(card) else { Issue.record("not a card"); return }
+        #expect(read.leaving == nil)
+        #expect(try roundTrips(.guestCard(GuestCard(device: device, name: "Ada", leaving: true))))
+    }
+
     @Test func aStopFromAnOlderBuildReadsAsTheHosts() throws {
         let session = UUID()
         let stop = try Wire.sharingStopped(sessionID: session).encoded()

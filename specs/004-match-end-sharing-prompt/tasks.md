@@ -424,12 +424,12 @@ taps (SC-004).
 
 **Purpose**: Mixed versions, docs, accessibility, and the gate
 
-- [ ] T054 [P] Write `SyncTests/OlderBuildBetweenMatchesTests.swift` (D-13). Each case works on payloads with the new keys stripped or with nil values, so no real older build is needed:
+- [X] T054 [P] Write `SyncTests/OlderBuildBetweenMatchesTests.swift` (D-13). Each case works on payloads with the new keys stripped or with nil values, so no real older build is needed:
   - an older host never sets `keptSharingAfter`, so the guest's question asks only stay or leave;
   - an older host's `sharingStopped` without `reason` stops a waiting new guest, reading as `.host`;
   - a guest whose pair drops the `.answered` and `.newMatch` signals still leaves on Leave, through the existing path, and is asked on each device separately without stalling;
   - a guest card without `leaving` reads as an ordinary card, and a host that ignores the key shows the leaver out of reach after 15 s, as today.
-- [ ] T055 [P] Update `README.md`'s "How syncing works" and the sharing sections around lines 339–423 and 748–762:
+- [X] T055 [P] Update `README.md`'s "How syncing works" and the sharing sections around lines 339–423 and 748–762:
   - sharing lasts until it is stopped, or for 30 minutes with no match on;
   - the host and the guests are asked at the end of every match;
   - the next match arrives with a dialog;
@@ -438,7 +438,7 @@ taps (SC-004).
   - combined VoiceOver labels as in contracts/screens.md, with digits read one by one;
   - `scaledFont` on the watch;
   - check at the largest Dynamic Type size on both simulators that nothing truncates.
-- [ ] T057 Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh`. Both pass with no new Info.plist key or entitlement. If one turned out to be needed, add its assertion to `scripts/verify.sh` in the same change.
+- [X] T057 Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh`. Both pass with no new Info.plist key or entitlement. If one turned out to be needed, add its assertion to `scripts/verify.sh` in the same change.
 - [ ] T058 Walk [quickstart.md](quickstart.md) level 3 with `scripts/share.sh --keep`, steps 1–7, against contracts/screens.md. Note anything off as a new task.
 - [ ] T059 Walk quickstart.md level 4, a real-device evening with a host and three guests, and record the outcome against SC-001 – SC-008 in `specs/004-match-end-sharing-prompt/validation.md`, in the shape of `specs/003-apple-watch-se-support/validation.md`.
 

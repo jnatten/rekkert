@@ -89,6 +89,7 @@ struct SharingSection: View {
             } label: {
                 row("Join again", "Back on \(kept.readOut), no code to type", "arrow.right.circle")
             }
+            .accessibilityLabel("Join again on \(kept.digitByDigit), no code to type")
         }
     }
 

@@ -392,8 +392,8 @@ shared one says so, with **Get on it**.
 
 The host's watch shares too. A watch cannot advertise — `CBPeripheralManager` does not exist
 on watchOS — so the phone still does the hosting, but it can be run from the wrist with the
-phone in a bag. **Share match**, in the menu of a match of the watch's own, asks the phone to
-share it, and shows the code as six digits to read out and as a picture of the join link for an
+phone in a bag. **Share**, on the start screen or in a match's menu, asks the phone to
+share, and shows the code as six digits to read out and as a picture of the join link for an
 iPhone's Camera. The phone draws the picture, since watchOS has no Core Image, and sends it
 over. **Who's on** lists everybody on the match — in step, catching up, or out of reach since
 when — and **Stop sharing** ends it for all of them, each keeping their copy in History.
@@ -656,9 +656,24 @@ so a host takes back any that reaches it from a phone other than itself or its o
 older build that let a guest end it, say — and a guest whose copy that Finish ended is put
 back on the match by it. A guest's own watch ending its copy alone ends nothing of the host's.
 
-Between the host's matches a guest stays on the code, and the host's next match opens on it by
-itself. Home shows the sharing glyph in its corner as a match screen does, so that is never a
-surprise, and tapping it there is the way off.
+Sharing lasts across matches until the host stops it, so at the end of every shared match
+everybody is asked. The host, beside the result, whether to **Keep sharing** for the next match
+or **Stop sharing**, with how many are on; each guest whether to **Stay** for the host's next
+match or **Leave**, told once the host has said Keep. A phone and its watch are asked once
+between them: an answer on either counts for both, and Leave wins over Stay. Nobody answering is
+staying. The host's next match lands on every guest still on, at once, so nobody falls out of
+step, but with a popup naming the host: scoring waits on that device until **OK**, and
+**Leave** is there too. A guest looking at neither device gets a notification on the wrist
+that opens it. A guest that leaves says so to the host on the way out, so the host's list drops
+it rather than waiting for it to go quiet.
+
+Home and the watch's start screen carry the sharing between matches: **Share** with nothing on,
+the code and who is on and **Stop sharing** for the host, and for a guest whose sharing it is
+on, that it is waiting for the next match, and **Leave**. A join with nothing on is a guest at
+once, waiting. Starting a match while sharing says it is shared, and a guest starting one of its
+own is asked first, since that takes it off. Half an hour with no match on and sharing stops by
+itself: the host and every guest are told why, and a host's app that comes back later does not
+share again. Every answer, popup and stop is in the sharing record.
 
 An event of a kind this build cannot read — recorded by a newer one — changes nothing here,
 is kept in its place in the log and passed on unchanged, so a newer phone on the match never
@@ -757,7 +772,8 @@ with the share id its keys are derived from, and each guest's phone and watch. I
 this device only, so it is never synced or backed up, and readable after the first unlock, so
 an app launched in the background with the phone locked still finds it. It lasts twelve hours,
 checked whenever it is read, since a Keychain item can outlive the app. Every launch looks for
-it. A host comes back on the same code, between matches too, and its guests
+it. A host comes back on the same code, between matches too unless half an hour has passed with
+no match on, and its guests
 find it again by themselves; a guest that was on the match when its app was ended goes back on.
 Stop sharing clears the host's. A guest forgets its copy when told sharing has stopped, replaces
 it on joining another match, and keeps it after Leave, for Join again.
