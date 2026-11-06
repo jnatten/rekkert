@@ -252,7 +252,7 @@ final class AppModel {
             rules: TraditionalRules(deuceRule: .goldenPoint),
             teams: BySide(a: TeamInfo(name: "Blues", players: ["Jonas", "Ada"]), b: TeamInfo(name: "Oranges", players: ["Kim", "Sam"]))
         ), at: start), from: device, at: start)
-        var generator = SeededGenerator(seed: 7)
+        var generator = DemoGenerator(seed: 7)
         while !(SessionReducer.state(of: log)?.isFinished ?? true) {
             clock = clock.addingTimeInterval(Double.random(in: 14 ... 34, using: &generator))
             let side: TeamSide = Double.random(in: 0 ..< 1, using: &generator) < 0.56 ? .a : .b
@@ -274,7 +274,7 @@ final class AppModel {
             score.winner = winner
             return score
         }
-        var generator = SeededGenerator(seed: 11)
+        var generator = DemoGenerator(seed: 11)
         let now = Date()
         var records: [HistoryRecord] = []
 
@@ -950,6 +950,20 @@ final class AppModel {
 extension AppModel {
     /// The notification that brings a guest's watch round, posted by the phone and acted on by the watch.
     static let followMatchCategory = "rekkert.followMatch"
+}
+
+/// The demo's scores, seeded so a screenshot comes out the same every time. Only this device
+/// ever sees them, so the stdlib's draws are fine here.
+private struct DemoGenerator: RandomNumberGenerator {
+    private var seeded: SeededGenerator
+
+    init(seed: UInt64) {
+        seeded = SeededGenerator(seed: seed)
+    }
+
+    mutating func next() -> UInt64 {
+        seeded.next()
+    }
 }
 
 #if os(iOS)

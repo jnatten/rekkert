@@ -299,7 +299,7 @@ struct MatchTimelineTests {
     /// was filed — the one property everything drawn from the timeline leans on.
     @Test(arguments: 0 ..< 12)
     func theLastEntryIsAlwaysTheFiledScore(seed: Int) throws {
-        var generator = SeededGenerator(seed: UInt64(seed))
+        var generator = TestGenerator(seed: UInt64(seed))
         var play = seed.isMultiple(of: 3) ? tournament() : (seed % 3 == 1 ? match(TraditionalRules(deuceRule: .starPoint)) : Play())
         if seed % 3 == 2 {
             play.append(.configure(.winnerCourt(rules: WinnerCourtRules(), teams: teams), at: noon))

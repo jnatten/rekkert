@@ -65,7 +65,7 @@ public enum LadderScheduler {
         guard let previous else {
             guard start == .random else { return units }
             var generator = SeededGenerator(tournament.id.raw, salt: .max)
-            return units.shuffled(using: &generator)
+            return units.shuffled(seededBy: &generator)
         }
 
         let courts = previous.matches.sorted { $0.courtIndex < $1.courtIndex }

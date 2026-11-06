@@ -192,7 +192,7 @@ struct MatchLogTests {
 
     @Test func replayIsDeterministicUnderShufflingAndDuplication() {
         var source = configuredLog()
-        var generator = SeededGenerator(seed: 99)
+        var generator = TestGenerator(seed: 99)
         for index in 0 ..< 60 {
             let team: TeamSide = index.isMultiple(of: 3) ? .b : .a
             source.append(.point(round: 0, court: 0, team: team), from: index.isMultiple(of: 2) ? deviceA : deviceB)
@@ -213,7 +213,7 @@ struct MatchLogTests {
     @Test func aLossyBidirectionalExchangeStillConverges() {
         var phone = configuredLog()
         var watch = phone
-        var generator = SeededGenerator(seed: 7)
+        var generator = TestGenerator(seed: 7)
         var inFlightToWatch: [MatchEvent] = []
         var inFlightToPhone: [MatchEvent] = []
 

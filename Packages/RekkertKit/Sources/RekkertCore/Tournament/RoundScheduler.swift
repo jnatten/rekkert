@@ -23,7 +23,7 @@ enum RoundScheduler {
         chosen: [PlayerID] = [],
         generator: inout SeededGenerator
     ) -> (playing: [PlayerID], sitting: [PlayerID]) {
-        let shuffled = players.map(\.id).shuffled(using: &generator)
+        let shuffled = players.map(\.id).shuffled(seededBy: &generator)
         let seatCount = seats
         guard shuffled.count > seatCount else { return (shuffled, []) }
 

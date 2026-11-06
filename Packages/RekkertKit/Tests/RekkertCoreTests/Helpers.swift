@@ -72,3 +72,21 @@ extension MatchLog {
         }
     }
 }
+
+/// `SeededGenerator` for the stdlib's own draws, where a test only needs them repeatable on
+/// the machine running it.
+struct TestGenerator: RandomNumberGenerator {
+    private var seeded: SeededGenerator
+
+    init(seed: UInt64) {
+        seeded = SeededGenerator(seed: seed)
+    }
+
+    init(_ id: UUID, salt: UInt64 = 0) {
+        seeded = SeededGenerator(id, salt: salt)
+    }
+
+    mutating func next() -> UInt64 {
+        seeded.next()
+    }
+}
