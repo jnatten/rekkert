@@ -41,7 +41,7 @@ struct WatchRootView: View {
                     set: { _ in }
                 )
             ) {
-                Button("OK") { model.standIn.answer(.ok) }
+                Button("OK", role: .cancel) { model.standIn.answer(.ok) }
                 Button("Leave", role: .destructive) { model.standIn.answer(.leave) }
             }
             .alert("Start a workout?", isPresented: $askingToStartWorkout) {
@@ -343,10 +343,10 @@ struct WatchIdleView: View {
         ) { ask in
             switch ask.side {
             case .host:
-                Button("Keep sharing") { model.standIn.answer(.keepSharing) }
+                Button("Keep sharing", role: .cancel) { model.standIn.answer(.keepSharing) }
                 Button("Stop sharing", role: .destructive) { model.standIn.answer(.stopSharing) }
             case .guest:
-                Button("Stay") { model.standIn.answer(.stay) }
+                Button("Stay", role: .cancel) { model.standIn.answer(.stay) }
                 Button("Leave", role: .destructive) { model.standIn.answer(.leave) }
             }
         } message: { ask in

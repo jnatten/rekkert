@@ -186,8 +186,9 @@ struct RootView: View {
             ),
             presenting: askingAtTheEnd
         ) { _ in
-            Button("Keep sharing") { model.sharing.answer(.keepSharing) }
-                .keyboardShortcut(.defaultAction)
+            // The cancel role, so the system adds no Cancel of its own: putting the question
+            // away is keeping sharing, as not answering it is.
+            Button("Keep sharing", role: .cancel) { model.sharing.answer(.keepSharing) }
             Button("Stop sharing", role: .destructive) { model.sharing.answer(.stopSharing) }
         } message: { ask in
             Text(ask.guestsOnLine)
@@ -200,8 +201,7 @@ struct RootView: View {
             ),
             presenting: askingAtTheEnd
         ) { _ in
-            Button("Stay") { model.sharing.answer(.stay) }
-                .keyboardShortcut(.defaultAction)
+            Button("Stay", role: .cancel) { model.sharing.answer(.stay) }
             Button("Leave", role: .destructive) { model.sharing.answer(.leave) }
         } message: { ask in
             Text(ask.stayLine)
@@ -223,8 +223,8 @@ struct RootView: View {
                 set: { if !$0 { announcingNewMatch = nil } }
             )
         ) {
-            Button("OK") { model.sharing.answer(.ok) }
-                .keyboardShortcut(.defaultAction)
+            // Scoring waits on this answer, so there must be no way to put it away without one.
+            Button("OK", role: .cancel) { model.sharing.answer(.ok) }
             Button("Leave", role: .destructive) { model.sharing.answer(.leave) }
         } message: {
             Text("You're on it. Leave if you're done for the evening.")
