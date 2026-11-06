@@ -170,6 +170,7 @@ final class AppModel {
         // went; the same two ends as the workout, the other way round.
         #if os(watchOS)
         store.onSharing = { [standIn] signal in standIn.heard(signal) }
+        store.participantCount = { [standIn] in standIn.hosting?.participants.count ?? 0 }
         standIn.mayUseTheRadio = { [workout] in
             workout.isTracking || WKApplication.shared().applicationState == .active
         }
@@ -354,6 +355,7 @@ final class AppModel {
         // The host's wrist, with this phone in a bag. Answered with what is being shared.
         case .startHosting: sharing.startHostingFromTheWatch()
         case .stopHosting: sharing.stopHostingFromTheWatch()
+        case .answered, .newMatch: break
         }
     }
     #endif

@@ -30,6 +30,7 @@ public struct ActiveSession: Codable, Sendable, Hashable {
     public var access: ShareAccessTable?
     public var guests: [GuestCard]
     public var identity: String?
+    public var betweenMatches: BetweenMatches
 
     public init(
         log: MatchLog,
@@ -44,7 +45,8 @@ public struct ActiveSession: Codable, Sendable, Hashable {
         pairedDevice: DeviceID? = nil,
         access: ShareAccessTable? = nil,
         guests: [GuestCard] = [],
-        identity: String? = nil
+        identity: String? = nil,
+        betweenMatches: BetweenMatches = BetweenMatches()
     ) {
         self.log = log
         self.outbox = outbox
@@ -59,11 +61,12 @@ public struct ActiveSession: Codable, Sendable, Hashable {
         self.access = access
         self.guests = guests
         self.identity = identity
+        self.betweenMatches = betweenMatches
     }
 
     private enum CodingKeys: String, CodingKey {
         case log, outbox, retired, discarded, role, pairedRole, guestOf, leftSessionID, counterpartLeftSessionID, pairedDevice
-        case access, guests, identity
+        case access, guests, identity, betweenMatches
     }
 
     public init(from decoder: any Decoder) throws {
@@ -81,6 +84,7 @@ public struct ActiveSession: Codable, Sendable, Hashable {
         access = try container.decodeIfPresent(ShareAccessTable.self, forKey: .access)
         guests = try container.decodeIfPresent([GuestCard].self, forKey: .guests) ?? []
         identity = try container.decodeIfPresent(String.self, forKey: .identity)
+        betweenMatches = try container.decodeIfPresent(BetweenMatches.self, forKey: .betweenMatches) ?? BetweenMatches()
     }
 }
 

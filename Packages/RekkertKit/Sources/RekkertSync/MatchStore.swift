@@ -35,6 +35,8 @@ public final class MatchStore {
     public private(set) var guests: [GuestCard]
     public private(set) var identity: String?
     public private(set) var defaultAccess: ShareAccess
+    public private(set) var betweenMatches: BetweenMatches
+    @ObservationIgnored public var participantCount: (() -> Int)?
     /// One point, just played, on a board that just moved. Everything that is not that is
     /// filtered out here rather than left to the listener — see `announce(_:before:after:)`.
     @ObservationIgnored public var onPoint: ((ScoredPoint) -> Void)?
@@ -207,6 +209,7 @@ public final class MatchStore {
         self.accessTable = session?.access
         self.guests = session?.guests ?? []
         self.identity = session?.identity
+        self.betweenMatches = session?.betweenMatches ?? BetweenMatches()
         self.defaultAccess = store?.loadShareAccess() ?? .full
         self.device = device
         self.transport = transport
@@ -417,8 +420,36 @@ public final class MatchStore {
         return accessTable.access(for: [device, pairedDevice])
     }
 
-    public var canScore: Bool { access.canScore }
-    public var canRunRounds: Bool { access.canRunRounds }
+    public var canScore: Bool { access.canScore && !betweenMatches.blocksScoring }
+    public var canRunRounds: Bool { access.canRunRounds && !betweenMatches.blocksScoring }
+
+    /// Records the answer and tells the other half of the pair. Stopping and leaving are
+    /// `SharedSession.answer(_:)`'s and `WatchStandIn.answer(_:)`'s to carry out, after this.
+    public func answer(_ choice: BetweenMatchesAnswer.Choice) {
+        let notice = choice == .ok || choice == .leave ? betweenMatches.newMatch : nil
+        guard let session = notice?.session ?? betweenMatches.ask?.session else { return }
+        let answer = BetweenMatchesAnswer(session: session, choice: choice)
+        betweenMatches.answered(answer)
+        recorder?.note(notice == nil ? .endOfMatchAnswered(choice) : .newMatchAnswered(choice), in: session)
+        persist()
+        Task { await sendDurably(.answered(answer)) }
+    }
+
+    private func hearThePair(_ signal: SharingSignal) {
+        switch signal {
+        case .answered(let answer):
+            betweenMatches.answered(answer)
+            persist()
+        case .newMatch(let notice):
+            guard betweenMatches.newMatch != notice else { return }
+            let hadAsk = betweenMatches.ask?.session
+            if betweenMatches.hostsNextMatchArrived(notice) { recorder?.note(.endOfMatchUnanswered, in: hadAsk) }
+            if betweenMatches.newMatch == notice { recorder?.note(.newMatchShown, in: notice.session) }
+            persist()
+        default:
+            break
+        }
+    }
 
     public func participantStates() -> [ParticipantSummary] {
         participants.states(now: now(), hostCoverage: log.coverage)
@@ -1762,7 +1793,7 @@ public final class MatchStore {
                 shareAccess()
             }
 
-        case .sharingStopped(let sessionID):
+        case .sharingStopped(let sessionID, _):
             // The host letting everybody go, and saying so first. Kept in History as it stood,
             // as a Leave keeps it, and the watch on the same wrist goes with it.
             if !packet.isFromPairedDevice, sessionID == log.sessionID, !log.isEmpty, !canEndSession {
@@ -1779,7 +1810,10 @@ public final class MatchStore {
             // Only ever from the device in the same pocket — the scope drops this case before
             // it can reach anybody else — but said out loud here too, because acting on a
             // stranger's `.join` would be joining a match on their say-so.
-            if packet.isFromPairedDevice { onSharing?(signal) }
+            if packet.isFromPairedDevice {
+                hearThePair(signal)
+                onSharing?(signal)
+            }
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
 
         case .snapshot(let incoming, let pairRole, let access):
@@ -2187,7 +2221,7 @@ public final class MatchStore {
         switch signal {
         case .standby: announcedStandby = signal
         case .hostingStatus: announcedHosting = signal
-        case .join, .cancel, .startHosting, .stopHosting, .followPhone, .state, .hostStoppedSharing: break
+        case .join, .cancel, .startHosting, .stopHosting, .followPhone, .state, .hostStoppedSharing, .answered, .newMatch: break
         }
     }
 
@@ -2424,7 +2458,8 @@ public final class MatchStore {
             log: log, outbox: outbox, retired: retired, discarded: discarded, role: role,
             pairedRole: pairedRole, guestOf: guestOf,
             leftSessionID: leftSessionID, counterpartLeftSessionID: counterpartLeftSessionID,
-            pairedDevice: pairedDevice, access: accessTable, guests: guests, identity: identity
+            pairedDevice: pairedDevice, access: accessTable, guests: guests, identity: identity,
+            betweenMatches: betweenMatches
         ))
     }
 }

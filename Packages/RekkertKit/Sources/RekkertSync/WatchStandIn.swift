@@ -226,6 +226,18 @@ public final class WatchStandIn {
         }
     }
 
+    public func answer(_ choice: BetweenMatchesAnswer.Choice) {
+        switch choice {
+        case .leave:
+            store.answer(.leave)
+            sharing.leave()
+        case .stopSharing:
+            stopHosting()
+        case .keepSharing, .stay, .ok:
+            store.answer(choice)
+        }
+    }
+
     private func heard(hosting status: HostingStatus) {
         if let held = hosting?.issuedAt, let issued = status.issuedAt, issued < held { return }
         var status = status
@@ -394,10 +406,10 @@ public final class WatchStandIn {
             }
         case .hostingStatus(let status):
             heard(hosting: status)
-        case .hostStoppedSharing(let host):
+        case .hostStoppedSharing(let host, _):
             heardHostStopped = true
             heardStoppingHost = host
-        case .join, .cancel, .startHosting, .stopHosting, .followPhone:
+        case .join, .cancel, .startHosting, .stopHosting, .followPhone, .answered, .newMatch:
             break
         }
         evaluate()

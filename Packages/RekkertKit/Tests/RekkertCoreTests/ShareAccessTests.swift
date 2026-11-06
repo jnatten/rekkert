@@ -116,4 +116,25 @@ struct ShareAccessTests {
         let nobody = SessionState.traditional(TraditionalSession(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
         #expect(nobody.playerNames.isEmpty)
     }
+
+    @Test func keepingSharingIsANewerWordFromTheHost() {
+        let session = UUID()
+        let table = ShareAccessTable(standard: .full, hostName: "Ada")
+        let kept = table.keepingSharing(after: session)
+        #expect(kept.keptSharingAfter == session)
+        #expect(kept.supersedes(table))
+        #expect(kept.keepingSharing(after: session) == kept)
+    }
+
+    @Test func aTableWithoutKeepingSharingStillReads() throws {
+        let table = ShareAccessTable(standard: .score, hostName: "Ada")
+        var json = try JSONSerialization.jsonObject(with: JSONCoding.encoder.encode(table)) as! [String: Any]
+        json["keptSharingAfter"] = nil
+        let older = try JSONSerialization.data(withJSONObject: json)
+        let read = try JSONCoding.decoder.decode(ShareAccessTable.self, from: older)
+        #expect(read.keptSharingAfter == nil)
+        #expect(read.hostName == "Ada")
+        let kept = table.keepingSharing(after: UUID())
+        #expect(try JSONCoding.decoder.decode(ShareAccessTable.self, from: JSONCoding.encoder.encode(kept)) == kept)
+    }
 }

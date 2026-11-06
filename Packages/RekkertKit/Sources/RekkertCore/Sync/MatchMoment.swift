@@ -7,4 +7,5 @@ public enum MatchMoment: Equatable, Sendable {
     case inPlay(UUID)
     /// Won, finished, called off, ended by its host, or stepped off.
     case ended(UUID)
+    case nextFromHost(UUID)
 }

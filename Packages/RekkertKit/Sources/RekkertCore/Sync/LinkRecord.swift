@@ -63,6 +63,12 @@ public enum LinkEvent: Codable, Sendable, Hashable {
     case recordReceived(from: LinkRecordEntry.Device)
     /// Debug builds only: how long after it was scored a point reached this device.
     case pointArrived(latency: TimeInterval)
+    case endOfMatchAsked
+    case endOfMatchAnswered(BetweenMatchesAnswer.Choice)
+    case endOfMatchUnanswered
+    case newMatchShown
+    case newMatchAnswered(BetweenMatchesAnswer.Choice)
+    case idleStop
 
     /// As an export reads it: `dropped(timeout)`, `caughtUp(12)`.
     public var text: String {
@@ -90,6 +96,12 @@ public enum LinkEvent: Codable, Sendable, Hashable {
         case .notificationPosted: "notificationPosted"
         case .recordReceived(let device): "recordReceived(\(device.rawValue))"
         case .pointArrived(let latency): "pointArrived(\(String(format: "%.3f", latency))s)"
+        case .endOfMatchAsked: "endOfMatchAsked"
+        case .endOfMatchAnswered(let choice): "endOfMatchAnswered(\(choice.rawValue))"
+        case .endOfMatchUnanswered: "endOfMatchUnanswered"
+        case .newMatchShown: "newMatchShown"
+        case .newMatchAnswered(let choice): "newMatchAnswered(\(choice.rawValue))"
+        case .idleStop: "idleStop"
         }
     }
 
@@ -111,6 +123,10 @@ public enum LinkEvent: Codable, Sendable, Hashable {
             self = .recordReceived(from: device)
         case ("pointArrived", let argument?): guard let latency = TimeInterval(argument.dropLast()) else { return nil }
             self = .pointArrived(latency: latency)
+        case ("endOfMatchAnswered", let argument?): guard let choice = BetweenMatchesAnswer.Choice(rawValue: argument) else { return nil }
+            self = .endOfMatchAnswered(choice)
+        case ("newMatchAnswered", let argument?): guard let choice = BetweenMatchesAnswer.Choice(rawValue: argument) else { return nil }
+            self = .newMatchAnswered(choice)
         case (_, nil):
             let plain: [String: LinkEvent] = [
                 "appHadBeenEnded": .appHadBeenEnded, "sharingStarted": .sharingStarted,
@@ -119,7 +135,8 @@ public enum LinkEvent: Codable, Sendable, Hashable {
                 "outOfReach": .outOfReach, "backInStep": .backInStep, "wroteOff": .wroteOff,
                 "redialled": .redialled, "standIn": .standIn, "standDown": .standDown,
                 "radioOff": .radioOff, "radioOn": .radioOn, "permissionDenied": .permissionDenied,
-                "notificationPosted": .notificationPosted,
+                "notificationPosted": .notificationPosted, "endOfMatchAsked": .endOfMatchAsked,
+                "endOfMatchUnanswered": .endOfMatchUnanswered, "newMatchShown": .newMatchShown, "idleStop": .idleStop,
             ]
             guard let event = plain[name] else { return nil }
             self = event

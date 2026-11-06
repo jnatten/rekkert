@@ -49,7 +49,7 @@ story can be built, tested and shipped on its own.
 
 **Purpose**: A known-good baseline
 
-- [ ] T001 Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh` on `dbc72a3b` and confirm both pass. Any failure found here is not this feature's, and must be raised before going on.
+- [X] T001 Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh` on `dbc72a3b` and confirm both pass. Any failure found here is not this feature's, and must be raised before going on.
 
 ---
 
@@ -60,7 +60,7 @@ store's plumbing for asking and answering. Every story needs these.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T002 [P] Write `CoreTests/BetweenMatchesTests.swift` (Swift Testing, `@Suite("Between matches")`) for the rules in data-model.md. It fails to compile until T003. Cover:
+- [X] T002 [P] Write `CoreTests/BetweenMatchesTests.swift` (Swift Testing, `@Suite("Between matches")`) for the rules in data-model.md. It fails to compile until T003. Cover:
   - **Who is asked.** `side(role:pairedRole:isWatch:)`: on a phone the side is `role`, and on a watch it is `pairedRole`. `.solo` asks nothing.
   - **One question per session.** A second `matchEnded` for an already-answered session opens nothing.
   - **Leave wins.** `answered(.stay)` followed by `answered(.leave)` for the same session closes the question, and so does the reverse order.
@@ -73,7 +73,7 @@ store's plumbing for asking and answering. Every story needs these.
   - **The host's next match.** `hostsNextMatchArrived` closes an open `ask`, reports it as unanswered, opens `newMatch`, and clears `idleSince`.
   - **`wantsNotification(appIsActive:watchReachable:)`** is true only when both are false (D-11).
   - **Persistence.** A `Codable` round trip of every field.
-- [ ] T003 Create `RekkertCore/Sync/BetweenMatches.swift` so T002 passes. Every type is `Codable, Sendable, Hashable`, with no platform imports:
+- [X] T003 Create `RekkertCore/Sync/BetweenMatches.swift` so T002 passes. Every type is `Codable, Sendable, Hashable`, with no platform imports:
   - `BetweenMatches`, with `idleSince: Date?`, `ask: EndOfMatchAsk?` and `newMatch: NewMatchNotice?`.
   - `EndOfMatchAsk`, with `session: UUID`, `side: Side` and `askedAt: Date`. `Side` is `.host(guestsOn: Int)` or `.guest(hostName: String?, hostKeepsSharing: Bool)`.
   - `NewMatchNotice`, with `session: UUID`, `hostName: String?` and `arrivedAt: Date`.
@@ -81,11 +81,11 @@ store's plumbing for asking and answering. Every story needs these.
   - `static let idleLimit: TimeInterval = 30 * 60`.
   - The mutating transitions `matchEnded(session:side:now:)`, `answered(_:)`, `hostsNextMatchArrived(_:)`, `matchBegan()`, `sharingStarted(now:)`, `joinedBetweenMatches(now:)` and `sharingEnded()`. `hostsNextMatchArrived` returns whether it closed an unanswered question.
   - `isIdleExpired(now:matchOn:)`, `blocksScoring`, `static func side(role:pairedRole:isWatch:) -> SessionRole?` and `static func wantsNotification(appIsActive:watchReachable:) -> Bool`.
-- [ ] T004 [P] Add `keptSharingAfter: UUID?` and `func keepingSharing(after session: UUID) -> ShareAccessTable` to `RekkertCore/Sync/ShareAccess.swift`. `keepingSharing(after:)` does `revision += 1`, like `with(hostName:)`. Extend `CoreTests/ShareAccessTests.swift`:
+- [X] T004 [P] Add `keptSharingAfter: UUID?` and `func keepingSharing(after session: UUID) -> ShareAccessTable` to `RekkertCore/Sync/ShareAccess.swift`. `keepingSharing(after:)` does `revision += 1`, like `with(hostName:)`. Extend `CoreTests/ShareAccessTests.swift`:
   - a table built with it `supersedes` the one before;
   - JSON without the key decodes with nil;
   - the key round-trips.
-- [ ] T005 [P] Extend the wire in `RekkertCore/Sync/Wire.swift` (D-4, D-6, D-7):
+- [X] T005 [P] Extend the wire in `RekkertCore/Sync/Wire.swift` (D-4, D-6, D-7):
   - add `SharingStopReason` (`.host`, `.idle`);
   - change `Wire.sharingStopped(sessionID: UUID)` to `sharingStopped(sessionID: UUID, reason: SharingStopReason?)`;
   - change `SharingSignal.hostStoppedSharing(host: String?)` to `hostStoppedSharing(host: String?, reason: SharingStopReason?)`;
@@ -95,8 +95,8 @@ store's plumbing for asking and answering. Every story needs these.
   Then fix every exhaustive switch and call site the compiler names: `MatchStore.keepToSayAgain` (the new signals say nothing again), `RekkertSync/FanOutTransport.swift`, `RekkertSync/WatchStandIn.swift`, `Shared/AppModel.swift` `joinFromWatch`, and the `onSharing` switch in `SyncTests/CourtHarness.swift` `boot`. Extend `CoreTests/WireCompatibilityTests.swift`:
   - the new cases round-trip (`everyNewMessageRoundTrips`);
   - a `sharingStopped`, a `hostStoppedSharing` and a `HostingStatus` encoded without the new keys decode with nil.
-- [ ] T006 [P] Add `.nextFromHost(UUID)` to `MatchMoment` in `RekkertCore/Sync/MatchMoment.swift`, and handle it wherever `MatchMoment` is switched on: `Shared/AppModel.swift`, and the workout follower `Shared/WorkoutFollower.swift` if it switches on it. For the follower, treat it like `.began`.
-- [ ] T007 [P] Add the six `LinkEvent` cases of [contracts/sharing-record.md](contracts/sharing-record.md) to `RekkertCore/Sync/LinkRecord.swift`, each with its `text` and its parse in `init(text:)` and the `plain` table:
+- [X] T006 [P] Add `.nextFromHost(UUID)` to `MatchMoment` in `RekkertCore/Sync/MatchMoment.swift`, and handle it wherever `MatchMoment` is switched on: `Shared/AppModel.swift`, and the workout follower `Shared/WorkoutFollower.swift` if it switches on it. For the follower, treat it like `.began`.
+- [X] T007 [P] Add the six `LinkEvent` cases of [contracts/sharing-record.md](contracts/sharing-record.md) to `RekkertCore/Sync/LinkRecord.swift`, each with its `text` and its parse in `init(text:)` and the `plain` table:
   - `endOfMatchAsked`;
   - `endOfMatchAnswered(EndOfMatchChoice)`;
   - `endOfMatchUnanswered`;
@@ -105,8 +105,8 @@ store's plumbing for asking and answering. Every story needs these.
   - `idleStop`.
 
   Add a write → export → `init(text:)` round trip for each in `CoreTests/LinkRecordTests.swift`.
-- [ ] T008 Add `betweenMatches: BetweenMatches?` to `ActiveSession` in `RekkertCore/Persistence/SessionStore.swift`. Decode it with `decodeIfPresent`, so an older `active.json` reads as empty. Add a test to `SyncTests/RestoreTests.swift` that an older `active.json` restores with an empty `betweenMatches`.
-- [ ] T009 Give `RekkertSync/MatchStore.swift` its between-matches plumbing (depends on T003–T008):
+- [X] T008 Add `betweenMatches: BetweenMatches?` to `ActiveSession` in `RekkertCore/Persistence/SessionStore.swift`. Decode it with `decodeIfPresent`, so an older `active.json` reads as empty. Add a test to `SyncTests/RestoreTests.swift` that an older `active.json` restores with an empty `betweenMatches`.
+- [X] T009 Give `RekkertSync/MatchStore.swift` its between-matches plumbing (depends on T003–T008):
   - `public private(set) var betweenMatches: BetweenMatches`, loaded from and saved with `ActiveSession` in `persist()` and at init.
   - `public func answer(_ choice: BetweenMatchesAnswer.Choice)`. It applies `answered` for the open `ask` or `newMatch`, and notes `endOfMatchAnswered` or `newMatchAnswered` on the recorder. It sends `.sharing(.answered(…))` to the pair through the durable path used by `sendDurably`, and persists.
   - In `handle(_:)`'s `.sharing` case, from the paired device only:
@@ -117,7 +117,7 @@ store's plumbing for asking and answering. Every story needs these.
   - `canScore` and `canRunRounds` also return false while `betweenMatches.blocksScoring` (FR-013).
   - An injectable `participantCount: () -> Int` (default `participantStates().count`). The watch's `AppModel` sets it from `standIn.hosting?.participants.count`.
   - `MatchStore.answer` carries out nothing but the answer itself. Stopping and leaving belong to T010.
-- [ ] T010 Add the one engine entry point per device for every answer (D-4, Principle I). Depends on T009.
+- [X] T010 Add the one engine entry point per device for every answer (D-4, Principle I). Depends on T009.
   - **`SharedSession.answer(_ choice:)`** in `RekkertSync/SharedSession.swift`:
     1. call `store.answer(choice)` first, so the answer is recorded and sent to the pair while the question still exists;
     2. then for `.stopSharing` call `stop()`, and for `.leave` take the guest's leave path, which is `stop()` for a guest's phone;
@@ -128,7 +128,7 @@ store's plumbing for asking and answering. Every story needs these.
     - for every other choice, call `store.answer`.
 
   Expose both through the watch's and the phone's `AppModel` as `model.sharing` and `model.standIn`, as today.
-- [ ] T011 Add helpers to `SyncTests/CourtHarness.swift`:
+- [X] T011 Add helpers to `SyncTests/CourtHarness.swift`:
   - `finish(on:)`, which finishes from a given device;
   - `discard(on:)`;
   - `answer(_ choice:on:)`, which calls `SharedSession.answer` on a phone and `WatchStandIn.answer` on a watch (T010), as the views do;

@@ -155,6 +155,7 @@ final class CourtHarness {
             let standIn = WatchStandIn(store: store, sharing: sharing, timing: timing.standIn, tick: timing.standInTick)
             device.standIn = standIn
             store.onSharing = { [standIn] signal in standIn.heard(signal) }
+            store.participantCount = { [standIn] in standIn.hosting?.participants.count ?? 0 }
             device.tasks.append(Task { await standIn.run() })
         } else {
             sharing.publish = { [store] state in Task { await store.send(.state(state)) } }
@@ -170,7 +171,7 @@ final class CourtHarness {
                 case .followPhone: store.offerToThePair()
                 case .startHosting: sharing.startHostingFromTheWatch()
                 case .stopHosting: sharing.stopHostingFromTheWatch()
-                case .state, .standby, .hostingStatus, .hostStoppedSharing: break
+                case .state, .standby, .hostingStatus, .hostStoppedSharing, .answered, .newMatch: break
                 }
             }
         }
@@ -195,6 +196,31 @@ final class CourtHarness {
         for guest in guests { join(guest) }
     }
 
+    func finish(on device: Device) {
+        device.store.finish()
+    }
+
+    func discard(on device: Device) {
+        device.store.discardSession()
+    }
+
+    /// As the views answer: through the one entry point each device has.
+    func answer(_ choice: BetweenMatchesAnswer.Choice, on device: Device) {
+        if let standIn = device.standIn { standIn.answer(choice) } else { device.sharing.answer(choice) }
+    }
+
+    func betweenMatches(of device: Device) -> BetweenMatches {
+        device.store.betweenMatches
+    }
+
+    func isWaiting(_ device: Device) -> Bool {
+        device.store.role == .guest && device.store.log.isEmpty
+    }
+
+    func canScore(on device: Device) -> Bool {
+        device.store.canScore
+    }
+
     /// Taps a point on `device` and starts timing how long it takes to reach everybody else.
     @discardableResult
     func score(on device: Device, court: Int = 0, team: TeamSide = .a) -> EventID? {
@@ -215,6 +241,18 @@ final class CourtHarness {
             await step()
             elapsed += timing.step
         }
+    }
+
+    /// Long stretches of radio time in coarse steps, for timers measured in minutes.
+    func fastForward(by duration: Duration, step: Duration = .seconds(1)) async {
+        var elapsed = Duration.zero
+        while elapsed < duration {
+            clock.advance(by: step)
+            for _ in 0 ..< 4 { await Task.yield() }
+            try? await Task.sleep(for: .milliseconds(2))
+            elapsed += step
+        }
+        noteArrivals()
     }
 
     /// Steps until `condition` holds, or `limit` of radio time has gone by. Whether it held.

@@ -30,7 +30,7 @@ final class WorkoutFollower {
     func heard(_ moment: MatchMoment) {
         guard workout.isAvailable else { return }
         switch moment {
-        case .began(let session):
+        case .began(let session), .nextFromHost(let session):
             perform(follow.began(session, cue: cues().workoutOnMatchStart, isTracking: workout.isTracking))
         case .inPlay(let session):
             follow.inPlay(session)

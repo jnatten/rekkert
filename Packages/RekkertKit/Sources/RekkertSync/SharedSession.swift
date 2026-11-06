@@ -468,6 +468,14 @@ public final class SharedSession {
         return farewell
     }
 
+    public func answer(_ choice: BetweenMatchesAnswer.Choice) {
+        store.answer(choice)
+        switch choice {
+        case .stopSharing, .leave: stop()
+        case .keepSharing, .stay, .ok: break
+        }
+    }
+
     /// The host let everybody go, and said so first: nothing to look for, and no code to keep.
     private func stoppedByHost() {
         hostWhoStopped = store.hostName

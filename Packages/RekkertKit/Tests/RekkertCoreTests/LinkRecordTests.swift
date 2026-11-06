@@ -70,6 +70,9 @@ struct LinkRecordTests {
             .refused(.noRoom), .outOfReach, .backInStep, .caughtUp(events: 12), .wroteOff, .redialled,
             .standIn, .standDown, .radioOff, .radioOn, .permissionDenied, .notificationPosted,
             .recordReceived(from: .watch), .pointArrived(latency: 0.842), .dropped(.closedByPeer), .sharingStopped,
+            .endOfMatchAsked, .endOfMatchAnswered(.keepSharing), .endOfMatchAnswered(.stopSharing),
+            .endOfMatchAnswered(.stay), .endOfMatchAnswered(.leave), .endOfMatchUnanswered, .newMatchShown,
+            .newMatchAnswered(.ok), .newMatchAnswered(.leave), .idleStop,
         ]
         let entries = kinds.enumerated().map { index, kind in
             LinkRecordEntry(time: at(Double(index)), device: index.isMultiple(of: 2) ? .phone : .watch,

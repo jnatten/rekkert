@@ -77,7 +77,13 @@ public enum SharingSignal: Codable, Sendable, Hashable {
     case followPhone
     /// Phone to watch: the host stopped sharing the match the phone was a guest on, and its copy
     /// went to History. With who the host said they are, if they did.
-    case hostStoppedSharing(host: String?)
+    case hostStoppedSharing(host: String?, reason: SharingStopReason? = nil)
+    case answered(BetweenMatchesAnswer)
+    case newMatch(NewMatchNotice)
+}
+
+public enum SharingStopReason: String, Codable, Sendable, Hashable {
+    case host, idle
 }
 
 public struct SharingStandby: Codable, Sendable, Hashable {
@@ -133,6 +139,7 @@ public struct HostingStatus: Codable, Sendable, Hashable {
     public var failure: SharingFailure?
     /// Sent both live and queued, so one can overtake the other: the older is the one ignored.
     public var issuedAt: Date?
+    public var endedBy: SharingStopReason?
 
     public init(
         isSharing: Bool,
@@ -142,7 +149,8 @@ public struct HostingStatus: Codable, Sendable, Hashable {
         participants: [ParticipantSummary] = [],
         canShare: Bool,
         failure: SharingFailure? = nil,
-        issuedAt: Date? = nil
+        issuedAt: Date? = nil,
+        endedBy: SharingStopReason? = nil
     ) {
         self.isSharing = isSharing
         self.code = code
@@ -152,6 +160,7 @@ public struct HostingStatus: Codable, Sendable, Hashable {
         self.canShare = canShare
         self.failure = failure
         self.issuedAt = issuedAt
+        self.endedBy = endedBy
     }
 }
 
@@ -237,7 +246,7 @@ public enum Wire: Codable, Sendable, Hashable {
     /// Guest's phone to host: who it is, so the host can tell the phones on its code apart.
     case guestCard(GuestCard)
     /// Host to every guest, before it lets go: this match is no longer shared.
-    case sharingStopped(sessionID: UUID)
+    case sharingStopped(sessionID: UUID, reason: SharingStopReason? = nil)
     /// Host to a phone saying hello when the match already has as many guests as it takes.
     case noRoom(sessionID: UUID)
 

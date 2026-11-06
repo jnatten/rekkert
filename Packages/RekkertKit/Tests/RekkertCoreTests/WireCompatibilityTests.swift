@@ -29,6 +29,30 @@ struct WireCompatibilityTests {
         #expect(try roundTrips(.snapshot(MatchLog(), role: .guest)))
         #expect(try roundTrips(.snapshot(MatchLog(), role: .guest, access: ShareAccessTable(standard: .score, hostName: "Ada"))))
         #expect(try roundTrips(.sharing(.standby(SharingStandby(code: code, isThrough: true, issuedAt: Date(timeIntervalSince1970: 3_000))))))
+        #expect(try roundTrips(.sharingStopped(sessionID: UUID(), reason: .idle)))
+        #expect(try roundTrips(.sharing(.hostStoppedSharing(host: "Ada", reason: .idle))))
+        #expect(try roundTrips(.sharing(.answered(BetweenMatchesAnswer(session: UUID(), choice: .stay)))))
+        #expect(try roundTrips(.sharing(.newMatch(NewMatchNotice(session: UUID(), hostName: "Ada", arrivedAt: Date(timeIntervalSince1970: 4_000))))))
+        var ended = status
+        ended.endedBy = .idle
+        #expect(try roundTrips(.sharing(.hostingStatus(ended))))
+    }
+
+    @Test func aStopFromAnOlderBuildReadsAsTheHosts() throws {
+        let session = UUID()
+        let stop = try Wire.sharingStopped(sessionID: session).encoded()
+        #expect(!String(decoding: stop, as: UTF8.self).contains("reason"))
+        guard case .sharingStopped(let id, let reason) = try Wire.decode(stop) else { Issue.record("not a stop"); return }
+        #expect(id == session)
+        #expect(reason == nil)
+        let told = try Wire.sharing(.hostStoppedSharing(host: "Ada")).encoded()
+        guard case .sharing(.hostStoppedSharing(let host, let why)) = try Wire.decode(told) else { Issue.record("not a notice"); return }
+        #expect(host == "Ada")
+        #expect(why == nil)
+        let status = try Wire.sharing(.hostingStatus(HostingStatus(isSharing: false, canShare: true))).encoded()
+        #expect(!String(decoding: status, as: UTF8.self).contains("endedBy"))
+        guard case .sharing(.hostingStatus(let read)) = try Wire.decode(status) else { Issue.record("not a status"); return }
+        #expect(read.endedBy == nil)
     }
 
     @Test func aCardFromAnOlderBuildStillReads() throws {

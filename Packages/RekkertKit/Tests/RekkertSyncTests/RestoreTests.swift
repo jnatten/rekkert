@@ -83,4 +83,18 @@ struct RestoreTests {
         court.relaunch(host)
         #expect(host.sharing.phase == .off)
     }
+
+    @Test func aSessionSavedBeforeBetweenMatchesStillLoads() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "older-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let store = SessionStore(directory: directory)
+        try store.save(ActiveSession(log: MatchLog(), role: .guest))
+        let url = directory.appending(path: "active.json")
+        var json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+        json["betweenMatches"] = nil
+        try JSONSerialization.data(withJSONObject: json).write(to: url)
+        let restored = try #require(try store.loadActive())
+        #expect(restored.role == .guest)
+        #expect(restored.betweenMatches == BetweenMatches())
+    }
 }
