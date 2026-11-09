@@ -1029,10 +1029,11 @@ with no watch paired.
 ./scripts/release.sh --metadata                  # text only
 ./scripts/release.sh --screenshots               # images only
 ./scripts/release.sh --screenshots --metadata    # the whole listing
+./scripts/release.sh --creative                  # header and search results images
 ```
 
-None of these build anything. Both belong to a version rather than to the app, so they
-need a version in an editable state — the one you are preparing.
+None of these build anything. All of them belong to a version rather than to the app, so
+they need a version in an editable state — the one you are preparing.
 
 Screenshots replace the set for each device size instead of adding to it, because App
 Store Connect caps a set at ten and then refuses. Metadata only touches fields that exist
@@ -1047,10 +1048,12 @@ the app never shows one there.
 App Store Connect is the only thing that knows which pixel sizes it accepts this month, so
 the script prints what it made rather than claiming the sizes are right.
 
-The header and search results images are not part of that upload, because `deliver` has
-no field for them. They go up in App Store Connect, under Product Page Information >
-Header and Search Results, and its Preview shows how each device crops them. They are
-reviewed on their own, and an approved one can go live without a new version.
+`deliver` has no field for the header and search results images, so `--creative` runs
+`scripts/creative-upload.swift` instead. It puts each locale folder in `fastlane/creative/`
+into the app's Asset Library and places the images on the version `Project.swift` names,
+replacing the ones already there and deleting those once nothing uses them. They are
+reviewed with the version. App Store Connect's Preview, under Product Page Information >
+Header and Search Results, shows how each device crops them.
 
 Some of what a submission needs is set once in App Store Connect and has no file here:
 price and availability, the App Privacy answers (Data Not Collected, as the privacy

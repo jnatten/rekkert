@@ -10,6 +10,7 @@
 #   scripts/release.sh --screenshots   # upload only the screenshots, build nothing
 #   scripts/release.sh --metadata      # upload only the description and the rest
 #   scripts/release.sh --screenshots --metadata   # the whole listing
+#   scripts/release.sh --creative      # upload only the header and search results images
 #
 # Needs, once:
 #   TUIST_DEVELOPMENT_TEAM      the paid team id, in mise.local.toml
@@ -33,6 +34,8 @@
 # --screenshots uploads whatever `scripts/shots.sh` last put in fastlane/screenshots/, and
 # --metadata uploads the text in fastlane/metadata/. Both belong to a version rather than
 # to the app, so they need a version in an editable state — the one you are preparing.
+# --creative puts fastlane/creative/ on that version too, through scripts/creative-upload.swift,
+# because deliver has no field for the header and search results images.
 #
 # Screenshots replace the whole set for each device size rather than adding to it, because
 # App Store Connect caps a set at ten and then starts refusing. Metadata only touches the
@@ -56,6 +59,7 @@ BUMP=0
 BUILD_NUMBER=
 UP_SHOTS=0
 UP_META=0
+UP_CREATIVE=0
 for arg in "$@"; do
   case "$arg" in
     --bump) BUMP=1 ;;
@@ -65,6 +69,7 @@ for arg in "$@"; do
     --skip-tests) DO_TESTS=0 ;;
     --screenshots) STOP_AFTER=listing; UP_SHOTS=1 ;;
     --metadata) STOP_AFTER=listing; UP_META=1 ;;
+    --creative) STOP_AFTER=listing; UP_CREATIVE=1 ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
 done
@@ -116,10 +121,15 @@ fi
 if [ "$STOP_AFTER" = listing ]; then
   shots=fastlane/screenshots
   meta=fastlane/metadata
+  creative=fastlane/creative
 
   if [ "$UP_SHOTS" = 1 ]; then
     test -n "$(find "$shots" -name '*.png' 2>/dev/null)" || {
       echo "No screenshots in $shots/ - run ./scripts/shots.sh first" >&2; exit 1; }
+  fi
+  if [ "$UP_CREATIVE" = 1 ]; then
+    test -n "$(find "$creative" -name '*.png' 2>/dev/null)" || {
+      echo "No images in $creative/ - run ./scripts/shots.sh --store first" >&2; exit 1; }
   fi
 
   # App Store Connect rejects the whole upload over one long field, and says so after the
@@ -149,6 +159,16 @@ for path in sorted(pathlib.Path(os.environ["META_DIR"]).rglob("*.txt")):
 if over:
     sys.exit("FAIL: metadata too long\n" + "\n".join(over))
 ' || exit 1
+  fi
+
+  if [ "$UP_CREATIVE" = 1 ]; then
+    version=$(grep -o '"MARKETING_VERSION": "[^"]*"' Project.swift | head -1 | cut -d'"' -f4)
+    echo "==> Header and search results"
+    swift scripts/creative-upload.swift "$version" "$creative"
+    if [ "$UP_SHOTS" = 0 ] && [ "$UP_META" = 0 ]; then
+      echo "==> Uploaded, onto the version you are preparing."
+      exit 0
+    fi
   fi
 
   # deliver wants the key as one JSON file rather than as the three separate things every

@@ -9,8 +9,7 @@
 # Docs images land in docs/images/ at the sizes index.html declares. App Store images
 # land in fastlane/screenshots/en-US/ at the simulator's own resolution, which is where
 # `scripts/release.sh --screenshots` uploads them from. The product page header and search
-# results images land in fastlane/creative/en-US/, and go up by hand: deliver has no
-# field for them.
+# results images land in fastlane/creative/en-US/, for `scripts/release.sh --creative`.
 #
 # Override the devices if the listing needs a different size:
 #
@@ -264,7 +263,7 @@ if [ "$DO_STORE" = 1 ]; then
   echo "==> $CREATIVE"
   rm -rf "$CREATIVE"
   swift scripts/creative.swift "$RAW" "$CREATIVE"
-  echo "  upload them in App Store Connect: Product Page Information > Header and Search Results"
+  echo "  upload them with: ./scripts/release.sh --creative"
 fi
 
 echo "==> Done"
