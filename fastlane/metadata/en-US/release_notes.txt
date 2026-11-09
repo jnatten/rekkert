@@ -1,0 +1,17 @@
+KEEP THE COURT TOGETHER BETWEEN MATCHES
+
+When a shared match ends, the host chooses to keep sharing for the next match or stop.
+
+Guests choose to stay for the next match or leave. When the host starts it, everyone on the share is told and follows along.
+
+Start sharing before a match is on, so everyone can join while you set up.
+
+Joining when no match is on waits until the host starts one, and leaving is one tap away.
+
+A share you forget stops on its own after 30 minutes.
+
+FIXES
+
+On the Apple Watch SE (1st generation), Rekkert no longer crashes when it finds the host over Bluetooth, and it draws the same teams as the phones.
+
+A workout picked up after the watch app restarts keeps recording heart rate and energy.
