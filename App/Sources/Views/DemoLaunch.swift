@@ -16,6 +16,10 @@ enum DemoLaunch {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-landscape")
     }
 
+    static var isPortrait: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-portrait")
+    }
+
     /// Opens straight into the full-screen scoreboard.
     static var fullscreen: Bool {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-fullscreen")

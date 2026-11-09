@@ -925,6 +925,20 @@ declares, and the script fails if the two ever disagree — a wrong size is a cr
 that nothing else would catch. App Store images land in `fastlane/screenshots/en-US/`, at
 the simulator's own resolution.
 
+The iPhone's scoreboards are all landscape, and the first one leads the listing. Search
+results show a landscape first screenshot on its own instead of three portrait ones.
+
+`scripts/creative.swift` builds the product page header (3840 × 1646) and the search
+results image (3840 × 2560) from the same shots, into `fastlane/creative/en-US/`.
+`shots.sh --store` runs it, or on its own:
+
+```sh
+swift scripts/creative.swift .build/shots/raw fastlane/creative/en-US
+```
+
+They show on iOS 27 and iPadOS 27 and later, cropped differently on each device, so the
+scoreboard sits in the middle and nothing that matters is near an edge.
+
 ## Releasing
 
 A build goes to TestFlight when you ask for one: **Run workflow** on the TestFlight
@@ -1032,6 +1046,11 @@ slot of another size. The iPad's set has no workouts in it: an iPad cannot pair 
 the app never shows one there.
 App Store Connect is the only thing that knows which pixel sizes it accepts this month, so
 the script prints what it made rather than claiming the sizes are right.
+
+The header and search results images are not part of that upload, because `deliver` has
+no field for them. They go up in App Store Connect, under Product Page Information >
+Header and Search Results, and its Preview shows how each device crops them. They are
+reviewed on their own, and an approved one can go live without a new version.
 
 Some of what a submission needs is set once in App Store Connect and has no file here:
 price and availability, the App Privacy answers (Data Not Collected, as the privacy

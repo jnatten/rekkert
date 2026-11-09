@@ -100,6 +100,9 @@ struct RootView: View {
             if DemoLaunch.isLandscape, let scene = UIApplication.shared.phoneScene {
                 scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
             }
+            if DemoLaunch.isPortrait, let scene = UIApplication.shared.phoneScene {
+                scene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
+            }
             #endif
         }
         .alert(

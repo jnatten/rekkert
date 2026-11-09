@@ -8,7 +8,9 @@
 #
 # Docs images land in docs/images/ at the sizes index.html declares. App Store images
 # land in fastlane/screenshots/en-US/ at the simulator's own resolution, which is where
-# `scripts/release.sh --screenshots` uploads them from.
+# `scripts/release.sh --screenshots` uploads them from. The product page header and search
+# results images land in fastlane/creative/en-US/, and go up by hand: deliver has no
+# field for them.
 #
 # Override the devices if the listing needs a different size:
 #
@@ -39,6 +41,7 @@ IPAD_NAME=${REKKERT_SHOTS_IPAD:-"iPad Pro 13-inch (M5)"}
 DD=.build/shots
 RAW=.build/shots/raw
 STORE=fastlane/screenshots/en-US
+CREATIVE=fastlane/creative/en-US
 IOS_ID=dev.natten.rekkert
 WATCH_ID=dev.natten.rekkert.watchkitapp
 IOS_APP="$DD/Build/Products/Debug-iphonesimulator/Rekkert.app"
@@ -124,16 +127,15 @@ shoot() {
 SCORE=(-rekkert-demo traditional -rekkert-demo-points 20)
 
 echo "==> iPhone"
-shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/home.png" -rekkert-demo-presets
+# Stood up first: the last run ended on its side, and the phone keeps that through a reboot.
+shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/home.png" -rekkert-demo-presets -rekkert-demo-portrait
 shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/americano.png" -rekkert-demo americano -rekkert-demo-rounds
 # The rounds list rather than the scoreboard: three rounds with three different
 # partnerships in them is what a friendly is, and a scoreboard cannot show that.
 shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/friendly.png" -rekkert-demo friendly -rekkert-demo-friendly-rounds 3 -rekkert-demo-rounds-sheet
 if [ "$DO_STORE" = 1 ]; then
-  shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/match-portrait.png" "${SCORE[@]}" -rekkert-demo-workout
   # A round that has been played rather than the one just drawn, which is all zeros.
   shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/americano-round.png" -rekkert-demo americano -rekkert-demo-rounds -rekkert-demo-browse-round 1
-  shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/winner.png" -rekkert-demo winnercourt
   shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/history.png" -rekkert-demo-workouts -rekkert-demo-history 0
   shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/player.png" -rekkert-demo-players Jonas
   shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/workout.png" -rekkert-demo-workouts 0
@@ -141,6 +143,9 @@ fi
 # Landscape last: the simulator stays turned until something turns it back.
 shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/match.png" "${SCORE[@]}" -rekkert-demo-landscape
 if [ "$DO_STORE" = 1 ]; then
+  # The listing's first image. Search results show a landscape first shot on its own.
+  shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/match-workout.png" "${SCORE[@]}" -rekkert-demo-workout -rekkert-demo-landscape
+  shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/winner.png" -rekkert-demo winnercourt -rekkert-demo-landscape
   shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/fullscreen.png" "${SCORE[@]}" -rekkert-demo-fullscreen -rekkert-demo-landscape
   shoot "$PHONE" "$IOS_APP" "$IOS_ID" "$RAW/board.png" -rekkert-demo americano -rekkert-demo-courts 4 -rekkert-demo-rounds -rekkert-demo-board -rekkert-demo-landscape
 fi
@@ -219,7 +224,7 @@ if [ "$DO_STORE" = 1 ]; then
   # all App Store Connect takes.
   rm -rf "$STORE"
   mkdir -p "$STORE"
-  cp "$RAW/match-portrait.png" "$STORE/iphone-01-match.png"
+  cp "$RAW/match-workout.png" "$STORE/iphone-01-match.png"
   cp "$RAW/home.png" "$STORE/iphone-02-home.png"
   cp "$RAW/americano-round.png" "$STORE/iphone-03-americano.png"
   cp "$RAW/friendly.png" "$STORE/iphone-04-friendly.png"
@@ -255,6 +260,11 @@ if [ "$DO_STORE" = 1 ]; then
     echo "  $shot  $(sips -g pixelWidth -g pixelHeight "$shot" | awk '/pixel/ {printf "%s", $2 " "}')"
   done
   echo "  upload them with: ./scripts/release.sh --screenshots"
+
+  echo "==> $CREATIVE"
+  rm -rf "$CREATIVE"
+  swift scripts/creative.swift "$RAW" "$CREATIVE"
+  echo "  upload them in App Store Connect: Product Page Information > Header and Search Results"
 fi
 
 echo "==> Done"
