@@ -51,6 +51,9 @@ nonisolated final class TestClock: RadioScheduler, @unchecked Sendable {
 
     var hasPending: Bool { lock.withLock { !pending.isEmpty } }
 
+    /// When the earliest thing on the clock is due, if anything is.
+    var nextDue: Duration? { lock.withLock { pending.map(\.due).min() } }
+
     private func schedule(after delay: Duration, _ work: @escaping @Sendable () -> Void) -> Timer {
         let id = lock.withLock { () -> Int in
             counter += 1

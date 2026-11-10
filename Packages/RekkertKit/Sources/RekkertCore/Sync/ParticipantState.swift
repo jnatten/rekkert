@@ -57,7 +57,8 @@ public struct Participants: Codable, Sendable, Hashable {
         name: String? = nil,
         access: ShareAccess = .full,
         isOlderBuild: Bool = false,
-        at time: Date
+        at time: Date,
+        limit: Int = Self.limit
     ) -> Admission {
         // Counted on its own until it named its phone, a watch joins that guest instead.
         if let pairedTo,
@@ -72,7 +73,7 @@ public struct Participants: Codable, Sendable, Hashable {
             if let name { all[index].name = name }
             return .known
         }
-        guard all.count < Self.limit else { return .full }
+        guard all.count < limit else { return .full }
         all.append(Participant(
             id: pairedTo ?? device,
             name: name,

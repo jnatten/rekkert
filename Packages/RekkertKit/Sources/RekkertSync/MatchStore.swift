@@ -182,6 +182,7 @@ public final class MatchStore {
     /// A guest heard who the host says they are.
     @ObservationIgnored public var onHostNameChanged: (() -> Void)?
     @ObservationIgnored private let participantTick: Duration
+    @ObservationIgnored let guestLimit: Int
 
     public init(
         device: DeviceID,
@@ -193,9 +194,11 @@ public final class MatchStore {
         retryInterval: Duration = .seconds(4),
         keepsHistory: Bool = true,
         now: @escaping @Sendable () -> Date = { Date() },
-        participantTick: Duration = .seconds(1)
+        participantTick: Duration = .seconds(1),
+        guestLimit: Int = Participants.limit
     ) {
         self.participantTick = participantTick
+        self.guestLimit = guestLimit
         self.sendTimeout = sendTimeout
         self.retryInterval = retryInterval
         self.keepsHistory = keepsHistory
@@ -552,13 +555,13 @@ public final class MatchStore {
             guard sender != device else { return true }
             let owner = sender ?? linkOwners[link] ?? DeviceID(link.raw)
             linkOwners[link] = owner
-            admission = participants.heard(from: owner, vector: vector, isOlderBuild: sender == nil, at: now())
+            admission = participants.heard(from: owner, vector: vector, isOlderBuild: sender == nil, at: now(), limit: guestLimit)
         case .guestCard(let card):
             linkOwners[link] = card.device
-            admission = participants.heard(from: card.device, pairedTo: card.pairedTo, name: card.name, at: now())
+            admission = participants.heard(from: card.device, pairedTo: card.pairedTo, name: card.name, at: now(), limit: guestLimit)
         default:
             guard let owner = linkOwners[link] else { return true }
-            admission = participants.heard(from: owner, at: now())
+            admission = participants.heard(from: owner, at: now(), limit: guestLimit)
         }
         guard admission == .full else { return true }
         refusedLinks.insert(link)
@@ -1411,7 +1414,7 @@ public final class MatchStore {
     private func record(_ kind: EventKind) {
         let before = state
         let session = log.sessionID
-        let event = log.append(kind, from: device, at: MatchEvent.stamp())
+        let event = log.append(kind, from: device, at: MatchEvent.stamp(now()))
         outbox.enqueue(event)
         // Reduced before `refresh()` rather than read after it: the point that wins a match
         // takes the log and the state with it, and this is the only moment the board it
@@ -2202,7 +2205,7 @@ public final class MatchStore {
         guard role == .host else { return [] }
         return fresh.compactMap { event in
             guard case .finish = event.kind, event.id.device != device, event.id.device != pairedDevice else { return nil }
-            return log.append(.undo(event.id), from: device, at: MatchEvent.stamp())
+            return log.append(.undo(event.id), from: device, at: MatchEvent.stamp(now()))
         }
     }
 

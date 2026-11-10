@@ -65,7 +65,7 @@ are not stories:
 
 **Purpose**: A known-good baseline, and somewhere to keep the evidence
 
-- [ ] T001 Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh` on `e6b11594`, and confirm both pass. Any failure here is not this feature's, and is raised before going on. Create `specs/005-steady-sharing-nine-guests/validation.md` with four sections:
+- [X] T001 Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh` on `e6b11594`, and confirm both pass. Any failure here is not this feature's, and is raised before going on. Create `specs/005-steady-sharing-nine-guests/validation.md` with four sections:
   - **Baseline**: the RekkertSync suite time, `twoCourtsSevenGuestsHalfAnHour` time and `deliveryDoesNotSnowball` time, from the latest `main` CI run (`gh run view --log`).
   - **Level 4: small field run.**
   - **Calibration.**
@@ -83,26 +83,24 @@ per-device clocks and an injectable host limit. Every story's tests need these.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T002 [P] Add `nextDue` to `TestClock` in `SyncTests/TestClock.swift`: the earliest deadline of any scheduled run, or `nil`. Cover it in the same file's existing tests, or in a new `SyncTests/TestClockTests.swift`.
-- [ ] T003 Make `CourtHarness` step to whichever comes first, the clock's `nextDue` or the step, in `SyncTests/CourtHarness.swift` (the stepping at :280-285).
-  - The default step becomes 50 ms.
-  - Every existing RekkertSync suite must still pass unchanged.
+- [X] T002 [P] Add `nextDue` to `TestClock` in `SyncTests/TestClock.swift`: the earliest deadline of any scheduled run, or `nil`. Cover it in the same file's existing tests, or in a new `SyncTests/TestClockTests.swift`.
+- [X] T003 Let `CourtHarness` jump over idle radio time, in `SyncTests/CourtHarness.swift` (the stepping at :280-285). With `Timing.skipsIdleTime` on, a step goes up to the clock's `nextDue` when that is further off than the step. It is opt-in, so every existing RekkertSync suite runs exactly as before, still at 50 ms steps.
 
   Depends on T002.
-- [ ] T004 [P] Add to `Airwaves.Settings` in `SyncTests/SimulatedRadio.swift` (D-10). All are seeded from the existing generator (:573-587):
+- [X] T004 [P] Add to `Airwaves.Settings` in `SyncTests/SimulatedRadio.swift` (D-10). All are seeded from the existing generator (:573-587):
   - `jitter: Duration`, added to each hop;
   - `busyAir: Double`, a factor on `bytesPerSecond`;
   - `burstLoss`, bursts of lost host→guest chunks;
   - `guestWriteLoss: Double`;
   - `sharedAirtime: Bool`: every host on the same airwaves draws on one byte budget, so a second shared match on the next court competes for the air;
   - a static `busyHall` preset with `jitter`, `busyAir`, `burstLoss` and `guestWriteLoss` on.
-- [ ] T005 [P] Create `SyncTests/Flapper.swift`. It drops and restores one guest's second link on a seeded schedule, from the field numbers in research.md D-10:
+- [X] T005 [P] Create `SyncTests/Flapper.swift`. It drops and restores one guest's second link on a seeded schedule, from the field numbers in research.md D-10:
   - up for a median of 43 s (90th percentile 127 s);
   - down for a median of 4.1 s (90th percentile 10.9 s);
   - a third of drops shared with another guest within 1 s.
 
   It uses `walkAway`/`comeBack` on that guest's second radio (`SyncTests/SimulatedRadio.swift:488-496`).
-- [ ] T006 Give `CourtHarness` a second link per guest phone, in `SyncTests/CourtHarness.swift` (`boot`, :120-124).
+- [X] T006 Give `CourtHarness` a second link per guest phone, in `SyncTests/CourtHarness.swift` (`boot`, :120-124).
   - The second link is a separate `Airwaves` standing in for Wi-Fi, with its own `SimulatedRadio` and `RadioCore`, attached as `.sharedSession`.
   - New options:
     - `radios` per guest:
@@ -115,7 +113,7 @@ per-device clocks and an injectable host limit. Every story's tests need these.
   - The real `LocalNetworkTransport` stays out of the harness, because it only builds for iOS. Field runs cover it (T058).
 
   Depends on T003 and T005.
-- [ ] T007 [P] Create the pure rule `ArrivalConditions.nothingWrong(arrivalAt:on:from:entries:pairEntries:)` in `RekkertCore/Sync/ArrivalConditions.swift`, as data-model.md defines it. It reads the device's `LinkRecordEntry`s (`proven`/`dropped` per link, `outOfReach`, `caughtUp`), plus its phone's entries for a watch following that phone, and returns true exactly as defined above (FR-010).
+- [X] T007 [P] Create the pure rule `ArrivalConditions.nothingWrong(arrivalAt:on:from:entries:pairEntries:)` in `RekkertCore/Sync/ArrivalConditions.swift`, as data-model.md defines it. It reads the device's `LinkRecordEntry`s (`proven`/`dropped` per link, `outOfReach`, `caughtUp`), plus its phone's entries for a watch following that phone, and returns true exactly as defined above (FR-010).
   - Pin it in `CoreTests/ArrivalConditionsTests.swift`:
     - one link up of two;
     - every link down;
@@ -123,21 +121,21 @@ per-device clocks and an injectable host limit. Every story's tests need these.
     - a `caughtUp` within 30 s;
     - the host's view of a guest;
     - a watch whose phone was fine, a watch whose phone had no link to the host, and a watch whose pair link was down.
-- [ ] T008 Add per-device arrivals to `CourtHarness` in `SyncTests/CourtHarness.swift` (replacing the pooled `arrivalTimes()` at :287-300):
+- [X] T008 Add per-device arrivals to `CourtHarness` in `SyncTests/CourtHarness.swift` (replacing the pooled `arrivalTimes()` at :287-300):
   - `arrivals(by device:)` leaves out only the device that tapped (its paired phone or watch still counts, FR-010). It counts a point that never arrived as later than 2 s, and times point taps only, not undos;
   - each arrival is tagged with `ArrivalConditions.nothingWrong` over that device's recorder entries;
   - a `DelayStats` gives the median, 95th percentile, slowest, and the shares within 1 s and 2 s, and says whether the device is judgeable: at least 100 timed points, and at most 10% unknown, leaving out `older` points;
   - existing suites keep their pooled assertions through a compatibility helper.
 
   Depends on T006 and T007.
-- [ ] T009 Stamp taps with an injectable clock, so tests can give each device its own. Production behaviour is unchanged, because the store's `now()` is `Date()` outside tests.
+- [X] T009 Stamp taps with an injectable clock, so tests can give each device its own. Production behaviour is unchanged, because the store's `now()` is `Date()` outside tests.
   - In `RekkertSync/MatchStore.swift`, `tap()`/`record()` stamp with the store's `now()`, not `Date()` (MS:248-251, 1411-1414).
   - In `SyncTests/CourtHarness.swift`, each simulated device gets its own clock offset and drift (both zero by default), and the harness can report a point's true delay.
-- [ ] T010 Make the host's limit injectable. Production code always uses the constant.
-  - `Participants` takes its limit at init, defaulting to `Participants.limit` (`RekkertCore/Sync/ParticipantState.swift:34, 75`).
+- [X] T010 Make the host's limit injectable. Production code always uses the constant.
+  - `Participants.heard(…)` takes a `limit`, defaulting to `Participants.limit` (`RekkertCore/Sync/ParticipantState.swift:34, 75`). `Participants` itself, which is persisted, keeps its shape.
   - `MatchStore` takes an optional `guestLimit`, defaulting to the constant (`RekkertSync/MatchStore.swift`).
   - `CourtHarness` passes it through (`SyncTests/CourtHarness.swift`).
-- [ ] T011 Run all RekkertSync suites, and record in `specs/005-steady-sharing-nine-guests/validation.md` the suite time and `twoCourtsSevenGuestsHalfAnHour` time against the T001 baseline. If either is slower than the baseline, fix the stepping before going on.
+- [X] T011 Run all RekkertSync suites, and record in `specs/005-steady-sharing-nine-guests/validation.md` the suite time and `twoCourtsSevenGuestsHalfAnHour` time against the T001 baseline. If either is slower than the baseline, fix the stepping before going on.
 
 **Checkpoint**: The simulation has two links per guest, a busy hall, per-device delays,
 per-device clocks and an injectable host limit, and the one rule exists. Stories can begin, and

@@ -18,6 +18,16 @@ final class CourtHarness {
         var standIn = StandInPolicy.Timing()
         var standInTick: Duration = .milliseconds(100)
         var idleCheck: Duration = .seconds(30)
+        /// Jumps over stretches with nothing on the radio's clock instead of stepping through them.
+        var skipsIdleTime = false
+    }
+
+    /// The radios a phone has on. Watches only ever have Bluetooth.
+    enum Radios {
+        case bluetooth
+        /// Its only link stands in for the local network, as on a phone with Bluetooth off.
+        case wifi
+        case both
     }
 
     @MainActor
@@ -26,6 +36,11 @@ final class CourtHarness {
         let id = DeviceID()
         let isWatch: Bool
         let radio: SimulatedRadio
+        /// The second link of a phone on both radios.
+        let wifiRadio: SimulatedRadio?
+        /// This device's clock against the radio's: offset, and drift as a fraction.
+        let clockOffset: TimeInterval
+        let drift: Double
         let directory: URL
         /// What the Keychain would hold: it outlives the app being ended.
         let keeper = MemoryCodeKeeper()
@@ -34,16 +49,23 @@ final class CourtHarness {
         fileprivate(set) var store: MatchStore!
         fileprivate(set) var sharing: SharedSession!
         fileprivate(set) var core: RadioCore!
+        fileprivate(set) var wifiCore: RadioCore?
         fileprivate(set) var links: FanOutTransport!
         fileprivate(set) var standIn: WatchStandIn?
         fileprivate var pairLink: LoopbackTransport?
         fileprivate var pairToken: ObjectIdentifier?
         fileprivate var tasks: [Task<Void, Never>] = []
 
-        fileprivate init(name: String, isWatch: Bool, radio: SimulatedRadio) {
+        fileprivate init(
+            name: String, isWatch: Bool, radio: SimulatedRadio, wifiRadio: SimulatedRadio? = nil,
+            clockOffset: TimeInterval = 0, drift: Double = 0
+        ) {
             self.name = name
             self.isWatch = isWatch
             self.radio = radio
+            self.wifiRadio = wifiRadio
+            self.clockOffset = clockOffset
+            self.drift = drift
             directory = FileManager.default.temporaryDirectory
                 .appendingPathComponent("court-\(UUID().uuidString)", isDirectory: true)
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -59,10 +81,14 @@ final class CourtHarness {
     nonisolated static let epoch = Date(timeIntervalSince1970: 1_800_000_000)
 
     let air: Airwaves
+    /// The air the second links share, when any phone has one.
+    let wifiAir: Airwaves?
     let timing: Timing
     let code: SessionCode
+    let guestLimit: Int
     private(set) var players: [Player] = []
     private var scored: [EventID: Duration] = [:]
+    private var scorer: [EventID: ObjectIdentifier] = [:]
     private var arrived: [EventID: [ObjectIdentifier: Duration]] = [:]
 
     var clock: TestClock { air.clock }
@@ -75,21 +101,40 @@ final class CourtHarness {
     /// `air` from another court puts both within range of each other, as two courts at one club are.
     init(
         guests: Int, withWatches: Bool = true, settings: Airwaves.Settings = Airwaves.Settings(),
-        timing: Timing = Timing(), air: Airwaves? = nil, code: SessionCode = SessionCode("482915")!
+        timing: Timing = Timing(), air: Airwaves? = nil, code: SessionCode = SessionCode("482915")!,
+        guestRadios: (Int) -> Radios = { _ in .bluetooth },
+        wifiSettings: Airwaves.Settings = Airwaves.Settings(),
+        clockSkew: (_ index: Int, _ isWatch: Bool) -> (offset: TimeInterval, drift: Double) = { _, _ in (0, 0) },
+        guestLimit: Int = Participants.limit
     ) {
         self.air = air ?? Airwaves(settings: settings)
         self.timing = timing
         self.code = code
+        self.guestLimit = guestLimit
+        let usesWifi = guests > 0 && (1 ... guests).contains { guestRadios($0) != .bluetooth }
+        wifiAir = usesWifi ? Airwaves(clock: self.air.clock, settings: wifiSettings) : nil
         for index in 0 ... guests {
             let name = index == 0 ? "host" : "guest\(index)"
-            let phone = Device(name: name, isWatch: false, radio: self.air.radio(canHost: true))
-            let watch = withWatches ? Device(name: "\(name)-watch", isWatch: true, radio: self.air.radio(canHost: false)) : nil
-            let clock = self.air.clock
+            let radios = index == 0 ? (usesWifi ? .both : .bluetooth) : guestRadios(index)
+            let phoneSkew = clockSkew(index, false)
+            let phone = Device(
+                name: name, isWatch: false,
+                radio: radios == .wifi ? wifiAir!.radio(canHost: true) : self.air.radio(canHost: true),
+                wifiRadio: radios == .both ? wifiAir!.radio(canHost: true) : nil,
+                clockOffset: phoneSkew.offset, drift: phoneSkew.drift
+            )
+            let watchSkew = clockSkew(index, true)
+            let watch = withWatches
+                ? Device(
+                    name: "\(name)-watch", isWatch: true, radio: self.air.radio(canHost: false),
+                    clockOffset: watchSkew.offset, drift: watchSkew.drift
+                )
+                : nil
             for device in [phone] + (watch.map { [$0] } ?? []) {
                 device.recorder = LinkRecorder(
                     directory: device.directory.appendingPathComponent("record", isDirectory: true),
                     device: device.isWatch ? .watch : .phone,
-                    now: { CourtHarness.epoch.addingTimeInterval(clock.now.seconds) }
+                    now: deviceClock(of: device)
                 )
             }
             // What `transferFile` does: gets there whether or not the phone's app is running.
@@ -113,8 +158,20 @@ final class CourtHarness {
             MainActor.assumeIsolated {
                 for task in device.tasks { task.cancel() }
                 device.core?.stop()
+                device.wifiCore?.stop()
             }
         }
+    }
+
+    /// What `device` reads as the time: the radio's clock, offset and drifting as its own does.
+    private func deviceClock(of device: Device) -> @Sendable () -> Date {
+        let (clock, offset, drift) = (air.clock, device.clockOffset, device.drift)
+        return { CourtHarness.epoch.addingTimeInterval(clock.now.seconds * (1 + drift) + offset) }
+    }
+
+    /// The time `device` shows when the radio's clock reads `instant`.
+    func deviceTime(of device: Device, at instant: Duration) -> Date {
+        CourtHarness.epoch.addingTimeInterval(instant.seconds * (1 + device.drift) + device.clockOffset)
     }
 
     private func boot(_ device: Device, pairLink: LoopbackTransport) {
@@ -122,8 +179,11 @@ final class CourtHarness {
         let links = FanOutTransport()
         device.pairToken = links.attach(pairLink, as: .pairedDevice)
         links.attach(core, as: .sharedSession)
+        let wifiCore = device.wifiRadio.map { RadioCore(radio: $0) }
+        if let wifiCore { links.attach(wifiCore, as: .sharedSession) }
         let persistence = SessionStore(directory: device.directory)
         let clock = air.clock
+        let now = deviceClock(of: device)
         let store = MatchStore(
             device: device.id,
             transport: links,
@@ -133,14 +193,16 @@ final class CourtHarness {
             sendTimeout: timing.sendTimeout,
             retryInterval: timing.retryInterval,
             keepsHistory: !device.isWatch,
-            now: { CourtHarness.epoch.addingTimeInterval(clock.now.seconds) },
-            participantTick: .milliseconds(20)
+            now: now,
+            participantTick: .milliseconds(20),
+            guestLimit: guestLimit
         )
         store.recorder = device.recorder
         let sharing = SharedSession(
-            store: store, link: LocalNetworkTransport(), bluetooth: core,
+            store: store, link: LocalNetworkTransport(),
+            bluetooth: wifiCore.map { TwinLink(bluetooth: core, wifi: $0) as any SharedLink } ?? core,
             graceBeforeNotice: timing.graceBeforeNotice, radioGrace: timing.radioGrace,
-            keeper: device.keeper, now: { CourtHarness.epoch.addingTimeInterval(clock.now.seconds) },
+            keeper: device.keeper, now: now,
             idleCheck: timing.idleCheck,
             // Woken by the clock rather than polling it: a court of sixteen devices, each with
             // timers asleep for minutes, would otherwise spend its time asking what time it is.
@@ -156,6 +218,7 @@ final class CourtHarness {
             }
         )
         device.core = core
+        device.wifiCore = wifiCore
         device.links = links
         device.store = store
         device.sharing = sharing
@@ -237,7 +300,10 @@ final class CourtHarness {
         let before = Set(device.store.log.events.keys)
         device.store.tap(court: court, team: team)
         let new = device.store.log.events.keys.first { !before.contains($0) }
-        if let new { scored[new] = clock.now }
+        if let new {
+            scored[new] = clock.now
+            scorer[new] = ObjectIdentifier(device)
+        }
         return new
     }
 
@@ -248,8 +314,7 @@ final class CourtHarness {
     func run(for duration: Duration) async {
         var elapsed = Duration.zero
         while elapsed < duration {
-            await step()
-            elapsed += timing.step
+            elapsed += await step(atMost: duration - elapsed)
         }
     }
 
@@ -271,17 +336,22 @@ final class CourtHarness {
         var elapsed = Duration.zero
         while elapsed <= limit {
             if condition() { return true }
-            await step()
-            elapsed += timing.step
+            elapsed += await step(atMost: max(timing.step, limit - elapsed))
         }
         return condition()
     }
 
-    private func step() async {
-        clock.advance(by: timing.step)
+    /// One step of radio time, or with `skipsIdleTime` a longer one up to whatever is next due.
+    private func step(atMost limit: Duration) async -> Duration {
+        var delta = timing.step
+        if timing.skipsIdleTime, let due = clock.nextDue {
+            delta = max(timing.step, min(due - clock.now, limit))
+        }
+        clock.advance(by: delta)
         for _ in 0 ..< 4 { await Task.yield() }
         try? await Task.sleep(for: .milliseconds(1))
         noteArrivals()
+        return delta
     }
 
     private func noteArrivals() {
@@ -297,6 +367,73 @@ final class CourtHarness {
     /// How long each point took to reach each device that has it, counted from the tap.
     func arrivalTimes() -> [Duration] {
         scored.flatMap { event, at in (arrived[event] ?? [:]).values.map { $0 - at } }
+    }
+
+    struct Arrival {
+        let event: EventID
+        /// `nil` for a point that never got there.
+        let delay: Duration?
+        let nothingWrong: Bool
+    }
+
+    /// Every point tapped elsewhere, as it reached `device`: the scorer's own phone or watch
+    /// counts, the device that tapped does not (spec 005, FR-010).
+    func arrivals(on device: Device) -> [Arrival] {
+        let key = ObjectIdentifier(device)
+        let entries = device.recorder.read().entries.filter { $0.device == (device.isWatch ? .watch : .phone) }
+        let pair = counterpart(of: device)
+        let pairEntries = device.isWatch ? pair?.recorder.read().entries.filter { $0.device == .phone } : nil
+        return scored.compactMap { event, tapped -> Arrival? in
+            guard let by = scorer[event], by != key else { return nil }
+            let landed = arrived[event]?[key]
+            let instant = landed ?? clock.now
+            let fromPair = pair.map { ObjectIdentifier($0) == by } ?? false
+            let fromGuest = device === host.phone ? scoringPhone(of: by)?.id : nil
+            let fine = ArrivalConditions.nothingWrong(
+                arrivalAt: deviceTime(of: device, at: instant),
+                on: device.isWatch ? .watch : .phone,
+                from: fromGuest,
+                fromPairedDevice: fromPair,
+                entries: entries,
+                pairEntries: fromPair ? nil : pairEntries
+            )
+            return Arrival(event: event, delay: landed.map { $0 - tapped }, nothingWrong: fine)
+        }
+    }
+
+    private func scoringPhone(of key: ObjectIdentifier) -> Device? {
+        players.first { ObjectIdentifier($0.phone) == key || $0.watch.map(ObjectIdentifier.init) == key }?.phone
+    }
+
+    /// Delays on one device, or on many, where a point that never arrived counts as later than
+    /// any limit.
+    struct DelayStats {
+        let delays: [Duration?]
+
+        init(_ arrivals: [Arrival]) { delays = arrivals.map(\.delay) }
+        init(delays: [Duration?]) { self.delays = delays }
+
+        var count: Int { delays.count }
+        private var sorted: [Duration] {
+            delays.map { $0 ?? .seconds(3_600) }.sorted()
+        }
+        var median: Duration? { percentile(0.5) }
+        var p95: Duration? { percentile(0.95) }
+        var slowest: Duration? { sorted.last }
+
+        func percentile(_ share: Double) -> Duration? {
+            let sorted = sorted
+            guard !sorted.isEmpty else { return nil }
+            return sorted[min(sorted.count - 1, Int((Double(sorted.count) * share).rounded(.up)) - 1)]
+        }
+
+        func share(within limit: Duration) -> Double {
+            guard !delays.isEmpty else { return 0 }
+            return Double(delays.count { $0.map { $0 <= limit } ?? false }) / Double(delays.count)
+        }
+
+        /// FR-010 can be judged only on at least 100 timed points.
+        var isJudgeable: Bool { count >= 100 }
     }
 
     // MARK: - Agreement
@@ -316,8 +453,18 @@ final class CourtHarness {
 
     // MARK: - What happens to a device
 
-    func outOfRange(_ device: Device) { device.radio.walkAway() }
-    func backInRange(_ device: Device) { device.radio.comeBack() }
+    func outOfRange(_ device: Device) {
+        device.radio.walkAway()
+        device.wifiRadio?.walkAway()
+    }
+
+    func backInRange(_ device: Device) {
+        device.radio.comeBack()
+        device.wifiRadio?.comeBack()
+    }
+
+    /// The second links of every guest on both radios, for a `Flapper`.
+    var secondLinks: [SimulatedRadio] { guests.compactMap(\.phone.wifiRadio) }
 
     /// The watch out of reach of its own phone, both still running.
     func separate(_ player: Player) {
@@ -342,12 +489,14 @@ final class CourtHarness {
         for task in device.tasks { task.cancel() }
         device.tasks = []
         device.radio.end()
+        device.wifiRadio?.end()
         device.pairLink?.disconnect()
         // WatchConnectivity says so on the other wrist or phone: an app that is not running is not reachable.
         counterpart(of: device)?.pairLink?.setReachable(false)
         device.store = nil
         device.sharing = nil
         device.core = nil
+        device.wifiCore = nil
         device.links = nil
         device.standIn = nil
     }
@@ -356,6 +505,7 @@ final class CourtHarness {
     /// with its watch or phone anew.
     func relaunch(_ device: Device) {
         device.radio.relaunch()
+        device.wifiRadio?.relaunch()
         guard let counterpart = counterpart(of: device) else {
             return boot(device, pairLink: LoopbackTransport(reachable: false))
         }

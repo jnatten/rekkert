@@ -21,6 +21,32 @@ nonisolated final class Airwaves: @unchecked Sendable {
         var loss = 0.0
         /// Whether a guest scanning with its screen off finds a host advertising from the background.
         var findsBackgroundedHostsInBackground = true
+        /// Up to this much more than `latency` on each hop, seeded.
+        var jitter: Duration = .zero
+        /// A hall full of other radios: the share of `bytesPerSecond` left over for this match.
+        var busyAir = 1.0
+        /// Now and then several host-to-guest chunks in a row go missing.
+        var burstLoss = BurstLoss()
+        /// The share of guest-to-host writes that fail and have to be written again.
+        var guestWriteLoss = 0.0
+        /// Every host on these airwaves draws on one budget of airtime, so a second shared match
+        /// on the next court competes with this one for the air.
+        var sharedAirtime = false
+
+        struct BurstLoss {
+            var chance = 0.0
+            var length = 0
+        }
+
+        /// A hall in use, with other players and their phones and watches about.
+        static var busyHall: Settings {
+            var settings = Settings()
+            settings.jitter = .milliseconds(20)
+            settings.busyAir = 0.7
+            settings.burstLoss = BurstLoss(chance: 0.01, length: 3)
+            settings.guestWriteLoss = 0.01
+            return settings
+        }
     }
 
     let clock: TestClock
@@ -81,6 +107,44 @@ nonisolated final class Airwaves: @unchecked Sendable {
     private var freedSinceRefusal: [ObjectIdentifier: Int] = [:]
     private var refused: Set<ObjectIdentifier> = []
     private var delivered: [ObjectIdentifier: Int] = [:]
+    private var burstLeft = 0
+    /// With `sharedAirtime`, when the air is next free for anybody's chunk.
+    private var airBusyUntil: Duration = .zero
+    private var chunksSent: [ObjectIdentifier: Int] = [:]
+
+    /// Every chunk `radio` has put on the air as a host, lost or not.
+    func chunksSent(by radio: SimulatedRadio) -> Int {
+        lock.withLock { chunksSent[ObjectIdentifier(radio), default: 0] }
+    }
+
+    /// A hop's latency with this time's jitter added. Called with the lock held.
+    private func hopLatency() -> Duration {
+        let jitter = _settings.jitter
+        guard jitter > .zero else { return _settings.latency }
+        return _settings.latency + jitter * random.next()
+    }
+
+    /// Whether this host-to-guest chunk goes missing. Called with the lock held.
+    private func losesChunk() -> Bool {
+        if burstLeft > 0 {
+            burstLeft -= 1
+            return true
+        }
+        if _settings.burstLoss.chance > 0, random.next() < _settings.burstLoss.chance {
+            burstLeft = max(0, _settings.burstLoss.length - 1)
+            return true
+        }
+        return random.next() < _settings.loss
+    }
+
+    /// When a transmission of `duration` that wants to start now finishes, counting the air
+    /// shared with other hosts when it is. Called with the lock held.
+    private func finishing(after duration: Duration, now: Duration) -> Duration {
+        guard _settings.sharedAirtime else { return now + duration }
+        let start = max(now, airBusyUntil)
+        airBusyUntil = start + duration
+        return airBusyUntil
+    }
 
     /// Everything a host has got through to `radio` so far, in bytes.
     func bytesDelivered(to radio: SimulatedRadio) -> Int {
@@ -92,7 +156,9 @@ nonisolated final class Airwaves: @unchecked Sendable {
     }
 
     private func airtime(_ bytes: Int) -> Duration {
-        .nanoseconds(Int64(bytes) * 1_000_000_000 / Int64(max(1, settings.bytesPerSecond)))
+        let settings = settings
+        let rate = max(1, Int64((Double(settings.bytesPerSecond) * settings.busyAir).rounded()))
+        return .nanoseconds(Int64(bytes) * 1_000_000_000 / rate)
     }
 
     private func connection(guest: SimulatedRadio, peripheral: RadioPeer) -> Connection? {
@@ -265,9 +331,13 @@ nonisolated final class Airwaves: @unchecked Sendable {
     private func transmitNext(from host: SimulatedRadio) {
         let token = ObjectIdentifier(host)
         guard let head = lock.withLock({ transmitting[token]?.first }) else { return }
-        clock.run(after: airtime(head.chunk.count)) {
+        let duration = airtime(head.chunk.count)
+        let now = clock.now
+        let done = lock.withLock { finishing(after: duration, now: now) }
+        clock.run(after: done - now) {
             let (freedEnough, latency, lost) = self.lock.withLock { () -> (Bool, Duration, Bool) in
                 if !(self.transmitting[token]?.isEmpty ?? true) { self.transmitting[token]?.removeFirst() }
+                self.chunksSent[token, default: 0] += 1
                 var freedEnough = false
                 if self.refused.contains(token) {
                     self.freedSinceRefusal[token, default: 0] += 1
@@ -276,8 +346,8 @@ nonisolated final class Airwaves: @unchecked Sendable {
                         freedEnough = true
                     }
                 }
-                let lost = self.random.next() < self._settings.loss || head.connection.guest.missesIncoming
-                return (freedEnough, self._settings.latency, lost)
+                let lost = self.losesChunk() || head.connection.guest.missesIncoming
+                return (freedEnough, self.hopLatency(), lost)
             }
             let connection = head.connection
             if !lost {
@@ -297,16 +367,20 @@ nonisolated final class Airwaves: @unchecked Sendable {
             clock.run { guest.tell { $0.wrote(to: peripheral, failed: true) } }
             return
         }
-        let (latency, airtime) = (settings.latency, airtime(chunk.count))
-        let arrives = lock.withLock { () -> Duration in
-            let start = max(clock.now, connection.guestWriteBusyUntil)
-            connection.guestWriteBusyUntil = start + airtime
-            return connection.guestWriteBusyUntil + latency
+        let airtime = airtime(chunk.count)
+        let now = clock.now
+        let (arrives, latency, fails) = lock.withLock { () -> (Duration, Duration, Bool) in
+            let start = max(now, connection.guestWriteBusyUntil)
+            let done = finishing(after: start - now + airtime, now: now)
+            connection.guestWriteBusyUntil = done
+            let latency = hopLatency()
+            let fails = _settings.guestWriteLoss > 0 && random.next() < _settings.guestWriteLoss
+            return (done + latency, latency, fails)
         }
         let host = connection.host
         let goesMissing = guest.losesWrites
-        clock.run(after: arrives - clock.now) {
-            guard connection.isConnected else {
+        clock.run(after: arrives - now) {
+            guard connection.isConnected, !fails else {
                 return guest.tell { $0.wrote(to: peripheral, failed: true) }
             }
             guard !goesMissing else {

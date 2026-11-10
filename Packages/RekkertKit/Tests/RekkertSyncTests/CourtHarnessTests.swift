@@ -43,6 +43,64 @@ struct CourtHarnessTests {
         #expect(court.host.phone.core.reachableCount == 0)
     }
 
+    @Test func aGuestOnBothRadiosHoldsTwoLinksToTheHost() async {
+        let court = CourtHarness(guests: 1, withWatches: false, guestRadios: { _ in .both })
+        court.startMatch()
+        court.share()
+        court.joinAll()
+        #expect(await court.until(within: .seconds(60)) {
+            court.allInStep() && court.host.phone.core.reachableCount == 1 && court.host.phone.wifiCore?.reachableCount == 1
+        })
+    }
+
+    @Test func aGuestOnTheStandInForWiFiAloneFollowsThePoint() async {
+        let court = CourtHarness(guests: 1, withWatches: false, guestRadios: { _ in .wifi })
+        court.startMatch()
+        court.share()
+        court.joinAll()
+        #expect(await court.until(within: .seconds(60)) { court.allInStep() })
+        #expect(court.host.phone.core.reachableCount == 0)
+        court.score(on: court.host.phone)
+        #expect(await court.until(within: .seconds(30)) { court.allInStep() })
+    }
+
+    @Test func arrivalsLeaveOutOnlyTheDeviceThatTapped() async {
+        let court = CourtHarness(guests: 1)
+        court.startMatch()
+        court.share()
+        court.joinAll()
+        #expect(await court.until(within: .seconds(90)) { court.allInStep() })
+        court.score(on: court.host.phone)
+        #expect(await court.until(within: .seconds(30)) { court.allInStep() })
+
+        #expect(court.arrivals(on: court.host.phone).isEmpty)
+        #expect(court.arrivals(on: court.host.watch!).count == 1)
+        let onGuest = court.arrivals(on: court.guests.first!.phone)
+        #expect(onGuest.count == 1)
+        #expect(onGuest.first?.delay != nil)
+        #expect(onGuest.first?.nothingWrong == true)
+    }
+
+    @Test func aPointThatNeverArrivesCountsAsLate() {
+        let stats = CourtHarness.DelayStats(delays: [.milliseconds(300), nil])
+        #expect(stats.share(within: .seconds(2)) == 0.5)
+        #expect(stats.slowest! > .seconds(2))
+        #expect(!stats.isJudgeable)
+    }
+
+    @Test func skippingIdleTimeKeepsEverybodyInStep() async {
+        var timing = CourtHarness.Timing()
+        timing.skipsIdleTime = true
+        let court = CourtHarness(guests: 2, timing: timing)
+        court.startMatch()
+        court.share()
+        court.joinAll()
+        #expect(await court.until(within: .seconds(90)) { court.allInStep() })
+        court.score(on: court.guests.first!.watch!)
+        await court.run(for: .seconds(20))
+        #expect(court.allInStep())
+    }
+
     @Test func twoGuestsWithWatchesFollowAPointScoredOnAWatch() async {
         let court = CourtHarness(guests: 2)
         court.startMatch()
