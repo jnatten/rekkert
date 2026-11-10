@@ -70,10 +70,9 @@ struct WatchCourtPage: View {
         if model.standIn.phonesMatchElsewhere != nil {
             return model.standIn.phonesHostName.map { "Your iPhone is on \($0)'s match" } ?? "Your iPhone is on a shared match"
         }
-        // The host's: how many are on, counting nobody who has gone out of reach.
+        // The host's: how many are on, in reach or not, as everywhere else (spec 005, FR-014).
         guard model.store.canEndSession, let hosting = model.standIn.hosting, hosting.isSharing else { return nil }
-        let on = hosting.participants.count { if case .outOfReach = $0.state { false } else { true } }
-        return "Sharing · \(on) on"
+        return "Sharing · \(hosting.countLine)"
     }
 
     @ViewBuilder

@@ -28,7 +28,7 @@ struct WatchGuestsView: View {
                 .accessibilityLabel("\(name), \(participant.state.title)")
             }
         }
-        .navigationTitle("Who's on")
+        .navigationTitle(model.standIn.hosting.flatMap { status in status.limit.map { "\(participants.count) of \($0) on" } } ?? "Who's on")
     }
 }
 

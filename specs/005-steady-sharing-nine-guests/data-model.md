@@ -185,11 +185,14 @@ the compatibility rules are in [contracts/wire-protocol.md](contracts/wire-proto
 - Until the calibrated simulation passes with nine, the constant stays 7, and the tests are
   parameterised on it.
 
-## Changed: `StandInPolicy.Status` (D-13)
+## Changed: a refused join keeps the limit (D-13)
 
-| Case | Change |
+| Where | Change |
 |---|---|
-| `full` | **new**: shown on the wrist when either half of the pair heard `noRoom`, within 15 s of the join |
+| `MatchStore.noRoomLimit: Int?` | **new**: the limit in the last `noRoom` this device heard |
+| `SharingSignal.state(_:limit:)` | **new** optional `limit`, set by the phone with `.failed(.noRoom)` so its watch can say how many fit |
+| `WatchStandIn.joining` | Ends as `.failed(.noRoom)` when either half of the pair heard `noRoom`, within 15 s of the join, never `.notFound` |
+| `WatchStandIn.fullLimit: Int?` | **new**: the limit the wrist heard, from its phone or its own search |
 
 ## Test only: `Airwaves.Settings` and the harness (D-10, D-11)
 

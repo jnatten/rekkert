@@ -106,6 +106,13 @@ struct WireAcrossVersionsTests {
     private enum OlderWire: Codable {
         case hello(sessionID: UUID, vector: VersionVector, from: DeviceID? = nil)
         case events(sessionID: UUID, events: [MatchEvent])
+        case noRoom(sessionID: UUID)
+    }
+
+    private struct OlderHostingStatus: Codable {
+        var isSharing: Bool
+        var participants: [ParticipantSummary]
+        var canShare: Bool
     }
 
     private struct OlderGuestCard: Codable {
@@ -167,6 +174,27 @@ struct WireAcrossVersionsTests {
     @Test func needsUpdateRoundTrips() throws {
         let wire = Wire.needsUpdate(sessionID: session)
         #expect(try Wire.decode(wire.encoded()) == wire)
+    }
+
+    @Test func noRoomSaysHowManyFitAndOlderBuildsReadIt() throws {
+        let wire = Wire.noRoom(sessionID: session, limit: 9)
+        #expect(try Wire.decode(wire.encoded()) == wire)
+        guard case .noRoom(let id) = try JSONCoding.decoder.decode(OlderWire.self, from: wire.encoded()) else {
+            Issue.record("not noRoom")
+            return
+        }
+        #expect(id == session)
+        let older = try JSONCoding.encoder.encode(OlderWire.noRoom(sessionID: session))
+        #expect(try Wire.decode(older) == .noRoom(sessionID: session))
+    }
+
+    @Test func theHostsWatchHearsTheLimitAndOlderBuildsReadIt() throws {
+        let status = HostingStatus(isSharing: true, canShare: true, limit: 9)
+        let data = try JSONCoding.encoder.encode(status)
+        #expect(try JSONCoding.decoder.decode(HostingStatus.self, from: data) == status)
+        #expect(try JSONCoding.decoder.decode(OlderHostingStatus.self, from: data).isSharing)
+        let older = try JSONCoding.encoder.encode(OlderHostingStatus(isSharing: true, participants: [], canShare: true))
+        #expect(try JSONCoding.decoder.decode(HostingStatus.self, from: older).limit == nil)
     }
 
     @Test func aClockQuestionAndAnswerRoundTrip() throws {

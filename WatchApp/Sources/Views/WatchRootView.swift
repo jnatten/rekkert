@@ -350,7 +350,7 @@ struct WatchIdleView: View {
                 Button("Leave", role: .destructive) { model.standIn.answer(.leave) }
             }
         } message: { ask in
-            if let line = ask.watchLine { Text(line) }
+            if let line = ask.watchLine(limit: model.standIn.hosting?.limit) { Text(line) }
         }
         .task {
             #if DEBUG
@@ -379,7 +379,7 @@ struct WatchPresetsView: View {
         ScrollView {
             VStack(spacing: 8) {
                 if let hosting = model.standIn.hosting, hosting.isSharing {
-                    Text("Sharing · \(hosting.participants.count) on")
+                    Text("Sharing · \(hosting.countLine)")
                         .scaledFont(size: 11)
                         .foregroundStyle(.secondary)
                 }

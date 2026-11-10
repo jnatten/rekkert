@@ -84,6 +84,13 @@ final class AppModel {
             keepsHistory: AppModel.keepsHistory
         )
         store.recorder = recorder
+        #if os(watchOS)
+        WKInterfaceDevice.current().isBatteryMonitoringEnabled = true
+        store.batteryLevel = { Double(WKInterfaceDevice.current().batteryLevel) }
+        #else
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        store.batteryLevel = { Double(UIDevice.current.batteryLevel) }
+        #endif
         self.store = store
         let workout = WorkoutController()
         self.workout = workout

@@ -168,6 +168,8 @@ public final class MatchStore {
     @ObservationIgnored public var onStoppedByHost: ((SharingStopReason?) -> Void)?
     /// The sharing record, told what happens to each link as it happens.
     @ObservationIgnored public var recorder: (any LinkRecording)?
+    /// This device's battery level as the app reads it, for the record (spec 005, D-12).
+    @ObservationIgnored public var batteryLevel: (() -> Double?)?
     /// The device on the far end of each link, as its first hello named it.
     @ObservationIgnored private var farEnds: [LinkID: DeviceID] = [:]
     /// This device's own events that came back to it over a link.
@@ -189,6 +191,8 @@ public final class MatchStore {
     @ObservationIgnored private var lastPresence: (onLinks: Bool, pair: Bool)?
     /// The host this device last heard from on a link, for a guest's record.
     @ObservationIgnored public private(set) var hostDevice: DeviceID?
+    /// How many guests the host that last turned this device away takes, when it said.
+    public private(set) var noRoomLimit: Int?
     /// The shared match this device's own phone last said it is a guest on.
     public private(set) var pairsSharedMatch: UUID?
     @ObservationIgnored private var recordedPairReachable: Bool?
@@ -200,7 +204,7 @@ public final class MatchStore {
     @ObservationIgnored public var onHostNameChanged: (() -> Void)?
     @ObservationIgnored private let participantTick: Duration
     @ObservationIgnored private let clockTick: Duration
-    @ObservationIgnored let guestLimit: Int
+    @ObservationIgnored public let guestLimit: Int
     @ObservationIgnored private let sleep: @Sendable (Duration) async -> Void
 
     public init(
@@ -681,7 +685,7 @@ public final class MatchStore {
             let payload = encode(.access(accessTable))
             Task { _ = await sendLive(payload) }
         case .guest:
-            // For its own watch: the host ignores it, and over Bluetooth seven guests saying it at
+            // For its own watch: the host ignores it, and over Bluetooth a full match of guests saying it at
             // once as they join held the first point back.
             if let accessTable {
                 let payload = encode(.access(accessTable))
@@ -1327,6 +1331,7 @@ public final class MatchStore {
     private func watchParticipants() async {
         while !Task.isCancelled {
             await sleep(participantTick)
+            recorder?.offer(batteryLevel: batteryLevel?())
             guard role == .host else {
                 recordedOutOfReach = []
                 heardStates = []
@@ -1847,7 +1852,7 @@ public final class MatchStore {
             return
         }
         guard noteParticipant(wire, from: packet) else {
-            packet.reply?(encode(.noRoom(sessionID: log.sessionID)))
+            packet.reply?(encode(.noRoom(sessionID: log.sessionID, limit: guestLimit)))
             if let link = packet.link {
                 transport.refuse(link)
                 var sender: DeviceID?
@@ -2111,8 +2116,11 @@ public final class MatchStore {
             }
             packet.reply?(encode(ownHello))
 
-        case .noRoom:
-            if !packet.isFromPairedDevice, isJoining || role == .guest { onRefused?(.noRoom) }
+        case .noRoom(_, let limit):
+            if !packet.isFromPairedDevice, isJoining || role == .guest {
+                noRoomLimit = limit
+                onRefused?(.noRoom)
+            }
             packet.reply?(encode(ownHello))
 
         case .needsUpdate:
@@ -2559,6 +2567,7 @@ public final class MatchStore {
 
     /// A standby is what is true when it goes, so it is dated then, replays included.
     private func stamped(_ signal: SharingSignal) -> SharingSignal {
+        if case .state(.failed(.noRoom), nil) = signal, let noRoomLimit { return .state(.failed(.noRoom), limit: noRoomLimit) }
         guard case .standby(var standby?) = signal else { return signal }
         standby.issuedAt = now()
         return .standby(standby)

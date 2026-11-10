@@ -63,8 +63,9 @@ public enum SharingSignal: Codable, Sendable, Hashable {
     case join(SessionCode)
     /// Watch to phone: stop looking.
     case cancel
-    /// Phone to watch: here is how it is going.
-    case state(SharingState)
+    /// Phone to watch: here is how it is going. `limit` comes with a full match, to say how many
+    /// it takes.
+    case state(SharingState, limit: Int? = nil)
     /// Phone to watch: the match this phone is a guest on, so the wrist can reach the host
     /// itself. Nil when it is on none.
     case standby(SharingStandby?)
@@ -140,6 +141,8 @@ public struct HostingStatus: Codable, Sendable, Hashable {
     /// Sent both live and queued, so one can overtake the other: the older is the one ignored.
     public var issuedAt: Date?
     public var endedBy: SharingStopReason?
+    /// How many guests the host takes, for "N of M on". Absent from 1.1 and older.
+    public var limit: Int?
 
     public init(
         isSharing: Bool,
@@ -150,7 +153,8 @@ public struct HostingStatus: Codable, Sendable, Hashable {
         canShare: Bool,
         failure: SharingFailure? = nil,
         issuedAt: Date? = nil,
-        endedBy: SharingStopReason? = nil
+        endedBy: SharingStopReason? = nil,
+        limit: Int? = nil
     ) {
         self.isSharing = isSharing
         self.code = code
@@ -161,6 +165,7 @@ public struct HostingStatus: Codable, Sendable, Hashable {
         self.failure = failure
         self.issuedAt = issuedAt
         self.endedBy = endedBy
+        self.limit = limit
     }
 }
 
@@ -254,7 +259,8 @@ public enum Wire: Codable, Sendable, Hashable {
     /// Host to every guest, before it lets go: this match is no longer shared.
     case sharingStopped(sessionID: UUID, reason: SharingStopReason? = nil)
     /// Host to a phone saying hello when the match already has as many guests as it takes.
-    case noRoom(sessionID: UUID)
+    /// `limit` is how many that is, absent from 1.1 and older.
+    case noRoom(sessionID: UUID, limit: Int? = nil)
     /// Host to a guest whose sharing protocol is too old to follow the match. Nothing sends it
     /// yet: it is here so a later breaking change can say so plainly to builds from spec 005 on.
     case needsUpdate(sessionID: UUID)

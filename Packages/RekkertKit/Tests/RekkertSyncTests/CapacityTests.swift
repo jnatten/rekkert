@@ -41,6 +41,8 @@ nonisolated private final class ScriptedGuest: PeerTransport, @unchecked Sendabl
 @Suite("How many guests a match takes", .serialized)
 @MainActor
 struct CapacityTests {
+    private let limit = Participants.limit
+
     private func hostingStore(over guests: ScriptedGuest) -> MatchStore {
         let links = FanOutTransport()
         links.attach(guests, as: .sharedSession)
@@ -50,8 +52,8 @@ struct CapacityTests {
         return store
     }
 
-    @Test func sevenGetOnAndTheEighthIsToldThereIsNoRoom() async throws {
-        let guests = ScriptedGuest(links: 8)
+    @Test func aFullMatchTellsTheNextGuestThereIsNoRoom() async throws {
+        let guests = ScriptedGuest(links: limit + 1)
         let store = hostingStore(over: guests)
         let run = Task { await store.run() }
         defer { run.cancel() }
@@ -61,14 +63,14 @@ struct CapacityTests {
         }
         await eventually { guests.told.contains { if case .noRoom = $0 { true } else { false } } }
         let turnedAway = guests.told.count { if case .noRoom = $0 { true } else { false } }
-        #expect(store.participants.all.count == 7)
+        #expect(store.participants.all.count == limit)
         #expect(turnedAway == 1)
-        #expect(guests.wasRefused(guests.links[7]))
+        #expect(guests.wasRefused(guests.links[limit]))
         #expect(!guests.wasRefused(guests.links[0]))
     }
 
-    @Test func olderBuildsCountOneEachTowardsTheSeven() async throws {
-        let guests = ScriptedGuest(links: 8)
+    @Test func olderBuildsCountOneEachTowardsTheLimit() async throws {
+        let guests = ScriptedGuest(links: limit + 1)
         let store = hostingStore(over: guests)
         let run = Task { await store.run() }
         defer { run.cancel() }
@@ -76,45 +78,45 @@ struct CapacityTests {
         for link in guests.links {
             try guests.say(.hello(sessionID: store.log.sessionID, vector: VersionVector()), on: link)
         }
-        await eventually { guests.wasRefused(guests.links[7]) }
+        await eventually { guests.wasRefused(guests.links[limit]) }
         let allOlder = store.participants.all.allSatisfy(\.isOlderBuild)
-        #expect(store.participants.all.count == 7)
+        #expect(store.participants.all.count == limit)
         #expect(allOlder)
     }
 
     @Test func aWatchStandingInForAGuestAlreadyOnIsNotTurnedAway() async throws {
-        let guests = ScriptedGuest(links: 8)
+        let guests = ScriptedGuest(links: limit + 1)
         let store = hostingStore(over: guests)
         let run = Task { await store.run() }
         defer { run.cancel() }
 
         var phones: [DeviceID] = []
-        for link in guests.links.prefix(7) {
+        for link in guests.links.prefix(limit) {
             let phone = DeviceID()
             phones.append(phone)
             try guests.say(.hello(sessionID: store.log.sessionID, vector: VersionVector(), from: phone), on: link)
         }
         let watch = DeviceID()
-        try guests.say(.guestCard(GuestCard(device: watch, name: nil, pairedTo: phones[0])), on: guests.links[7])
-        try guests.say(.hello(sessionID: store.log.sessionID, vector: VersionVector(), from: watch), on: guests.links[7])
-        // Every one of the nine is answered, the watch's two included, whether or not there is room.
-        await eventually { guests.told.count == 9 }
-        #expect(guests.told.count == 9)
-        #expect(store.participants.all.count == 7)
-        #expect(!guests.wasRefused(guests.links[7]))
+        try guests.say(.guestCard(GuestCard(device: watch, name: nil, pairedTo: phones[0])), on: guests.links[limit])
+        try guests.say(.hello(sessionID: store.log.sessionID, vector: VersionVector(), from: watch), on: guests.links[limit])
+        // Every one is answered, the watch's two included, whether or not there is room.
+        await eventually { guests.told.count == limit + 2 }
+        #expect(guests.told.count == limit + 2)
+        #expect(store.participants.all.count == limit)
+        #expect(!guests.wasRefused(guests.links[limit]))
     }
 
-    @Test func theEighthGuestOverTheRadioIsToldWithinFifteenSecondsAndTheOthersCarryOn() async {
-        let court = CourtHarness(guests: 8, withWatches: false)
+    @Test func oneGuestTooManyOverTheRadioIsToldWithinFifteenSecondsAndTheOthersCarryOn() async {
+        let court = CourtHarness(guests: limit + 1, withWatches: false)
         court.startMatch()
         court.share()
         for guest in court.guests.dropLast() { court.join(guest) }
         await court.until(within: .seconds(120)) {
             court.guests.dropLast().allSatisfy { court.inStep($0.phone, with: court.host.phone) }
         }
-        let eighth = court.guests.last!
-        court.join(eighth)
-        #expect(await court.until(within: .seconds(15)) { eighth.phone.sharing.phase == .failed(.noRoom) })
+        let oneTooMany = court.guests.last!
+        court.join(oneTooMany)
+        #expect(await court.until(within: .seconds(15)) { oneTooMany.phone.sharing.phase == .failed(.noRoom) })
 
         court.score(on: court.host.phone)
         #expect(await court.until(within: .seconds(30)) {

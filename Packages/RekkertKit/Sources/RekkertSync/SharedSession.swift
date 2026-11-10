@@ -849,6 +849,9 @@ public final class SharedSession {
         if failure == .notFound || failure == .rejected, let kept, kept.role == .guest, kept.code == wanted {
             remember(.sharingStopped)
         }
+        // Given up is the answer: the search's own deadline would say "not found" over it later.
+        searchDeadline?.cancel()
+        searchDeadline = nil
         peers = 0
         if hosted == nil { cutLinks() }
         store.cancelJoining()
@@ -863,7 +866,8 @@ public final class SharedSession {
             joinLink: code?.joinLink,
             participants: code == nil ? [] : store.participantStates(),
             canShare: store.role != .guest,
-            endedBy: stoppedForIdle ? .idle : nil
+            endedBy: stoppedForIdle ? .idle : nil,
+            limit: store.guestLimit
         )
     }
 

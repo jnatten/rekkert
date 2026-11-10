@@ -144,7 +144,7 @@ struct WatchJoinView: View {
             Text(failure.title(code: typed))
                 .font(.headline)
                 .multilineTextAlignment(.center)
-            Text(failure.watchAdvice)
+            Text(failure.watchAdvice(limit: model.standIn.fullLimit))
                 .scaledFont(size: 10)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
@@ -204,13 +204,13 @@ extension SharingFailure {
 
     /// The phone's wording, cut to a screen this size — and pointing at the phone, since that
     /// is where both the looking and any fixing actually happen.
-    var watchAdvice: String {
+    func watchAdvice(limit: Int?) -> String {
         switch self {
         case .notFound: "Check the code, and that the host's iPhone is nearby with the match shared."
         case .rejected: "Ask the host to read the code out again."
         case .blocked: "Let Rekkert find devices on the local network, in Settings on your iPhone."
         case .unreachable: "Your iPhone does the looking, and it is out of touch. Bring it closer and try again."
-        case .noRoom: "The host already has seven others on. One of them has to leave first."
+        case .noRoom: limit.map { "The host already has \($0) others on. One of them has to leave first." } ?? "The match is full. One person has to leave first."
         case .bluetoothOff: "Switch Bluetooth on in Control Center on your iPhone and try again."
         case .bluetoothDenied: "Allow it in Settings on your iPhone, then try again."
         }

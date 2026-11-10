@@ -196,7 +196,7 @@ struct JoinMatchSheet: View {
         ContentUnavailableView {
             Label(failure.title(code: typed), systemImage: "antenna.radiowaves.left.and.right.slash")
         } description: {
-            Text(failure.advice)
+            Text(failure.advice(limit: model.store.noRoomLimit))
         } actions: {
             Button("Try again") {
                 model.sharing.dismissFailure()
@@ -244,7 +244,7 @@ extension LocalNetworkTransport.Failure {
 
     /// A mistyped code and an absent host are the same observation from in here, so the
     /// wording covers both rather than guessing confidently at one.
-    var advice: String {
+    func advice(limit: Int?) -> String {
         switch self {
         case .notFound:
             "No shared match with that code. Check the code, that the host is nearby with Rekkert open, and that Rekkert may find devices on the local network."
@@ -253,7 +253,8 @@ extension LocalNetworkTransport.Failure {
         case .blocked:
             "Rekkert needs permission to find devices on the local network before it can join a match."
         case .noRoom:
-            "The host already has seven others on. One of them has to leave before you can join."
+            limit.map { "The host already has \($0) others on. One of them has to leave before you can join." }
+                ?? "The host's match is full. One person has to leave before you can join."
         case .bluetoothOff:
             "With no Wi-Fi, Rekkert finds the host over Bluetooth. Switch it on in Control Center and try again."
         case .bluetoothDenied:

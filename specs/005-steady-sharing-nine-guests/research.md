@@ -508,9 +508,9 @@ the number of guests, plus whatever traffic from R-3 and R-4 is already ahead in
   - **The phone and watch views say "N of M on"** (contracts/screens.md). The hard-coded
     "seven" in `JoinMatchSheet` and `WatchJoinView` comes from the limit instead, and so does
     `README.md`.
-  - **A full match ends a wrist join quickly.** `StandInPolicy.Status` gains `full`. A `.noRoom`
-    heard by either half of the pair ends the wrist's join at once, with "Match is full", within
-    15 s (R-6).
+  - **A full match ends a wrist join quickly.** A `.noRoom` heard by either half of the pair
+    ends the wrist's join at once as `.failed(.noRoom)`, with "No room on this match", within
+    15 s (R-6). The wrist keeps the limit it heard, for the advice.
   - **Tests**: the capacity tests are parameterised on `Participants.limit`, and the two-court
     test runs nine guests.
 - **Rationale**:

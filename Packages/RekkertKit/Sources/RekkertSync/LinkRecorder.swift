@@ -5,9 +5,12 @@ import RekkertCore
 /// what happened to a link as it happens.
 public protocol LinkRecording: AnyObject {
     func record(_ kind: LinkEvent, link: LinkRecordEntry.Link, session: UUID?, radios: [LinkRadio]?, detail: String?)
+    func offer(batteryLevel level: Double?)
 }
 
 extension LinkRecording {
+    public func offer(batteryLevel level: Double?) {}
+
     public func note(
         _ kind: LinkEvent, on link: LinkRecordEntry.Link = .radio, in session: UUID? = nil,
         radios: [LinkRadio]? = nil, detail: String? = nil
@@ -32,6 +35,10 @@ public final class LinkRecorder: LinkRecording {
     /// How long each day's file was when it last went to the phone. A day only grows, so one
     /// the same length has nothing new in it.
     private var sentLengths: [String: Int] = [:]
+    /// Spec 005, D-12: a reading at most this often, unless sharing started or stopped since.
+    static let batteryInterval: TimeInterval = 600
+    private var lastBatteryAt: Date?
+    private var batteryDue = false
 
     public init(
         directory: URL, device: LinkRecordEntry.Device, now: @escaping @Sendable () -> Date = { Date() },
@@ -64,8 +71,20 @@ public final class LinkRecorder: LinkRecording {
         guard var line = try? JSONEncoder().encode(entry) else { return }
         line.append(0x0A)
         append(line, to: file(device, day))
+        if kind.boundsAStint { batteryDue = true }
         // Back in touch with the phone: the moment to bring it up to date.
         if device == .watch, kind == .proven, link == .pair { sendDays() }
+    }
+
+    /// The level as the app reads it, handed over whenever it runs anyway; this decides whether it
+    /// goes in the record. Below zero is the system saying it does not know.
+    public func offer(batteryLevel level: Double?) {
+        guard let level, level >= 0 else { return }
+        let moment = now()
+        if !batteryDue, let last = lastBatteryAt, moment.timeIntervalSince(last) < Self.batteryInterval { return }
+        batteryDue = false
+        lastBatteryAt = moment
+        note(.battery(level: level))
     }
 
     /// Both halves of the pair, merged, once anything older than a week has gone.

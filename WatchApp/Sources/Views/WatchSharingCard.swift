@@ -15,7 +15,7 @@ struct WatchSharingCard: View {
             if model.store.side == .guest {
                 guest
             } else if let hosting = model.standIn.hosting, hosting.isSharing {
-                Text("Sharing · \(hosting.participants.count) on")
+                Text("Sharing · \(hosting.countLine)")
                     .scaledFont(size: 13, weight: .semibold)
                 Button("Code", systemImage: "qrcode") { showingCode = true }
                     .buttonStyle(.bordered)
@@ -71,5 +71,12 @@ struct WatchSharingCard: View {
             .font(.footnote)
         }
         .accessibilityElement(children: .contain)
+    }
+}
+
+extension HostingStatus {
+    /// "N of M" when the phone said how many it takes, "N on" from a phone that did not.
+    var countLine: String {
+        limit.map { "\(participants.count) of \($0)" } ?? "\(participants.count) on"
     }
 }

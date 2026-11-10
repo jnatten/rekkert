@@ -194,7 +194,7 @@ struct RootView: View {
             Button("Keep sharing", role: .cancel) { model.sharing.answer(.keepSharing) }
             Button("Stop sharing", role: .destructive) { model.sharing.answer(.stopSharing) }
         } message: { ask in
-            Text(ask.guestsOnLine)
+            Text(ask.guestsOnLine(limit: model.store.guestLimit))
         }
         .alert(
             askingAtTheEnd?.stayTitle ?? "",
@@ -334,12 +334,12 @@ private extension EndOfMatchAsk {
         return host.map { "If you stay, \($0)'s next match comes here." } ?? "If you stay, the host's next match comes here."
     }
 
-    var guestsOnLine: String {
+    func guestsOnLine(limit: Int) -> String {
         guard case .host(let guestsOn) = side else { return "" }
         switch guestsOn {
         case 0: return "Nobody is on yet."
-        case 1: return "1 person is on. They get your next match unless you stop."
-        default: return "\(guestsOn) people are on. They get your next match unless you stop."
+        case 1: return "1 of \(limit) is on. They get your next match unless you stop."
+        default: return "\(guestsOn) of \(limit) are on. They get your next match unless you stop."
         }
     }
 }

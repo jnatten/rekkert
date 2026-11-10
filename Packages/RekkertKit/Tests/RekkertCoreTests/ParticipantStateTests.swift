@@ -42,20 +42,26 @@ struct ParticipantStateTests {
         #expect(state == .outOfReach(since: start))
     }
 
-    @Test func sevenGuestsGetOnAndTheEighthIsTurnedAway() {
+    @Test func aFullMatchTurnsTheNextGuestAway() {
         var participants = Participants()
-        for _ in 0 ..< 7 { #expect(participants.heard(from: DeviceID(), at: start) == .admitted) }
+        for _ in 0 ..< Participants.limit { #expect(participants.heard(from: DeviceID(), at: start) == .admitted) }
         #expect(participants.heard(from: DeviceID(), at: start) == .full)
-        #expect(participants.all.count == 7)
+        #expect(participants.all.count == Participants.limit)
+    }
+
+    @Test func aLimitGivenByTheHostIsTheOneThatHolds() {
+        var participants = Participants()
+        for _ in 0 ..< 3 { #expect(participants.heard(from: DeviceID(), at: start, limit: 3) == .admitted) }
+        #expect(participants.heard(from: DeviceID(), at: start, limit: 3) == .full)
     }
 
     @Test func aWatchStandingInForItsPhoneCountsWithIt() {
         let phone = DeviceID(), watch = DeviceID()
         var participants = Participants()
-        for _ in 0 ..< 6 { participants.heard(from: DeviceID(), at: start) }
+        for _ in 0 ..< Participants.limit - 1 { participants.heard(from: DeviceID(), at: start) }
         #expect(participants.heard(from: phone, at: start) == .admitted)
         #expect(participants.heard(from: watch, pairedTo: phone, at: start) == .known)
-        #expect(participants.all.count == 7)
+        #expect(participants.all.count == Participants.limit)
         #expect(participants.participant(for: watch)?.id == phone)
     }
 

@@ -35,6 +35,11 @@ public struct SharingSummary: Sendable, Hashable {
     }
 }
 
+extension LinkEvent {
+    /// Sharing starting, coming back or joined, or it stopping or the guest leaving.
+    public var boundsAStint: Bool { LinkRecord.starts(self) || LinkRecord.ends(self) }
+}
+
 extension LinkRecordEntry {
     /// The kind as the record writes it, with the drop's detail inside its parentheses.
     public var kindText: String {
@@ -91,14 +96,14 @@ extension LinkRecord {
         }
     }
 
-    private static func starts(_ kind: LinkEvent) -> Bool {
+    fileprivate static func starts(_ kind: LinkEvent) -> Bool {
         switch kind {
         case .sharingStarted, .sharingRestored, .joined: true
         default: false
         }
     }
 
-    private static func ends(_ kind: LinkEvent) -> Bool {
+    fileprivate static func ends(_ kind: LinkEvent) -> Bool {
         switch kind {
         case .sharingStopped, .idleStop, .endOfMatchAnswered(.leave), .endOfMatchAnswered(.stopSharing),
              .newMatchAnswered(.leave): true

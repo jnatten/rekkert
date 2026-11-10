@@ -54,14 +54,14 @@ struct IncidentTests {
         #expect(await court.until(within: .seconds(30)) { court.allInStep() })
     }
 
-    /// RC-3: seven guests behind a host whose transmit queue frees one slot at a time. Every one
-    /// of them gets every point, not just the ones that come first.
+    /// RC-3: a full match behind a host whose transmit queue frees one slot at a time. Every
+    /// guest gets every point, not just the ones that come first.
     @Test func everyGuestGetsTurns() async {
         var settings = Airwaves.Settings()
         settings.queueSlots = 2
         settings.slotsPerReady = 1
         settings.bytesPerSecond = 1_500
-        let court = await sharedCourt(guests: 7, withWatches: false, settings: settings)
+        let court = await sharedCourt(guests: Participants.limit, withWatches: false, settings: settings)
         for _ in 0 ..< 8 {
             court.score(on: court.host.phone)
             await court.run(for: .milliseconds(500))
@@ -69,14 +69,14 @@ struct IncidentTests {
         #expect(await court.until(within: .seconds(60)) { court.allInStep() })
     }
 
-    /// RC-4: half an hour of play with seven guests. What each guest is sent stays in proportion
+    /// RC-4: half an hour of play on a full match. What each guest is sent stays in proportion
     /// to what is scored, and the points arrive in time.
     @Test func deliveryDoesNotSnowball() async {
         var settings = Airwaves.Settings()
         settings.bytesPerSecond = 1_200
         var timing = CourtHarness.Timing()
         timing.step = .milliseconds(200)
-        let court = await sharedCourt(guests: 7, withWatches: false, settings: settings, timing: timing)
+        let court = await sharedCourt(guests: Participants.limit, withWatches: false, settings: settings, timing: timing)
         let scorers = court.players.map(\.phone)
         let before = court.guests.map { court.air.bytesDelivered(to: $0.phone.radio) }
 
@@ -109,25 +109,25 @@ struct IncidentTests {
         #expect(await court.until(within: .seconds(30)) { court.allInStep() })
     }
 
-    /// RC-7: an eighth guest is turned away and told so, and the seven already on carry on.
-    @Test func eighthGuestIsToldNoRoom() async {
-        let court = CourtHarness(guests: 8, withWatches: false)
+    /// RC-7: one guest too many is turned away and told so, and those already on carry on.
+    @Test func oneGuestTooManyIsToldNoRoom() async {
+        let court = CourtHarness(guests: Participants.limit + 1, withWatches: false)
         court.startMatch()
         court.share()
         for guest in court.guests.dropLast() { court.join(guest) }
         await court.until(within: .seconds(120)) {
             court.guests.dropLast().allSatisfy { court.inStep($0.phone, with: court.host.phone) }
         }
-        let eighth = court.guests.last!.phone
+        let oneTooMany = court.guests.last!.phone
         court.join(court.guests.last!)
-        #expect(await court.until(within: .seconds(60)) { eighth.sharing.phase == .failed(.noRoom) })
+        #expect(await court.until(within: .seconds(60)) { oneTooMany.sharing.phase == .failed(.noRoom) })
 
         court.score(on: court.host.phone)
         #expect(await court.until(within: .seconds(30)) {
             court.guests.dropLast().allSatisfy { court.inStep($0.phone, with: court.host.phone) }
         })
-        #expect(court.host.phone.store.participants.all.count == 7)
-        #expect(!court.inStep(eighth, with: court.host.phone))
+        #expect(court.host.phone.store.participants.all.count == Participants.limit)
+        #expect(!court.inStep(oneTooMany, with: court.host.phone))
     }
 
     /// RW-2: the guest's watch was warming up a match of its own when the phone joined. It ends up

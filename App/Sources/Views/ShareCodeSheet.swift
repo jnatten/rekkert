@@ -111,11 +111,8 @@ struct ShareCodeSheet: View {
     /// People, not links: a guest on two radios, or with its watch standing in, is one of them.
     private func joinedDescription(_ participants: [ParticipantSummary]) -> String {
         if model.sharing.isReconnecting { return "Looking for them again" }
-        switch participants.count {
-        case 0: return "Nobody has joined yet"
-        case 1: return "1 guest joined"
-        case let count: return "\(count) guests joined"
-        }
+        let count = participants.count
+        return count == 0 ? "Nobody has joined yet" : "\(count) of \(model.store.guestLimit) joined"
     }
 
     private func whoIsOn(_ participants: [ParticipantSummary]) -> some View {

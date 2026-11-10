@@ -42,13 +42,13 @@ struct SharingSection: View {
 
     @ViewBuilder
     private func hostRows(_ code: SessionCode) -> some View {
-        let on = model.store.participantStates().count
+        let on = "\(model.store.participantStates().count) of \(model.store.guestLimit) on"
         Button {
             model.showingShareCode = true
         } label: {
-            row("Sharing on \(code.readOut)", "\(on) on · until you stop", "person.2.wave.2")
+            row("Sharing on \(code.readOut)", "\(on) · until you stop", "person.2.wave.2")
         }
-        .accessibilityLabel("Sharing on \(code.digitByDigit), \(on) on")
+        .accessibilityLabel("Sharing on \(code.digitByDigit), \(on)")
         Button(role: .destructive) {
             confirmingStop = true
         } label: {

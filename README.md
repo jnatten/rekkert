@@ -742,8 +742,16 @@ on. The outbox lets an event go once everybody still on has it; a guest out of r
 minute does not hold it up, and is caught up from its hello when it comes back.
 
 The host knows who is on by the device that proved itself rather than by the link, so a phone
-and the watch standing in for it count once, and **Who's on** can name them. It takes seven: the
-eighth is told there is no room, rather than let in to starve the others.
+and the watch standing in for it count once, and **Who's on** can name them. It takes
+`Participants.limit` guests, seven for now: one more is told there is no room and how many the
+match takes, rather than let in to starve the others. A code typed on the wrist for a full match
+says so within 15 seconds, whichever of the phone and the watch heard it. The host's phone and
+watch count guests as "N of M on", everyone on whether in reach or not.
+
+A guest on both radios is one guest with two links. Points from it are pushed back on neither,
+and marked as held on both, so nothing goes round twice. A second link coming up costs one hello
+on that link, and one going while the other stays costs nothing: only the device as a whole
+coming or going starts a round.
 
 iOS wakes a suspended app for traffic on the link. The phone's two Bluetooth managers are also
 set up for state restoration, so for an app iOS has ended to free memory it goes on advertising,
@@ -795,8 +803,22 @@ phone can be reached; the phone puts the two together by time. **Settings → Sh
 shows it, and **Share** exports it as plain text, one line an entry, in the format
 [`specs/001-fix-session-sharing/contracts/sharing-record.md`](specs/001-fix-session-sharing/contracts/sharing-record.md)
 sets out and `LinkRecordTests` reads back. There are no names, scores or codes in it, and
-devices go by four hex digits of their random id. Debug builds also note how long each point
-took to arrive.
+devices go by four hex digits of their random id.
+
+Every build notes how long each point took to arrive, counted from the tap on whichever phone
+or watch tapped it, to within a tenth of a second or as `unknown`. No two clocks agree, so each
+device asks the others the time over a message small enough for one radio chunk each way, when
+a link comes up and every 30 seconds, and keeps the narrowest bound the round trips give.
+Pushes carry the sender's bounds on each point's author, so a guest can time a point another
+guest tapped through the host. A clock set by hand, or a point from a 1.1 device that says
+nothing of its clock, reads `unknown`. Each link entry names its radio, `bt` or `wifi`, and a
+Wi-Fi drop says why in one short code, such as `ETIMEDOUT`, never the error's own text. The
+battery level is noted when sharing starts and stops, and every ten minutes otherwise.
+
+Each stretch of sharing, from sharing or joining to stopping or leaving, gets a summary at its
+head, on screen and in the export: the share of points within a second, the slowest, drops per
+radio, who was out of reach for how long, and battery per hour. It says "not enough timed
+points" below 100, and "too many unknown" above one in ten.
 
 ## Verifying
 

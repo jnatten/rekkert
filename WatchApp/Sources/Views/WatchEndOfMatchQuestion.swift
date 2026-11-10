@@ -11,7 +11,7 @@ struct WatchEndOfMatchQuestion: View {
             Text(ask.watchTitle)
                 .font(.footnote.weight(.semibold))
                 .multilineTextAlignment(.center)
-            if let line = ask.watchLine {
+            if let line = ask.watchLine(limit: model.standIn.hosting?.limit) {
                 Text(line)
                     .scaledFont(size: 11)
                     .foregroundStyle(.secondary)
@@ -48,9 +48,9 @@ extension EndOfMatchAsk {
         }
     }
 
-    var watchLine: String? {
+    func watchLine(limit: Int?) -> String? {
         switch side {
-        case .host(let guestsOn): guestsOn == 0 ? "Nobody on yet" : "\(guestsOn) on"
+        case .host(let guestsOn): guestsOn == 0 ? "Nobody on yet" : limit.map { "\(guestsOn) of \($0) on" } ?? "\(guestsOn) on"
         case .guest(let host, let keeps): keeps ? "\(host ?? "The host") is keeping it shared." : nil
         }
     }
