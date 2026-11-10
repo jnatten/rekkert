@@ -8,8 +8,9 @@
   build decodes every message the host sends, skipping fields it does not know (research R-7).
 - **Version markers stay put.** The Bluetooth greeting stays at version 3, and the
   local-network TXT record stays at `v = "1"`.
-- **One new `Wire` case, `needsUpdate`, which this release never sends.** It exists so a later
-  breaking change can tell guests from this release on, plainly.
+- **Two new `Wire` cases.** `needsUpdate`, which this release never sends, exists so a later
+  breaking change can tell guests from this release on, plainly. `clock` is sent only to
+  devices whose hello carried `protocol`, so no 1.1 build ever receives it.
 - **Event formats are unchanged**, apart from `at` being rounded to the hundredth
   (data-model.md). Principle II is weighed in plan.md.
 
@@ -18,26 +19,29 @@
 | Message | Before | After | Who sets it | Who reads it |
 |---|---|---|---|---|
 | `hello` | `hello(sessionID:, vector:, from:)` | `+ clock: Date?`, `+ protocol: Int?` | Every sender from this release. `clock` is the sender's time when it encodes the hello | The other end, to time a round trip (D-2) |
-| `events` | `events(sessionID:, events:)` | `+ offsets: [DeviceID: ClockBounds]?` | The host, on per-link pushes | The guest, to compose its offset to each event's author |
+| `events` | `events(sessionID:, events:)` | `+ offsets: [DeviceID: ClockSpan]?` | Every sender from this release, on every push | The receiver, to bound the sender's clock and compose its offset to each event's author |
 | `noRoom` | `noRoom(sessionID:)` | `+ limit: Int?` | The host | The guest's phone and watch, to say how many fit |
 | `GuestCard` | `device, name, pairedTo, leaving` | `+ protocol: Int?` | Guests from this release | The host, to know which guests can understand `needsUpdate` |
 | `HostingStatus` (phone → watch) | `…, participants, …` | `+ limit: Int?` | The host's phone | The host's watch, for "N of M on" |
 | `needsUpdate(sessionID:)` | — | **new case** | Nobody in this release | Builds from this release |
+| `clock(reading:)` | — | **new case** | Every device from this release, on each link to a device that sent `protocol`: when the link is greeted, then every 30 s while sharing. Asked with no reading, answered with one | The asker, to time a round trip (D-2) |
 
 ## Timing a round trip (D-2)
 
 ```text
-near (t₁) ── events / hello ──▶ far
-near (t₄) ◀── hello(clock: t₂) ─ far
+near (t₁) ── clock() / events ──────────────▶ far
+near (t₄) ◀── clock(reading: t₂) / hello(clock: t₂) ─ far
 offset(far − near) ∈ [t₂ − t₄, t₂ − t₁]
 ```
 
-- t₁ and t₄ are the near device's clock around `sendLive` in `deliver()`, and on a hello it
-  sends itself.
+- t₁ and t₄ are the near device's clock around `sendLive`, for a `clock` question or a push.
+  The `clock` exchange fits in one radio chunk each way, so it gives the narrow samples; a push
+  gives wider ones, which the narrowest-sample rule mostly sets aside.
 - A reply without `clock`, from an older build, gives no sample. Delays from that device are
   then `unknown` unless another path bounds them.
-- The host's `offsets` hold its current `ClockBounds` for each author in the batch. It leaves
-  out any author it has no bounds for.
+- A push's `offsets` hold the sender's current bounds on the recipient and on each author in
+  the batch, as `ClockSpan`: `[lower, upper]` in whole milliseconds, rounded outwards. It
+  leaves out any device it has no bounds for.
 
 ## What a link change sends (D-5, D-6)
 
@@ -54,7 +58,7 @@ offset(far − near) ∈ [t₂ − t₄, t₂ − t₁]
 | Pair | Behaviour |
 |---|---|
 | This release ↔ this release | All of the above |
-| This release host ↔ 1.1 guest | 1.1 skips `clock`, `protocol`, `offsets` and `limit`. Its hellos have no `clock`, so its delays read `unknown` on the host. It is counted once, as today |
+| This release host ↔ 1.1 guest | 1.1 skips `clock`, `protocol`, `offsets` and `limit`, and is never sent a `clock` question. Its hellos have no `clock`, so its delays read `unknown` on the host. It is counted once, as today |
 | 1.1 host ↔ this release guest | The guest gets no `offsets` and no `limit`. Delays from the host are known from direct samples; relayed delays read `unknown`. The guest's text falls back to "Match is full" without a number |
 | 1.0 guest over Wi-Fi | Unchanged from today. Known limit, D-14 |
 

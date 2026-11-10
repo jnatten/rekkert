@@ -41,8 +41,9 @@ final class CourtHarness {
         /// The second link of a phone on both radios.
         let wifiRadio: SimulatedRadio?
         /// This device's clock against the radio's: offset, and drift as a fraction.
-        let clockOffset: TimeInterval
-        let drift: Double
+        let skew: ClockSkew
+        var clockOffset: TimeInterval { skew.offset }
+        var drift: Double { skew.drift }
         let directory: URL
         /// What the Keychain would hold: it outlives the app being ended.
         let keeper = MemoryCodeKeeper()
@@ -66,8 +67,7 @@ final class CourtHarness {
             self.isWatch = isWatch
             self.radio = radio
             self.wifiRadio = wifiRadio
-            self.clockOffset = clockOffset
-            self.drift = drift
+            skew = ClockSkew(offset: clockOffset, drift: drift)
             directory = FileManager.default.temporaryDirectory
                 .appendingPathComponent("court-\(UUID().uuidString)", isDirectory: true)
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -167,8 +167,28 @@ final class CourtHarness {
 
     /// What `device` reads as the time: the radio's clock, offset and drifting as its own does.
     private func deviceClock(of device: Device) -> @Sendable () -> Date {
-        let (clock, offset, drift) = (air.clock, device.clockOffset, device.drift)
-        return { CourtHarness.epoch.addingTimeInterval(clock.now.seconds * (1 + drift) + offset) }
+        let (clock, skew) = (air.clock, device.skew)
+        return { CourtHarness.epoch.addingTimeInterval(clock.now.seconds * (1 + skew.drift) + skew.offset) }
+    }
+
+    /// Sets `device`'s clock forward or back, and tells its store, as the system would.
+    func jumpClock(of device: Device, by seconds: TimeInterval) {
+        device.skew.offset += seconds
+        device.store.clockChanged()
+    }
+
+    /// Each delay `device` recorded, beside the true one: from the tap to when the store noted it.
+    func recordedDelays(on device: Device) -> [(recorded: TimeInterval?, truth: TimeInterval)] {
+        let key = ObjectIdentifier(device)
+        let kind: LinkRecordEntry.Device = device.isWatch ? .watch : .phone
+        return device.recorder.read().entries.compactMap { entry in
+            guard entry.device == kind, case .pointArrived(let latency) = entry.kind else { return nil }
+            let instant = (entry.time.timeIntervalSince(CourtHarness.epoch) - device.clockOffset) / (1 + device.drift)
+            let nearest = scored.filter { arrived[$0.key]?[key] != nil }
+                .min { abs(arrived[$0.key]![key]!.seconds - instant) < abs(arrived[$1.key]![key]!.seconds - instant) }
+            guard let nearest, abs(arrived[nearest.key]![key]!.seconds - instant) < 1 else { return nil }
+            return (latency, instant - nearest.value.seconds)
+        }
     }
 
     /// The time `device` shows when the radio's clock reads `instant`.
@@ -194,11 +214,11 @@ final class CourtHarness {
     }
 
     private func boot(_ device: Device, pairLink: LoopbackTransport) {
-        let core = RadioCore(radio: device.radio)
+        let core = RadioCore(radio: device.radio, linkRadio: device.radio.air === wifiAir ? .wifi : .bluetooth)
         let links = FanOutTransport(sleep: clockSleep)
         device.pairToken = links.attach(pairLink, as: .pairedDevice)
         links.attach(core, as: .sharedSession)
-        let wifiCore = device.wifiRadio.map { RadioCore(radio: $0) }
+        let wifiCore = device.wifiRadio.map { RadioCore(radio: $0, linkRadio: .wifi) }
         if let wifiCore { links.attach(wifiCore, as: .sharedSession) }
         let persistence = SessionStore(directory: device.directory)
         let clock = air.clock
@@ -420,6 +440,9 @@ final class CourtHarness {
     struct DelayStats {
         let delays: [Duration?]
 
+        /// A 95% share means something from one in twenty; on fewer, one late point is all of it.
+        static let enoughForAShare = 20
+
         init(_ arrivals: [Arrival]) { delays = arrivals.map(\.delay) }
         init(delays: [Duration?]) { self.delays = delays }
 
@@ -541,5 +564,22 @@ final class CourtHarness {
 extension Duration {
     nonisolated var seconds: TimeInterval {
         Double(components.seconds) + Double(components.attoseconds) / 1e18
+    }
+}
+
+/// A device's clock against the radio's, which a test can set forward or back.
+nonisolated final class ClockSkew: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _offset: TimeInterval
+    let drift: Double
+
+    init(offset: TimeInterval, drift: Double) {
+        _offset = offset
+        self.drift = drift
+    }
+
+    var offset: TimeInterval {
+        get { lock.withLock { _offset } }
+        set { lock.withLock { _offset = newValue } }
     }
 }

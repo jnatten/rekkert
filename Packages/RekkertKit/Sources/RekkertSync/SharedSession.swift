@@ -108,6 +108,7 @@ public final class SharedSession {
 
     private var recorder: (any LinkRecording)? { store.recorder }
     private var hostLink: LinkRecordEntry.Link { store.hostDevice.map { .host($0) } ?? .radio }
+    private var hostRadios: [LinkRadio]? { store.hostDevice.map { store.radiosUp(to: $0) } }
 
     private let store: MatchStore
     private let link: LocalNetworkTransport
@@ -664,7 +665,7 @@ public final class SharedSession {
             && !store.canEndSession && reachablePeers == 0
         guard isOnItsOwn else {
             if hostOutOfReachSince != nil, reachablePeers > 0 {
-                recorder?.note(.backInStep, on: hostLink, in: store.log.sessionID)
+                recorder?.note(.backInStep, on: hostLink, in: store.log.sessionID, radios: hostRadios)
             }
             hostLostAt = nil
             watchingTheHost?.cancel()
@@ -679,7 +680,7 @@ public final class SharedSession {
             await sleep(Self.hostGrace)
             guard let self, !Task.isCancelled, self.hostLostAt == lost else { return }
             self.hostOutOfReachSince = lost
-            self.recorder?.note(.outOfReach, on: self.hostLink, in: self.store.log.sessionID)
+            self.recorder?.note(.outOfReach, on: self.hostLink, in: self.store.log.sessionID, radios: self.hostRadios)
         }
     }
 

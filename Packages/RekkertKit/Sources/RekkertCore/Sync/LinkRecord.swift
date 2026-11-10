@@ -1,5 +1,23 @@
 import Foundation
 
+/// Which radio a link to the host or a guest is on.
+public enum LinkRadio: String, Codable, Sendable, Hashable, Comparable {
+    case bluetooth, wifi
+
+    public static func < (lhs: LinkRadio, rhs: LinkRadio) -> Bool { lhs.rawValue < rhs.rawValue }
+
+    var short: String { self == .bluetooth ? "bt" : "wifi" }
+    public var title: String { self == .bluetooth ? "Bluetooth" : "Wi-Fi" }
+
+    init?(short: String) {
+        switch short {
+        case "bt": self = .bluetooth
+        case "wifi": self = .wifi
+        default: return nil
+        }
+    }
+}
+
 /// Something that happened to one of a device's links, for the sharing record.
 ///
 /// Nothing in it can carry a player's name, a score or the code: the kinds are fixed, and
@@ -24,10 +42,14 @@ public struct LinkRecordEntry: Codable, Sendable, Hashable, Identifiable {
     public var session: UUID?
     public var link: Link
     public var kind: LinkEvent
+    /// The radios the link was on: one for a link, the ones up for a guest or host as a whole.
+    public var radios: [LinkRadio]?
+    /// One short code with a drop (`ETIMEDOUT`), or `older` with a delay a 1.1 device left unknown.
+    public var detail: String?
 
     public init(
         id: UUID = UUID(), time: Date, device: Device, session: UUID? = nil, link: Link = .radio,
-        kind: LinkEvent
+        kind: LinkEvent, radios: [LinkRadio]? = nil, detail: String? = nil
     ) {
         self.id = id
         self.time = time
@@ -35,6 +57,8 @@ public struct LinkRecordEntry: Codable, Sendable, Hashable, Identifiable {
         self.session = session
         self.link = link
         self.kind = kind
+        self.radios = radios.map { Array(Set($0)).sorted() }
+        self.detail = detail
     }
 }
 
@@ -61,8 +85,11 @@ public enum LinkEvent: Codable, Sendable, Hashable {
     case radioOff, radioOn, permissionDenied
     case notificationPosted
     case recordReceived(from: LinkRecordEntry.Device)
-    /// Debug builds only: how long after it was scored a point reached this device.
-    case pointArrived(latency: TimeInterval)
+    /// How long after it was tapped a point reached this device, or `nil` when the clocks
+    /// could not bound it within a tenth of a second (spec 005, FR-006).
+    case pointArrived(latency: TimeInterval?)
+    /// The device's battery, 0 to 1.
+    case battery(level: Double)
     case endOfMatchAsked
     case endOfMatchAnswered(BetweenMatchesAnswer.Choice)
     case endOfMatchUnanswered
@@ -95,7 +122,9 @@ public enum LinkEvent: Codable, Sendable, Hashable {
         case .permissionDenied: "permissionDenied"
         case .notificationPosted: "notificationPosted"
         case .recordReceived(let device): "recordReceived(\(device.rawValue))"
-        case .pointArrived(let latency): "pointArrived(\(String(format: "%.3f", latency))s)"
+        case .pointArrived(let latency?): "pointArrived(\(String(format: "%.3f", latency))s)"
+        case .pointArrived(nil): "pointArrived(unknown)"
+        case .battery(let level): "battery(\(Int((level * 100).rounded()))%)"
         case .endOfMatchAsked: "endOfMatchAsked"
         case .endOfMatchAnswered(let choice): "endOfMatchAnswered(\(choice.rawValue))"
         case .endOfMatchUnanswered: "endOfMatchUnanswered"
@@ -108,7 +137,7 @@ public enum LinkEvent: Codable, Sendable, Hashable {
     public init?(text: String) {
         let name = String(text.prefix { $0 != "(" })
         let argument = text.count > name.count + 1
-            ? String(text.dropFirst(name.count + 1).dropLast())
+            ? String(text.dropFirst(name.count + 1).dropLast()).components(separatedBy: "; ").first
             : nil
         switch (name, argument) {
         case ("launched", let argument?): guard let launch = Launch(rawValue: argument) else { return nil }
@@ -121,8 +150,12 @@ public enum LinkEvent: Codable, Sendable, Hashable {
             self = .caughtUp(events: events)
         case ("recordReceived", let argument?): guard let device = LinkRecordEntry.Device(rawValue: argument) else { return nil }
             self = .recordReceived(from: device)
+        case ("pointArrived", "unknown"):
+            self = .pointArrived(latency: nil)
         case ("pointArrived", let argument?): guard let latency = TimeInterval(argument.dropLast()) else { return nil }
             self = .pointArrived(latency: latency)
+        case ("battery", let argument?): guard let percent = Double(argument.dropLast()) else { return nil }
+            self = .battery(level: percent / 100)
         case ("endOfMatchAnswered", let argument?): guard let choice = BetweenMatchesAnswer.Choice(rawValue: argument) else { return nil }
             self = .endOfMatchAnswered(choice)
         case ("newMatchAnswered", let argument?): guard let choice = BetweenMatchesAnswer.Choice(rawValue: argument) else { return nil }
@@ -209,6 +242,8 @@ public struct LinkRecord: Sendable, Hashable {
         public var link: String
         public var kind: LinkEvent
         public var session: String?
+        public var radios: [LinkRadio]? = nil
+        public var detail: String? = nil
     }
 
     /// The plain text of `contracts/sharing-record.md`.
@@ -226,7 +261,11 @@ public struct LinkRecord: Sendable, Hashable {
             lines.append(String(format: "Watch entries up to %02d:%02d (not in touch since)", parts.hour ?? 0, parts.minute ?? 0))
         }
         lines.append("")
-        lines += entries.map { Self.line(for: $0, in: calendar) }
+        let starts = Dictionary(summaries(watchUpTo: header.watchUpTo).map { ($0.firstEntry, $0) }) { first, _ in first }
+        for entry in entries {
+            if let summary = starts[entry.id] { lines.append(summary.line(in: calendar)) }
+            lines.append(Self.line(for: entry, in: calendar))
+        }
         return lines.joined(separator: "\n")
     }
 
@@ -241,7 +280,18 @@ public struct LinkRecord: Sendable, Hashable {
             let session = columns.count > 4 && columns[4].hasPrefix("match ")
                 ? String(columns[4].dropFirst("match ".count).prefix(4))
                 : nil
-            return Line(time: time, device: device, link: columns[2], kind: kind, session: session)
+            var link = columns[2]
+            var radios: [LinkRadio]?
+            let words = link.split(separator: " ")
+            if words.count > 1 {
+                let named = words.last!.split(separator: "+").map { LinkRadio(short: String($0)) }
+                if !named.contains(where: { $0 == nil }) {
+                    radios = named.compactMap { $0 }
+                    link = words.dropLast().joined(separator: " ")
+                }
+            }
+            let detail = columns[3].range(of: "; ").map { String(columns[3][$0.upperBound...].dropLast()) }
+            return Line(time: time, device: device, link: link, kind: kind, session: session, radios: radios, detail: detail)
         }
     }
 
@@ -252,9 +302,11 @@ public struct LinkRecord: Sendable, Hashable {
         case .host(let device): "host \(short(device.raw))"
         case .guest(let device): "guest \(short(device.raw))"
         }
-        let columns = "\(stamp(entry.time, in: calendar))  \(entry.device.rawValue)  \(link.padded(to: 10))  "
-        guard let session = entry.session else { return columns + entry.kind.text }
-        return columns + entry.kind.text.padded(to: 26) + "  match \(short(session))…"
+        let radios = entry.radios.map { " " + $0.map(\.short).joined(separator: "+") } ?? ""
+        let columns = "\(stamp(entry.time, in: calendar))  \(entry.device.rawValue)  \((link + radios).padded(to: 10))  "
+        let kind = entry.kindText
+        guard let session = entry.session else { return columns + kind }
+        return columns + kind.padded(to: 26) + "  match \(short(session))…"
     }
 
     private static func short(_ id: UUID) -> String { String(id.uuidString.prefix(4)) }

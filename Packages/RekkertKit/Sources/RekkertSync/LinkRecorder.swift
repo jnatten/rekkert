@@ -4,12 +4,15 @@ import RekkertCore
 /// Where the sharing record is written from: the store, the coordinator and the stand-in each say
 /// what happened to a link as it happens.
 public protocol LinkRecording: AnyObject {
-    func record(_ kind: LinkEvent, link: LinkRecordEntry.Link, session: UUID?)
+    func record(_ kind: LinkEvent, link: LinkRecordEntry.Link, session: UUID?, radios: [LinkRadio]?, detail: String?)
 }
 
 extension LinkRecording {
-    public func note(_ kind: LinkEvent, on link: LinkRecordEntry.Link = .radio, in session: UUID? = nil) {
-        record(kind, link: link, session: session)
+    public func note(
+        _ kind: LinkEvent, on link: LinkRecordEntry.Link = .radio, in session: UUID? = nil,
+        radios: [LinkRadio]? = nil, detail: String? = nil
+    ) {
+        record(kind, link: link, session: session, radios: radios, detail: detail)
     }
 }
 
@@ -26,6 +29,9 @@ public final class LinkRecorder: LinkRecording {
     private let now: @Sendable () -> Date
     private let calendar: Calendar
     private var prunedOn: String?
+    /// How long each day's file was when it last went to the phone. A day only grows, so one
+    /// the same length has nothing new in it.
+    private var sentLengths: [String: Int] = [:]
 
     public init(
         directory: URL, device: LinkRecordEntry.Device, now: @escaping @Sendable () -> Date = { Date() },
@@ -48,8 +54,11 @@ public final class LinkRecorder: LinkRecording {
             .appendingPathComponent("SharingRecord", isDirectory: true)
     }
 
-    public func record(_ kind: LinkEvent, link: LinkRecordEntry.Link, session: UUID?) {
-        let entry = LinkRecordEntry(time: now(), device: device, session: session, link: link, kind: kind)
+    public func record(_ kind: LinkEvent, link: LinkRecordEntry.Link, session: UUID?, radios: [LinkRadio]?, detail: String?) {
+        let entry = LinkRecordEntry(
+            time: now(), device: device, session: session, link: link, kind: kind,
+            radios: radios.flatMap { $0.isEmpty ? nil : $0 }, detail: detail
+        )
         let day = LinkRecord.day(of: entry.time, in: calendar)
         if prunedOn != day { prune(today: entry.time) }
         guard var line = try? JSONEncoder().encode(entry) else { return }
@@ -84,11 +93,13 @@ public final class LinkRecorder: LinkRecording {
         note(.recordReceived(from: .watch), on: .pair)
     }
 
-    /// This device's own days, each handed to `send`.
+    /// This device's own days that changed since they last went, each handed to `send`.
     public func sendDays() {
         guard let send else { return }
         for (day, url, owner) in dayFiles() where owner == device {
-            if let contents = try? Data(contentsOf: url) { send(day, contents) }
+            guard let contents = try? Data(contentsOf: url), sentLengths[day] != contents.count else { continue }
+            sentLengths[day] = contents.count
+            send(day, contents)
         }
     }
 

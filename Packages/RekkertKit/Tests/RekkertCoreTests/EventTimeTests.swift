@@ -56,10 +56,18 @@ struct EventTimeTests {
         #expect(decoded.ordered.map(\.at) == value.ordered.map(\.at))
     }
 
-    @Test func theStampKeepsATenthOfASecond() {
-        let stamped = MatchEvent.stamp(seconds(12.345))
-        #expect(abs(stamped.timeIntervalSince(seconds(12.3))) < 0.001)
+    @Test func theStampKeepsAHundredthOfASecond() {
+        let stamped = MatchEvent.stamp(seconds(12.3456))
+        #expect(abs(stamped.timeIntervalSince(seconds(12.35))) < 0.0001)
         #expect(MatchEvent.stamp(stamped) == stamped)
+    }
+
+    @Test func anEventStampedToATenthStillDecodesAsWritten() throws {
+        var value = log()
+        let tenth = Date(timeIntervalSinceReferenceDate: (seconds(12.345).timeIntervalSinceReferenceDate * 10).rounded() / 10)
+        value.append(.point(round: 0, court: 0, team: .a), from: phone, at: tenth)
+        let decoded = try JSONCoding.decoder.decode(MatchLog.self, from: JSONCoding.encoder.encode(value))
+        #expect(decoded.ordered.map(\.at) == [tenth])
     }
 
     @Test func aTimeCostsAFewBytesAnEvent() throws {

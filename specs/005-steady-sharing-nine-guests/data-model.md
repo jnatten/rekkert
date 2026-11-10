@@ -34,7 +34,7 @@ The phone↔watch link is `pair`, as today, and has no radio.
 | Field | Type | Change | Notes |
 |---|---|---|---|
 | `id`, `time`, `device`, `session`, `link`, `kind` | as today | — | |
-| `radio` | `LinkRadio?` | **new**, optional | Set on every entry about a host or guest link, and on delay entries. Absent on `pair` and `radio` entries, and in older lines |
+| `radios` | `[LinkRadio]?` | **new**, optional | The radio a host or guest link entry is about, or every radio up to that device for a reach or delay entry; both are written `bt+wifi`. Absent on `pair` and `radio` entries, and in older lines |
 | `detail` | `String?` | **new**, optional | One code from `DropDetail` (below) for a local-network drop. Never the platform's description text, a name, a score or a code |
 
 Older lines decode with both fields absent. An older phone drops a newer watch's lines it cannot
@@ -46,7 +46,7 @@ decode, as it does today.
 |---|---|---|
 | `pointArrived(latency: TimeInterval?)` | latency is now optional, and noted in every build, for point taps only, not undos or corrections. An unknown delay for a point from, or relayed through, a 1.1 device carries `detail: "older"` | `pointArrived(0.412s)`, `pointArrived(unknown)` or `pointArrived(unknown; older)` |
 | `battery(level: Double)` | **new**, level 0…1. `LinkRecorder` decides when to note one: when sharing starts or a join completes, when it stops or the guest leaves, and otherwise only when 10 minutes have passed since the last. The app shells only hand it the level | `battery(83%)` |
-| `outOfReach`, `backInStep` | unchanged kind; the entry's `radio` lists the radio that was up, or both | — |
+| `outOfReach`, `backInStep` | unchanged kind; the entry's `radios` list the radios that were up | — |
 | everything else | unchanged | — |
 
 The exact rows are in [contracts/sharing-record.md](contracts/sharing-record.md).
@@ -66,20 +66,34 @@ Rules, each pinned by `ClockBoundsTests`:
 
 - **`estimate`** is the midpoint, and **`halfWidth`** is half of `upper − lower`.
 - **`aged(at:)`** widens both ends by 50 ppm of the time since `sampledAt`.
-- **`narrower(than:)` keeps the better sample.** A new sample replaces the kept one when its
+- **`narrower(than:at:)` keeps the better sample.** A new sample replaces the kept one when its
   aged half-width is smaller.
+- **`contradicts(_:)`**: two bounds that do not overlap cannot both be true, so one far clock
+  changed between them.
 - **`composed(with:)`** chains two hops. The near device's bounds on B, plus B's bounds on A,
   give the near device's bounds on A: the estimates and the half-widths both add.
 - **`delay(arrivedAt:tappedAt:)`** returns `arrivedAt − (tappedAt − estimate)`. It returns
   `nil` when `halfWidth + 0.005 > 0.1`, which is FR-006.
 
+## New: `ClockSpan` (D-2)
+
+Bounds as they travel in a push's `offsets`: `lower` and `upper` in whole milliseconds,
+encoded as `[lower, upper]`. Made from `ClockBounds` by rounding `lower` down and `upper` up,
+so a span never claims more than was known. The receiver takes it as sampled when it arrived;
+the sender aged it to the moment it sent.
+
 ## New: `ClockBook` (D-2)
 
 - Per device, a `[DeviceID: ClockBounds]`, kept in memory by `MatchStore`. It is not
   persisted, because samples go stale anyway.
-- It is updated from every `.hello` reply that carries `clock`, and from the `offsets` a host
-  sends with `.events` (composed with the receiver's bounds on the host).
+- It is updated from every reply that carries a reading (`.clock` or `.hello`), and from the
+  `offsets` on every `.events` push, composed with the receiver's bounds on the sender.
 - The watch keeps one too, with its phone's bounds as the first hop.
+- It lives in `ClockBounds.swift`, beside the bounds it holds.
+- A new sample that contradicts the kept one replaces it, however wide: the far clock changed.
+- When this device's own clock changes (`NSSystemClockDidChange`), the book is cleared and every
+  delay noted in the next 60 s reads unknown. Delays already in flight were timed partly on the
+  old clock, and the first fresh samples can still be crossing the change.
 
 ## New: `DropDetail` (D-3, FR-004)
 

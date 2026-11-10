@@ -54,7 +54,7 @@ private final class AwayTransport: PeerTransport, @unchecked Sendable {
 
     func queuedEvents(for session: UUID) -> Bool {
         queued.contains { payload in
-            if case .events(session, _)? = try? Wire.decode(payload) { true } else { false }
+            if case .events(session, _, _)? = try? Wire.decode(payload) { true } else { false }
         }
     }
 }

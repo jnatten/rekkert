@@ -140,8 +140,15 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
     /// for the moment there is a peripheral to ask, and this only covers the gap before that.
     private static let conservativeMTU = 20
 
-    public init(radio: any Radio, replyTimeout: Int = 4, proofTimeout: Int = 10, candidateTimeout: Int = 15) {
+    /// Which radio this core's links are named as being on. Bluetooth, but for a stand-in.
+    private let linkRadio: LinkRadio
+
+    public init(
+        radio: any Radio, replyTimeout: Int = 4, proofTimeout: Int = 10, candidateTimeout: Int = 15,
+        linkRadio: LinkRadio = .bluetooth
+    ) {
         self.radio = radio
+        self.linkRadio = linkRadio
         self.replyTimeout = .seconds(replyTimeout)
         replySeconds = replyTimeout
         self.proofTimeout = .seconds(proofTimeout)
@@ -311,6 +318,8 @@ nonisolated public final class RadioCore: PeerTransport, RadioListener, @uncheck
     // MARK: - PeerTransport
 
     public func activate() {}
+
+    public func radio(of link: LinkID) -> LinkRadio? { linkRadio }
 
     public var isReachable: Bool {
         lock.withLock { peers.values.contains { $0.isReady } }

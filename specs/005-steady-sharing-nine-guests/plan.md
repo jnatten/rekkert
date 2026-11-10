@@ -169,8 +169,7 @@ specs/005-steady-sharing-nine-guests/
 Packages/RekkertKit/
 ├── Sources/RekkertCore/
 │   ├── Sync/
-│   │   ├── ClockBounds.swift         # NEW: bounds, ageing, composing, delay or nil (D-2)
-│   │   ├── ClockBook.swift           # NEW: narrowest recent bounds per device (D-2)
+│   │   ├── ClockBounds.swift         # NEW: bounds, ageing, composing, delay or nil; ClockBook (D-2)
 │   │   ├── SharingSummary.swift      # NEW: stints and their numbers (D-4, D-12)
 │   │   ├── ArrivalConditions.swift   # NEW: whether nothing was wrong for one arrival (FR-010)
 │   │   ├── LinkRecord.swift          # LinkRadio; radio and detail on entries; pointArrived(nil);

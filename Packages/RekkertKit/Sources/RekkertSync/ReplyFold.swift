@@ -23,21 +23,27 @@ nonisolated enum ReplyFold {
         var sessionID: UUID?
         var vectors: [VersionVector] = []
         var agree = true
+        var only: (from: DeviceID?, clock: Date?, sharing: Int?)?
 
         for reply in replies.compactMap({ $0 }) {
-            guard case .hello(let session, let vector, _)? = try? Wire.decode(reply) else {
+            guard case .hello(let session, let vector, let from, let clock, let sharing)? = try? Wire.decode(reply) else {
                 folded.unsolicited.append(reply)
                 continue
             }
             sessionID = sessionID ?? session
             agree = agree && session == sessionID
             vectors.append(vector)
+            only = (from, clock, sharing)
         }
 
         guard let sessionID, agree, vectors.count == expected else { return folded }
+        // One answer is that device's own, clock and all (spec 005, D-2). Several have no one
+        // clock between them.
+        let single = vectors.count == 1 ? only : nil
         folded.acknowledgement = try? Wire.hello(
             sessionID: sessionID,
-            vector: VersionVector.lowerBound(of: vectors)
+            vector: VersionVector.lowerBound(of: vectors),
+            from: single?.from, clock: single?.clock, protocol: single?.sharing
         ).encoded()
         return folded
     }

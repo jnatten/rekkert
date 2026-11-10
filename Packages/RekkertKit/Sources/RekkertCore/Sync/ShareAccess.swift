@@ -121,14 +121,17 @@ public struct GuestCard: Codable, Sendable, Hashable, Identifiable {
     /// The phone a watch is standing in for, so the host counts the two as one guest.
     public var pairedTo: DeviceID?
     public var leaving: Bool?
+    /// The guest's sharing protocol, absent from 1.1 and older (`Wire.sharingProtocol`).
+    public var `protocol`: Int?
 
     public var id: DeviceID { device }
 
-    public init(device: DeviceID, name: String?, pairedTo: DeviceID? = nil, leaving: Bool? = nil) {
+    public init(device: DeviceID, name: String?, pairedTo: DeviceID? = nil, leaving: Bool? = nil, protocol: Int? = nil) {
         self.device = device
         self.name = name
         self.pairedTo = pairedTo
         self.leaving = leaving
+        self.protocol = `protocol`
     }
 }
 

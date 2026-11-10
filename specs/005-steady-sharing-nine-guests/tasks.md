@@ -221,13 +221,13 @@ any device's points are unknown, and each summary matches its entries.
 
 > **Write these tests FIRST. They fail until T032–T042 land.**
 
-- [ ] T023 [P] [US2] `CoreTests/ClockBoundsTests.swift` (FR-006, D-2). It pins:
+- [X] T023 [P] [US2] `CoreTests/ClockBoundsTests.swift` (FR-006, D-2). It pins:
   - the bounds from t₁/t₂/t₄, `estimate` (the midpoint) and `halfWidth`;
   - `aged(at:)` widening by 50 ppm;
   - `narrower(than:)`;
   - `composed(with:)`, where estimates and half-widths add;
   - `delay(arrivedAt:tappedAt:)` returning `nil` when `halfWidth + 0.005 > 0.1`.
-- [ ] T024 [P] [US2] `CoreTests/SharingSummaryTests.swift` (FR-003, D-4). It pins:
+- [X] T024 [P] [US2] `CoreTests/SharingSummaryTests.swift` (FR-003, D-4). It pins:
   - stint boundaries: `sharingStarted`, `sharingRestored` or `joined`, to `sharingStopped`, leaving, or the end of the file;
   - the median and slowest delay;
   - the shares within 1 s and 2 s, counted only over arrivals where `ArrivalConditions.nothingWrong` holds;
@@ -238,36 +238,36 @@ any device's points are unknown, and each summary matches its entries.
   - battery per hour for phone and watch;
   - `watchUpTo`, when the watch has not been in touch since;
   - a stint with no points.
-- [ ] T025 [P] [US2] Extend `CoreTests/LinkRecordTests.swift` (FR-001, FR-002), per [contracts/sharing-record.md](contracts/sharing-record.md):
+- [X] T025 [P] [US2] Extend `CoreTests/LinkRecordTests.swift` (FR-001, FR-002), per [contracts/sharing-record.md](contracts/sharing-record.md):
   - round trips for `pointArrived(0.412s)`, `pointArrived(unknown)`, `pointArrived(unknown; older)`, `battery(83%)`, a radio in the link column (`host 57FA wifi`, `guest 255B bt+wifi`) and a drop detail (`dropped(closedByPeer; ETIMEDOUT)`);
   - an export from today's format (no radios) parses unchanged;
   - summary lines are skipped by `parse`.
-- [ ] T026 [P] [US2] `CoreTests/WireCompatibilityTests.swift` (FR-015, D-14), per [contracts/wire-protocol.md](contracts/wire-protocol.md):
+- [X] T026 [P] [US2] `CoreTests/WireCompatibilityTests.swift` (FR-015, D-14), per [contracts/wire-protocol.md](contracts/wire-protocol.md):
   - `hello` with and without `clock` and `protocol`;
   - `events` with and without `offsets`;
   - `GuestCard` with and without `protocol`;
   - the `needsUpdate` case;
   - a 1.1-shaped payload decoded by this release's decoder, and this release's payloads decoded with the new fields stripped, as a 1.1 decoder would see them.
-- [ ] T027 [P] [US2] Extend `CoreTests/EventTimeTests.swift` (D-1):
+- [X] T027 [P] [US2] Extend `CoreTests/EventTimeTests.swift` (D-1):
   - `MatchEvent.stamp` rounds to 0.01 s;
   - an event's `at` survives encode→decode bit for bit, so every device holds the same value (Principle II);
   - an event stamped by today's 0.1 s rule decodes unchanged.
-- [ ] T028 [US2] `SyncTests/ClockOffsetTests.swift` (FR-006, clarified). A host and four guests, each with a watch, on both links. Every device's clock is offset by up to ±3 s and drifts by up to 20 ppm (T009). Over 30 simulated minutes:
+- [X] T028 [US2] `SyncTests/ClockOffsetTests.swift` (FR-006, clarified). A host and four guests, each with a watch, on both links. Every device's clock is offset by up to ±3 s and drifts by up to 20 ppm (T009). Over 30 simulated minutes:
   - every recorded delay is within 0.1 s of the harness's true delay, or reads `unknown`;
   - no device has more than 10% unknown;
   - each watch's delay entries reach its phone's export and the phone's summary, once the two are in touch (FR-005);
   - when one guest's clock jumps 5 s forward mid-run, delays across the jump read unknown, never wrong (Edge Cases).
 
   Depends on T009.
-- [ ] T029 [US2] `SyncTests/OlderGuestTests.swift` (FR-015, clarified). A guest whose sent payloads have `clock`, `protocol` and `offsets` stripped, as 1.1 sends them, joins a host from this release:
+- [X] T029 [US2] `SyncTests/OlderGuestTests.swift` (FR-015, clarified). A guest whose sent payloads have `clock`, `protocol` and `offsets` stripped, as 1.1 sends them, joins a host from this release:
   - it is counted once;
   - it receives every point;
   - the host records its points' delays as `unknown`, not as wrong numbers.
-- [ ] T030 [P] [US2] `SyncTests/DropDetailTests.swift` (FR-002, FR-004). For every platform error in data-model.md's `DropDetail` table, built as `NWError.posix(…)`, `.dns(…)` and `.tls(…)` on macOS:
+- [X] T030 [P] [US2] `SyncTests/DropDetailTests.swift` (FR-002, FR-004). For every platform error in data-model.md's `DropDetail` table, built as `NWError.posix(…)`, `.dns(…)` and `.tls(…)` on macOS:
   - it maps to the listed code;
   - anything else maps to `other`;
   - no mapped value contains text from the error's own description.
-- [ ] T031 [P] [US2] `SyncTests/RecordPrivacyTests.swift` (FR-004). Run a shared match in `CourtHarness` with named players and a known code, then export every phone's record. The export must not contain:
+- [X] T031 [P] [US2] `SyncTests/RecordPrivacyTests.swift` (FR-004). Run a shared match in `CourtHarness` with named players and a known code, then export every phone's record. The export must not contain:
   - any player's name;
   - the code, or the share id;
   - any score.
@@ -276,61 +276,64 @@ any device's points are unknown, and each summary matches its entries.
 
 ### Implementation for User Story 2
 
-- [ ] T032 [P] [US2] Round `MatchEvent.stamp` to the hundredth in `RekkertCore/Sync/MatchEvent.swift:121-126` (D-1), and update its doc comment's reasoning.
-- [ ] T033 [P] [US2] Create `RekkertCore/Sync/ClockBounds.swift` and `RekkertCore/Sync/ClockBook.swift` (D-2), as data-model.md defines them:
+- [X] T032 [P] [US2] Round `MatchEvent.stamp` to the hundredth in `RekkertCore/Sync/MatchEvent.swift:121-126` (D-1), and update its doc comment's reasoning.
+- [X] T033 [P] [US2] Create `RekkertCore/Sync/ClockBounds.swift`, holding both `ClockBounds` and `ClockBook` (D-2), as data-model.md defines them:
   - `ClockBounds` has `lower`, `upper`, `sampledAt`, `estimate`, `halfWidth`, `aged(at:)`, `narrower(than:)`, `composed(with:)` and `delay(arrivedAt:tappedAt:)`;
   - `ClockBook` holds `[DeviceID: ClockBounds]`, keeping the narrower sample.
 
   Both are `Codable` and `Sendable`.
-- [ ] T034 [P] [US2] Extend `RekkertCore/Sync/LinkRecord.swift` (D-1, D-3, D-12):
+- [X] T034 [P] [US2] Extend `RekkertCore/Sync/LinkRecord.swift` (D-1, D-3, D-12):
   - `LinkRadio` (`bluetooth`, `wifi`);
-  - optional `radio: LinkRadio?` and `detail: String?` on `LinkRecordEntry`;
+  - optional `radios: [LinkRadio]?` and `detail: String?` on `LinkRecordEntry`;
   - `pointArrived(latency: TimeInterval?)`;
   - `battery(level: Double)`.
 
   The text forms and `parse` follow [contracts/sharing-record.md](contracts/sharing-record.md). Older lines decode with both fields absent.
-- [ ] T035 [US2] Add the optional wire fields (D-2, D-14) in `RekkertCore/Sync/Wire.swift` and `RekkertCore/Sync/ShareAccess.swift`:
+- [X] T035 [US2] Add the optional wire fields (D-2, D-14) in `RekkertCore/Sync/Wire.swift` and `RekkertCore/Sync/ShareAccess.swift`:
   - `hello` gains `clock: Date?` and `protocol: Int?`, where `protocol` is `2`;
-  - `events` gains `offsets: [DeviceID: ClockBounds]?`;
+  - `events` gains `offsets: [DeviceID: ClockSpan]?`, whole milliseconds rounded outwards;
   - `GuestCard` gains `protocol: Int?`;
   - there is a new case `needsUpdate(sessionID:)`, which nothing sends;
+  - there is a new case `clock(reading:)`, small enough for one radio chunk each way (D-2, revised);
   - the fan-out's exhaustive switches cover the new case (FO:49-64, 256-265).
 
   Depends on T033.
-- [ ] T036 [P] [US2] Create `RekkertSync/DropDetail.swift`: a pure mapping from the platform's connection error to one code, exactly as data-model.md's `DropDetail` table lists them. It never passes on the error's description text (FR-004).
-- [ ] T037 [US2] Name each link's radio, and keep drop details (D-3):
+- [X] T036 [P] [US2] Create `RekkertSync/DropDetail.swift`: a pure mapping from the platform's connection error to one code, exactly as data-model.md's `DropDetail` table lists them. It never passes on the error's description text (FR-004).
+- [X] T037 [US2] Name each link's radio, and keep drop details (D-3):
   - `RadioCore` reports `.bluetooth`, and `LocalNetworkTransport` reports `.wifi`;
   - `FanOutTransport` records each child's radio when a link comes up, and answers `radio(of: LinkID)`;
   - `MatchStore` caches the radio with `farEnds` at first proof, and puts it on every link entry it notes;
   - `LocalNetworkTransport` passes `DropDetail`'s code for the `NWError` as the drop's `detail` (LN:541-542, 687-690, 704, 707-708).
 
   Files: `RekkertSync/Radio/RadioCore.swift`, `RekkertSync/LocalNetworkTransport.swift`, `RekkertSync/FanOutTransport.swift`, `RekkertSync/MatchStore.swift`. Depends on T034 and T036.
-- [ ] T038 [US2] Measure delays in every build (D-1, D-2) in `RekkertSync/MatchStore.swift`:
+- [X] T038 [US2] Measure delays in every build (D-1, D-2) in `RekkertSync/MatchStore.swift`:
   - **Time the round trip.** `deliver()` notes t₁ before `sendLive` and t₄ on the reply. Every `hello` the store writes carries `clock`. A reply's `clock` updates the store's `ClockBook`.
-  - **The host passes on offsets.** It adds `offsets` for each author to per-link `.events` pushes. A receiver composes them with its own bounds on the host.
+  - **Ask the time.** On each link to a device whose hello carried `protocol`, a `clock` question when the link is greeted and every 30 s while sharing (D-2, revised).
+  - **Every sender passes on offsets.** It adds `offsets` for the recipient and each author to every `.events` push. A receiver learns from them on every push, even one whose points it already holds, composed with its own bounds on the sender.
   - **The watch does the same** over the pair link, with its phone as the first hop.
   - **Delays in every build.** Remove the `#if DEBUG` around `pointArrived` (MS:2143-2148), and note `pointArrived(latency:)` for point taps only, with the radio of the link the point came on. Note `nil` when `ClockBounds.delay` returns nil, with `detail: "older"` when the author or the relaying host never sent a `clock`, as a 1.1 device does (FR-006).
-  - **A clock change** (`NSSystemClockDidChange`) clears the device's `ClockBook`, so delays across it read unknown until fresh samples arrive (Edge Cases).
+  - **A clock change** (`NSSystemClockDidChange`) clears the device's `ClockBook`, and delays noted in the next 60 s read unknown (Edge Cases). A sample that contradicts the kept one replaces it, because the far clock changed.
+  - **The watch's hello keeps its clock** when `ReplyFold` folds a single reply, so the watch can time its phone.
 
   Depends on T009 (Phase 2) and T032–T037.
-- [ ] T039 [US2] Put the radios on reach entries:
+- [X] T039 [US2] Put the radios on reach entries:
   - the host's `outOfReach`/`backInStep` (MS:1266-1292) and the guest's (`RekkertSync/SharedSession.swift:660-684`) carry the radios that were up when noted;
   - both radios up is written `bt+wifi`.
 
   Depends on T037.
-- [ ] T040 [P] [US2] Create `RekkertCore/Sync/SharingSummary.swift`, and add `LinkRecord.summaries()` (D-4):
+- [X] T040 [P] [US2] Create `RekkertCore/Sync/SharingSummary.swift`, and add `LinkRecord.summaries()` (D-4):
   - fields as in data-model.md, with the FR-010 shares counted over arrivals where `ArrivalConditions.nothingWrong` holds;
   - `export()` prints each stint's indented summary line before its rows, worded as in [contracts/sharing-record.md](contracts/sharing-record.md).
 
   Depends on T007 and T034.
-- [ ] T041 [US2] Show the stints in `App/Sources/Views/SharingRecordView.swift`:
+- [X] T041 [US2] Show the stints in `App/Sources/Views/SharingRecordView.swift`:
   - group entries by stint, newest first, each with a header worded as in [contracts/screens.md](contracts/screens.md);
   - leave out header lines with no data;
   - the shared export includes the summaries;
   - it works with VoiceOver and larger text sizes.
 
   Depends on T040.
-- [ ] T042 [P] [US2] Make the watch send only day files that changed since they were last sent, in `RekkertSync/LinkRecorder.swift` (:59, 88-93). Pin it in `SyncTests/OwnWatchTests.swift` or a new `SyncTests/RecordTransferTests.swift`.
+- [X] T042 [P] [US2] Make the watch send only day files that changed since they were last sent, in `RekkertSync/LinkRecorder.swift` (:59, 88-93). Pin it in `SyncTests/OwnWatchTests.swift` or a new `SyncTests/RecordTransferTests.swift`.
 - [ ] T043 [US2] Make T023–T031 pass, and run the whole package.
 
 **Checkpoint**: Every build records delays, radios, drop details and a summary per stint.

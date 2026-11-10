@@ -119,10 +119,11 @@ public struct MatchEvent: Codable, Sendable, Hashable, Identifiable {
         }
     }
 
-    /// A moment to a tenth of a second: finer than any timeline is drawn at, and a dozen
-    /// bytes shorter on every event than the full-precision number.
+    /// A moment to a hundredth of a second: fine enough to time a point's way to another device
+    /// to within a tenth (spec 005, FR-006), and still a dozen bytes shorter on every event than
+    /// the full-precision number.
     public static func stamp(_ date: Date = Date()) -> Date {
-        Date(timeIntervalSinceReferenceDate: (date.timeIntervalSinceReferenceDate * 10).rounded() / 10)
+        Date(timeIntervalSinceReferenceDate: (date.timeIntervalSinceReferenceDate * 100).rounded() / 100)
     }
 
     /// Events an undo can target. Configuration and undo itself are excluded so that

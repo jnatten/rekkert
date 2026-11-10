@@ -173,6 +173,18 @@ public final class MatchStore {
     /// This device's own events that came back to it over a link.
     @ObservationIgnored private(set) var echoesHeard = 0
     @ObservationIgnored private(set) var synchroniseRounds = 0
+    /// Bounds on other devices' clocks, for timing points from the tap (spec 005, D-2).
+    @ObservationIgnored private var clocks = ClockBook()
+    /// After this device's clock jumped, what others still know of it is stale for a while.
+    @ObservationIgnored private var clockChangedAt: Date?
+    @ObservationIgnored private var linkRadios: [LinkID: LinkRadio] = [:]
+    /// Devices whose hellos carry no protocol: 1.1 and older, which send no clock either.
+    @ObservationIgnored private var olderDevices: Set<DeviceID> = []
+    /// Devices whose hellos carry one, and so can be asked the time.
+    @ObservationIgnored private var currentDevices: Set<DeviceID> = []
+    /// Tests only: say nothing of clocks or protocol, as 1.1 does.
+    @ObservationIgnored var actsAsOlderBuild = false
+    private var ownProtocol: Int? { actsAsOlderBuild ? nil : Wire.sharingProtocol }
     /// Whether any link to the match was up, and the pair, when reachability last changed.
     @ObservationIgnored private var lastPresence: (onLinks: Bool, pair: Bool)?
     /// The host this device last heard from on a link, for a guest's record.
@@ -187,6 +199,7 @@ public final class MatchStore {
     /// A guest heard who the host says they are.
     @ObservationIgnored public var onHostNameChanged: (() -> Void)?
     @ObservationIgnored private let participantTick: Duration
+    @ObservationIgnored private let clockTick: Duration
     @ObservationIgnored let guestLimit: Int
     @ObservationIgnored private let sleep: @Sendable (Duration) async -> Void
 
@@ -201,10 +214,12 @@ public final class MatchStore {
         keepsHistory: Bool = true,
         now: @escaping @Sendable () -> Date = { Date() },
         participantTick: Duration = .seconds(1),
+        clockTick: Duration = .seconds(30),
         guestLimit: Int = Participants.limit,
         sleep: @escaping @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0) }
     ) {
         self.participantTick = participantTick
+        self.clockTick = clockTick
         self.guestLimit = guestLimit
         self.sleep = sleep
         self.sendTimeout = sendTimeout
@@ -559,7 +574,7 @@ public final class MatchStore {
         switch wire {
         case .guestCard(let card) where card.leaving == true:
             return true
-        case .hello(_, let vector, let sender):
+        case .hello(_, let vector, let sender, _, _):
             guard sender != device else { return true }
             let owner = sender ?? linkOwners[link] ?? DeviceID(link.raw)
             linkOwners[link] = owner
@@ -675,7 +690,7 @@ public final class MatchStore {
             }
             // The host lists phones; a watch's own join is its phone's to speak for.
             guard keepsHistory, !isJoining else { return }
-            let card = encode(.guestCard(GuestCard(device: device, name: identity)))
+            let card = encode(.guestCard(GuestCard(device: device, name: identity, protocol: ownProtocol)))
             Task {
                 guard let reply = await sendLive(card), case .access? = try? Wire.decode(reply) else { return }
                 handle(InboundPacket(payload: reply))
@@ -1256,12 +1271,41 @@ public final class MatchStore {
         async let initial: Void = synchroniseOnce()
         async let links: Void = consumeLinkChanges()
         async let guests: Void = watchParticipants()
-        _ = await (packets, reachability, retries, initial, links, guests)
+        async let clockJumps: Void = watchClockChanges()
+        async let clockTimes: Void = askTheTime()
+        _ = await (packets, reachability, retries, initial, links, guests, clockJumps, clockTimes)
+    }
+
+    /// Every link to a device that can answer, now and then: a push and its answer span several
+    /// radio chunks each way, too long a round trip to bound a clock within a tenth of a second.
+    private func askTheTime() async {
+        while !Task.isCancelled {
+            await sleep(clockTick)
+            guard role != .solo, !actsAsOlderBuild else { continue }
+            for link in transport.links { await askTheTime(on: link) }
+        }
+    }
+
+    private func askTheTime(on link: LinkID) async {
+        guard let far = farEnds[link], currentDevices.contains(far),
+              let payload = try? Wire.clock().encoded()
+        else { return }
+        let asked = now()
+        guard let reply = await sendLive(payload, on: link) else { return }
+        learnClock(asked: asked, reply: reply, from: farEnds[link])
+    }
+
+    /// Set by hand or corrected by the network: delays across the change read unknown, never
+    /// wrong (spec 005, Edge Cases).
+    private func watchClockChanges() async {
+        for await _ in NotificationCenter.default.notifications(named: .NSSystemClockDidChange) {
+            clockChanged()
+        }
     }
 
     private func consumeLinkChanges() async {
         for await change in transport.linkChanges {
-            guard case .down(let link, let reason) = change else {
+            guard case .down(let link, let reason, let detail) = change else {
                 if case .up(let link) = change { Task { await greet(link) } }
                 continue
             }
@@ -1270,9 +1314,10 @@ public final class MatchStore {
             delivering[link] = nil
             acknowledgeOutbox()
             // A host gives up on a guest that stays connected; a guest hangs up and dials again.
+            let radio = linkRadios.removeValue(forKey: link)
             if let owner = farEnds.removeValue(forKey: link) {
                 let kind: LinkEvent = reason == .timeout ? (role == .host ? .wroteOff : .redialled) : .dropped(reason)
-                recorder?.note(kind, on: farLink(owner), in: log.sessionID)
+                recorder?.note(kind, on: farLink(owner), in: log.sessionID, radios: radio.map { [$0] }, detail: detail)
             }
         }
     }
@@ -1297,10 +1342,10 @@ public final class MatchStore {
                 if case .outOfReach = summary.state { summary.id } else { nil }
             })
             for guest in away.subtracting(recordedOutOfReach) {
-                recorder?.note(.outOfReach, on: .guest(guest), in: log.sessionID)
+                recorder?.note(.outOfReach, on: .guest(guest), in: log.sessionID, radios: radiosUp(to: guest))
             }
             for guest in recordedOutOfReach.subtracting(away) where participants.participant(for: guest) != nil {
-                recorder?.note(.backInStep, on: .guest(guest), in: log.sessionID)
+                recorder?.note(.backInStep, on: .guest(guest), in: log.sessionID, radios: radiosUp(to: guest))
             }
             recordedOutOfReach = away
         }
@@ -1420,7 +1465,7 @@ public final class MatchStore {
         await introduceAsThePairs()
         // Coverage rather than the raw vector: this is the "what am I missing" question, and
         // the highest number seen is the wrong answer to it when something below is absent.
-        guard let payload = try? Wire.hello(sessionID: log.sessionID, vector: log.coverage, from: device).encoded() else { return }
+        guard let payload = try? ownHello.encoded() else { return }
         // Through the timeout, like every other send: `consumeReachability` awaits this, so a
         // hello that was never answered would stop every later reconnect from being noticed.
         if let reply = await sendLive(payload) {
@@ -1433,17 +1478,18 @@ public final class MatchStore {
     /// fan-out only says reachability changed when the device as a whole came or went.
     private func greet(_ link: LinkID) async {
         if standsInForThePair, let pairedDevice {
-            _ = await sendLive(encode(.guestCard(GuestCard(device: device, name: nil, pairedTo: pairedDevice))), on: link)
+            _ = await sendLive(encode(.guestCard(GuestCard(device: device, name: nil, pairedTo: pairedDevice, protocol: ownProtocol))), on: link)
         }
-        guard let payload = try? Wire.hello(sessionID: log.sessionID, vector: log.coverage, from: device).encoded(),
+        guard let payload = try? ownHello.encoded(),
               let reply = await sendLive(payload, on: link)
         else { return }
         handle(InboundPacket(payload: reply, link: link))
+        if role != .solo { await askTheTime(on: link) }
     }
 
     private func introduceAsThePairs() async {
         guard standsInForThePair, let pairedDevice else { return }
-        let card = encode(.guestCard(GuestCard(device: device, name: nil, pairedTo: pairedDevice)))
+        let card = encode(.guestCard(GuestCard(device: device, name: nil, pairedTo: pairedDevice, protocol: ownProtocol)))
         for link in transport.links { _ = await sendLive(card, on: link) }
     }
 
@@ -1550,12 +1596,15 @@ public final class MatchStore {
             guard !lacking.isEmpty else { continue }
             deliver(lacking, on: link, in: session)
         }
-        guard let payload = try? Wire.events(sessionID: session, events: events).encoded() else { return }
+        let offsets = clockOffsets(for: pairedDevice, authors: events)
+        guard let payload = try? Wire.events(sessionID: session, events: events, offsets: offsets).encoded() else { return }
         Task {
+            let asked = now()
             guard let reply = await sendLiveBesideLinks(payload) else {
                 if session == log.sessionID { queuePending() }
                 return
             }
+            learnClock(asked: asked, reply: reply, from: pairedDevice)
             acknowledge(reply, for: session)
         }
     }
@@ -1564,19 +1613,22 @@ public final class MatchStore {
     /// Counted as on its way before the send starts, so nothing that looks meanwhile sends it again.
     @discardableResult
     private func deliver(_ events: [MatchEvent], on link: LinkID, in session: UUID) -> Task<Void, Never>? {
-        guard let payload = try? Wire.events(sessionID: session, events: events).encoded() else { return nil }
+        let offsets = clockOffsets(for: farEnds[link], authors: events)
+        guard let payload = try? Wire.events(sessionID: session, events: events, offsets: offsets).encoded() else { return nil }
         let ids = Set(events.map(\.id))
         delivering[link, default: []].formUnion(ids)
         return Task {
+            let asked = now()
             let reply = await sendLive(payload, on: link)
             delivering[link]?.subtract(ids)
             guard let reply else { return }
+            learnClock(asked: asked, reply: reply, from: farEnds[link])
             acknowledge(reply, for: session, on: link)
         }
     }
 
     private func acknowledge(_ reply: Data, for session: UUID, on link: LinkID? = nil) {
-        guard case .hello(let answered, let vector, _)? = try? Wire.decode(reply) else {
+        guard case .hello(let answered, let vector, _, _, _)? = try? Wire.decode(reply) else {
             // Anything else is the counterpart saying it is not on the session we just
             // sent — which is the one thing that has to be acted on rather than dropped.
             return handle(InboundPacket(payload: reply, link: link))
@@ -1612,6 +1664,79 @@ public final class MatchStore {
         let before = outbox.pending.count
         outbox.acknowledge(upTo: .lowerBound(of: held))
         if outbox.pending.count != before { persist() }
+    }
+
+    /// This device's hello: what it holds, who it is, and its clock as it says so.
+    private var ownHello: Wire {
+        .hello(
+            sessionID: log.sessionID, vector: log.coverage, from: device,
+            clock: actsAsOlderBuild ? nil : now(), protocol: ownProtocol
+        )
+    }
+
+    /// The radios of the links up to `far`.
+    public func radiosUp(to far: DeviceID) -> [LinkRadio] {
+        Array(Set(farEnds.compactMap { $0.value == far ? linkRadios[$0.key] : nil })).sorted()
+    }
+
+    private func radios(of packet: InboundPacket) -> [LinkRadio]? {
+        packet.link.flatMap { linkRadios[$0] }.map { [$0] }
+    }
+
+    /// For one push: the recipient's clock against this one, and each author's, where known.
+    private func clockOffsets(for recipient: DeviceID?, authors events: [MatchEvent]) -> [DeviceID: ClockSpan]? {
+        guard !actsAsOlderBuild else { return nil }
+        let moment = now()
+        var known: [DeviceID: ClockSpan] = [:]
+        if let recipient, let bounds = clocks[recipient] { known[recipient] = ClockSpan(bounds.aged(at: moment)) }
+        for author in Set(events.map(\.id.device)) where author != device && author != recipient {
+            if let bounds = clocks[author] { known[author] = ClockSpan(bounds.aged(at: moment)) }
+        }
+        return known.isEmpty ? nil : known
+    }
+
+    /// A reply carrying the far end's clock, to a question asked at `asked`.
+    private func learnClock(asked: Date, reply: Data, from far: DeviceID?) {
+        let clock: Date
+        switch try? Wire.decode(reply) {
+        case .hello(_, _, _, let reading?, _)?, .clock(let reading?)?: clock = reading
+        default: return
+        }
+        guard let far else { return }
+        let heard = now()
+        clocks.learn(ClockBounds(asked: asked, farClock: clock, heard: heard), for: far, at: heard)
+    }
+
+    /// What `sender` knows of this device's clock, and of each author's: learned from every push,
+    /// even one whose events arrived first some other way.
+    private func learnOffsets(_ offsets: [DeviceID: ClockSpan], from sender: DeviceID, at arrival: Date) {
+        if let mine = offsets[device] {
+            clocks.learn(ClockBounds(lower: -Double(mine.upper) / 1_000, upper: -Double(mine.lower) / 1_000, sampledAt: arrival), for: sender, at: arrival)
+        }
+        guard let onSender = clocks[sender] else { return }
+        for (author, hop) in offsets where author != device && author != sender {
+            clocks.learn(onSender.composed(with: hop.bounds(at: arrival)), for: author, at: arrival)
+        }
+    }
+
+    /// How long after its tap `event` arrived from `sender`, and whether an unknown answer is
+    /// down to a 1.1 device on the way.
+    private func delay(of event: MatchEvent, arrivedAt arrival: Date, from sender: DeviceID?) -> (latency: TimeInterval?, older: Bool) {
+        guard let at = event.at, let sender else { return (nil, false) }
+        let author = event.id.device
+        let older = olderDevices.contains(sender) || olderDevices.contains(author)
+        if let jumped = clockChangedAt, arrival.timeIntervalSince(jumped) < 60, arrival >= jumped { return (nil, false) }
+        let latency = clocks[author]?.delay(arrivedAt: arrival, tappedAt: at)
+        return (latency, latency == nil && older)
+    }
+
+    /// Tests only: what this device knows of `other`'s clock.
+    func knownClock(of other: DeviceID) -> ClockBounds? { clocks[other] }
+
+    /// This device's clock jumped: nothing it knew of other clocks holds any more.
+    func clockChanged() {
+        clocks.forget()
+        clockChangedAt = now()
     }
 
     /// Every link to the device at the far end of `link`, itself included.
@@ -1713,12 +1838,12 @@ public final class MatchStore {
     private func handle(_ packet: InboundPacket) {
         guard let wire = try? Wire.decode(packet.payload) else {
             // Always answer, so a peer awaiting a reply can never hang on bad input.
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+            packet.reply?(encode(ownHello))
             return
         }
         // Off the host's match and only saying so: nothing it sends now is for this device.
         if isSayingGoodbye, !packet.isFromPairedDevice {
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+            packet.reply?(encode(ownHello))
             return
         }
         guard noteParticipant(wire, from: packet) else {
@@ -1726,20 +1851,30 @@ public final class MatchStore {
             if let link = packet.link {
                 transport.refuse(link)
                 var sender: DeviceID?
-                if case .hello(_, _, let named) = wire { sender = named }
+                if case .hello(_, _, let named, _, _) = wire { sender = named }
                 recorder?.note(.refused(.noRoom), on: .guest(sender ?? DeviceID(link.raw)), in: log.sessionID)
             }
             return
         }
 
         switch wire {
-        case .hello(let sessionID, let vector, let sender):
+        case .hello(let sessionID, let vector, let sender, _, let sharingProtocol):
             // The first word on a link names who is on the far end of it.
             if let link = packet.link, !packet.isFromPairedDevice, farEnds[link] == nil {
                 let owner = sender ?? DeviceID(link.raw)
                 farEnds[link] = owner
+                linkRadios[link] = transport.radio(of: link)
                 if role != .host { hostDevice = owner }
-                recorder?.note(.proven, on: farLink(owner), in: sessionID)
+                recorder?.note(.proven, on: farLink(owner), in: sessionID, radios: linkRadios[link].map { [$0] })
+            }
+            if let sender, sender != device {
+                if sharingProtocol == nil {
+                    olderDevices.insert(sender)
+                    currentDevices.remove(sender)
+                } else {
+                    olderDevices.remove(sender)
+                    currentDevices.insert(sender)
+                }
             }
             // Only the pair's: a stranger's phone is somebody else by definition, and on a
             // watch every packet arrives through its own phone anyway.
@@ -1769,7 +1904,7 @@ public final class MatchStore {
                 learn(packet.reply == nil ? vector : vector.merging(log.coverage), on: link)
             }
 
-        case .events(let sessionID, let events):
+        case .events(let sessionID, let events, let offsets):
             if retired.contains(sessionID) {
                 guard let ended = overturnedEnding(of: sessionID, by: events) else {
                     return announceRetirement(of: sessionID, to: packet)
@@ -1784,8 +1919,8 @@ public final class MatchStore {
                     heldOnLink[sibling] = held.extended(by: events.map(\.id))
                 }
             }
-            relay(events, from: packet)
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+            relay(events, from: packet, offsets: offsets)
+            packet.reply?(encode(ownHello))
 
         case .retired(let sessionID, let archive, let farewell):
             // Only ever our own live session, and only once: concluding puts it in the
@@ -1808,12 +1943,12 @@ public final class MatchStore {
                     record(.finish(archive: archive))
                 }
             }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+            packet.reply?(encode(ownHello))
 
         case .presets(let incoming):
             let merged = presets.adopting(incoming)
             if merged != presets { apply(merged, publish: false) }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+            packet.reply?(encode(ownHello))
 
         case .role(let incoming):
             let heldBefore = (pairedRole, leftSessionID, counterpartLeftSessionID)
@@ -1851,7 +1986,7 @@ public final class MatchStore {
                 counterpartLeftSessionID = nil
                 Task { await synchronise() }
             }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+            packet.reply?(encode(ownHello))
 
         case .left(let sessionID):
             // Only ever from this device's own phone or watch — the shared scope does not
@@ -1878,12 +2013,12 @@ public final class MatchStore {
                     dropSession()
                 }
             }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+            packet.reply?(encode(ownHello))
 
         case .display(let incoming):
             let merged = display.adopting(incoming)
             if merged != display { apply(merged, publish: false) }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+            packet.reply?(encode(ownHello))
 
         case .haptics(let incoming):
             let merged = haptics.adopting(incoming)
@@ -1891,7 +2026,7 @@ public final class MatchStore {
                 apply(merged, publish: false)
                 identifyAsMe()
             }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+            packet.reply?(encode(ownHello))
 
         case .workout(var signal):
             // A finished workout is filed here because the watch that recorded it keeps no
@@ -1916,19 +2051,19 @@ public final class MatchStore {
                 }
             }
             onWorkout?(signal)
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+            packet.reply?(encode(ownHello))
 
         case .displaced(let lost):
             if packet.isFromPairedDevice { keep(lost, handedOverBy: .displacement) }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+            packet.reply?(encode(ownHello))
 
         case .access(let incoming):
             take(incoming, from: packet)
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+            packet.reply?(encode(ownHello))
 
         case .guestCard(let card):
             guard role == .host, !packet.isFromPairedDevice, card.device != device else {
-                packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+                packet.reply?(encode(ownHello))
                 return
             }
             if card.leaving == true {
@@ -1940,7 +2075,7 @@ public final class MatchStore {
                 }
                 persist()
                 onParticipantsChanged?()
-                packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+                packet.reply?(encode(ownHello))
                 return
             }
             // A watch speaking for its phone is that guest, already listed by the phone.
@@ -1959,7 +2094,7 @@ public final class MatchStore {
             if let accessTable, let reply = packet.reply {
                 reply(encode(.access(accessTable)))
             } else {
-                packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+                packet.reply?(encode(ownHello))
                 shareAccess()
             }
 
@@ -1974,11 +2109,18 @@ public final class MatchStore {
                 onStoppedByHost?(reason)
                 leaveSharedSession()
             }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+            packet.reply?(encode(ownHello))
 
         case .noRoom:
             if !packet.isFromPairedDevice, isJoining || role == .guest { onRefused?(.noRoom) }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+            packet.reply?(encode(ownHello))
+
+        case .needsUpdate:
+            // Sent by no host yet: a later breaking change will, and say it on the screen.
+            packet.reply?(encode(ownHello))
+
+        case .clock(let reading):
+            if reading == nil { packet.reply?(encode(.clock(reading: now()))) }
 
         case .sharing(let signal):
             // Only ever from the device in the same pocket — the scope drops this case before
@@ -1988,7 +2130,7 @@ public final class MatchStore {
                 hearThePair(signal)
                 onSharing?(signal)
             }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+            packet.reply?(encode(ownHello))
 
         case .snapshot(let incoming, let pairRole, let access):
             if packet.isFromPairedDevice, let pairRole { heardThePairIsOn(incoming, as: pairRole) }
@@ -2143,7 +2285,7 @@ public final class MatchStore {
             if let access, log.sessionID == incoming.sessionID, accessTable.map({ $0.id == access.id }) ?? true {
                 take(access, from: packet)
             }
-            packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
+            packet.reply?(encode(ownHello))
         }
     }
 
@@ -2184,19 +2326,24 @@ public final class MatchStore {
         if counterpartLeftSessionID == session { counterpartLeftSessionID = nil }
     }
 
-    private func relay(_ incoming: [MatchEvent], from packet: InboundPacket) {
+    private func relay(_ incoming: [MatchEvent], from packet: InboundPacket, offsets: [DeviceID: ClockSpan]? = nil) {
         if packet.link != nil { echoesHeard += incoming.count { $0.id.device == device } }
+        let arrival = now()
+        let sender = packet.isFromPairedDevice ? pairedDevice : packet.link.flatMap { farEnds[$0] }
+        if let offsets, let sender { learnOffsets(offsets, from: sender, at: arrival) }
         let fresh = incoming.filter { log.events[$0.id] == nil }
         let before = state
         let session = log.sessionID
         guard log.merge(fresh) else { return }
         if fresh.count > 1 { recorder?.note(.caughtUp(events: fresh.count), on: source(of: packet), in: session) }
-        #if DEBUG
         for event in fresh {
-            guard case .point = event.kind, let at = event.at else { continue }
-            recorder?.note(.pointArrived(latency: now().timeIntervalSince(at)), on: source(of: packet), in: session)
+            guard case .point = event.kind else { continue }
+            let (latency, older) = delay(of: event, arrivedAt: arrival, from: sender)
+            recorder?.note(
+                .pointArrived(latency: latency), on: source(of: packet), in: session,
+                radios: radios(of: packet), detail: older ? "older" : nil
+            )
         }
-        #endif
         let overruled = packet.isFromPairedDevice ? [] : overrule(endingsIn: fresh)
         outbox.enqueue(contentsOf: fresh + overruled)
         push(fresh + overruled, in: session, from: packet.link)

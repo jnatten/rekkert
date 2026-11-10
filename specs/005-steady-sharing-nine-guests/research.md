@@ -268,6 +268,27 @@ the number of guests, plus whatever traffic from R-3 and R-4 is already ahead in
   - **A dedicated time-sync message.** Rejected: it is extra traffic on the queue R-5 says is
     the bottleneck.
   - **Measuring from when the host first had a point.** Rejected: the spec counts from the tap.
+- **Revised during implementation (US2)**:
+  - **Pushes made too slow a clock.** In `ClockOffsetTests` no radio round trip on a push was
+    shorter than 130 ms, and most took 200–240 ms. The radio splits each message into chunks,
+    and a push with offsets and its hello answer take several chunks each way. That made each
+    hop ±65–120 ms, and guest to guest ±140–170 ms. Watches learned nothing beyond their own
+    phone, because their points came first by snapshot, which carries no offsets. Between 62%
+    and 90% of delays read `unknown`.
+  - **So clocks are now timed on a dedicated message after all.** `.clock(reading: nil)` asks
+    and `.clock(reading: t₂)` answers. Both fit in one radio chunk. Each device asks on every
+    link to a device whose hello carried `protocol`, once when the link is greeted and then
+    every 30 s while sharing. That is two small chunks per link per 30 s. The narrowest sample
+    still wins, so a question that waited behind a burst is outvoted by a quiet one.
+  - **Offsets travel as whole milliseconds**, as `ClockSpan` (`[lower, upper]`), rounded
+    outwards and taken as of their arrival. The full `ClockBounds` with its sample time made
+    each push long enough to cost guests 0.3–0.5 s at the 95th percentile in `BusyHallTests`.
+  - **Every push teaches its offsets**, even one whose points arrived first some other way.
+  - **Every sender passes offsets on**, guests and phones to their watches as well as the host.
+  - **The pair link is timed on its pushes as before.** In the simulation it answers at once;
+    the field run says whether WatchConnectivity needs the small message too.
+  - **Result**: one hop ±21 ms, guest to guest ±42–49 ms, and at most 2 of 135 delays unknown
+    on a phone and 10 of 135 on a watch.
 
 ### D-3 · Each link names its radio, and drops say why (FR-002)
 
@@ -279,7 +300,7 @@ the number of guests, plus whatever traffic from R-3 and R-4 is already ahead in
     comes up and answers `radio(of: LinkID)`. The store caches it with `farEnds` at first proof,
     so a drop can still be named after the link is gone.
   - **`LinkRecordEntry` gains two optional fields**:
-    - `radio: LinkRadio?`;
+    - `radios: [LinkRadio]?`: one for a link, every radio up for a reach or delay entry;
     - `detail: String?`, holding one short code for a local-network drop: `ETIMEDOUT`,
       `ECONNRESET`, `ECONNREFUSED`, `ENETDOWN`, `path unsatisfied`, `tls`, `dns` or `other`.
       A pure, tested `DropDetail` mapping in RekkertSync picks the code. The error's own

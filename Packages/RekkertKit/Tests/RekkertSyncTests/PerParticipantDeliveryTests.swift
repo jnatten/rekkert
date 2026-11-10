@@ -39,7 +39,7 @@ nonisolated private final class LinkedGuests: PeerTransport, @unchecked Sendable
     func queue(_ payload: Data) {}
 
     func sendLive(_ payload: Data, on link: LinkID) async -> Data? {
-        guard case .events(let session, let events)? = try? Wire.decode(payload) else { return nil }
+        guard case .events(let session, let events, _)? = try? Wire.decode(payload) else { return nil }
         let vector = lock.withLock { () -> VersionVector? in
             guard up.contains(link) else { return nil }
             sent[link, default: []].append(events.map(\.id))
@@ -58,7 +58,7 @@ nonisolated private final class LinkedGuests: PeerTransport, @unchecked Sendable
 
     func say(_ wire: Wire, on link: LinkID) throws {
         packets.yield(InboundPacket(payload: try wire.encoded(), reply: { [weak self] data in
-            guard let self, case .events(_, let events)? = try? Wire.decode(data) else { return }
+            guard let self, case .events(_, let events, _)? = try? Wire.decode(data) else { return }
             self.lock.withLock { self.hold(events, on: link) }
         }, link: link))
     }

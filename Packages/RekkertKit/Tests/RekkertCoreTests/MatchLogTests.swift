@@ -39,7 +39,7 @@ struct MatchLogTests {
         let pointJSON = String(decoding: try JSONCoding.encoder.encode(point), as: UTF8.self)
         let batch = Data(#"{"events":{"events":[\#(pointJSON),\#(future)],"sessionID":"\#(log.sessionID.uuidString)"}}"#.utf8)
 
-        guard case .events(_, let events) = try Wire.decode(batch) else {
+        guard case .events(_, let events, _) = try Wire.decode(batch) else {
             Issue.record("the batch should read")
             return
         }

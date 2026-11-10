@@ -48,7 +48,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         /// Somebody else's phone: the match, and nothing personal.
         public static let sharedSession = Scope(isDurable: false) { wire in
             switch wire {
-            case .hello, .events, .snapshot, .retired, .access, .guestCard, .sharingStopped, .noRoom: true
+            case .hello, .events, .snapshot, .retired, .access, .guestCard, .sharingStopped, .noRoom, .needsUpdate, .clock: true
             // Saved setups and which side is blue belong to whoever's phone this is. The
             // whistle is between a phone and its own watch, and says nothing to anyone else.
             // Neither does what somebody's heart is doing: a workout is between a wrist and
@@ -172,6 +172,10 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         for child in snapshotOfChildren() { child.transport.activate() }
     }
 
+    public func radio(of link: LinkID) -> LinkRadio? {
+        snapshotOfChildren().first { $0.transport.links.contains(link) }?.transport.radio(of: link)
+    }
+
     public var links: [LinkID] {
         snapshotOfChildren().flatMap(\.transport.links)
     }
@@ -269,7 +273,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         case .workout(.finished), .workout(.series), .workout(.rated): true
         case .workout(.stop), .workout(.pause), .workout(.resume), .workout(.running),
              .workout(.paused), .workout(.idle), .workout(.skipped): false
-        case .hello, .sharing, .guestCard, .noRoom: false
+        case .hello, .sharing, .guestCard, .noRoom, .needsUpdate, .clock: false
         }
     }
 
@@ -304,7 +308,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
     /// Onto a child's durable queue, holding back the events it already has there: a live send
     /// of the whole outbox that did not land is mostly what went the last time.
     private func keep(_ payload: Data, _ wire: Wire, on child: Child) {
-        guard case .events(let session, let events) = wire else { return child.transport.queue(payload) }
+        guard case .events(let session, let events, _) = wire else { return child.transport.queue(payload) }
         let fresh = lock.withLock { queued[child.token, default: QueueLedger()].admitting(events, in: session) }
         guard !fresh.isEmpty else { return }
         let trimmed = fresh.count == events.count ? payload : (try? Wire.events(sessionID: session, events: fresh).encoded())

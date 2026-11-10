@@ -16,7 +16,7 @@ private final class ChangeLog {
 
     var ups: Int { changes.count { if case .up = $0 { true } else { false } } }
     var reasons: [LinkDropReason] {
-        changes.compactMap { if case .down(_, let reason) = $0 { reason } else { nil } }
+        changes.compactMap { if case .down(_, let reason, _) = $0 { reason } else { nil } }
     }
 
     func stop() { listening?.cancel() }

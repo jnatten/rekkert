@@ -97,3 +97,92 @@ struct WireCompatibilityTests {
         #expect(throws: (any Error).self) { try Wire.decode(newer) }
     }
 }
+
+/// Spec 005, contracts/wire-protocol.md: every change is an optional field, so 1.1 reads what
+/// this release sends and this release reads what 1.1 sends.
+@Suite("The wire stays readable both ways")
+struct WireAcrossVersionsTests {
+    /// The cases as 1.1 declares them, to decode with the synthesised rules 1.1 itself uses.
+    private enum OlderWire: Codable {
+        case hello(sessionID: UUID, vector: VersionVector, from: DeviceID? = nil)
+        case events(sessionID: UUID, events: [MatchEvent])
+    }
+
+    private struct OlderGuestCard: Codable {
+        var device: DeviceID
+        var name: String?
+        var pairedTo: DeviceID?
+        var leaving: Bool?
+    }
+
+    private let session = UUID()
+    private let device = DeviceID()
+    private let clock = Date(timeIntervalSince1970: 1_800_000_000.25)
+
+    @Test func aHelloWithAClockAndProtocolRoundTrips() throws {
+        let hello = Wire.hello(sessionID: session, vector: VersionVector(), from: device, clock: clock, protocol: Wire.sharingProtocol)
+        #expect(try Wire.decode(hello.encoded()) == hello)
+    }
+
+    @Test func olderBuildsReadTheNewHello() throws {
+        let hello = Wire.hello(sessionID: session, vector: VersionVector(), from: device, clock: clock, protocol: 2)
+        guard case .hello(let id, _, let from) = try JSONCoding.decoder.decode(OlderWire.self, from: hello.encoded()) else {
+            Issue.record("not a hello")
+            return
+        }
+        #expect(id == session)
+        #expect(from == device)
+    }
+
+    @Test func thisBuildReadsAnOlderHello() throws {
+        let older = try JSONCoding.encoder.encode(OlderWire.hello(sessionID: session, vector: VersionVector(), from: device))
+        #expect(try Wire.decode(older) == .hello(sessionID: session, vector: VersionVector(), from: device))
+    }
+
+    @Test func eventsWithOffsetsRoundTripAndOlderBuildsReadThem() throws {
+        let offsets = [device: ClockSpan(lower: 100, upper: 140)]
+        let events = Wire.events(sessionID: session, events: [], offsets: offsets)
+        #expect(try Wire.decode(events.encoded()) == events)
+        guard case .events(let id, _) = try JSONCoding.decoder.decode(OlderWire.self, from: events.encoded()) else {
+            Issue.record("not events")
+            return
+        }
+        #expect(id == session)
+    }
+
+    @Test func thisBuildReadsOlderEvents() throws {
+        let older = try JSONCoding.encoder.encode(OlderWire.events(sessionID: session, events: []))
+        #expect(try Wire.decode(older) == .events(sessionID: session, events: []))
+    }
+
+    @Test func aGuestCardCarriesItsProtocolAndOlderBuildsReadIt() throws {
+        let card = GuestCard(device: device, name: "Ada", protocol: 2)
+        let data = try JSONCoding.encoder.encode(card)
+        #expect(try JSONCoding.decoder.decode(GuestCard.self, from: data) == card)
+        #expect(try JSONCoding.decoder.decode(OlderGuestCard.self, from: data).name == "Ada")
+        let older = try JSONCoding.encoder.encode(OlderGuestCard(device: device, name: "Ada"))
+        #expect(try JSONCoding.decoder.decode(GuestCard.self, from: older).protocol == nil)
+    }
+
+    @Test func needsUpdateRoundTrips() throws {
+        let wire = Wire.needsUpdate(sessionID: session)
+        #expect(try Wire.decode(wire.encoded()) == wire)
+    }
+
+    @Test func aClockQuestionAndAnswerRoundTrip() throws {
+        #expect(try Wire.decode(Wire.clock().encoded()) == .clock())
+        #expect(try Wire.decode(Wire.clock(reading: clock).encoded()) == .clock(reading: clock))
+    }
+
+    /// One radio chunk each way is the point of it: Bluetooth's smallest carries 20 bytes, a
+    /// negotiated one 180 and more.
+    @Test func aClockQuestionAndAnswerAreSmall() throws {
+        #expect(try Wire.clock().encoded().count <= 40)
+        #expect(try Wire.clock(reading: Date()).encoded().count <= 60)
+    }
+
+    @Test func offsetsTravelAsTwoWholeMillisecondsEach() throws {
+        let data = try JSONCoding.encoder.encode([device: ClockSpan(lower: -2_701, upper: -2_690)])
+        #expect(String(decoding: data, as: UTF8.self).contains("[-2701,-2690]"))
+    }
+}

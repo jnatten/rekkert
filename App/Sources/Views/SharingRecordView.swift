@@ -8,6 +8,7 @@ import UIKit
 struct SharingRecordView: View {
     @Environment(AppModel.self) private var model
     @State private var record = LinkRecord()
+    @State private var sections: [LinkRecord.Section] = []
     @State private var file: URL?
 
     var body: some View {
@@ -19,13 +20,31 @@ struct SharingRecordView: View {
                     description: Text("Joins, drops, reconnects, refusals and catch-ups on a shared match show here for a week, with your watch's once it is back in touch.")
                 )
             }
-            ForEach(record.entries.reversed()) { entry in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.kind.text)
-                        .font(.body.monospaced())
-                    Text("\(entry.time.formatted(date: .abbreviated, time: .standard)) · \(entry.device == .watch ? "Watch" : "iPhone") · \(entry.link.title)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            ForEach(sections.reversed()) { section in
+                Section {
+                    ForEach(section.entries.reversed()) { entry in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(entry.kindText)
+                                .font(.body.monospaced())
+                            Text(([entry.time.formatted(date: .abbreviated, time: .standard), entry.device == .watch ? "Watch" : "iPhone", entry.link.title] + (entry.radios ?? []).map(\.title)).joined(separator: " · "))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    if let summary = section.summary {
+                        let lines = summary.headerLines(in: .current)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(lines[0])
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+                            ForEach(lines.dropFirst(), id: \.self) { line in
+                                Text(line)
+                            }
+                        }
+                        .textCase(nil)
+                        .accessibilityElement(children: .combine)
+                    }
                 }
             }
         }
@@ -43,6 +62,8 @@ struct SharingRecordView: View {
     private func load() {
         record = model.recorder.read()
         let now = Date()
+        let watchUpTo = model.store.isPairReachable ? nil : model.recorder.watchUpTo
+        sections = record.sections(watchUpTo: watchUpTo)
         let header = LinkRecord.Header(
             app: [
                 Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?",
@@ -52,7 +73,7 @@ struct SharingRecordView: View {
             phoneSystem: "iOS \(UIDevice.current.systemVersion)",
             phone: DeviceIdentity.current(),
             watch: model.store.pairDevice,
-            watchUpTo: model.store.isPairReachable ? nil : model.recorder.watchUpTo
+            watchUpTo: watchUpTo
         )
         let name = "rekkert-sharing-\(LinkRecord.day(of: now, in: .current)).txt"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)

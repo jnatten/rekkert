@@ -195,8 +195,14 @@ public enum Wire: Codable, Sendable, Hashable {
     /// says which of those authors is the other half of this pair — and "somebody else scored
     /// that" has to mean somebody other than the two of you. Optional, and absent from older
     /// builds, which decode this without it and go on as they did.
-    case hello(sessionID: UUID, vector: VersionVector, from: DeviceID? = nil)
-    case events(sessionID: UUID, events: [MatchEvent])
+    ///
+    /// `clock` is the sender's time as it wrote this, for the far end to bound the offset between
+    /// the two clocks by the round trip (spec 005, D-2). `protocol` is the sender's sharing
+    /// protocol. Both absent from 1.1 and older.
+    case hello(sessionID: UUID, vector: VersionVector, from: DeviceID? = nil, clock: Date? = nil, protocol: Int? = nil)
+    /// `offsets` is the sender's bounds on the recipient's clock and on each event's author's,
+    /// so a guest can time a point another guest tapped. Absent from 1.1 and older.
+    case events(sessionID: UUID, events: [MatchEvent], offsets: [DeviceID: ClockSpan]? = nil)
     /// Whole-log backstop, used on the coalescing application-context channel. `role` is the
     /// sender's, for its own watch; absent from older builds and from what goes to other phones.
     /// `access` is the host's say on what each phone may do, so a guest has it the moment it has
@@ -249,6 +255,16 @@ public enum Wire: Codable, Sendable, Hashable {
     case sharingStopped(sessionID: UUID, reason: SharingStopReason? = nil)
     /// Host to a phone saying hello when the match already has as many guests as it takes.
     case noRoom(sessionID: UUID)
+    /// Host to a guest whose sharing protocol is too old to follow the match. Nothing sends it
+    /// yet: it is here so a later breaking change can say so plainly to builds from spec 005 on.
+    case needsUpdate(sessionID: UUID)
+    /// Asked with no reading, answered with the far clock's. Small enough for one radio chunk
+    /// each way, so the round trip bounds the clocks far tighter than a push does (spec 005,
+    /// D-2). Sent only to devices whose hello carried a `protocol`.
+    case clock(reading: Date? = nil)
+
+    /// The sharing protocol this build speaks: 2 from spec 005, absent (1) before it.
+    public static let sharingProtocol = 2
 
     public func encoded() throws -> Data {
         try JSONCoding.encoder.encode(self)
@@ -273,7 +289,8 @@ public enum LinkDropReason: String, Codable, Sendable, Hashable {
 
 public enum LinkChange: Sendable, Hashable {
     case up(LinkID)
-    case down(LinkID, LinkDropReason)
+    /// `detail` is one short code for a local-network drop (spec 005, D-3).
+    case down(LinkID, LinkDropReason, detail: String? = nil)
 }
 
 public struct InboundPacket: Sendable {
@@ -351,6 +368,9 @@ public protocol PeerTransport: Sendable {
 
     /// Whether anything is there that is not on a link.
     var isReachableBesideLinks: Bool { get }
+
+    /// The radio `link` is on, while it is up (spec 005, D-3).
+    func radio(of link: LinkID) -> LinkRadio?
 }
 
 extension PeerTransport {
@@ -365,4 +385,5 @@ extension PeerTransport {
         links.isEmpty ? await sendLive(payload) : nil
     }
     public var isReachableBesideLinks: Bool { links.isEmpty && isReachable }
+    public func radio(of link: LinkID) -> LinkRadio? { nil }
 }

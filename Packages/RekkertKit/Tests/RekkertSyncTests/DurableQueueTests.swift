@@ -101,7 +101,7 @@ nonisolated private final class SlowWatch: PeerTransport, @unchecked Sendable {
 
 nonisolated private func queuedEventCount(_ payloads: [Data]) -> Int {
     payloads.reduce(0) { total, payload in
-        guard case .events(_, let events)? = try? Wire.decode(payload) else { return total }
+        guard case .events(_, let events, _)? = try? Wire.decode(payload) else { return total }
         return total + events.count
     }
 }

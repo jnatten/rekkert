@@ -387,6 +387,8 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         lock.withLock { openLinks.values.count { $0.isReady } }
     }
 
+    public func radio(of link: LinkID) -> LinkRadio? { .wifi }
+
     public var links: [LinkID] {
         lock.withLock { openLinks.values.filter(\.isReady).map(\.id) }
     }
@@ -543,7 +545,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
                 self.linkUpdates.yield(.up(link.id))
                 self.announce()
             case .failed(let error):
-                self.close(token, refusable: Self.isRefusal(error))
+                self.close(token, refusable: Self.isRefusal(error), detail: DropDetail.code(for: error))
             case .cancelled:
                 // Never a rejection: a wrong pre-shared key surfaces as a failure, and a
                 // cancel is somebody hanging up — usually this end.
@@ -607,7 +609,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         close(token, refusable: false)
     }
 
-    private func close(_ token: ObjectIdentifier, refusable: Bool, reason: LinkDropReason? = nil) {
+    private func close(_ token: ObjectIdentifier, refusable: Bool, reason: LinkDropReason? = nil, detail: String? = nil) {
         forgetDialDeadline(token)
         let link = lock.withLock { openLinks.removeValue(forKey: token) }
         guard let link else { return }
@@ -624,7 +626,9 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
                 refusable: refusable
             )
         }
-        if circumstances.everGotThere { linkUpdates.yield(.down(link.id, reason ?? (refusable ? .refused : .closedByPeer))) }
+        if circumstances.everGotThere {
+            linkUpdates.yield(.down(link.id, reason ?? (refusable ? .refused : .closedByPeer), detail: detail))
+        }
         reachabilityUpdates.yield(isReachable)
 
         switch ReconnectPolicy.loss(circumstances) {
@@ -709,7 +713,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
                 for frame in frames { self.deliver(frame, on: link) }
             }
             if isComplete || error != nil {
-                return self.close(ObjectIdentifier(link.connection), refusable: false)
+                return self.close(ObjectIdentifier(link.connection), refusable: false, detail: DropDetail.code(for: error))
             }
             self.receive(on: link)
         }
