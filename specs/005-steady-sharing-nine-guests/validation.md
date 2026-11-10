@@ -27,8 +27,10 @@ On `e6b11594`, before any change (T001):
 
 | Suite | Result |
 |---|---|
-| `BusyHallTests`, per device | _to fill (T022)_ |
-| Fails on today's code? | _to fill (T015)_ |
+| Fails on today's code? (T015) | Yes, on every device. 95th percentile 1.0–7.3 s, slowest 13–83 s, with second links dropping 64–69 times an hour |
+| `NoEchoTests`, `LinkChangeTrafficTests` on today's code | Fail for the stated reasons: the host heard its own points back, and a second link dropping ran rounds of `synchronise()` |
+| `BusyHallTests` after User Story 1 (T022) | Passes, with FR-010's own numbers recorded as known issues until calibration (T059). Host: 95th percentile 0.95 s, slowest 1.55 s. Guests whose second link drops every minute: 95th percentile 1.25–1.35 s, slowest 1.9 s. One-link guests (Bluetooth only, Wi-Fi stand-in only): 95th percentile 1.3–1.4 s, slowest 12–15 s. FR-008 holds: a dropping second link costs its guest no time against a guest on one link |
+| Harness change found on the way (R-8) | The stores' and fan-out's waits now run on the radio's clock in the harness, at the app's own timings (6 s send timeout, 4 s retry, 1 s participant tick). On real time they stretched whenever the machine was busy, which made `deliveryDoesNotSnowball` fail under load and hid the 1-second delays. Busy-hall losses are now link-layer re-sends, which arrive late, not never |
 
 ## Level 4: small field run
 

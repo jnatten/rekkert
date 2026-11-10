@@ -83,6 +83,12 @@ struct ArrivalConditionsTests {
         #expect(!ArrivalConditions.nothingWrong(arrivalAt: at(10), on: .phone, fromPairedDevice: true, entries: [entry(5, .host(host), .proven)]))
     }
 
+    @Test func theHostsWatchFollowsTheHostsViewOfTheGuest() {
+        let watch = [entry(0, .pair, .proven, on: .watch)]
+        let hostPhone = [entry(0, .guest(guest), .proven)]
+        #expect(ArrivalConditions.nothingWrong(arrivalAt: at(100), on: .watch, from: guest, entries: watch, pairEntries: hostPhone))
+    }
+
     @Test func aWatchWithItsPairLinkDownIsSomethingWrong() {
         let watch = [entry(0, .pair, .proven, on: .watch), entry(50, .pair, .dropped(.unknown), on: .watch)]
         let phoneFine = [entry(0, .host(host), .proven)]

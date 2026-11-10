@@ -50,7 +50,9 @@ struct StopBetweenMatchesTests {
         let court = await waitingCourt(guests: 1)
         let guest = court.guests.first!.phone
         #expect(court.host.phone.store.log.sessionID != guest.store.log.sessionID)
-        await court.host.phone.store.sayStoppedSharing().value
+        let stopping = court.host.phone.store.sayStoppedSharing()
+        await court.run(for: .seconds(3))
+        await stopping.value
         #expect(await court.until(within: .seconds(10)) { guest.sharing.hostStoppedSharing })
         #expect(guest.store.role == .solo)
     }

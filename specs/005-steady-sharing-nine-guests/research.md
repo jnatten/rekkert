@@ -430,9 +430,11 @@ the number of guests, plus whatever traffic from R-3 and R-4 is already ahead in
 - **Alternatives considered**:
   - **A protocol for `SharedSession`'s local network**, so a fake can stand in. Deferred:
     larger, and only needed if the store-level stand-in misses something the field runs show.
-  - **Moving the store's timers onto the test clock** (R-8). Deferred: the 1-second path is
-    push, deliver and reply, which uses no timers. This becomes worth doing if the timing tests
-    turn out flaky.
+  - **Moving the store's timers onto the test clock** (R-8). First deferred, then done during
+    User Story 1: with the busy-hall suite running in parallel, `deliveryDoesNotSnowball`
+    failed on real-time retries, and real-time waits hid the 1-second delays. `MatchStore` and
+    `FanOutTransport` take an injectable `sleep`, which the harness runs on the radio's clock
+    at the app's own timings.
 
 ### D-11 · Calibrating from a real run (FR-017, SC-006)
 

@@ -25,9 +25,10 @@ nonisolated final class Airwaves: @unchecked Sendable {
         var jitter: Duration = .zero
         /// A hall full of other radios: the share of `bytesPerSecond` left over for this match.
         var busyAir = 1.0
-        /// Now and then several host-to-guest chunks in a row go missing.
+        /// Now and then several host-to-guest chunks in a row are lost on the air and sent again
+        /// by the link layer, so they arrive late rather than never.
         var burstLoss = BurstLoss()
-        /// The share of guest-to-host writes that fail and have to be written again.
+        /// The share of guest-to-host writes the link layer has to send again.
         var guestWriteLoss = 0.0
         /// Every host on these airwaves draws on one budget of airtime, so a second shared match
         /// on the next court competes with this one for the air.
@@ -124,8 +125,13 @@ nonisolated final class Airwaves: @unchecked Sendable {
         return _settings.latency + jitter * random.next()
     }
 
-    /// Whether this host-to-guest chunk goes missing. Called with the lock held.
+    /// Whether this host-to-guest chunk goes missing for good. Called with the lock held.
     private func losesChunk() -> Bool {
+        random.next() < _settings.loss
+    }
+
+    /// Whether the link layer has to send this chunk again, in a burst. Called with the lock held.
+    private func resendsChunk() -> Bool {
         if burstLeft > 0 {
             burstLeft -= 1
             return true
@@ -134,7 +140,13 @@ nonisolated final class Airwaves: @unchecked Sendable {
             burstLeft = max(0, _settings.burstLoss.length - 1)
             return true
         }
-        return random.next() < _settings.loss
+        return false
+    }
+
+    /// What one more try on the air costs a chunk. Called with the lock held.
+    private func resendDelay(for bytes: Int) -> Duration {
+        let rate = max(1, Int64((Double(_settings.bytesPerSecond) * _settings.busyAir).rounded()))
+        return .nanoseconds(Int64(bytes) * 1_000_000_000 / rate) + _settings.latency * 2
     }
 
     /// When a transmission of `duration` that wants to start now finishes, counting the air
@@ -347,7 +359,9 @@ nonisolated final class Airwaves: @unchecked Sendable {
                     }
                 }
                 let lost = self.losesChunk() || head.connection.guest.missesIncoming
-                return (freedEnough, self.hopLatency(), lost)
+                var latency = self.hopLatency()
+                if self.resendsChunk() { latency += self.resendDelay(for: head.chunk.count) }
+                return (freedEnough, latency, lost)
             }
             let connection = head.connection
             if !lost {
@@ -373,9 +387,11 @@ nonisolated final class Airwaves: @unchecked Sendable {
             let start = max(now, connection.guestWriteBusyUntil)
             let done = finishing(after: start - now + airtime, now: now)
             connection.guestWriteBusyUntil = done
-            let latency = hopLatency()
-            let fails = _settings.guestWriteLoss > 0 && random.next() < _settings.guestWriteLoss
-            return (done + latency, latency, fails)
+            var latency = hopLatency()
+            if _settings.guestWriteLoss > 0, random.next() < _settings.guestWriteLoss {
+                latency += resendDelay(for: chunk.count)
+            }
+            return (done + latency, latency, false)
         }
         let host = connection.host
         let goesMissing = guest.losesWrites

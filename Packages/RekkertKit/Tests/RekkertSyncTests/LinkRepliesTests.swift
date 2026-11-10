@@ -46,6 +46,33 @@ struct LinkHealthTests {
         let verdicts = (0 ..< 2).map { _ in health.missed() }
         #expect(verdicts == [false, false])
     }
+
+    /// As the local network counts its questions (spec 005, D-7).
+    @Test func threeTimeoutsInARowAreAPeerGone() {
+        var health = LinkHealth()
+        let verdicts = (0 ..< 3).map { _ in health.observe(.timedOut) }
+        #expect(verdicts == [false, false, true])
+    }
+
+    @Test func anAnswerStartsTheCountAgain() {
+        var health = LinkHealth()
+        _ = health.observe(.timedOut)
+        _ = health.observe(.timedOut)
+        let afterAnswer = health.observe(.answered)
+        let nextTimeout = health.observe(.timedOut)
+        #expect(!afterAnswer)
+        #expect(!nextTimeout)
+    }
+
+    @Test func aQuestionThatNeverWentOutSaysNothing() {
+        var health = LinkHealth()
+        _ = health.observe(.timedOut)
+        _ = health.observe(.timedOut)
+        let notSent = health.observe(.notSent)
+        let third = health.observe(.timedOut)
+        #expect(!notSent)
+        #expect(third)
+    }
 }
 
 @Suite("One listener, one browser")

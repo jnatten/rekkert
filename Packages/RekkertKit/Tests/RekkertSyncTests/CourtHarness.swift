@@ -11,8 +11,10 @@ import RekkertCore
 final class CourtHarness {
     struct Timing {
         var step: Duration = .milliseconds(50)
-        var sendTimeout: Duration = .seconds(2)
-        var retryInterval: Duration = .milliseconds(200)
+        /// The app's own: these waits run on the radio's clock, not the machine's.
+        var sendTimeout: Duration = .seconds(6)
+        var retryInterval: Duration = .seconds(4)
+        var participantTick: Duration = .seconds(1)
         var graceBeforeNotice: Duration = .seconds(1)
         var radioGrace: Duration = .seconds(30)
         var standIn = StandInPolicy.Timing()
@@ -174,9 +176,26 @@ final class CourtHarness {
         CourtHarness.epoch.addingTimeInterval(instant.seconds * (1 + device.drift) + device.clockOffset)
     }
 
+    /// Woken by the clock rather than polling it: a court of sixteen devices, each with timers
+    /// asleep for minutes, would otherwise spend its time asking what time it is. The stores'
+    /// waits run on it too, so a retry is as late in radio time however busy the machine is.
+    private var clockSleep: @Sendable (Duration) async -> Void {
+        let clock = air.clock
+        return { duration in
+            let (woken, wake) = AsyncStream<Void>.makeStream()
+            let timer = clock.run(after: duration) { wake.finish() }
+            await withTaskCancellationHandler {
+                for await _ in woken {}
+            } onCancel: {
+                timer.cancel()
+                wake.finish()
+            }
+        }
+    }
+
     private func boot(_ device: Device, pairLink: LoopbackTransport) {
         let core = RadioCore(radio: device.radio)
-        let links = FanOutTransport()
+        let links = FanOutTransport(sleep: clockSleep)
         device.pairToken = links.attach(pairLink, as: .pairedDevice)
         links.attach(core, as: .sharedSession)
         let wifiCore = device.wifiRadio.map { RadioCore(radio: $0) }
@@ -194,8 +213,9 @@ final class CourtHarness {
             retryInterval: timing.retryInterval,
             keepsHistory: !device.isWatch,
             now: now,
-            participantTick: .milliseconds(20),
-            guestLimit: guestLimit
+            participantTick: timing.participantTick,
+            guestLimit: guestLimit,
+            sleep: clockSleep
         )
         store.recorder = device.recorder
         let sharing = SharedSession(
@@ -204,18 +224,7 @@ final class CourtHarness {
             graceBeforeNotice: timing.graceBeforeNotice, radioGrace: timing.radioGrace,
             keeper: device.keeper, now: now,
             idleCheck: timing.idleCheck,
-            // Woken by the clock rather than polling it: a court of sixteen devices, each with
-            // timers asleep for minutes, would otherwise spend its time asking what time it is.
-            sleep: { duration in
-                let (woken, wake) = AsyncStream<Void>.makeStream()
-                let timer = clock.run(after: duration) { wake.finish() }
-                await withTaskCancellationHandler {
-                    for await _ in woken {}
-                } onCancel: {
-                    timer.cancel()
-                    wake.finish()
-                }
-            }
+            sleep: clockSleep
         )
         device.core = core
         device.wifiCore = wifiCore
@@ -388,7 +397,8 @@ final class CourtHarness {
             let landed = arrived[event]?[key]
             let instant = landed ?? clock.now
             let fromPair = pair.map { ObjectIdentifier($0) == by } ?? false
-            let fromGuest = device === host.phone ? scoringPhone(of: by)?.id : nil
+            let onHost = device === host.phone || device === host.watch
+            let fromGuest = onHost ? scoringPhone(of: by)?.id : nil
             let fine = ArrivalConditions.nothingWrong(
                 arrivalAt: deviceTime(of: device, at: instant),
                 on: device.isWatch ? .watch : .phone,

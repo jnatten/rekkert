@@ -156,16 +156,17 @@ FR-010 over the arrivals where nothing was wrong.
 
 > **Write these tests FIRST. T012 and T013 must FAIL for the stated reason before T017–T019.**
 
-- [ ] T012 [P] [US1] `SyncTests/NoEchoTests.swift` (R-4, fails first). A host and two guests on both links. Over 50 points scored on the host:
-  - no guest sends a host point back to the host on either link;
-  - Bluetooth chunks sent per point are at most 60% of today's (count them on the airwaves);
+- [X] T012 [P] [US1] `SyncTests/NoEchoTests.swift` (R-4, fails first). A host and two guests on both links. Over 50 points scored on the host:
+  - no guest sends a host point back to the host on either link: the host's `echoesHeard` (its own events arriving back over a link) stays 0;
+  - the same holds the other way, for a guest that scores;
   - every device ends in step.
-- [ ] T013 [P] [US1] `SyncTests/LinkChangeTrafficTests.swift` (R-3, fails first). A host and three guests on both links:
-  - when one guest's Wi-Fi link drops and comes back, the only frames sent are one `hello` on that link and its answer: no `access`, `snapshot`, `guestCard` or hello on any other link;
+- [X] T013 [P] [US1] `SyncTests/LinkChangeTrafficTests.swift` (R-3, fails first). A host and three guests on both links:
+  - when one guest's Wi-Fi link drops and comes back, no device runs a round of `synchronise()` (`synchroniseRounds` unchanged everywhere): the link gets one `hello` and its answer;
+  - a point scored while the link was down still reaches that guest when it comes back;
   - the first proof of a new guest still exchanges `access` and `guestCard`;
   - every device ends in step.
-- [ ] T014 [P] [US1] `SyncTests/HostRadioRestartTests.swift` (FR-009, SC-004, pins today's behaviour). A host and four guests on Bluetooth: turn the host's radio off for 2 s and on again. Every guest is back in step within 10 s, with no input.
-- [ ] T015 [P] [US1] `SyncTests/BusyHallTests.swift` (FR-007, FR-008, FR-010, SC-002). Uses `Airwaves.Settings.busyHall` and a `Flapper` on every two-link guest:
+- [X] T014 [P] [US1] `SyncTests/HostRadioRestartTests.swift` (FR-009, SC-004, pins today's behaviour). A host and four guests on Bluetooth: turn the host's radio off for 2 s and on again. Every guest is back in step within 10 s, with no input.
+- [X] T015 [P] [US1] `SyncTests/BusyHallTests.swift` (FR-007, FR-008, FR-010, SC-002). Uses `Airwaves.Settings.busyHall` and a `Flapper` on every two-link guest:
   - **Main case**: a host and four guests on both links, 60 simulated minutes, points tapped on watches and phones across all five people. On every phone and watch, among arrivals where nothing was wrong, at least 95% within 1 s and all within 2 s.
   - **One radio**: one guest on `.bluetooth` only, and one on `.wifi` only (Story 1 scenario 4, Edge Cases); both meet the same times.
   - **Drops cost no time** (FR-008): no arrival after a second-link drop exceeds 2 s while another link was up.
@@ -173,7 +174,7 @@ FR-010 over the arrivals where nothing was wrong.
   - **The next court** (Edge Cases): with `sharedAirtime` on, a second host with two guests shares a separate match on the same airwaves. Build it as a second `CourtHarness` passed the first one's `air:`, with its own `code:` (`SyncTests/CourtHarness.swift:78`). Both matches still meet FR-010, and no device gets onto the other's match.
   - **Drop rate** (FR-007): drops per guest per hour are reported in the test output against the target of 5. They are not asserted, because FR-007 is a target.
   - Record whether this suite fails on today's code, and why, in `validation.md`.
-- [ ] T016 [P] [US1] Pin the Wi-Fi link's miss rule (Principle III) in `SyncTests/LinkRepliesTests.swift` (`LinkHealthTests`), for `LinkHealth.observe(_ outcome: ReplyOutcome) -> Bool`:
+- [X] T016 [P] [US1] Pin the Wi-Fi link's miss rule (Principle III) in `SyncTests/LinkRepliesTests.swift` (`LinkHealthTests`), for `LinkHealth.observe(_ outcome: ReplyOutcome) -> Bool`:
   - a reply counts as answered;
   - a reply timeout counts as a miss;
   - a send that failed before going out whole counts as neither;
@@ -183,26 +184,24 @@ FR-010 over the arrivals where nothing was wrong.
 
 ### Implementation for User Story 1
 
-- [ ] T017 [US1] No echo (D-5) in `RekkertSync/MatchStore.swift`:
+- [X] T017 [US1] No echo (D-5) in `RekkertSync/MatchStore.swift`:
   - `push` (MS:1506-1513) leaves out every link whose far end, from `farEnds`, is the device the events came from, not only the link they came on;
   - events arriving on one link mark them held on every sibling link to the same device (where `heldOnLink` is updated, MS:1734-1736);
   - the hello still catches up anything missed (Principle II).
-- [ ] T018 [US1] Pass on only real reachability changes in `RekkertSync/FanOutTransport.swift` (FO:123-127, 324-326):
-  - a child's link change reaches the store's `reachability` only when overall reachability or pair reachability actually changed;
-  - per-link up/down still reaches the store through the existing link-change path, so it can greet that link (D-6).
-- [ ] T019 [US1] Greet only the changed link (D-6) in `RekkertSync/MatchStore.swift`:
+- [X] T018 [US1] Make the store's reaction to reachability proportionate (D-6), in `RekkertSync/MatchStore.swift` (`consumeReachability`). The fan-out keeps passing on every child's change, because the radio core uses that to nudge a quiet guest into its hello (`RadioCore.swift:299`). The store then runs a full `synchronise()` only when the device as a whole came or went: any link to the match up or not, or the pair. Otherwise a guest asks what it is missing, and the host does nothing, leaving the changed link to `greet` (T019).
+- [X] T019 [US1] Greet only the changed link (D-6) in `RekkertSync/MatchStore.swift`:
   - a newly proven link gets one `hello` on that link only, with its catch-up;
   - `access` (host) and `guestCard` (guest) go out on the first proof of a device, or when they change, not on every re-proof (MS:651-671, 1251-1264, 1344-1360);
   - the nudge, retry and idle hello stay as they are.
 
   Depends on T018.
-- [ ] T020 [US1] Add the pure `LinkHealth.observe(_ outcome: ReplyOutcome) -> Bool` beside `LinkHealth` in `RekkertSync/LinkReplies.swift:41`, with `ReplyOutcome` as `answered`, `timedOut` or `notSent`, so that T016 passes. T021 then adds no rule of its own.
-- [ ] T021 [US1] Loosen the Wi-Fi link (D-7) in `RekkertSync/LocalNetworkTransport.swift`:
+- [X] T020 [US1] Add the pure `LinkHealth.observe(_ outcome: ReplyOutcome) -> Bool` beside `LinkHealth` in `RekkertSync/LinkReplies.swift:41`, with `ReplyOutcome` as `answered`, `timedOut` or `notSent`, so that T016 passes. T021 then adds no rule of its own.
+- [X] T021 [US1] Loosen the Wi-Fi link (D-7) in `RekkertSync/LocalNetworkTransport.swift`:
   - **TCP keepalive**: idle 5 s, interval 3 s, count 5 (LN:462-465);
   - **a miss counter**: each ready link keeps a `LinkHealth` and feeds it every request's outcome through `observe(_:)` (T020). When it reports the peer gone, the link closes with reason `timeout` (beside the reply timeout at LN:745-748). A guest on Wi-Fi alone then still notices a dead link.
 
   The adapter holds no rule of its own: the counting is `LinkHealth`'s, pinned by T016. It only builds for iOS. Prove the wiring with `scripts/share.sh` in T069, and in the field in T058.
-- [ ] T022 [US1] Make T012–T016 pass, and run the whole package: the convergence suites must pass unchanged. Record `BusyHallTests`' per-device numbers in `specs/005-steady-sharing-nine-guests/validation.md`.
+- [X] T022 [US1] Make T012–T016 pass, and run the whole package: the convergence suites must pass unchanged. Record `BusyHallTests`' per-device numbers in `specs/005-steady-sharing-nine-guests/validation.md`.
 
 **Checkpoint**: Points are fast and steady in the simulation. Story 1 can ship alone, though the
 field run needs Story 2's record to prove it.

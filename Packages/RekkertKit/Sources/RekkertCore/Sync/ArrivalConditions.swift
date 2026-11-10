@@ -20,7 +20,7 @@ public enum ArrivalConditions {
         if fromPairedDevice { return isUp(entries, on: { $0 == .pair }) }
         if device == .watch, let pairEntries {
             return isUp(entries, on: { $0 == .pair })
-                && nothingWrong(arrivalAt: time, on: .phone, entries: pairEntries)
+                && nothingWrong(arrivalAt: time, on: .phone, from: guest, entries: pairEntries)
         }
         let relevant: (LinkRecordEntry.Link) -> Bool = { link in
             switch (link, guest) {

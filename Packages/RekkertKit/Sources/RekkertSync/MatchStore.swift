@@ -170,6 +170,11 @@ public final class MatchStore {
     @ObservationIgnored public var recorder: (any LinkRecording)?
     /// The device on the far end of each link, as its first hello named it.
     @ObservationIgnored private var farEnds: [LinkID: DeviceID] = [:]
+    /// This device's own events that came back to it over a link.
+    @ObservationIgnored private(set) var echoesHeard = 0
+    @ObservationIgnored private(set) var synchroniseRounds = 0
+    /// Whether any link to the match was up, and the pair, when reachability last changed.
+    @ObservationIgnored private var lastPresence: (onLinks: Bool, pair: Bool)?
     /// The host this device last heard from on a link, for a guest's record.
     @ObservationIgnored public private(set) var hostDevice: DeviceID?
     /// The shared match this device's own phone last said it is a guest on.
@@ -183,6 +188,7 @@ public final class MatchStore {
     @ObservationIgnored public var onHostNameChanged: (() -> Void)?
     @ObservationIgnored private let participantTick: Duration
     @ObservationIgnored let guestLimit: Int
+    @ObservationIgnored private let sleep: @Sendable (Duration) async -> Void
 
     public init(
         device: DeviceID,
@@ -195,10 +201,12 @@ public final class MatchStore {
         keepsHistory: Bool = true,
         now: @escaping @Sendable () -> Date = { Date() },
         participantTick: Duration = .seconds(1),
-        guestLimit: Int = Participants.limit
+        guestLimit: Int = Participants.limit,
+        sleep: @escaping @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0) }
     ) {
         self.participantTick = participantTick
         self.guestLimit = guestLimit
+        self.sleep = sleep
         self.sendTimeout = sendTimeout
         self.retryInterval = retryInterval
         self.keepsHistory = keepsHistory
@@ -480,12 +488,12 @@ public final class MatchStore {
             device: device, name: identity, pairedTo: standsInForThePair ? pairedDevice : nil, leaving: true
         )))
         isSayingGoodbye = true
-        let transport = transport
+        let (transport, sleep) = (transport, sleep)
         return Task { [weak self] in
             await withTaskGroup(of: Void.self) { group in
                 for link in links {
                     group.addTask {
-                        _ = await Self.answer(within: patience) { await transport.sendLive(card, on: link) }
+                        _ = await Self.answer(within: patience, sleep: sleep) { await transport.sendLive(card, on: link) }
                     }
                 }
             }
@@ -1253,7 +1261,10 @@ public final class MatchStore {
 
     private func consumeLinkChanges() async {
         for await change in transport.linkChanges {
-            guard case .down(let link, let reason) = change else { continue }
+            guard case .down(let link, let reason) = change else {
+                if case .up(let link) = change { Task { await greet(link) } }
+                continue
+            }
             departedLinks.remove(link)
             heldOnLink[link] = nil
             delivering[link] = nil
@@ -1270,7 +1281,7 @@ public final class MatchStore {
     /// out of reach or come back since it last did.
     private func watchParticipants() async {
         while !Task.isCancelled {
-            try? await Task.sleep(for: participantTick)
+            await sleep(participantTick)
             guard role == .host else {
                 recordedOutOfReach = []
                 heardStates = []
@@ -1318,7 +1329,7 @@ public final class MatchStore {
     /// full with nothing ever prompting another attempt.
     private func retryUndelivered() async {
         while !Task.isCancelled {
-            try? await Task.sleep(for: retryInterval * retryPatience)
+            await sleep(retryInterval * retryPatience)
             guard !outbox.isEmpty || isAnyLinkBehind else {
                 retryPatience = 1
                 continue
@@ -1360,7 +1371,19 @@ public final class MatchStore {
             // Back, it says again what it holds. Until then it may have come back with less.
             if !transport.isReachableBesideLinks { heldBesideLinks = nil }
             retryPatience = 1
-            if reachable { Task { await synchroniseOnce() } }
+            // A full round only when the device as a whole came or went. One link among several
+            // coming or going is greeted on its own (`greet`), and a quiet guest's radio nudging
+            // it needs only the question. A round each time put every guest's traffic on the
+            // host's one Bluetooth queue whenever a second link dropped (spec 005, R-3).
+            let presence = (onLinks: !transport.links.isEmpty, pair: isPairReachable)
+            let cameOrWent = lastPresence.map { $0 != presence } ?? true
+            lastPresence = presence
+            guard reachable else { continue }
+            if cameOrWent {
+                Task { await synchroniseOnce() }
+            } else if role != .host, !isSynchronising {
+                Task { await askWhatIsMissing() }
+            }
         }
     }
 
@@ -1380,6 +1403,7 @@ public final class MatchStore {
     /// Anti-entropy. Cheap enough to call on activation, on reachability changes and
     /// whenever the app comes to the foreground.
     public func synchronise() async {
+        synchroniseRounds += 1
         await askWhatIsMissing()
         publishSnapshot(force: true)
         sharePresets()
@@ -1403,6 +1427,18 @@ public final class MatchStore {
             handle(InboundPacket(payload: reply))
         }
         await flush()
+    }
+
+    /// A link coming up costs one hello on it and its answer, not a round on every link: the
+    /// fan-out only says reachability changed when the device as a whole came or went.
+    private func greet(_ link: LinkID) async {
+        if standsInForThePair, let pairedDevice {
+            _ = await sendLive(encode(.guestCard(GuestCard(device: device, name: nil, pairedTo: pairedDevice))), on: link)
+        }
+        guard let payload = try? Wire.hello(sessionID: log.sessionID, vector: log.coverage, from: device).encoded(),
+              let reply = await sendLive(payload, on: link)
+        else { return }
+        handle(InboundPacket(payload: reply, link: link))
     }
 
     private func introduceAsThePairs() async {
@@ -1508,7 +1544,8 @@ public final class MatchStore {
     /// nothing: sent back, every point went round twice.
     private func push(_ events: [MatchEvent], in session: UUID, from source: LinkID? = nil) {
         guard !events.isEmpty, transport.isReachable else { return }
-        for link in transport.links where link != source {
+        let came = source.map { Set(links(to: $0)) } ?? []
+        for link in transport.links where !came.contains(link) {
             let lacking = held(on: link).map { held in events.filter { $0.id.seq > held[$0.id.device] } } ?? events
             guard !lacking.isEmpty else { continue }
             deliver(lacking, on: link, in: session)
@@ -1577,6 +1614,12 @@ public final class MatchStore {
         if outbox.pending.count != before { persist() }
     }
 
+    /// Every link to the device at the far end of `link`, itself included.
+    private func links(to link: LinkID) -> [LinkID] {
+        guard let owner = farEnds[link] else { return [link] }
+        return farEnds.compactMap { $0.value == owner ? $0.key : nil }
+    }
+
     private func held(on link: LinkID) -> VersionVector? {
         heldSession == log.sessionID ? heldOnLink[link] : nil
     }
@@ -1637,12 +1680,12 @@ public final class MatchStore {
     public func sayStoppedSharing(within patience: Duration = .seconds(2), reason: SharingStopReason = .host) -> Task<Void, Never> {
         let notice = encode(.sharingStopped(sessionID: log.sessionID, reason: reason))
         let links = transport.links
-        let transport = transport
+        let (transport, sleep) = (transport, sleep)
         return Task {
             await withTaskGroup(of: Void.self) { group in
                 for link in links {
                     group.addTask {
-                        _ = await Self.answer(within: patience) { await transport.sendLive(notice, on: link) }
+                        _ = await Self.answer(within: patience, sleep: sleep) { await transport.sendLive(notice, on: link) }
                     }
                 }
             }
@@ -1650,17 +1693,18 @@ public final class MatchStore {
     }
 
     private func answer(_ send: @escaping @Sendable () async -> Data?) async -> Data? {
-        await Self.answer(within: sendTimeout, send)
+        await Self.answer(within: sendTimeout, sleep: sleep, send)
     }
 
     private nonisolated static func answer(
-        within timeout: Duration, _ send: @escaping @Sendable () async -> Data?
+        within timeout: Duration, sleep: @escaping @Sendable (Duration) async -> Void,
+        _ send: @escaping @Sendable () async -> Data?
     ) async -> Data? {
         await withCheckedContinuation { continuation in
             let once = ResumeOnce(continuation)
             Task { once.resume(await send()) }
             Task {
-                try? await Task.sleep(for: timeout)
+                await sleep(timeout)
                 once.resume(nil)
             }
         }
@@ -1734,8 +1778,11 @@ public final class MatchStore {
             }
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
             arrive(on: sessionID, from: packet)
-            if let link = packet.link, !packet.isFromPairedDevice, let held = held(on: link) {
-                heldOnLink[link] = held.extended(by: events.map(\.id))
+            if let link = packet.link, !packet.isFromPairedDevice {
+                for sibling in links(to: link) {
+                    guard let held = held(on: sibling) else { continue }
+                    heldOnLink[sibling] = held.extended(by: events.map(\.id))
+                }
             }
             relay(events, from: packet)
             packet.reply?(encode(.hello(sessionID: log.sessionID, vector: log.coverage, from: device)))
@@ -2138,6 +2185,7 @@ public final class MatchStore {
     }
 
     private func relay(_ incoming: [MatchEvent], from packet: InboundPacket) {
+        if packet.link != nil { echoesHeard += incoming.count { $0.id.device == device } }
         let fresh = incoming.filter { log.events[$0.id] == nil }
         let before = state
         let session = log.sessionID
@@ -2538,7 +2586,7 @@ public final class MatchStore {
         guard !snapshotPending else { return }
         snapshotPending = true
         Task { [weak self] in
-            try? await Task.sleep(for: .seconds(max(0, delay)))
+            await self?.sleep(.seconds(max(0, delay)))
             guard let self, self.snapshotPending else { return }
             // Cleared before the log is looked at. Waking to find the match over left the
             // flag set, and every throttled publish after that was dropped on it until

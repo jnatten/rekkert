@@ -93,9 +93,14 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
     /// after four seconds of their own; WatchConnectivity does not promise to answer at all, and
     /// every child is waited on before anybody's acknowledgement is folded.
     private let childTimeout: Duration
+    private let sleep: @Sendable (Duration) async -> Void
 
-    public init(childTimeout: Duration = .seconds(4)) {
+    public init(
+        childTimeout: Duration = .seconds(4),
+        sleep: @escaping @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0) }
+    ) {
         self.childTimeout = childTimeout
+        self.sleep = sleep
         var packetContinuation: AsyncStream<InboundPacket>.Continuation!
         inbound = AsyncStream { packetContinuation = $0 }
         packets = packetContinuation
@@ -189,7 +194,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
               let child = snapshotOfChildren().first(where: { $0.scope.carries(wire) && $0.transport.links.contains(link) })
         else { return nil }
         let transport = child.transport
-        guard let reply = await Self.answer(within: childTimeout, { await transport.sendLive(payload, on: link) }),
+        guard let reply = await Self.answer(within: childTimeout, sleep: sleep, { await transport.sendLive(payload, on: link) }),
               child.scope.admits(reply)
         else { return nil }
         return reply
@@ -206,11 +211,12 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
 
         let timeout = childTimeout
         let packets = packets
+        let sleep = sleep
         let acknowledgements = await withTaskGroup(of: Data?.self) { group in
             for child in recipients {
                 group.addTask {
                     let transport = child.transport
-                    let reply = await Self.answer(within: timeout, { await transport.sendLive(payload) })
+                    let reply = await Self.answer(within: timeout, sleep: sleep, { await transport.sendLive(payload) })
                     // A live send that did not land still has to reach a channel that
                     // survives the counterpart not running, or attaching a second child
                     // would quietly switch the watch's durable fallback off.
@@ -241,12 +247,15 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
 
     /// A child's answer, or nothing once it has had its time. The send is left to finish on its
     /// own: one parked on a continuation the framework never resumes cannot be cancelled.
-    private static func answer(within timeout: Duration, _ send: @escaping @Sendable () async -> Data?) async -> Data? {
+    private static func answer(
+        within timeout: Duration, sleep: @escaping @Sendable (Duration) async -> Void,
+        _ send: @escaping @Sendable () async -> Data?
+    ) async -> Data? {
         await withCheckedContinuation { continuation in
             let once = ResumeOnce(continuation)
             Task { once.resume(await send()) }
             Task {
-                try? await Task.sleep(for: timeout)
+                await sleep(timeout)
                 once.resume(nil)
             }
         }
@@ -319,8 +328,9 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
     /// Yields on *any* child's change rather than only when the aggregate flips.
     ///
     /// One peer coming back is a reason to run anti-entropy even while another was there the
-    /// whole time — and the aggregate would not have moved, so nothing would have asked. What
-    /// it prompts is `synchronise()`, which is cheap and idempotent by design.
+    /// whole time — and the aggregate would not have moved, so nothing would have asked. The
+    /// store decides how much that is worth: a full round only when the device as a whole came
+    /// or went, a hello otherwise.
     private func reachabilityChanged() {
         reachabilityUpdates.yield(isReachable)
     }

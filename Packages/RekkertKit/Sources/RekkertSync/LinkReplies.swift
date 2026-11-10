@@ -51,4 +51,22 @@ nonisolated struct LinkHealth {
         misses += 1
         return misses >= Self.patience
     }
+
+    /// Whether the peer is gone, after this question's outcome. A question that never went out
+    /// whole says nothing about the peer.
+    mutating func observe(_ outcome: ReplyOutcome) -> Bool {
+        switch outcome {
+        case .answered:
+            answered()
+            return false
+        case .timedOut:
+            return missed()
+        case .notSent:
+            return false
+        }
+    }
+}
+
+enum ReplyOutcome {
+    case answered, timedOut, notSent
 }

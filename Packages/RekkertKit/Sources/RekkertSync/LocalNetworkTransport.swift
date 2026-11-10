@@ -55,6 +55,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         let id = LinkID()
         var buffer = Data()
         var isReady = false
+        var health = LinkHealth()
         init(_ connection: NWConnection, share: UUID? = nil) {
             self.connection = connection
             self.share = share
@@ -458,11 +459,14 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
 
         let tcp = NWProtocolTCP.Options()
         tcp.noDelay = true
-        // A phone that went into a pocket has to be noticed in seconds rather than minutes.
+        // About 20 s without an answer before the system gives up on a link. Peer-to-peer Wi-Fi
+        // pauses for several seconds at a time, and at 8 s that cut a guest's second link about
+        // once a minute (spec 005, research R-2). A link that really went quiet is noticed by
+        // the questions going unanswered instead (`health`).
         tcp.enableKeepalive = true
-        tcp.keepaliveIdle = 2
-        tcp.keepaliveInterval = 2
-        tcp.keepaliveCount = 3
+        tcp.keepaliveIdle = 5
+        tcp.keepaliveInterval = 3
+        tcp.keepaliveCount = 5
 
         let parameters = NWParameters(tls: tls, tcp: tcp)
         // Works with no network at all: straight from one radio to the other.
@@ -603,7 +607,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         close(token, refusable: false)
     }
 
-    private func close(_ token: ObjectIdentifier, refusable: Bool) {
+    private func close(_ token: ObjectIdentifier, refusable: Bool, reason: LinkDropReason? = nil) {
         forgetDialDeadline(token)
         let link = lock.withLock { openLinks.removeValue(forKey: token) }
         guard let link else { return }
@@ -620,7 +624,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
                 refusable: refusable
             )
         }
-        if circumstances.everGotThere { linkUpdates.yield(.down(link.id, refusable ? .refused : .closedByPeer)) }
+        if circumstances.everGotThere { linkUpdates.yield(.down(link.id, reason ?? (refusable ? .refused : .closedByPeer))) }
         reachabilityUpdates.yield(isReachable)
 
         switch ReconnectPolicy.loss(circumstances) {
@@ -715,6 +719,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         switch frame.kind {
         case .reply:
             if let pending = lock.withLock({ waiting.removeValue(forKey: frame.correlation) }) {
+                lock.withLock { _ = link.health.observe(.answered) }
                 pending.resume(frame.payload)
             } else if LinkReplies.isWorthHandingOn(late: frame.payload) {
                 packets.yield(InboundPacket(payload: frame.payload, link: link.id))
@@ -742,9 +747,14 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             send(Frame(kind: .request, correlation: correlation, payload: payload), on: link)
             // Resolved here rather than left to the store's own timeout, so a silent peer
             // never holds up the answer the others already gave.
-            queue.asyncAfter(deadline: .now() + replyTimeout) { [weak self] in
-                self?.lock.withLock { _ = self?.waiting.removeValue(forKey: correlation) }
+            queue.asyncAfter(deadline: .now() + replyTimeout) { [weak self, weak link] in
+                guard let self else { return once.resume(nil) }
+                let unanswered = self.lock.withLock { self.waiting.removeValue(forKey: correlation) } != nil
                 once.resume(nil)
+                guard unanswered, let link else { return }
+                if self.lock.withLock({ link.health.observe(.timedOut) }) {
+                    self.close(ObjectIdentifier(link.connection), refusable: false, reason: .timeout)
+                }
             }
         }
     }

@@ -140,7 +140,7 @@ No violations. The Complexity Tracking table is not needed.
 | Clock bounds are too wide on slow links (D-2) | Many delays read `unknown`, and FR-010 cannot be shown | Level 4 checks the share of unknown delays. If it is above 10%, sample on the pair link and on direct hellos too, and keep the narrowest |
 | Three guests do not load the queue enough to calibrate (D-11) | The nine-guest prediction is weak | The walk-out burst in level 4. The two-court evening checks the prediction (FR-018), and the limit is lowered in the next release if it was wrong (FR-016) |
 | The nine-guest suites are too slow for CI (R-8) | The gate takes too long | `TestClock.nextDue`. Otherwise, parallel CI jobs running the same `verify.sh` step |
-| The store's real-time timers make timing tests flaky (R-8) | Intermittent failures | Move those timers onto the injected clock, deferred until it is seen (D-10) |
+| The store's real-time timers make timing tests flaky (R-8) | Intermittent failures | Seen during User Story 1, and handled: the store's and fan-out's waits run on the harness's clock at the app's own timings (D-10) |
 | A 1.0 guest over Wi-Fi (D-14) | It can sit "catching up" with nothing arriving, as today | Out of scope under FR-015 as clarified: the host shows it as catching up, never in step |
 | iOS caps the host's Bluetooth connections below nine guests | Guests refused, or links failing | Only seen on the two-court evening. The record notes refusals, and the limit is lowered in the next release (FR-016) |
 
