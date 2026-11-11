@@ -824,8 +824,15 @@ points" below 100, and "too many unknown" above one in ten.
 
 ```sh
 swift test --package-path Packages/RekkertKit   # the fast loop, no simulator
+./scripts/package-tests.sh                      # the same, long court simulations on their own
 ./scripts/verify.sh                             # tests, build both apps, assert embedding
 ```
+
+`scripts/package-tests.sh` is what `verify.sh` and `release.sh` run. It runs the suites that
+hold the main actor for long stretches (the busy hall, the club night, calibration, a two-hour
+evening in the record and the like) one at a time after everything else, because beside the
+short tests on a three-core runner they starve the ones that wait in real time. A new suite
+like that belongs in its list.
 
 `scripts/verify.sh` also asserts that the watch app really is embedded at
 `Rekkert.app/Watch/` with the right `WKApplication` and companion bundle identifier — a

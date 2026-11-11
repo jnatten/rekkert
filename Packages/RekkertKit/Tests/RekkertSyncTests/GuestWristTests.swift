@@ -6,9 +6,9 @@ import Testing
 @Suite("A guest joins and leaves from the wrist", .serialized)
 @MainActor
 struct GuestWristTests {
-    private func court() -> CourtHarness {
+    private func court(ownWait: Duration = .seconds(3)) -> CourtHarness {
         var timing = CourtHarness.Timing()
-        timing.standIn = StandInPolicy.Timing(phoneWait: .seconds(1), ownWait: .seconds(3), grace: .milliseconds(500))
+        timing.standIn = StandInPolicy.Timing(phoneWait: .seconds(1), ownWait: ownWait, grace: .milliseconds(500))
         let court = CourtHarness(guests: 1, withWatches: true, timing: timing)
         court.startMatch()
         court.share()
@@ -86,8 +86,9 @@ struct GuestWristTests {
     }
 
     /// FR-024: the host stopped, so joining again says nothing is there, and lets the code go.
+    /// The wrist's own wait is the app's, which the search's 14 s runs out before.
     @Test func joiningAgainAfterTheHostStoppedSaysSoAndForgets() async {
-        let court = court()
+        let court = court(ownWait: StandInPolicy.Timing().ownWait)
         let guest = court.guests.first!
         court.join(guest)
         await court.until(within: .seconds(30)) { onTheMatch(court, guest.watch!) }

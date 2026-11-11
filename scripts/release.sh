@@ -244,7 +244,7 @@ echo "==> Rekkert $version ($build), team $team"
 
 if [ "$DO_TESTS" = 1 ]; then
   echo "==> Package tests"
-  swift test --package-path Packages/RekkertKit
+  scripts/package-tests.sh
 fi
 
 echo "==> tuist generate"

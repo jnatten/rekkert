@@ -20,7 +20,7 @@ fi
 echo "  ok: no .nanoseconds( in code the watch runs"
 
 echo "==> Package tests (macOS, no simulator)"
-swift test --package-path Packages/RekkertKit
+scripts/package-tests.sh
 
 echo "==> tuist generate"
 mise exec -- tuist generate --no-open

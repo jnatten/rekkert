@@ -19,6 +19,20 @@ struct CourtHarnessTests {
         #expect(await court.until(within: .seconds(30)) { court.allInStep() })
     }
 
+    /// The wrist's waits are the radio's time, as the stores' are: on the machine's they ran out
+    /// sooner or later against the court depending on how busy it was.
+    @Test func aWatchStandingInWaitsInRadioTime() async {
+        var timing = CourtHarness.Timing()
+        timing.standIn = StandInPolicy.Timing(phoneWait: .seconds(1), ownWait: .seconds(3), grace: .milliseconds(500))
+        timing.standInTick = .milliseconds(100)
+        let court = CourtHarness(guests: 1, withWatches: true, timing: timing)
+        let standIn = court.guests.first!.watch!.standIn!
+
+        standIn.join(SessionCode("106273")!)
+        #expect(await court.until(within: .seconds(2)) { standIn.joining != .searching } == false)
+        #expect(await court.until(within: .seconds(2)) { standIn.joining == .failed(.notFound) })
+    }
+
     @Test func theHostKnowsEachGuestByItsPhone() async {
         let court = CourtHarness(guests: 2)
         court.startMatch()

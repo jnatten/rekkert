@@ -712,8 +712,8 @@ public final class SharedSession {
 
     private func beginNoticingTheLoss() {
         guard noticing == nil else { return }
-        noticing = Task { [weak self, graceBeforeNotice] in
-            try? await Task.sleep(for: graceBeforeNotice)
+        noticing = Task { [weak self, graceBeforeNotice, sleep] in
+            await sleep(graceBeforeNotice)
             guard let self, !Task.isCancelled else { return }
             // Let go of first, whatever is decided: a task still on the books after it has
             // run would stop the next loss from ever being noticed.
@@ -802,8 +802,8 @@ public final class SharedSession {
 
     private func waitForTheRadio(_ code: SessionCode, else failure: LocalNetworkTransport.Failure) {
         guard waitingForTheRadio == nil else { return }
-        waitingForTheRadio = Task { [weak self, radioGrace] in
-            try? await Task.sleep(for: radioGrace)
+        waitingForTheRadio = Task { [weak self, radioGrace, sleep] in
+            await sleep(radioGrace)
             guard let self, !Task.isCancelled, self.wanted == code else { return }
             self.waitingForTheRadio = nil
             if self.hasTheMatch || self.bluetoothPeers > 0 {

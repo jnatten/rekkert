@@ -6,7 +6,7 @@ import RekkertCore
 /// `AppModel` wires them, over one `SimulatedRadio`.
 ///
 /// The radio runs on a `TestClock` that the harness moves forward in steps, letting the stores
-/// catch up between them. The stores' own waits are real, and kept short.
+/// catch up between them. The stores' waits, and the watch stand-in's, run on that clock too.
 @MainActor
 final class CourtHarness {
     struct Timing {
@@ -18,7 +18,7 @@ final class CourtHarness {
         var graceBeforeNotice: Duration = .seconds(1)
         var radioGrace: Duration = .seconds(30)
         var standIn = StandInPolicy.Timing()
-        var standInTick: Duration = .milliseconds(100)
+        var standInTick: Duration = .seconds(1)
         var idleCheck: Duration = .seconds(30)
         /// Jumps over stretches with nothing on the radio's clock instead of stepping through them.
         var skipsIdleTime = false
@@ -171,6 +171,15 @@ final class CourtHarness {
         return { CourtHarness.epoch.addingTimeInterval(clock.now.seconds * (1 + skew.drift) + skew.offset) }
     }
 
+    private nonisolated static let instantEpoch = ContinuousClock.now
+
+    /// The monotonic clock the stand-in times its waits by, run off the radio's clock so its waits
+    /// and the stores' come out in the same order however busy the machine is.
+    private var monotonicClock: () -> ContinuousClock.Instant {
+        let clock = air.clock
+        return { CourtHarness.instantEpoch.advanced(by: clock.now) }
+    }
+
     /// Sets `device`'s clock forward or back, and tells its store, as the system would.
     func jumpClock(of device: Device, by seconds: TimeInterval) {
         device.skew.offset += seconds
@@ -254,7 +263,10 @@ final class CourtHarness {
         device.pairLink = pairLink
         device.tasks = [Task { await store.run() }]
         if device.isWatch {
-            let standIn = WatchStandIn(store: store, sharing: sharing, timing: timing.standIn, tick: timing.standInTick)
+            let standIn = WatchStandIn(
+                store: store, sharing: sharing, timing: timing.standIn, tick: timing.standInTick,
+                now: monotonicClock, sleep: clockSleep
+            )
             device.standIn = standIn
             store.onSharing = { [standIn] signal in standIn.heard(signal) }
             store.participantCount = { [standIn] in standIn.hosting?.participants.count ?? 0 }

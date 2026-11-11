@@ -120,6 +120,8 @@ public final class WatchStandIn {
     @ObservationIgnored private let sharing: SharedSession
     @ObservationIgnored private let timing: StandInPolicy.Timing
     @ObservationIgnored private let tick: Duration
+    @ObservationIgnored private let now: () -> ContinuousClock.Instant
+    @ObservationIgnored private let sleep: (Duration) async -> Void
     @ObservationIgnored private var pending: StandInPolicy.Join?
     @ObservationIgnored private var attempt = 0
     @ObservationIgnored private var phoneFailure: SharingFailure?
@@ -130,7 +132,7 @@ public final class WatchStandIn {
     private var phoneStandby: SharingStandby?
     /// An older phone never says, and is trusted to be carrying the match as it always was.
     private var hasHeardStandby = false
-    @ObservationIgnored private var phoneLastThrough = ContinuousClock.now
+    @ObservationIgnored private var phoneLastThrough: ContinuousClock.Instant
     /// When the wrist last saw its phone go, by the store's clock, which is the one the phone
     /// dates its standby by.
     @ObservationIgnored private var pairLostAt: Date?
@@ -323,11 +325,18 @@ public final class WatchStandIn {
         self.init(store: store, sharing: sharing, timing: StandInPolicy.Timing(), tick: .seconds(2))
     }
 
-    init(store: MatchStore, sharing: SharedSession, timing: StandInPolicy.Timing, tick: Duration) {
+    init(
+        store: MatchStore, sharing: SharedSession, timing: StandInPolicy.Timing, tick: Duration,
+        now: @escaping () -> ContinuousClock.Instant = { ContinuousClock.now },
+        sleep: @escaping (Duration) async -> Void = { try? await Task.sleep(for: $0) }
+    ) {
         self.store = store
         self.sharing = sharing
         self.timing = timing
         self.tick = tick
+        self.now = now
+        self.sleep = sleep
+        phoneLastThrough = now()
         // No link of the wrist's own survives a relaunch, and a role kept from one is what left a
         // watch refusing its own phone's match.
         store.followPairedDevice()
@@ -354,10 +363,10 @@ public final class WatchStandIn {
             return
         }
         if mayUseTheRadio() {
-            pending = .both(since: .now)
+            pending = .both(since: now())
             sharing.join(code)
         } else {
-            pending = .askedPhone(since: .now)
+            pending = .askedPhone(since: now())
         }
         Task {
             let landed = await store.send(.join(code))
@@ -488,12 +497,12 @@ public final class WatchStandIn {
     public func run() async {
         while !Task.isCancelled {
             evaluate()
-            try? await Task.sleep(for: tick)
+            await sleep(tick)
         }
     }
 
     func evaluate() {
-        let now = ContinuousClock.now
+        let now = self.now()
         let isPairReachable = store.isPairReachable
         if wasPairReachable, !isPairReachable { pairLostAt = store.now() }
         wasPairReachable = isPairReachable
@@ -567,7 +576,7 @@ public final class WatchStandIn {
     }
 
     private func lookOnTheWrist() {
-        pending = .own(since: .now)
+        pending = .own(since: now())
         guard let code = sharing.standbyCode, !sharing.isSharing else { return }
         sharing.join(code)
     }
