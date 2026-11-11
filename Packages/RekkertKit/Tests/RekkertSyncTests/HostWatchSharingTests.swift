@@ -26,7 +26,10 @@ struct HostWatchSharingTests {
 
         court.joinAll()
         #expect(await court.until(within: .seconds(60)) { watch.hosting?.participants.count == 1 })
+        // The whole guest goes: a watch left in reach stands in at the same 15 s the host stops
+        // hearing the phone, and whichever comes first decides what the host shows.
         court.outOfRange(court.guests.first!.phone)
+        court.outOfRange(court.guests.first!.watch!)
         #expect(await court.until(within: .seconds(20)) {
             if case .outOfReach? = watch.hosting?.participants.first?.state { true } else { false }
         })
