@@ -121,9 +121,7 @@ struct ClubNightTests {
             if let wrong = night.wrong[name], wrong.count > 0 {
                 withKnownIssue("FR-011 in a busy hall is judged on calibrated radio speeds (T059)", isIntermittent: true) {
                     #expect(wrong.share(within: .seconds(30)) == 1, "\(name): FR-011's 30 s")
-                    if wrong.count >= CourtHarness.DelayStats.enoughForAShare {
-                        #expect(wrong.share(within: .seconds(5)) >= 0.95, "\(name): FR-011's 5 s over \(wrong.count)")
-                    }
+                    #expect(wrong.share(within: .seconds(5)) >= 0.95, "\(name): FR-011's 5 s over \(wrong.count)")
                 }
             }
             print("ClubNight \(name): \(fine.count) fine, median \(String(describing: fine.median)), p95 \(String(describing: fine.p95)), slowest \(String(describing: fine.slowest)); \(night.wrong[name]?.count ?? 0) not")

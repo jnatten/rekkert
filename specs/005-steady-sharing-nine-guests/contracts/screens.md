@@ -35,7 +35,7 @@ The VoiceOver labels read the same words, for example "Sharing on 6 0 4 2 1 8, 9
 
 ```text
 Guest · 9 Nov, 18:08–20:00
-97% within 1 s · slowest 1.9 s · 1,170 of 1,184 timed
+0.4 s typical · 97% within 1 s · 99% within 2 s · slowest 1.9 s · 1,170 of 1,184 timed
 Wi-Fi dropped 3 times · Bluetooth 0 · host never unreachable
 Battery: iPhone 6%/h · Watch 9%/h
 ```

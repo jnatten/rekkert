@@ -32,6 +32,8 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         /// Nothing found, with Bluetooth switched off or not Rekkert's to use.
         case bluetoothOff
         case bluetoothDenied
+        /// The host's build cannot take this one's guests.
+        case needsUpdate
     }
 
     public enum Status: Sendable, Equatable {
@@ -56,6 +58,8 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         var buffer = Data()
         var isReady = false
         var health = LinkHealth()
+        /// The system said the link could no longer reach the far end, and has not taken it back.
+        var pathLost = false
         init(_ connection: NWConnection, share: UUID? = nil) {
             self.connection = connection
             self.share = share
@@ -523,6 +527,10 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         guard isNew else { return connection.cancel() }
         giveUpUnlessReady(token, link)
 
+        connection.viabilityUpdateHandler = { [weak self] isViable in
+            self?.lock.withLock { link.pathLost = !isViable }
+        }
+
         connection.stateUpdateHandler = { [weak self] state in
             guard let self else { return }
             switch state {
@@ -545,7 +553,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
                 self.linkUpdates.yield(.up(link.id))
                 self.announce()
             case .failed(let error):
-                self.close(token, refusable: Self.isRefusal(error), detail: DropDetail.code(for: error))
+                self.close(token, refusable: Self.isRefusal(error), error: error)
             case .cancelled:
                 // Never a rejection: a wrong pre-shared key surfaces as a failure, and a
                 // cancel is somebody hanging up — usually this end.
@@ -609,7 +617,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
         close(token, refusable: false)
     }
 
-    private func close(_ token: ObjectIdentifier, refusable: Bool, reason: LinkDropReason? = nil, detail: String? = nil) {
+    private func close(_ token: ObjectIdentifier, refusable: Bool, reason: LinkDropReason? = nil, error: NWError? = nil) {
         forgetDialDeadline(token)
         let link = lock.withLock { openLinks.removeValue(forKey: token) }
         guard let link else { return }
@@ -627,6 +635,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
             )
         }
         if circumstances.everGotThere {
+            let detail = DropDetail.code(for: error, pathLost: lock.withLock { link.pathLost })
             linkUpdates.yield(.down(link.id, reason ?? (refusable ? .refused : .closedByPeer), detail: detail))
         }
         reachabilityUpdates.yield(isReachable)
@@ -713,7 +722,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
                 for frame in frames { self.deliver(frame, on: link) }
             }
             if isComplete || error != nil {
-                return self.close(ObjectIdentifier(link.connection), refusable: false, detail: DropDetail.code(for: error))
+                return self.close(ObjectIdentifier(link.connection), refusable: false, error: error)
             }
             self.receive(on: link)
         }
@@ -793,7 +802,7 @@ nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked 
 /// already the only thing it talks to — nor on macOS, which is a platform here only so the
 /// tests run without a simulator. The type still exists so nothing above it needs an `#if`.
 nonisolated public final class LocalNetworkTransport: PeerTransport, @unchecked Sendable {
-    public enum Failure: Sendable, Equatable { case notFound, rejected, blocked, noRoom, bluetoothOff, bluetoothDenied }
+    public enum Failure: Sendable, Equatable { case notFound, rejected, blocked, noRoom, bluetoothOff, bluetoothDenied, needsUpdate }
     public enum Status: Sendable, Equatable {
         case idle, hosting(peers: Int), searching, joined(peers: Int), failed(Failure)
     }

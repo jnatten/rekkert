@@ -199,6 +199,7 @@ extension SharingFailure {
         case .noRoom: "No room on this match"
         case .bluetoothOff: "Bluetooth is off on your iPhone"
         case .bluetoothDenied: "Rekkert can't use Bluetooth"
+        case .needsUpdate: "Update Rekkert to join"
         }
     }
 
@@ -213,6 +214,7 @@ extension SharingFailure {
         case .noRoom: limit.map { "The host already has \($0) others on. One of them has to leave first." } ?? "The match is full. One person has to leave first."
         case .bluetoothOff: "Switch Bluetooth on in Control Center on your iPhone and try again."
         case .bluetoothDenied: "Allow it in Settings on your iPhone, then try again."
+        case .needsUpdate: "The host's match needs a newer Rekkert. Update it on your iPhone, then join again."
         }
     }
 }

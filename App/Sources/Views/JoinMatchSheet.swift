@@ -239,6 +239,7 @@ extension LocalNetworkTransport.Failure {
         case .noRoom: "No room on this match"
         case .bluetoothOff: "Bluetooth is off on your iPhone"
         case .bluetoothDenied: "Rekkert can't use Bluetooth"
+        case .needsUpdate: "Update Rekkert to join"
         }
     }
 
@@ -259,6 +260,8 @@ extension LocalNetworkTransport.Failure {
             "With no Wi-Fi, Rekkert finds the host over Bluetooth. Switch it on in Control Center and try again."
         case .bluetoothDenied:
             "Allow Rekkert to use Bluetooth in Settings, then try again."
+        case .needsUpdate:
+            "The host's match needs a newer Rekkert than this one. Update it from the App Store, then join again."
         }
     }
 }

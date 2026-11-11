@@ -610,3 +610,23 @@ between Options B and C (concept.md).
 - **The manual tasks** are T057, T058, T065 and the second half of T059. Each writes its
   evidence into `validation.md`.
 - **Raw field records stay with the requester.** Only the trimmed fixture in T060 is committed.
+
+---
+
+## Phase 9: Convergence
+
+- [X] T071 Count a link that ends by timing out (`wroteOff`, `redialled`) as a drop on its radio in `SharingSummary`, as FR-007 counts any connection ending, and pin it in `CoreTests/SharingSummaryTests.swift` per FR-007 (partial)
+- [X] T072 Record `path unsatisfied` when a ready Wi-Fi link goes to `.waiting` in `RekkertSync/LocalNetworkTransport.swift`, closing it with `DropDetail.pathUnsatisfied` as its detail, so a lost path is told apart from a keepalive timeout per plan D-3 (partial)
+- [X] T073 Tell the watch "no room", with the limit, when its phone is turned away from a full match it joined from the phone, within 15 s, in `RekkertSync/WatchStandIn.swift` and `WatchApp/Sources/Views/`, with a test in `SyncTests/LimitReachesWatchTests.swift` per FR-013 (partial)
+- [X] T074 Turn a host's `needsUpdate` into a plain "update Rekkert to join" refusal on the guest's phone and watch: a `SharingFailure` and `LocalNetworkTransport.Failure` case, the store calling `onRefused`, and wording in `JoinMatchSheet` and `WatchJoinView`, with a test that fails first, per FR-015 (partial)
+- [X] T075 Make `Calibration.replay` in `SyncTests/Calibration.swift` a true replay: each guest's taps at the times the record shows (arrival minus delay), and each guest out of range from `outOfReach` to `backInStep` and each link dropped as recorded, per FR-017 (partial)
+- [ ] T076 Once T060 pins `Airwaves.Settings.calibrated`, run `ClockOffsetTests` on calibrated busy-hall speeds with FR-006's 10% cap asserted, and if it fails, tighten the bounds (for example the far end's receive and send times in the `clock` answer) per FR-006 (partial)
+- [ ] T077 Once T060 pins `Airwaves.Settings.calibrated`, move `BusyHallTests` and `ClubNightTests.twoCourtsFullHalfAnHour` onto it and turn FR-010's and FR-011's known issues into firm assertions, at the current limit whether or not Phase 7 runs, per FR-020 (partial)
+- [X] T078 Add `SyncTests/OlderHostTests.swift`: a guest from this release on a host acting as 1.1 follows every point, is never sent a `clock` question, and records relayed delays as `unknown; older`, per FR-015 (partial)
+- [X] T079 Review the 20-arrival minimum on FR-011's 5-second share in `CourtHarness.DelayStats.enoughForAShare`: get it into spec.md through `/speckit-clarify`, or remove it from `BusyHallTests` and `ClubNightTests`, per FR-011 (unrequested)
+- [X] T080 Bring spec.md's assumption that delays are bounded from the round trips points already make in line with D-2 (revised), the dedicated `clock` exchange, through `/speckit-clarify` or `/speckit-specify` per plan D-2 (contradicts)
+- [X] T081 Add the typical delay and the share within 2 s to the record screen's stint header (`SharingSummary.headerLines`, `contracts/screens.md`) per FR-003 (partial)
+- [X] T082 Put the radios up to the host on the guest's `joined` entry in `RekkertSync/SharedSession.swift` per FR-002 (partial)
+- [X] T083 Add a test that a two-hour evening with ten people's delay entries fits in the record, exports and parses back, and is still pruned after 7 days, per Edge Cases: a long evening (missing)
+- [X] T084 Add a test that a guest's watch standing in for its phone gets points within FR-010's times in `CourtHarness`, per Edge Cases: a watch standing in (missing)
+- [X] T085 List `SharingSignal.state(_:limit:)` in `contracts/wire-protocol.md`'s changed messages per plan: wire contract (partial)

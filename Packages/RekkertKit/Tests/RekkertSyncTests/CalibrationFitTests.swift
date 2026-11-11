@@ -14,6 +14,27 @@ struct CalibrationFitTests {
         return calendar
     }
 
+    @Test func aGuestOutOfReachOrOffBluetoothIsReplayedAsGone() throws {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let guest = DeviceID()
+        func entry(_ seconds: Double, _ kind: LinkEvent, radios: [LinkRadio]? = [.bluetooth]) -> LinkRecordEntry {
+            LinkRecordEntry(time: start.addingTimeInterval(seconds), device: .phone, link: .guest(guest), kind: kind, radios: radios)
+        }
+        var entries = [entry(0, .proven)]
+        for index in 0 ..< 30 { entries.append(entry(10 + Double(index) * 10, .pointArrived(latency: 0.5))) }
+        entries += [
+            entry(100, .outOfReach), entry(130, .backInStep),
+            entry(200, .dropped(.closedByPeer)), entry(205, .proven),
+            entry(250, .dropped(.closedByPeer), radios: [.wifi]), entry(255, .proven, radios: [.wifi]),
+        ]
+        let export = LinkRecord(entries).export(
+            LinkRecord.Header(app: "1.2 (80)", phoneSystem: "iOS 27.0", phone: DeviceID()), now: start.addingTimeInterval(400), in: calendar
+        )
+        let measured = try #require(Calibration.measure(export, in: calendar))
+        #expect(measured.taps.first?.at == 0)
+        #expect(measured.away.map { [$0.from, $0.to] } == [[90.5, 120.5], [190.5, 195.5]])
+    }
+
     @Test func aRecordFromAKnownRadioIsFittedBackWithinAQuarter() async throws {
         var known = Airwaves.Settings()
         known.latency = .milliseconds(25)
@@ -37,6 +58,10 @@ struct CalibrationFitTests {
 
         let measured = try #require(Calibration.measure(export, in: calendar))
         #expect(measured.guests == 2)
+        #expect(measured.taps.count >= 30)
+        // Taps 10 s apart on the harness's clock come back 10 s apart, give or take a delay.
+        let gaps = zip(measured.taps.dropFirst(), measured.taps).map { $0.at - $1.at }
+        #expect(gaps.filter { abs($0 - 10) < 1 }.count >= gaps.count * 9 / 10)
         let fitted = await Calibration.fit(measured, steps: 4, points: 30)
         let (_, p95) = await Calibration.replay(measured, settings: fitted, points: 40)
         print("Calibration: known \(known.latency), \(known.bytesPerSecond) B/s; fitted \(fitted.latency), \(fitted.bytesPerSecond) B/s; p95 \(p95) against \(measured.p95)")

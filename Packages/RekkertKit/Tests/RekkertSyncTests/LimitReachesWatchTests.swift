@@ -35,4 +35,24 @@ struct LimitReachesWatchTests {
         #expect(fourth.phone.sharing.phase == .failed(.noRoom))
         #expect(fourth.phone.store.noRoomLimit == 3)
     }
+
+    /// FR-013: told on phone and watch, whichever the code was typed on.
+    @Test func aGuestTurnedAwayOnThePhoneIsToldOnTheWristToo() async {
+        let court = CourtHarness(guests: 4, withWatches: true, guestLimit: 3)
+        court.startMatch()
+        court.share()
+        for guest in court.guests.dropLast() { court.join(guest) }
+        #expect(await court.until(within: .seconds(90)) {
+            court.guests.dropLast().allSatisfy { court.inStep($0.phone, with: court.host.phone) }
+        })
+        let fourth = court.guests.last!
+        await court.until(within: .seconds(5)) { fourth.watch!.store.isPairReachable }
+        court.join(fourth)
+        #expect(await court.until(within: .seconds(15)) {
+            fourth.phone.sharing.phase == .failed(.noRoom) && fourth.watch!.standIn!.phoneTurnedAway?.limit == 3
+        })
+
+        fourth.watch!.standIn!.dismissPhoneTurnedAway()
+        #expect(fourth.watch!.standIn!.phoneTurnedAway == nil)
+    }
 }

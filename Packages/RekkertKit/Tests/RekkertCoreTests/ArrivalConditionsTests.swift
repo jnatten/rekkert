@@ -89,6 +89,27 @@ struct ArrivalConditionsTests {
         #expect(ArrivalConditions.nothingWrong(arrivalAt: at(100), on: .watch, from: guest, entries: watch, pairEntries: hostPhone))
     }
 
+    /// A link written off or redialled after going quiet is as gone as one closed.
+    @Test func aLinkThatTimedOutIsDown() {
+        let guestPhone = [entry(0, .host(host), .proven), entry(50, .host(host), .redialled)]
+        let hostPhone = [entry(0, .guest(guest), .proven), entry(50, .guest(guest), .wroteOff)]
+        #expect(!ArrivalConditions.nothingWrong(arrivalAt: at(100), on: .phone, entries: guestPhone))
+        #expect(!ArrivalConditions.nothingWrong(arrivalAt: at(100), on: .phone, from: guest, entries: hostPhone))
+    }
+
+    /// Edge Cases: a watch standing in for its phone is on the host itself, and judged as its
+    /// phone would be, on its own link to the host.
+    @Test func aWatchStandingInIsJudgedOnItsOwnLinkToTheHost() {
+        let watch = [
+            entry(0, .pair, .proven, on: .watch), entry(40, .pair, .dropped(.unknown), on: .watch),
+            entry(60, .host(host), .proven, on: .watch),
+        ]
+        let phoneGone = [entry(0, .host(host), .proven), entry(40, .host(host), .dropped(.unknown))]
+        #expect(ArrivalConditions.nothingWrong(arrivalAt: at(100), on: .watch, entries: watch, pairEntries: phoneGone))
+        let standingDown = watch + [entry(90, .host(host), .dropped(.closedByPeer), on: .watch)]
+        #expect(!ArrivalConditions.nothingWrong(arrivalAt: at(100), on: .watch, entries: standingDown, pairEntries: phoneGone))
+    }
+
     @Test func aWatchWithItsPairLinkDownIsSomethingWrong() {
         let watch = [entry(0, .pair, .proven, on: .watch), entry(50, .pair, .dropped(.unknown), on: .watch)]
         let phoneFine = [entry(0, .host(host), .proven)]

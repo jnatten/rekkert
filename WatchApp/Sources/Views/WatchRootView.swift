@@ -293,6 +293,20 @@ struct WatchIdleView: View {
 
                 WatchSharingCard()
 
+                if let turnedAway = model.standIn.phoneTurnedAway {
+                    VStack(spacing: 4) {
+                        Text(SharingFailure.noRoom.title(code: ""))
+                            .font(.footnote.weight(.semibold))
+                        Text(SharingFailure.noRoom.watchAdvice(limit: turnedAway.limit))
+                            .scaledFont(size: 11)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        Button("OK") { model.standIn.dismissPhoneTurnedAway() }
+                            .buttonStyle(.bordered)
+                            .font(.footnote)
+                    }
+                }
+
                 connection
 
                 Button("Quick match", systemImage: "bolt") {

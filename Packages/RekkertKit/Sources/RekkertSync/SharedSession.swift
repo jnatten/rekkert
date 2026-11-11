@@ -188,7 +188,7 @@ public final class SharedSession {
         // on the way in, and the first snapshot of it goes out before a later turn comes round —
         // to a host with nothing on, which takes it up as its own.
         store.onLeft = { [weak self] in self?.letGo() }
-        store.onRefused = { [weak self] _ in self?.turnedAway() }
+        store.onRefused = { [weak self] failure in self?.turnedAway(failure) }
         store.onStoppedByHost = { [weak self] reason in self?.stoppedByHost(reason) }
         store.onParticipantsChanged = { [weak self] in self?.reportHostingStatus() }
         store.onHostNameChanged = { [weak self] in self?.reportStandby() }
@@ -211,7 +211,7 @@ public final class SharedSession {
                 for await _ in changes {
                     guard let self else { return }
                     self.bluetoothPeers = bluetooth.reachableCount
-                    if self.bluetoothPeers > 0 { self.noteProven() }
+                    if self.bluetoothPeers > 0 { self.noteProven(over: .bluetooth) }
                     self.reportStandby()
                     if self.bluetoothPeers > 0, self.waitingForTheRadio != nil, let wanted = self.wanted {
                         self.keepLooking(for: wanted)
@@ -331,11 +331,12 @@ public final class SharedSession {
     }
 
     /// A join that got through, on whichever link: the code is worth keeping from here.
-    private func noteProven() {
+    private func noteProven(over radio: LinkRadio) {
         guard let wanted, hosted == nil, store.role != .host else { return }
         if !hasRecordedJoin {
             hasRecordedJoin = true
-            recorder?.note(.joined, on: hostLink, in: store.log.sessionID)
+            let radios = hostRadios.flatMap { $0.isEmpty ? nil : $0 } ?? [radio]
+            recorder?.note(.joined, on: hostLink, in: store.log.sessionID, radios: radios)
             onJoined?()
         }
         let kept = keeper?.read(now: now())
@@ -764,7 +765,7 @@ public final class SharedSession {
             hasLostTheMatch = false
             hasJoinedBefore = true
             phase = .joined
-            noteProven()
+            noteProven(over: .wifi)
         case .failed(let failure):
             // A host's listener giving up is the network gone, not the match: the radio is still
             // advertising the same code, and the listener is put back when the app next comes to
@@ -828,12 +829,12 @@ public final class SharedSession {
         }
     }
 
-    /// The host has as many guests as it takes. Whatever of its match came through first is
-    /// let go of the way a Leave would.
-    private func turnedAway() {
+    /// The host has as many guests as it takes, or cannot take this build's. Whatever of its
+    /// match came through first is let go of the way a Leave would.
+    private func turnedAway(_ failure: SharingFailure) {
         guard wanted != nil else { return }
         if store.role == .guest { store.leaveSharedSession() }
-        giveUp(.noRoom)
+        giveUp(failure == .needsUpdate ? .needsUpdate : .noRoom)
     }
 
     /// Nothing is left dialling: a radio still looking after the screen said "not found" would
@@ -843,6 +844,7 @@ public final class SharedSession {
         switch failure {
         case .rejected: recorder?.note(.refused(.wrongCode))
         case .noRoom: recorder?.note(.refused(.noRoom), on: hostLink)
+        case .needsUpdate: recorder?.note(.refused(.needsUpdate), on: hostLink)
         case .notFound, .blocked, .bluetoothOff, .bluetoothDenied: break
         }
         // Nothing there on the code kept for joining again: it is gone for good (FR-024).
@@ -933,6 +935,7 @@ extension LocalNetworkTransport.Failure {
         case .rejected: .rejected
         case .blocked: .blocked
         case .noRoom: .noRoom
+        case .needsUpdate: .needsUpdate
         case .bluetoothOff: .bluetoothOff
         case .bluetoothDenied: .bluetoothDenied
         }

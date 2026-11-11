@@ -440,9 +440,6 @@ final class CourtHarness {
     struct DelayStats {
         let delays: [Duration?]
 
-        /// A 95% share means something from one in twenty; on fewer, one late point is all of it.
-        static let enoughForAShare = 20
-
         init(_ arrivals: [Arrival]) { delays = arrivals.map(\.delay) }
         init(delays: [Duration?]) { self.delays = delays }
 

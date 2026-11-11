@@ -19,6 +19,14 @@ struct DropDetailTests {
         #expect(DropDetail.code(for: .dns(DNSServiceErrorType(kDNSServiceErr_NoSuchRecord))) == "dns")
     }
 
+    /// A link that lost its path before it went is put down to that, whatever the system says
+    /// last: by then the keepalive has timed out too.
+    @Test func aLostPathOutranksTheErrorThatFollows() {
+        #expect(DropDetail.code(for: .posix(.ETIMEDOUT), pathLost: true) == "path unsatisfied")
+        #expect(DropDetail.code(for: nil, pathLost: true) == "path unsatisfied")
+        #expect(DropDetail.code(for: .posix(.ETIMEDOUT), pathLost: false) == "ETIMEDOUT")
+    }
+
     @Test func noErrorGivesNoCode() {
         #expect(DropDetail.code(for: nil) == nil)
     }

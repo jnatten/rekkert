@@ -68,7 +68,7 @@ public enum LinkEvent: Codable, Sendable, Hashable {
     }
 
     public enum Refusal: String, Codable, Sendable, Hashable {
-        case wrongCode, noRoom, access
+        case wrongCode, noRoom, access, needsUpdate
     }
 
     case launched(Launch)

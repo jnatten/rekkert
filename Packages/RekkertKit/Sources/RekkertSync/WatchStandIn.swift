@@ -56,12 +56,12 @@ nonisolated enum StandInPolicy {
             switch join {
             case .askedPhone(let since):
                 // The host turning it away is the answer, whoever heard it (R-6).
-                if let failure = now.phoneFailure, failure == .rejected || failure == .noRoom { return .refused(failure) }
+                if let failure = now.phoneFailure, failure.isTheHostsAnswer { return .refused(failure) }
                 if now.phoneFailure != nil || !now.isPairReachable { return .lookOnTheWrist }
                 return now.now - since >= timing.phoneWait ? .lookOnTheWrist : .nothing
             case .both(let since):
-                if let failure = now.phoneFailure, failure == .rejected || failure == .noRoom { return .refused(failure) }
-                if now.ownFailure == .noRoom { return .refused(.noRoom) }
+                if let failure = now.phoneFailure, failure.isTheHostsAnswer { return .refused(failure) }
+                if let own = now.ownFailure, own.isALateRefusal { return .refused(own) }
                 guard let own = now.ownFailure else {
                     return now.now - since >= timing.ownWait ? .giveUp : .nothing
                 }
@@ -89,6 +89,13 @@ nonisolated enum StandInPolicy {
     }
 }
 
+private extension SharingFailure {
+    /// Said by the host itself, so no looking anywhere else will change it.
+    nonisolated var isTheHostsAnswer: Bool { self == .rejected || isALateRefusal }
+    /// Said by the host once the link is up, so after a phone that says it is through.
+    nonisolated var isALateRefusal: Bool { self == .noRoom || self == .needsUpdate }
+}
+
 /// The watch standing in for its phone on somebody else's match.
 @MainActor
 @Observable
@@ -96,6 +103,14 @@ public final class WatchStandIn {
     public private(set) var joining: SharingState = .off
     /// How many guests the match that turned this join away takes, when the host said.
     public private(set) var fullLimit: Int?
+
+    public struct TurnedAway: Sendable, Equatable {
+        public var limit: Int?
+    }
+
+    /// The phone was turned away from a full match it was joining by itself, so the wrist says
+    /// so too (FR-013), until the phone tries again or it is put away.
+    public private(set) var phoneTurnedAway: TurnedAway?
     /// Once per code typed here, when the host's match is on the wrist — not on landing, since
     /// the phone can be through to a host with nothing on yet.
     @ObservationIgnored public var onJoined: ((UUID) -> Void)?
@@ -323,6 +338,7 @@ public final class WatchStandIn {
         let attempt = attempt
         joining = .searching
         fullLimit = nil
+        phoneTurnedAway = nil
         phoneFailure = nil
         phoneHasJoined = false
         phoneStandby = nil
@@ -361,11 +377,15 @@ public final class WatchStandIn {
         joining == .joined && pending == nil && owesJoined && !isHandedTheHostsMatch
     }
 
-    private func turnedAway(limit: Int?) {
-        fullLimit = limit ?? fullLimit ?? store.noRoomLimit
+    private func turnedAway(_ failure: SharingFailure, limit: Int?) {
+        if failure == .noRoom { fullLimit = limit ?? fullLimit ?? store.noRoomLimit }
         owesJoined = false
         if case .searching = sharing.phase { sharing.cancelJoining() }
-        joining = .failed(.noRoom)
+        joining = .failed(failure)
+    }
+
+    public func dismissPhoneTurnedAway() {
+        phoneTurnedAway = nil
     }
 
     private var isAskingThePhone: Bool {
@@ -419,7 +439,17 @@ public final class WatchStandIn {
     public func heard(_ signal: SharingSignal) {
         switch signal {
         case .state(let state, let limit):
-            if state == .failed(.noRoom), isLandedWithoutTheMatch { return turnedAway(limit: limit) }
+            if case .failed(let failure) = state, failure.isALateRefusal, isLandedWithoutTheMatch {
+                return turnedAway(failure, limit: limit)
+            }
+            switch state {
+            case .failed(.noRoom) where !isAskingThePhone && joining != .failed(.noRoom):
+                phoneTurnedAway = TurnedAway(limit: limit)
+            case .searching, .joined:
+                phoneTurnedAway = nil
+            case .failed, .off:
+                break
+            }
             guard isAskingThePhone else { return }
             switch state {
             case .joined: phoneHasJoined = true
@@ -473,7 +503,7 @@ public final class WatchStandIn {
             && phoneStandby?.code == sharing.standbyCode
         if isPhoneThrough { phoneLastThrough = now }
 
-        if ownFailure == .noRoom, isLandedWithoutTheMatch { turnedAway(limit: nil) }
+        if let own = ownFailure, own.isALateRefusal, isLandedWithoutTheMatch { turnedAway(own, limit: nil) }
         let isHandedTheHostsMatch = self.isHandedTheHostsMatch
         let hasLanded = switch pending {
         case .askedPhone, .both: phoneHasJoined || isPhoneThrough || isHandedTheHostsMatch

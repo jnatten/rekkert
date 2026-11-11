@@ -410,9 +410,11 @@ delays the simulation predicts with those the real records show.
 - **Matching the 95th percentile on the small run (FR-017) is trusted to predict nine
   guests.** That trust is checked on the first two-court evening (FR-018), and the limit is
   lowered if the prediction was wrong (FR-016).
-- **Delays are bounded from the round trips points already make.** With no network time at
-  court, there is no other clock to trust. Where the bounds are too wide, the delay reads
-  unknown (FR-006).
+- **Delays are bounded from round trips between the devices.** With no network time at
+  court, there is no other clock to trust. Each device asks the devices it is linked to the
+  time now and then, in a message small enough to make the round trip short, and keeps the
+  narrowest bound; points then carry those bounds on. Where the bounds are still too wide, the
+  delay reads unknown (FR-006, research D-2).
 - **The minimum of 100 timed points per device (FR-010) is an informed default.** An hour's
   play at the field run's pace gives several hundred.
 - **Nothing in this feature leaves the devices at court.** A server, account or internet relay,

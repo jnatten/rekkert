@@ -150,7 +150,7 @@ on the phone.
 | `withinOne`, `withinTwo` | `Double?` | The share of known delays ≤ 1 s and ≤ 2 s, over arrivals where `ArrivalConditions.nothingWrong` holds (FR-010) |
 | `unknownShare` | `Double?` | The share of points whose delay is unknown, leaving out `older` ones. Above 10%, FR-010 cannot be judged for that device (FR-006) |
 | `judgeable` | `Bool` | Whether FR-010 can be judged: at least 100 timed points (FR-010), and `unknownShare` ≤ 10% |
-| `drops` | `[LinkRadio: Int]` | `dropped` entries per radio, leaving out `dropped(radioOff)` from the host's own Bluetooth restarting (FR-007) |
+| `drops` | `[LinkRadio: Int]` | `dropped`, `wroteOff` and `redialled` entries per radio, since any connection ending is a drop, leaving out `dropped(radioOff)` from the host's own Bluetooth restarting (FR-007) |
 | `hostRestarts` | `Int` | How many times the host's Bluetooth went off and came back by itself during the stint |
 | `watchUpTo` | `Date?` | On the phone: up to when the watch's entries are included, when the watch has not been in touch since (FR-005) |
 | `unreachable` | `[String: TimeInterval]` | Per far device, the 4-hex short name: summed `outOfReach` → `backInStep` time |

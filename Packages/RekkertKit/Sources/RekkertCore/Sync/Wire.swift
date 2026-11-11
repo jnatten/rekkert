@@ -190,6 +190,8 @@ public enum SharingFailure: String, Codable, Sendable, Hashable {
     case noRoom
     case bluetoothOff
     case bluetoothDenied
+    /// The host's build cannot take this one's guests (spec 005, FR-015).
+    case needsUpdate
 }
 
 public enum Wire: Codable, Sendable, Hashable {

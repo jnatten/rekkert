@@ -18,7 +18,9 @@ public enum ArrivalConditions {
     ) -> Bool {
         let entries = entries.filter { $0.time <= time }.sorted { $0.time < $1.time }
         if fromPairedDevice { return isUp(entries, on: { $0 == .pair }) }
-        if device == .watch, let pairEntries {
+        // A watch standing in for its phone is on the host itself, and judged as its phone would be.
+        let isOnTheHost = isUp(entries, on: { if case .host = $0 { true } else { false } })
+        if device == .watch, let pairEntries, !isOnTheHost {
             return isUp(entries, on: { $0 == .pair })
                 && nothingWrong(arrivalAt: time, on: .phone, from: guest, entries: pairEntries)
         }
@@ -53,7 +55,7 @@ public enum ArrivalConditions {
         for entry in entries where relevant(entry.link) {
             switch entry.kind {
             case .proven: open += 1
-            case .dropped: open = max(0, open - 1)
+            case .dropped, .wroteOff, .redialled: open = max(0, open - 1)
             default: break
             }
         }

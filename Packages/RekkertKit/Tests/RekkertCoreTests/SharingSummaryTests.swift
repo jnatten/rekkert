@@ -93,6 +93,19 @@ struct SharingSummaryTests {
         #expect(summary.hostRestarts == 1)
     }
 
+    /// FR-007 counts any connection ending: one written off or redialled after going quiet
+    /// ended as surely as one closed by the other end.
+    @Test func aLinkThatTimedOutCountsAsADrop() {
+        let entries = [
+            entry(0, .sharingStarted),
+            entry(10, .wroteOff, .guest(guest), radios: [.wifi]),
+            entry(20, .redialled, .host(guest), radios: [.bluetooth]),
+            entry(30, .dropped(.closedByPeer), .guest(guest), radios: [.wifi]),
+        ]
+        let summary = LinkRecord(entries).summaries()[0]
+        #expect(summary.drops == [.wifi: 2, .bluetooth: 1])
+    }
+
     @Test func unreachableTimeRunsFromOutOfReachToBackInStep() {
         let entries = [
             entry(0, .sharingStarted),
@@ -136,7 +149,7 @@ struct SharingSummaryTests {
         let lines = LinkRecord(entries).summaries().first!.headerLines(in: calendar)
         #expect(lines.count == 4)
         #expect(lines[0].hasPrefix("Guest · 15 Jan, "))
-        #expect(lines[1] == "97% within 1 s · slowest 1.9 s · 100 of 100 timed")
+        #expect(lines[1] == "0.4 s typical · 97% within 1 s · 100% within 2 s · slowest 1.9 s · 100 of 100 timed")
         #expect(lines[2] == "Wi-Fi dropped once · Bluetooth 0 · host never unreachable")
         #expect(lines[3] == "Battery: iPhone 6%/h")
     }

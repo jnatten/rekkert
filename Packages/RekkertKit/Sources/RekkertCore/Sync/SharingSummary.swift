@@ -161,7 +161,8 @@ extension LinkRecord {
             switch (entry.kind, entry.link) {
             case (.dropped(.radioOff), _):
                 continue
-            case (.dropped, .host), (.dropped, .guest):
+            case (.dropped, .host), (.dropped, .guest), (.wroteOff, .host), (.wroteOff, .guest),
+                 (.redialled, .host), (.redialled, .guest):
                 for radio in entry.radios ?? [] { summary.drops[radio, default: 0] += 1 }
             case (.radioOff, .radio):
                 summary.hostRestarts += 1
@@ -235,7 +236,10 @@ extension SharingSummary {
             } else if (unknownShare ?? 0) > Self.unknownLimit {
                 lines.append("Too many unknown · \(timed)")
             } else {
-                lines.append("\(percent(withinOne)) within 1 s · slowest \(String(format: "%.1f s", slowestDelay ?? 0)) · \(timed)")
+                lines.append([
+                    String(format: "%.1f s typical", medianDelay ?? 0), "\(percent(withinOne)) within 1 s",
+                    "\(percent(withinTwo)) within 2 s", String(format: "slowest %.1f s", slowestDelay ?? 0), timed,
+                ].joined(separator: " · "))
             }
         }
         let wifi = drops[.wifi, default: 0]

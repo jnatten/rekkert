@@ -6,6 +6,10 @@ import Network
 nonisolated enum DropDetail {
     static let pathUnsatisfied = "path unsatisfied"
 
+    static func code(for error: NWError?, pathLost: Bool) -> String? {
+        pathLost ? pathUnsatisfied : code(for: error)
+    }
+
     static func code(for error: NWError?) -> String? {
         guard let error else { return nil }
         switch error {

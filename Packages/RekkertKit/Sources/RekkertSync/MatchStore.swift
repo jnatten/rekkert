@@ -174,6 +174,8 @@ public final class MatchStore {
     @ObservationIgnored private var farEnds: [LinkID: DeviceID] = [:]
     /// This device's own events that came back to it over a link.
     @ObservationIgnored private(set) var echoesHeard = 0
+    /// Tests only: how many times this device was asked the time.
+    @ObservationIgnored private(set) var clockQuestionsHeard = 0
     @ObservationIgnored private(set) var synchroniseRounds = 0
     /// Bounds on other devices' clocks, for timing points from the tap (spec 005, D-2).
     @ObservationIgnored private var clocks = ClockBook()
@@ -186,6 +188,8 @@ public final class MatchStore {
     @ObservationIgnored private var currentDevices: Set<DeviceID> = []
     /// Tests only: say nothing of clocks or protocol, as 1.1 does.
     @ObservationIgnored var actsAsOlderBuild = false
+    /// Tests only: turn every guest away as needing an update, as a later breaking release will.
+    @ObservationIgnored var refusesAsNeedingUpdate = false
     private var ownProtocol: Int? { actsAsOlderBuild ? nil : Wire.sharingProtocol }
     /// Whether any link to the match was up, and the pair, when reachability last changed.
     @ObservationIgnored private var lastPresence: (onLinks: Bool, pair: Bool)?
@@ -1851,6 +1855,10 @@ public final class MatchStore {
             packet.reply?(encode(ownHello))
             return
         }
+        if refusesAsNeedingUpdate, role == .host, case .hello = wire, let link = packet.link, !packet.isFromPairedDevice {
+            packet.reply?(encode(.needsUpdate(sessionID: log.sessionID)))
+            return transport.refuse(link)
+        }
         guard noteParticipant(wire, from: packet) else {
             packet.reply?(encode(.noRoom(sessionID: log.sessionID, limit: guestLimit)))
             if let link = packet.link {
@@ -2124,11 +2132,14 @@ public final class MatchStore {
             packet.reply?(encode(ownHello))
 
         case .needsUpdate:
-            // Sent by no host yet: a later breaking change will, and say it on the screen.
+            // Sent by no host yet: a later breaking change will, and it is said on the screen.
+            if !packet.isFromPairedDevice, isJoining || role == .guest { onRefused?(.needsUpdate) }
             packet.reply?(encode(ownHello))
 
         case .clock(let reading):
-            if reading == nil { packet.reply?(encode(.clock(reading: now()))) }
+            guard reading == nil else { return }
+            clockQuestionsHeard += 1
+            packet.reply?(encode(.clock(reading: now())))
 
         case .sharing(let signal):
             // Only ever from the device in the same pocket — the scope drops this case before
