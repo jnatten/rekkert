@@ -961,6 +961,12 @@ built from at the end. The run's summary shows the same text. `scripts/test-note
 of `<commit>`, and `swift scripts/build-number.swift notes <number> <file>` puts a file on a
 build that is already listed, which is how to give a build from this Mac its notes.
 
+Notes written by hand go in the run's **notes** input instead, and are used as they are, with
+the commit still added at the end. The `/testflight` Claude skill writes them: it finds the
+latest build (`swift scripts/build-number.swift latest` prints it and its What to Test), reads
+what the branch brings over it, keeps only what a tester would notice, and starts the run with
+`gh workflow run`. A branch has the input only once it has this workflow.
+
 It needs six repository secrets, set once:
 
 | Secret | What goes in it |

@@ -1,12 +1,18 @@
 name: TestFlight
 
 # Sends the branch it is run on to TestFlight, numbered one past the latest build App Store
-# Connect has, with what it brings over the last successful run as its What to Test. Run it
-# from the Actions tab; the tests run on every push, in test.yml. The secrets this needs are
-# listed under "Releasing" in the README.
+# Connect has, with what it brings over the last successful run as its What to Test, or the
+# notes it is given. Run it from the Actions tab, or with the /testflight skill; the tests run
+# on every push, in test.yml. The secrets this needs are listed under "Releasing" in the README.
 
 on:
   workflow_dispatch:
+    inputs:
+      notes:
+        description: What to Test, as testers will read it. Left empty, it lists the commits since the last successful run.
+        type: string
+        required: false
+        default: ''
 
 # One upload at a time, so two runs never pick the same number. A run is never cancelled
 # once it has started; a newer run waiting behind it replaces an older one still waiting.
@@ -85,16 +91,23 @@ jobs:
       # A run only succeeds once its build is up, and runs never overlap, so the commits
       # this has that the last successful one did not are what this build brings, whichever
       # branch that one was from. Without one to go by, only the newest commit is listed.
+      # Notes given to the run are used as they are, with the commit it was built from after.
       - name: Write what to test
         env:
           GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ inputs.notes }}
         run: |
-          since=$(gh run list --workflow testflight.yml --status success --limit 1 \
-            --json headSha --jq '.[0].headSha // empty')
-          if [ -z "$since" ] || ! git cat-file -e "$since^{commit}" 2> /dev/null; then
-            since=HEAD~1
+          if [ -n "${NOTES//[[:space:]]/}" ]; then
+            printf '%s\n\n%s on %s\n' "$NOTES" "$(git rev-parse --short HEAD)" "$GITHUB_REF_NAME" \
+              > "$RUNNER_TEMP/what-to-test.txt"
+          else
+            since=$(gh run list --workflow testflight.yml --status success --limit 1 \
+              --json headSha --jq '.[0].headSha // empty')
+            if [ -z "$since" ] || ! git cat-file -e "$since^{commit}" 2> /dev/null; then
+              since=HEAD~1
+            fi
+            scripts/test-notes.sh "$since" > "$RUNNER_TEMP/what-to-test.txt"
           fi
-          scripts/test-notes.sh "$since" > "$RUNNER_TEMP/what-to-test.txt"
           { echo; echo '```'; cat "$RUNNER_TEMP/what-to-test.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Test, archive and upload

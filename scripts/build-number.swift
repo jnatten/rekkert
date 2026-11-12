@@ -3,6 +3,7 @@
 //     swift scripts/build-number.swift next      # the number the next upload should carry
 //     swift scripts/build-number.swift wait 57   # returns once App Store Connect lists 57
 //     swift scripts/build-number.swift notes 57 notes.txt   # notes.txt as 57's What to Test
+//     swift scripts/build-number.swift latest    # the newest upload and its What to Test
 //
 // Needs APP_STORE_CONNECT_KEY_ID, APP_STORE_CONNECT_ISSUER_ID and the key at
 // ~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8 — the same three release.sh uses.
@@ -97,6 +98,14 @@ func projectBuildNumber() -> Int {
     return source.firstMatch(of: #/"CURRENT_PROJECT_VERSION": "(\d+)"/#).flatMap { Int($0.1) } ?? 1
 }
 
+func localization(of buildID: String) async -> [String: Any]? {
+    let localizations = await get(
+        "/v1/builds/\(buildID)/betaBuildLocalizations", ["fields[betaBuildLocalizations]": "locale,whatsNew"]
+    )
+    return localizations.first { (($0["attributes"] as? [String: Any])?["locale"] as? String) == primaryLocale }
+        ?? localizations.first
+}
+
 let arguments = Array(CommandLine.arguments.dropFirst())
 switch arguments.first {
 case "next":
@@ -128,12 +137,7 @@ case "notes" where arguments.count == 3 && Int(arguments[1]) != nil:
 
     let builds = await get("/v1/builds", ["filter[app]": appID, "filter[version]": number, "fields[builds]": "version"])
     guard let buildID = builds.first?["id"] as? String else { fail("App Store Connect has no build \(number).") }
-    let localizations = await get(
-        "/v1/builds/\(buildID)/betaBuildLocalizations", ["fields[betaBuildLocalizations]": "locale"]
-    )
-    let existing = localizations.first { (($0["attributes"] as? [String: Any])?["locale"] as? String) == primaryLocale }
-        ?? localizations.first
-    if let id = existing?["id"] as? String {
+    if let id = await localization(of: buildID)?["id"] as? String {
         await send("PATCH", "/v1/betaBuildLocalizations/\(id)", body: ["data": [
             "type": "betaBuildLocalizations", "id": id, "attributes": ["whatsNew": notes],
         ]])
@@ -146,6 +150,21 @@ case "notes" where arguments.count == 3 && Int(arguments[1]) != nil:
     }
     print("Build \(number) says what to test.")
 
+case "latest":
+    let builds = await get("/v1/builds", [
+        "filter[app]": appID, "sort": "-uploadedDate", "limit": "1",
+        "fields[builds]": "version,uploadedDate,processingState",
+    ])
+    guard let build = builds.first, let buildID = build["id"] as? String else { fail("App Store Connect has no builds.") }
+    let attributes = build["attributes"] as? [String: Any] ?? [:]
+    let version = attributes["version"] as? String ?? "?"
+    let uploaded = attributes["uploadedDate"] as? String ?? "?"
+    let state = attributes["processingState"] as? String ?? "?"
+    print("Build \(version), uploaded \(uploaded), \(state)")
+    if let whatsNew = (await localization(of: buildID)?["attributes"] as? [String: Any])?["whatsNew"] as? String {
+        print("\n" + whatsNew)
+    }
+
 default:
-    fail("usage: swift scripts/build-number.swift next | wait <number> | notes <number> <file>")
+    fail("usage: swift scripts/build-number.swift next | wait <number> | notes <number> <file> | latest")
 }
