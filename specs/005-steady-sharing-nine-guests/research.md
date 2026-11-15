@@ -78,11 +78,11 @@ Paths are relative to `Packages/RekkertKit/Sources/` unless they start with `App
   link with no acknowledgement for about 8 s is failed (LN:459-469). The other way out is the
   OS failing the connection when the peer-to-peer Wi-Fi path goes. Both ends count from the same
   last exchange, so both see the drop within about 2 s, which matches the field records.
-  SUSPECTED
+  SUSPECTED. Not borne out on 14 November, with keepalive loosened (D-7, Finding).
 - **Peer-to-peer Wi-Fi pauses for several seconds.** Likely triggers are switching channels,
   scanning while not on a network, sharing the chip with Bluetooth, and an app suspended in a
   bag. The drops that hit two guests within a second point to something on the host.
-  SUSPECTED (platform)
+  SUSPECTED (platform). Most of the drops on 14 November were the path going (D-7, Finding).
 - **Redial is immediate.** A guest redials at once if the browser still lists the host, or
   rebuilds the browser after 2 s (LN:626-641, 668-683). Each new link sends the whole snapshot,
   one way (LN:535-537). VERIFIED
@@ -388,6 +388,26 @@ the number of guests, plus whatever traffic from R-3 and R-4 is already ahead in
 - **Rationale**:
   - Keepalive is the only app-controlled cut that fits the field records (R-2).
   - It is a one-line change, and the records will say whether it worked.
+- **Finding, 14 November (T059)**: read from a friendly game's records rather than the small
+  field run's. The host and one guest were on 1.2 (76) and the other guest on 1.1 (75), from
+  10:01 to 12:00, with Wi-Fi on for all three. That build has steps 2 and 3: keepalive at idle
+  5 s, interval 3 s, count 5, and the miss counter.
+  - **Keepalive is not what cuts the links.** Of the 153 Wi-Fi drops the host recorded, 4 ended
+    in `ETIMEDOUT`, the error a failed keepalive gives, all on one guest. Another 9 were the
+    host's miss counter giving up (`wroteOff`). The guest on 1.2 recorded none of its 93 as
+    `ETIMEDOUT`.
+  - **The path goes.** At the host, 64 ended with the peer-to-peer path unsatisfied, 49 reset by
+    the peer (`ECONNRESET`) and 27 with another error. At the guest on 1.2: 51, 10 and 31.
+    23 of that guest's 90 drops came within a second of one of the 1.1 guest's, 15 of them
+    `path unsatisfied`. That points at the host's end of the path.
+  - **Still far over FR-007's target.** The guest on 1.2 dropped 48 times an hour, and the guest
+    on 1.1 29, against 5. Guests on both radios dropped 56–70 times an hour on 8–9 November.
+  - **And still costing nothing (FR-008).** Points kept reaching the guest on 1.2 while its Wi-Fi
+    came and went: from the host's phone to its phone, typically 0.09 s, 0.24 s at the 95th
+    percentile and 0.54 s at worst, mostly over Bluetooth.
+  - **So the work stops here, as step 4 says.** No setting the app controls fits these drops.
+    They are reported against FR-007's target, which holds nothing back. If the small field
+    run's records show mostly `ETIMEDOUT` instead, this reopens.
 - **Alternatives considered**:
   - **No Wi-Fi redial while Bluetooth is up.** Rejected: it ends the churn, but moves all the
     load onto the Bluetooth queue that scales worst (R-5).

@@ -47,6 +47,30 @@ On `e6b11594`, before any change (T001):
 | Convergence (T071–T085) | Thirteen of fifteen done; T076 and T077 wait on calibration (T060). Links that end by timing out now count as drops in the summary and as down in the arrival rule. A Wi-Fi link that lost its path says `path unsatisfied` when it ends. A guest turned away on the phone is told on the wrist too, with the limit. A host's `needsUpdate` reads "Update Rekkert to join" on phone and watch. The calibration replays the record's own taps and absences, and fitted a known 3,000 B/s back as 3,308 B/s. A watch standing in is judged on its own link to the host: 95th percentile 1.1 s against 0.9 s for a guest's phone. New tests for a 1.1 host, a two-hour record, and the radio a join got through on. `scripts/verify.sh` passes: 602 sync tests with 54 known issues, 869 core tests. The first runs failed five real-time tests in other suites, every time: the two-hour record test wrote 1,200 entries on the main actor without a break, holding it for about 3 s. It now yields as it writes |
 | `scripts/share.sh` (T069) | Not run to the end. On this Mac on 10 Nov the guest's Bonjour browse saw nothing in 10 s and the join failed at its first check, though the host's listener was ready and its service type was registered. `main`, built without this feature, fails at the same check, so it is the simulators' local network here. T069 stays open: the screens are still to be checked against contracts/screens.md |
 
+## An early read: a friendly game, 14 November
+
+Not the small field run (T058). It had a host and two guests, one of them on 1.1. Every point
+was tapped on the host's watch, and there was no walk-out burst and no battery comparison. The
+records are the host's, B701's and 255B's, exported on 15 November.
+
+| | |
+|---|---|
+| Date | 2026-11-14, 10:01–12:00 |
+| Devices (build) | Host 57FA on 1.2 (76), guest B701 on 1.2 (76), guest 255B on 1.1 (75), each with a watch |
+| Length, points | 1 h 59 min, 264 points |
+
+| Check | Requirement | Result |
+|---|---|---|
+| Drops per guest per hour | FR-007, SC-003 | B701: 48 on Wi-Fi, and 1 on Bluetooth, at the break. 255B: 29 on Wi-Fi. Target 5 |
+| Drop details | D-7 | At the host, 153 Wi-Fi drops: 64 `path unsatisfied`, 49 `ECONNRESET`, 27 other, 4 `ETIMEDOUT`, 9 written off by the host's miss counter. Keepalive is not the cause, and the work stops there (research D-7, Finding; T059) |
+| Drops cost nothing | FR-008 | Host's phone to B701's phone: typically 0.09 s, 95th percentile 0.24 s, slowest 0.54 s, with its Wi-Fi dropping 48 times an hour |
+| Share unknown | FR-006 | Over the 10% cap everywhere: 22% on the host's phone, 37% on B701's, 86% on B701's watch. So FR-010 can't be judged on this game |
+
+The same records found three bugs, fixed since on this branch:
+- **The host lost guests between points.** It showed a guest out of reach whenever more than 15 s passed between points, worst for 1.1 guests (`.specify/bugs/host-loses-quiet-guests`).
+- **Bluetooth links carried no radio label** in the record (`1540d035`).
+- **No phone asked its own watch the time** (`1d9bb934`).
+
 ## Level 4: small field run
 
 | | |

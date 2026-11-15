@@ -450,11 +450,13 @@ in `validation.md`.
   - battery per hour with and without sharing;
   - whether another shared Rekkert match was running nearby (Edge Cases);
   - SC-007: a tester other than the developer reads one exported record, cold, and says whether points were on time and which connection dropped. Write down their answer and whether it matched the numbers.
-- [ ] T059 [US4] The D-7 time box: at most two days after T058. Read the Wi-Fi drop details from the records.
+- [X] T059 [US4] The D-7 time box: at most two days after T058. Read the Wi-Fi drop details from the records.
   - If they show keepalive cutting paused links, tune `LocalNetworkTransport`'s keepalive (T021) and note it for the next build.
   - If not, stop there.
 
   Either way, write the finding into research.md D-7 and `validation.md`. FR-007 is a target, so this blocks nothing.
+
+  Read early, from the 14 November friendly game on the same keepalive rather than from T058: 4 of 153 drops were `ETIMEDOUT`, so the work stops. T058's records reopen it only if they show mostly `ETIMEDOUT`.
 - [ ] T060 [US4] Calibrate from the field run (FR-017, SC-006):
   - add the host's record from T058 to `SyncTests/CalibrationFixture.swift` as a Swift string, with its header line holding full device ids removed;
   - pin the fitted settings as `Airwaves.Settings.calibrated` in `SyncTests/SimulatedRadio.swift`;
