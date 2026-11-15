@@ -19,6 +19,19 @@ if hits=$(grep -rn --include='*.swift' '\.nanoseconds(' Packages/RekkertKit/Sour
 fi
 echo "  ok: no .nanoseconds( in code the watch runs"
 
+echo "==> Assert every transport with links says which radio they are on"
+# The protocol answers nil by default, which the sharing record prints as no radio at all.
+# BluetoothTransport is not built on macOS, so no package test can catch it forgetting.
+for file in $(grep -rlE 'public var links: \[LinkID\]' Packages/RekkertKit/Sources); do
+  links=$(grep -cE 'public var links: \[LinkID\]' "$file" || true)
+  radios=$(grep -cE 'public func radio\(of link: LinkID\)' "$file" || true)
+  if [ "$radios" -lt "$links" ]; then
+    echo "FAIL: $file has $links transport(s) with links and $radios saying which radio they are on"
+    exit 1
+  fi
+done
+echo "  ok: every transport with links names their radio"
+
 echo "==> Package tests (macOS, no simulator)"
 scripts/package-tests.sh
 

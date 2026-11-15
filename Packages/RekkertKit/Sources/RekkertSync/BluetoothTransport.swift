@@ -56,6 +56,7 @@ nonisolated public final class BluetoothTransport: PeerTransport, @unchecked Sen
     public var linkChanges: AsyncStream<LinkChange> { core.linkChanges }
     public var availabilityChanges: AsyncStream<RadioAvailability> { core.availabilityChanges }
     public var links: [LinkID] { core.links }
+    public func radio(of link: LinkID) -> LinkRadio? { core.radio(of: link) }
     public func sendLive(_ payload: Data, on link: LinkID) async -> Data? { await core.sendLive(payload, on: link) }
     public func refuse(_ link: LinkID) { core.refuse(link) }
 
