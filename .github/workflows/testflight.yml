@@ -2,8 +2,9 @@ name: TestFlight
 
 # Sends the branch it is run on to TestFlight, numbered one past the latest build App Store
 # Connect has, with what it brings over the last successful run as its What to Test, or the
-# notes it is given. Run it from the Actions tab, or with the /testflight skill; the tests run
-# on every push, in test.yml. The secrets this needs are listed under "Releasing" in the README.
+# notes it is given. Run it from the Actions tab, or with the /testflight skill. It runs no tests:
+# they run on every push, in test.yml, and the skill says how that run went for the commit it
+# sends. The secrets this needs are listed under "Releasing" in the README.
 
 on:
   workflow_dispatch:
@@ -110,10 +111,10 @@ jobs:
           fi
           { echo; echo '```'; cat "$RUNNER_TEMP/what-to-test.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Test, archive and upload
+      - name: Archive and upload
         env:
           NUMBER: ${{ steps.number.outputs.value }}
-        run: scripts/release.sh --build-number="$NUMBER"
+        run: scripts/release.sh --skip-tests --build-number="$NUMBER"
 
       - name: Wait for App Store Connect to list it
         env:

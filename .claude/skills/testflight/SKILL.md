@@ -10,7 +10,9 @@ allowed-tools: Bash(gh run list:*), Bash(gh run view:*), Bash(gh workflow view:*
 `.github/workflows/testflight.yml` builds the head of a branch **as it is on GitHub**, uploads it,
 and puts its `notes` input on the build as What to Test, followed by a line `<short sha> on
 <branch>` that the workflow adds itself. Without notes it lists every commit subject since the last
-successful run, which is noisy; this skill writes the notes instead and starts the run.
+successful run, which is noisy; this skill writes the notes instead and starts the run. The run
+does no testing of its own: the tests run on every push, in `test.yml`, and step 1.5 says how that
+went for the commit being sent.
 
 Arguments (`$ARGUMENTS`, both optional, any order):
 
@@ -37,6 +39,15 @@ Arguments (`$ARGUMENTS`, both optional, any order):
    not, `gh workflow run -f notes=…` is refused, because `--ref` reads the workflow from the branch.
    Say the branch needs a `testflight.yml` with the input (rebase it onto, or merge, a branch that
    has it), and stop, unless this is a `draft`.
+5. Look at how the push's tests went for the target commit:
+   `gh run list --workflow test.yml --commit $(git rev-parse origin/<branch>) --limit 1 --json databaseId,status,conclusion,url`.
+   - `success`: say so in a line and carry on.
+   - `failure`: say which tests failed
+     (`gh run view <id> --log-failed | grep -E 'recorded an issue at|error:' | grep -v 'known issue'`),
+     and ask whether to send the build anyway. Stop until the user answers; a `draft` carries on.
+   - `queued` or `in_progress`: say the tests are still running, with the run's link, and ask
+     whether to send now or wait for them. Stop until the user answers; a `draft` carries on.
+   - No run, or `cancelled`: say no test run covers this commit, and ask whether to send anyway.
 
 ## 2. Find the latest TestFlight build
 

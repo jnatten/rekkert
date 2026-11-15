@@ -982,9 +982,10 @@ A build goes to TestFlight when you ask for one: **Run workflow** on the TestFli
 workflow in the Actions tab, from whichever branch you pick, runs
 `.github/workflows/testflight.yml`. Each run is listed under the `testflight` environment
 in the repository's Deployments. The job runs on GitHub's Xcode 27 image and does what
-`scripts/release.sh` does here — the package tests, an archive, the checks that the watch
-app and the Live Activity are inside it, export, validation, upload — and then waits until
-App Store Connect lists the build.
+`scripts/release.sh --skip-tests` does here — an archive, the checks that the watch app and
+the Live Activity are inside it, export, validation, upload — and then waits until App Store
+Connect lists the build. It runs no tests: they run on every push, and the `/testflight`
+skill says how that run went for the commit it sends.
 
 The build number is App Store Connect's highest plus one, or `CURRENT_PROJECT_VERSION` in
 `Project.swift` if that is higher, and nothing is committed back: the number in the project
