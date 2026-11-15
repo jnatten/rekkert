@@ -30,7 +30,8 @@
   connection to the host up, and had not been out of reach (15 s unheard) or caught up a batch,
   in the 30 seconds before it arrived. All of this is read from the sharing record (FR-010).
   This was extended to watches in FR-010 after analysis: a watch following its phone counts its
-  link to that phone, and the phone must meet the same condition.
+  link to that phone, and the phone must meet the same condition. Since 2026-11-15 that hop is
+  FR-010a's, not FR-010's.
 - Q: How many points on a device may have an unknown delay before a run can no longer be
   judged against the 1-second and 2-second times? → A: At most 10% per device. Above that, the
   run cannot be judged on FR-010 for that device until the clock bounds are fixed
@@ -43,6 +44,21 @@
   no points" guarantee? → A: Nothing beyond today. FR-015 covers 1.1 and later. A 1.0 guest is
   out of scope: the host lists it as catching up, never as in step, and its own screen stays as
   it is (FR-015).
+
+### Session 2026-11-15
+
+- Q: Should FR-010's 1 s / 2 s promise cover the hops between a watch and its own phone, or only
+  the shared link from the first phone that has a point to every other phone? → A: Only the
+  shared link. FR-010 is judged from when a point is first on a phone, or on a watch standing in
+  on its own link, to its arrival on every other such device. Each hop between a watch and its
+  own phone has its own target (FR-010a), reported but not gating. On 14 November those hops
+  took about 0.3 s each, with tails of 7–19 s, against 0.09 s on the radio. The simulation does
+  not model them, and they do not grow with the number of guests (FR-001, FR-006, FR-010,
+  FR-010a, FR-011, FR-016).
+- Q: What target should each hop between a watch and its own phone be reported against? → A:
+  FR-010's own numbers: under 1 second for at least 95% of points, and under 2 seconds for all
+  of them. It is a target, not a release gate, reported on every field run as FR-007's is
+  (FR-010a).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -62,12 +78,12 @@ host. A guest on Bluetooth alone did not drop once. The records cannot show how 
 were, because only developer builds note that. Nobody has measured what sharing costs in
 battery.
 
-### User Story 1 - Points show on every device within a second, even in a busy hall (Priority: P1)
+### User Story 1 - Points show on every phone within a second, even in a busy hall (Priority: P1)
 
 A host shares a match at a hall with no venue Wi-Fi, with other people and their phones
 around. Guests are on with their phones in bags and their watches on, some with Wi-Fi switched
-on and some without. A point tapped on any device shows on every other phone and watch on the
-match within about a second. That still holds when one of a guest's connections drops, when
+on and some without. A point shows on every other phone on the match within about a second of
+reaching the match, and each watch has it as soon as its phone hands it on. That still holds when one of a guest's connections drops, when
 strangers come into the hall, and an hour into the evening.
 
 **Why this priority**: this is the pain players have now, at any group size, and raising the
@@ -83,10 +99,11 @@ records are compared against FR-010 and FR-006.
 
 1. **Given** a host and four guests on a match, each connected over both Bluetooth and Wi-Fi,
    **When** points are tapped on watches for an hour, **Then** every point shows on every other
-   phone and watch within the times in FR-010.
+   phone within the times in FR-010, and each hop to or from a watch is reported against
+   FR-010a.
 2. **Given** a guest connected over both radios, **When** one of its connections drops,
-   **Then** points keep showing on that guest's phone and watch within the times in FR-010
-   while it reconnects.
+   **Then** points keep showing on that guest's phone within the times in FR-010 while it
+   reconnects.
 3. **Given** a match in a hall, **When** many other people's phones come into range, **Then**
    points still show within the times in FR-010.
 4. **Given** a guest with Wi-Fi switched off, **When** points are tapped, **Then** that guest's
@@ -142,7 +159,7 @@ User Stories 1 and 2 ship without it.
 
 **Independent Test**: On every push, automated tests simulate a host and as many guests as the
 limit allows (nine once raised), each with a phone and a watch, in a two-court americano in a
-busy hall for at least 30 simulated minutes. They check FR-010 on every device, and the next
+busy hall for at least 30 simulated minutes. They check FR-010 on every phone, and the next
 guest is refused and told so. Before the limit is raised, the same setup is run once with nine
 guests as a prediction (FR-016). After release, it is confirmed on real devices at the first
 two-court evening (FR-018).
@@ -150,8 +167,8 @@ two-court evening (FR-018).
 **Acceptance Scenarios**:
 
 1. **Given** a host sharing a two-court americano, **When** nine guests join with their phones
-   and watches, **Then** the host lists all nine as on the match, and every phone and watch
-   shows the host's score within the times in FR-010.
+   and watches, **Then** the host lists all nine as on the match, and every phone shows the
+   host's score within the times in FR-010.
 2. **Given** a match at its limit, **When** one more guest tries to join, **Then** that guest
    is told on phone and watch, within 15 seconds, that the match is full.
 3. **Given** a match at its limit, **When** a guest already on also gets on with their watch,
@@ -222,7 +239,9 @@ delays the simulation predicts with those the real records show.
 - **FR-001**: Each phone's and each watch's sharing record MUST note, for every point that
   arrives from another device, how long after the tap it arrived. This MUST be in every build
   distributed to players, not only developer builds. Only point taps are timed. An undo or a
-  correction is not timed, and does not count toward FR-010.
+  correction is not timed, and does not count toward FR-010. For a point tapped on a watch
+  following its phone, the record also notes how long after it reached that phone it arrived,
+  which is what FR-010 judges.
 - **FR-002**: Every entry in the record about a connection to the host or a guest MUST say
   which radio it was on, Bluetooth or Wi-Fi: proven, dropped, reconnected, out of reach, back in
   step. A delay entry MUST also say which radio the point came over.
@@ -231,6 +250,7 @@ delays the simulation predicts with those the real records show.
   it stops or the guest leaves. It can span several matches. The summary holds:
   - the typical and the slowest delay;
   - the share of points within each FR-010 time;
+  - the typical and slowest time over the hops between a watch and its phone (FR-010a);
   - the share of points whose delay is unknown;
   - how many times each radio's connection dropped (as FR-007 counts drops), and separately,
     how many times the host's Bluetooth restarted by itself;
@@ -247,8 +267,8 @@ delays the simulation predicts with those the real records show.
 - **FR-006**: A delay in the record MUST be within 0.1 seconds of the true time from tap to
   arrival, whatever the difference between the two devices' clocks. If that cannot be
   guaranteed for a point, the record MUST mark that point's delay as unknown. At most 10% of
-  the points arriving on a device in a run may be unknown. Above that, FR-010 cannot be judged
-  for that device, and the run does not count as meeting it.
+  the points FR-010 judges on a device in a run may be unknown. Above that, FR-010 cannot be
+  judged for that device, and the run does not count as meeting it.
 
   Points from, or relayed through, a device on 1.1 carry no clock readings. They are recorded
   as unknown for that reason, and left out of both the 10% cap and FR-010.
@@ -268,10 +288,15 @@ delays the simulation predicts with those the real records show.
   points MUST keep arriving within the FR-010 times. A dropping connection costs no one time.
 - **FR-009**: After the host's phone loses Bluetooth for a short while and gets it back by
   itself, every guest MUST be back in step within 10 seconds, without anyone touching anything.
-- **FR-010**: When nothing is wrong, a point tapped on any device on the match MUST show on
-  every other phone and watch on it within 1 second for at least 95% of points, and within
-  2 seconds for all of them. "Every other" includes the scorer's own paired phone or watch. That
+- **FR-010**: When nothing is wrong, a point MUST reach every other device on the match's shared
+  link within 1 second for at least 95% of points, and within 2 seconds for all of them. That
   holds with phones locked in bags, in a busy hall, and whichever radios each guest has on.
+  - **The shared link** is the host's phone, the guests' phones, and any watch standing in for
+    its phone on a link of its own. A watch following its own phone is not on it: that hop is
+    FR-010a's.
+  - **Timed from when the point is first on the shared link**: the tap, for a point tapped on a
+    phone or on a watch standing in; its arrival on the scorer's phone, for a point tapped on a
+    watch following that phone.
   - **A busy hall** is a hall in use, with other players and their phones and watches present.
     In the simulated tests, it is the busy-hall settings.
   - **A point that never arrives** on a device counts there as later than 2 seconds.
@@ -282,25 +307,30 @@ delays the simulation predicts with those the real records show.
   - the device it arrived on had a connection up:
     - to the host, for a guest's phone;
     - to the guest the point came from, for the host;
-    - to its own phone, for a watch following that phone, and that phone met this condition
-      at the same moment;
   - and in the 30 seconds before the point arrived, the device had neither been out of reach
     (15 s unheard) nor caught up a batch of points.
 
   All of this is read from the sharing records. A guest that loses one connection while
   another to the host is still up counts as nothing wrong.
-- **FR-011**: For any point where FR-010's "nothing is wrong" does not hold, spec 001's FR-002
-  times still hold: within 30 seconds for every point, and within 5 seconds for at least 95%,
-  counted from the tap. That covers a device with no connection to the host, out of reach,
-  catching up, or just back. FR-010 and FR-011 together cover every point.
+- **FR-010a**: Each hop between a watch and its own phone, either way, SHOULD take under
+  1 second for at least 95% of points, and under 2 seconds for all of them. This is a target,
+  not a release gate, as FR-007's is: every field run MUST report each watch's hops against it.
+  It covers a scorer's watch handing a point to its phone, and a phone handing a point on to
+  the watch following it. "Nothing is wrong" holds for a hop when the watch's link to its phone
+  was up, and the watch had neither been out of reach of it nor caught up a batch in the
+  30 seconds before.
+- **FR-011**: For any point FR-010 does not judge, spec 001's FR-002 times still hold: within
+  30 seconds for every point, and within 5 seconds for at least 95%, counted from the tap. That
+  covers a device with no connection to the host, out of reach, catching up, or just back, and
+  every point on a watch following its phone. FR-010 and FR-011 together cover every point.
 
 **Room for two full courts**
 
 - **FR-012**: Once FR-016 allows it, a shared match MUST carry the host and at least nine
   guests. Until then, it carries as many as the current limit. Each guest has a phone and a
   watch, the match is on two side-by-side courts, and there is no shared Wi-Fi.
-  FR-010 holds for every device. A guest counts once whether on with their phone, their watch
-  or both, as in spec 001 FR-001.
+  FR-010 holds for every device on the shared link. A guest counts once whether on with their
+  phone, their watch or both, as in spec 001 FR-001.
 - **FR-013**: The guest after the limit MUST be turned away within 15 seconds, and told on
   phone and watch that the match is full, as in spec 001 FR-008.
 - **FR-014**: The host's list of who is on, and the share sheet, MUST show how many are on out
@@ -358,8 +388,9 @@ delays the simulation predicts with those the real records show.
   - drops per radio;
   - unreachable time per guest;
   - battery per hour.
-- **Arrival condition**: for one point on one device, whether nothing was wrong (FR-010). It is
-  worked out from that device's sharing record, and for a watch, from its phone's record too.
+- **Arrival condition**: for one point on one device, whether nothing was wrong (FR-010, and
+  FR-010a for a watch's hop). It is worked out from that device's sharing record, and for a
+  watch, from its phone's record too.
 - **Guest limit**: how many guests a host takes, one person counting once. It is set no higher
   than the measurements support (FR-016).
 - **Field run**: a real-device test. It records which devices took part, where, how long it
@@ -371,8 +402,10 @@ delays the simulation predicts with those the real records show.
 
 - **SC-001**: At a two-court evening, ten people including the host follow one match on their
   own devices, and nobody is told the match is full. Baseline: eight.
-- **SC-002**: In a real-device run in a hall with other people around, points show on every
-  device within the FR-010 times. Baseline: unknown, as today's builds do not record delay.
+- **SC-002**: In a real-device run in a hall with other people around, points reach every
+  phone within the FR-010 times, and each watch's hops are reported against FR-010a. Baseline:
+  on 14 November, 93% of timed points on each phone within 1 s, every slow one already slow on
+  reaching the host's phone from its watch.
 - **SC-003**: In that run, drops per guest per hour are reported against FR-007's target of 5.
   Baseline: 56–70 an hour for guests on both radios on 9 November.
 - **SC-004**: After the host's Bluetooth drops out and comes back by itself, every guest is
