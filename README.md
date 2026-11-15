@@ -812,8 +812,9 @@ devices go by four hex digits of their random id.
 Every build notes how long each point took to arrive, counted from the tap on whichever phone
 or watch tapped it, to within a tenth of a second or as `unknown`. No two clocks agree, so each
 device asks the others the time over a message small enough for one radio chunk each way, when
-a link comes up and every 30 seconds, and keeps the narrowest bound the round trips give.
-Pushes carry the sender's bounds on each point's author, so a guest can time a point another
+a link comes up and every 30 seconds, and keeps the narrowest bound the round trips give. A
+phone asks its own watch too, every 30 seconds, and the watch learns its half from the phone's
+pushes. Pushes carry the sender's bounds on each point's author, so a guest can time a point another
 guest tapped through the host. A clock set by hand, or a point from a 1.1 device that says
 nothing of its clock, reads `unknown`. Each link entry names its radio, `bt` or `wifi`, and a
 Wi-Fi drop says why in one short code, such as `ETIMEDOUT`, never the error's own text. The

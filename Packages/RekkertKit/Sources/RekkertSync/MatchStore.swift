@@ -1294,7 +1294,18 @@ public final class MatchStore {
             await sleep(clockTick)
             guard role != .solo, !actsAsOlderBuild else { continue }
             for link in transport.links { await askTheTime(on: link) }
+            await askThePairTheTime()
         }
+    }
+
+    /// The phone asks for both: its answer reaches the watch in the offsets of every push.
+    private func askThePairTheTime() async {
+        guard keepsHistory, let pairedDevice, currentDevices.contains(pairedDevice), transport.isReachableBesideLinks,
+              let payload = try? Wire.clock().encoded()
+        else { return }
+        let asked = now()
+        guard let reply = await sendLiveBesideLinks(payload) else { return }
+        learnClock(asked: asked, reply: reply, from: pairedDevice)
     }
 
     private func askTheTime(on link: LinkID) async {

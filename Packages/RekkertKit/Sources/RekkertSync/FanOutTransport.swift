@@ -213,6 +213,16 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
         let present = recipients.filter(\.transport.isReachable).count
         guard present > 0 else { return nil }
 
+        // Asking the time has an answer rather than an acknowledgement, and the asker needs it back.
+        if case .clock = wire {
+            for child in recipients where child.transport.isReachable {
+                let transport = child.transport
+                if let reply = await Self.answer(within: childTimeout, sleep: sleep, { await transport.sendLive(payload) }),
+                   child.scope.admits(reply) { return reply }
+            }
+            return nil
+        }
+
         let timeout = childTimeout
         let packets = packets
         let sleep = sleep

@@ -26,7 +26,7 @@
 | `sharing(.state)` (phone → watch) | `state(SharingState)` | `+ limit: Int?`, with `.failed(.noRoom)` | A guest's phone turned away from a full match | Its watch, to say how many the match takes, whichever device the code was typed on |
 | `SharingFailure` (phone → watch) | `…, noRoom, bluetoothOff, bluetoothDenied` | `+ needsUpdate` | A guest's phone told to update | Its watch, from the same release |
 | `needsUpdate(sessionID:)` | — | **new case** | Nobody in this release | Builds from this release, which say on phone and watch that Rekkert needs updating to join |
-| `clock(reading:)` | — | **new case** | Every device from this release, on each link to a device that sent `protocol`: when the link is greeted, then every 30 s while sharing. Asked with no reading, answered with one | The asker, to time a round trip (D-2) |
+| `clock(reading:)` | — | **new case** | Every device from this release, on each link to a device that sent `protocol`: when the link is greeted, then every 30 s while sharing. A phone also asks its own watch every 30 s while sharing, if the watch sent `protocol`. Asked with no reading, answered with one | The asker, to time a round trip (D-2) |
 
 ## Timing a round trip (D-2)
 
