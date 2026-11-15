@@ -45,6 +45,7 @@ final class CourtHarness {
         var clockOffset: TimeInterval { skew.offset }
         var drift: Double { skew.drift }
         let directory: URL
+        let wakefulness: Wakefulness
         /// What the Keychain would hold: it outlives the app being ended.
         let keeper = MemoryCodeKeeper()
         /// The sharing record, which is on disk and outlives it too.
@@ -67,6 +68,8 @@ final class CourtHarness {
             self.isWatch = isWatch
             self.radio = radio
             self.wifiRadio = wifiRadio
+            wakefulness = Wakefulness(clock: radio.air.clock)
+            radio.wakefulness = wakefulness
             skew = ClockSkew(offset: clockOffset, drift: drift)
             directory = FileManager.default.temporaryDirectory
                 .appendingPathComponent("court-\(UUID().uuidString)", isDirectory: true)
@@ -208,11 +211,11 @@ final class CourtHarness {
     /// Woken by the clock rather than polling it: a court of sixteen devices, each with timers
     /// asleep for minutes, would otherwise spend its time asking what time it is. The stores'
     /// waits run on it too, so a retry is as late in radio time however busy the machine is.
-    private var clockSleep: @Sendable (Duration) async -> Void {
-        let clock = air.clock
+    private func clockSleep(for device: Device) -> @Sendable (Duration) async -> Void {
+        let (clock, wakefulness) = (air.clock, device.wakefulness)
         return { duration in
             let (woken, wake) = AsyncStream<Void>.makeStream()
-            let timer = clock.run(after: duration) { wake.finish() }
+            let timer = clock.run(after: duration) { wakefulness.whenAwake { wake.finish() } }
             await withTaskCancellationHandler {
                 for await _ in woken {}
             } onCancel: {
@@ -224,7 +227,7 @@ final class CourtHarness {
 
     private func boot(_ device: Device, pairLink: LoopbackTransport) {
         let core = RadioCore(radio: device.radio, linkRadio: device.radio.air === wifiAir ? .wifi : .bluetooth)
-        let links = FanOutTransport(sleep: clockSleep)
+        let links = FanOutTransport(sleep: clockSleep(for: device))
         device.pairToken = links.attach(pairLink, as: .pairedDevice)
         links.attach(core, as: .sharedSession)
         let wifiCore = device.wifiRadio.map { RadioCore(radio: $0, linkRadio: .wifi) }
@@ -244,7 +247,7 @@ final class CourtHarness {
             now: now,
             participantTick: timing.participantTick,
             guestLimit: guestLimit,
-            sleep: clockSleep
+            sleep: clockSleep(for: device)
         )
         store.recorder = device.recorder
         let sharing = SharedSession(
@@ -253,7 +256,7 @@ final class CourtHarness {
             graceBeforeNotice: timing.graceBeforeNotice, radioGrace: timing.radioGrace,
             keeper: device.keeper, now: now,
             idleCheck: timing.idleCheck,
-            sleep: clockSleep
+            sleep: clockSleep(for: device)
         )
         device.core = core
         device.wifiCore = wifiCore
@@ -265,7 +268,7 @@ final class CourtHarness {
         if device.isWatch {
             let standIn = WatchStandIn(
                 store: store, sharing: sharing, timing: timing.standIn, tick: timing.standInTick,
-                now: monotonicClock, sleep: clockSleep
+                now: monotonicClock, sleep: clockSleep(for: device)
             )
             device.standIn = standIn
             store.onSharing = { [standIn] signal in standIn.heard(signal) }

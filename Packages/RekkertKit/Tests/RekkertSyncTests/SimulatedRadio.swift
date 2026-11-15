@@ -303,6 +303,7 @@ nonisolated final class Airwaves: @unchecked Sendable {
         clock.run(after: settings.latency) {
             guard connection.isConnected, host.isPublished else { return }
             guest.tell { $0.foundInbox(on: peripheral) }
+            host.wakefulness?.wake()
             let value = host.listener?.greeting(session: host.peripheralSession ?? -1)
             guest.tell { $0.greeted(value, failed: value == nil, by: peripheral) }
         }
@@ -402,6 +403,7 @@ nonisolated final class Airwaves: @unchecked Sendable {
             guard !goesMissing else {
                 return guest.tell { $0.wrote(to: peripheral, failed: false) }
             }
+            host.wakefulness?.wake()
             let accepted = host.listener?.received(
                 writes: [(central: connection.central, offset: 0, value: chunk)],
                 session: host.peripheralSession ?? -1
@@ -417,7 +419,7 @@ nonisolated final class SimulatedRadio: Radio, @unchecked Sendable {
 
     let air: Airwaves
     let canHost: Bool
-    var scheduler: any RadioScheduler { air.clock }
+    var scheduler: any RadioScheduler { wakefulness?.scheduler ?? air.clock }
 
     private let lock = NSLock()
     private weak var _listener: (any RadioListener)?
@@ -433,6 +435,7 @@ nonisolated final class SimulatedRadio: Radio, @unchecked Sendable {
     private var _isBackgrounded = false
     private var _losesWrites = false
     private var _missesIncoming = false
+    private var _wakefulness: Wakefulness?
     private var held: [@Sendable () -> Void] = []
     private var reported: Set<UUID> = []
     private var handles: [UUID: Handle] = [:]
@@ -467,10 +470,16 @@ nonisolated final class SimulatedRadio: Radio, @unchecked Sendable {
         set { lock.withLock { _missesIncoming = newValue } }
     }
 
+    var wakefulness: Wakefulness? {
+        get { lock.withLock { _wakefulness } }
+        set { lock.withLock { _wakefulness = newValue } }
+    }
+
     /// Hands an event to the listener through the clock, or keeps it while the app is suspended.
     func tell(_ event: @escaping @Sendable (any RadioListener) -> Void) {
         let work: @Sendable () -> Void = { [weak self] in
             guard let listener = self?.listener else { return }
+            self?.wakefulness?.wake()
             event(listener)
         }
         let deliverNow = lock.withLock { () -> Bool in

@@ -725,7 +725,11 @@ host whose service goes away is hung up on and dialled again, three unanswered q
 row with nothing arriving meanwhile and a peer stops counting as there, and the radio switched
 off and on starts everything afresh. Liveness runs both ways, because a guest that is only
 following has nothing of its own to say. It says hello whenever ten seconds pass with nothing
-sent, and hangs up and dials again when three of those go unanswered. A host keeps the link to
+sent, and hangs up and dials again when three of those go unanswered. A guest whose phone is in a bag
+may not manage even that, since iOS runs it only after something arrives on Bluetooth, so a
+host asks a guest it has not heard from for twelve seconds, on Bluetooth where it can, with
+the time, or a hello for 1.1, and counts the answer as hearing it, as it does any answer to the
+host asking the time. A host keeps the link to
 a guest it has stopped counting, and goes on asking after it every fifteen seconds rather than
 falling silent on it. A host that went away, or was hung up on for not answering, is looked for
 as well as dialled where it was, since an iPhone's Bluetooth address moves on; one that proved

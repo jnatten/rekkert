@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-long='RekkertSyncTests\.(BusyHallTests|ClubNightTests|CalibrationFitTests|ClockOffsetTests|OlderHostTests|StandInDelayTests|LongEveningRecordTests)/'
+long='RekkertSyncTests\.(BusyHallTests|ClubNightTests|CalibrationFitTests|ClockOffsetTests|OlderHostTests|StandInDelayTests|LongEveningRecordTests|QuietGuestTests)/'
 
 swift test --package-path Packages/RekkertKit --skip "$long"
 

@@ -177,6 +177,9 @@ public final class MatchStore {
     /// Tests only: how many times this device was asked the time.
     @ObservationIgnored private(set) var clockQuestionsHeard = 0
     @ObservationIgnored private(set) var synchroniseRounds = 0
+    /// Tests only: how many times the host asked a guest it had not heard from.
+    @ObservationIgnored private(set) var quietGuestsAsked = 0
+    @ObservationIgnored private var quietGuestAskedAt: [DeviceID: Date] = [:]
     /// Bounds on other devices' clocks, for timing points from the tap (spec 005, D-2).
     @ObservationIgnored private var clocks = ClockBook()
     /// After this device's clock jumped, what others still know of it is stale for a while.
@@ -1300,8 +1303,39 @@ public final class MatchStore {
         else { return }
         let asked = now()
         guard let reply = await sendLive(payload, on: link) else { return }
+        heardAnswer(on: link)
         learnClock(asked: asked, reply: reply, from: farEnds[link])
     }
+
+    private func heardAnswer(on link: LinkID) {
+        guard role == .host, let owner = linkOwners[link], participants.participant(for: owner) != nil else { return }
+        participants.heard(from: owner, at: now(), limit: guestLimit)
+    }
+
+    /// A guest that only follows says hello after ten quiet seconds, but one whose phone is in a
+    /// bag cannot: iOS runs it only after something arrives on Bluetooth. So the host asks a guest
+    /// it has not heard from for twelve, on Bluetooth where it can, which leaves three for the
+    /// answer. The smallest question it understands: the time, or a hello for 1.1.
+    private func askQuietGuests() {
+        let moment = now()
+        for participant in participants.all {
+            let asked = quietGuestAskedAt[participant.id].map { moment.timeIntervalSince($0) } ?? .infinity
+            guard moment.timeIntervalSince(participant.lastHeard) >= Self.quietGuestWait, asked >= Self.quietGuestWait else { continue }
+            let links = farEnds.filter { participant.devices.contains($0.value) && !departedLinks.contains($0.key) }
+            guard !links.keys.contains(where: { !(delivering[$0]?.isEmpty ?? true) }),
+                  let (link, far) = links.first(where: { linkRadios[$0.key] != .wifi }) ?? links.first
+            else { continue }
+            quietGuestAskedAt[participant.id] = moment
+            quietGuestsAsked += 1
+            Task {
+                if currentDevices.contains(far) { return await askTheTime(on: link) }
+                guard let payload = try? ownHello.encoded(), let reply = await sendLive(payload, on: link) else { return }
+                handle(InboundPacket(payload: reply, link: link))
+            }
+        }
+    }
+
+    private static let quietGuestWait: TimeInterval = 12
 
     /// Set by hand or corrected by the network: delays across the change read unknown, never
     /// wrong (spec 005, Edge Cases).
@@ -1339,8 +1373,10 @@ public final class MatchStore {
             guard role == .host else {
                 recordedOutOfReach = []
                 heardStates = []
+                quietGuestAskedAt = [:]
                 continue
             }
+            askQuietGuests()
             let states = participantStates()
             if states != heardStates {
                 heardStates = states
