@@ -88,6 +88,10 @@ nonisolated private final class LinkedGuests: PeerTransport, @unchecked Sendable
 @Suite("Each guest is sent what it lacks", .serialized)
 @MainActor
 struct PerParticipantDeliveryTests {
+    /// The stores' waits run on it, so a retry comes when it should however busy the machine is
+    /// (bug ci-load-sharing-flakes).
+    private let clock = TestClock()
+
     private struct Host {
         let store: MatchStore
         let persistence: SessionStore
@@ -97,23 +101,23 @@ struct PerParticipantDeliveryTests {
     }
 
     private func host(over guests: LinkedGuests, pair: LoopbackTransport? = nil) async throws -> Host {
-        let links = FanOutTransport()
+        let links = FanOutTransport(sleep: clock.sleep)
         if let pair { links.attach(pair, as: .pairedDevice) }
         links.attach(guests, as: .sharedSession)
         let persistence = SessionStore(directory: FileManager.default.temporaryDirectory
             .appendingPathComponent("delivery-\(UUID().uuidString)", isDirectory: true))
         let store = MatchStore(
             device: DeviceID(), transport: links, store: persistence, snapshotInterval: 0,
-            sendTimeout: .seconds(1), retryInterval: .milliseconds(50), keepsHistory: false
+            sendTimeout: .seconds(1), retryInterval: .milliseconds(50), keepsHistory: false, sleep: clock.sleep
         )
         store.configure(.traditional(rules: TraditionalRules(), teams: BySide(a: .home, b: .away)))
         store.startSharing()
         let run = Task { await store.run() }
         for link in guests.all { try guests.sayHello(on: link, in: store.log.sessionID) }
-        await eventually { guests.all.allSatisfy { guests.holds(store.log.ordered[0].id, on: $0) } }
+        await clock.until { guests.all.allSatisfy { guests.holds(store.log.ordered[0].id, on: $0) } }
         for link in guests.all { try guests.sayHello(on: link, in: store.log.sessionID) }
-        await eventually { store.participants.all.count == guests.all.count }
-        await quietPeriod()
+        await clock.until { store.participants.all.count == guests.all.count }
+        await clock.until(within: .milliseconds(250)) { false }
         guests.forgetSends()
         return Host(store: store, persistence: persistence, run: run)
     }
@@ -132,9 +136,9 @@ struct PerParticipantDeliveryTests {
         let first = newest(host.store)
         host.store.tap(team: .a)
         let second = newest(host.store)
-        await eventually { guests.sends(to: deaf).count >= 2 }
+        await clock.until { guests.sends(to: deaf).count >= 2 }
         guests.setDeaf(deaf, false)
-        await eventually { guests.holds(second, on: deaf) }
+        await clock.until { guests.holds(second, on: deaf) }
 
         #expect(Set(guests.sends(to: heard)) == [[first], [second]])
         #expect(Set(guests.sends(to: deaf).prefix(2)) == [[first], [second]])
@@ -146,17 +150,17 @@ struct PerParticipantDeliveryTests {
         let guests = LinkedGuests(count: 2)
         let host = try await host(over: guests)
         defer { host.run.cancel() }
-        await eventually { host.outbox.isEmpty }
+        await clock.until { host.outbox.isEmpty }
         #expect(host.outbox.isEmpty)
 
         let gone = guests.all[1]
         guests.setDeaf(gone, true)
         host.store.tap(team: .a)
-        await quietPeriod()
+        await clock.until(within: .milliseconds(250)) { false }
         #expect(host.outbox.count == 1, "kept while a guest that is there lacks it")
 
         guests.drop(gone)
-        await eventually { host.outbox.isEmpty }
+        await clock.until { host.outbox.isEmpty }
         #expect(host.outbox.isEmpty, "caught up from the log if it comes back, not from the outbox")
     }
 
@@ -169,7 +173,7 @@ struct PerParticipantDeliveryTests {
         var theirs = host.store.log
         let point = theirs.append(.point(round: 0, court: 0, team: .b), from: guests.owners[scorer]!, at: MatchEvent.stamp())
         try guests.say(.events(sessionID: host.store.log.sessionID, events: [point]), on: scorer)
-        await eventually { guests.holds(point.id, on: other) }
+        await clock.until { guests.holds(point.id, on: other) }
 
         #expect(guests.sends(to: other).contains([point.id]))
         #expect(!guests.sends(to: scorer).joined().contains(point.id))
@@ -178,22 +182,22 @@ struct PerParticipantDeliveryTests {
     @Test func theWatchStillAcknowledgesForItself() async throws {
         let guests = LinkedGuests(count: 1)
         let (phoneSide, watchSide) = LoopbackTransport.pair()
-        let watch = MatchStore(device: DeviceID(), transport: watchSide, snapshotInterval: 0, keepsHistory: false)
+        let watch = MatchStore(device: DeviceID(), transport: watchSide, snapshotInterval: 0, keepsHistory: false, sleep: clock.sleep)
         let watchRun = Task { await watch.run() }
         defer { watchRun.cancel() }
         let host = try await host(over: guests, pair: phoneSide)
         defer { host.run.cancel() }
-        await eventually { host.outbox.isEmpty }
+        await clock.until { host.outbox.isEmpty }
 
         phoneSide.setSwallowing(true)
         host.store.tap(team: .a)
         let point = newest(host.store)
-        await eventually { guests.holds(point, on: guests.all[0]) }
-        await quietPeriod()
+        await clock.until { guests.holds(point, on: guests.all[0]) }
+        await clock.until(within: .milliseconds(250)) { false }
         #expect(host.outbox.map(\.id) == [point], "the guest has it, the watch has not said so")
 
         phoneSide.setSwallowing(false)
-        await eventually { host.outbox.isEmpty }
+        await clock.until { host.outbox.isEmpty }
         #expect(host.outbox.isEmpty)
         #expect(watch.log.events[point] != nil)
     }

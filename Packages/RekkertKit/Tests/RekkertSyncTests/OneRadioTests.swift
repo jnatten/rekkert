@@ -46,8 +46,9 @@ struct OneRadioTests {
         let broadcast = Broadcast<Int>()
         let first = Tally(), second = Tally()
         let one = broadcast.stream(), two = broadcast.stream()
-        let a = Task { for await _ in one { first.add() } }
-        let b = Task { for await _ in two { second.add() } }
+        // Off the main actor, which a busy machine's court tests can hold for seconds at a time.
+        let a = Task.detached { for await _ in one { first.add() } }
+        let b = Task.detached { for await _ in two { second.add() } }
         defer { a.cancel(); b.cancel() }
 
         for value in 0 ..< 20 { broadcast.yield(value) }

@@ -118,6 +118,36 @@ nonisolated private final class HangingTransport: PeerTransport, @unchecked Send
     }
 }
 
+/// A child's time running out, when the test says so rather than when a busy machine gets to it.
+nonisolated private final class Timeout: @unchecked Sendable {
+    private let lock = NSLock()
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+    private var fired = false
+
+    var hasFired: Bool { lock.withLock { fired } }
+
+    var sleep: @Sendable (Duration) async -> Void {
+        { [self] _ in
+            await withCheckedContinuation { continuation in
+                let now = lock.withLock { () -> Bool in
+                    if !fired { waiting.append(continuation) }
+                    return fired
+                }
+                if now { continuation.resume() }
+            }
+        }
+    }
+
+    func fire() {
+        let woken = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
+            fired = true
+            defer { waiting.removeAll() }
+            return waiting
+        }
+        for continuation in woken { continuation.resume() }
+    }
+}
+
 /// Reachable, and answers everything with the same reply.
 nonisolated private final class Answering: PeerTransport, @unchecked Sendable {
     let inbound = AsyncStream<InboundPacket> { _ in }
@@ -142,26 +172,25 @@ struct QuietChildTests {
         defer { quiet.release() }
         var hosts = MatchLog()
         hosts.append(.configure(.pointCount(rules: PointCountRules(target: 16), teams: BySide(a: .home, b: .away))), from: DeviceID())
-        let fan = FanOutTransport(childTimeout: .seconds(3))
+        let timeout = Timeout()
+        let fan = FanOutTransport(childTimeout: .seconds(3), sleep: timeout.sleep)
         fan.attach(quiet, as: .pairedDevice)
         fan.attach(Answering(try Wire.snapshot(hosts).encoded()), as: .sharedSession)
 
         let hello = try Wire.hello(sessionID: UUID(), vector: VersionVector()).encoded()
-        let started = ContinuousClock.now
         let sending = Task { await fan.sendLive(hello) }
         var iterator = fan.inbound.makeAsyncIterator()
         let first = await iterator.next()
-        let heardAfter = ContinuousClock.now - started
+        let heardBeforeTheTimeout = !timeout.hasFired
+        timeout.fire()
         _ = await sending.value
-        let doneAfter = ContinuousClock.now - started
 
         guard let payload = first?.payload, case .snapshot(let log, _, _, _)? = try? Wire.decode(payload) else {
             Issue.record("the host's answer should have been handed on")
             return
         }
         #expect(log.sessionID == hosts.sessionID)
-        #expect(heardAfter < .seconds(2), "at once, not after the quiet child has had its time")
-        #expect(doneAfter < .seconds(6), "and the send itself is over once it has")
+        #expect(heardBeforeTheTimeout, "at once, not after the quiet child has had its time")
         #expect(quiet.queued.isEmpty, "and a hello is not something to hand over late")
     }
 }

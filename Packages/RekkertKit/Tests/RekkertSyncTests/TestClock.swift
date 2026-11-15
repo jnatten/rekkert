@@ -77,3 +77,35 @@ nonisolated final class TestClock: RadioScheduler, @unchecked Sendable {
         lock.withLock { pending.removeAll { $0.id == id } }
     }
 }
+
+extension TestClock {
+    /// Waits out `duration` of this clock, however long the machine takes to get there: what a
+    /// store or a fan-out is given to sleep on, so a busy machine cannot run a timeout early.
+    var sleep: @Sendable (Duration) async -> Void {
+        { [self] duration in
+            let (woken, wake) = AsyncStream<Void>.makeStream()
+            let timer = run(after: duration) { wake.finish() }
+            await withTaskCancellationHandler {
+                for await _ in woken {}
+            } onCancel: {
+                timer.cancel()
+                wake.finish()
+            }
+        }
+    }
+
+    /// Moves this clock on a step at a time until `condition` holds or `limit` of it has gone by,
+    /// letting everything waiting on it run between steps. Whether it held.
+    @MainActor @discardableResult
+    func until(within limit: Duration = .seconds(30), _ condition: () -> Bool) async -> Bool {
+        var elapsed = Duration.zero
+        while elapsed <= limit {
+            if condition() { return true }
+            advance(by: .milliseconds(10))
+            elapsed += .milliseconds(10)
+            for _ in 0 ..< 4 { await Task.yield() }
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        return condition()
+    }
+}
