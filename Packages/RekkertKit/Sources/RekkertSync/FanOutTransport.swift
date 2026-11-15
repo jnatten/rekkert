@@ -302,7 +302,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
     /// The role, and a guest's copy of the host's list, are for this device's own watch or phone.
     /// Another phone is told the match, and the host's list with it.
     private static func snapshot(_ payload: Data, for scope: Scope) -> Data {
-        guard !scope.isPairedDevice, case .snapshot(let log, let role?, let access)? = try? Wire.decode(payload),
+        guard !scope.isPairedDevice, case .snapshot(let log, let role?, let access, _)? = try? Wire.decode(payload),
               let plain = try? Wire.snapshot(log, access: role == .host ? access : nil).encoded()
         else { return payload }
         return plain
@@ -318,7 +318,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
     /// Onto a child's durable queue, holding back the events it already has there: a live send
     /// of the whole outbox that did not land is mostly what went the last time.
     private func keep(_ payload: Data, _ wire: Wire, on child: Child) {
-        guard case .events(let session, let events, _) = wire else { return child.transport.queue(payload) }
+        guard case .events(let session, let events, _, _) = wire else { return child.transport.queue(payload) }
         let fresh = lock.withLock { queued[child.token, default: QueueLedger()].admitting(events, in: session) }
         guard !fresh.isEmpty else { return }
         let trimmed = fresh.count == events.count ? payload : (try? Wire.events(sessionID: session, events: fresh).encoded())

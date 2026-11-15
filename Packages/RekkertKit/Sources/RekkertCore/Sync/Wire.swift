@@ -209,13 +209,21 @@ public enum Wire: Codable, Sendable, Hashable {
     case hello(sessionID: UUID, vector: VersionVector, from: DeviceID? = nil, clock: Date? = nil, protocol: Int? = nil)
     /// `offsets` is the sender's bounds on the recipient's clock and on each event's author's,
     /// so a guest can time a point another guest tapped. Absent from 1.1 and older.
-    case events(sessionID: UUID, events: [MatchEvent], offsets: [DeviceID: ClockSpan]? = nil)
+    ///
+    /// `stamps` say when a device had an event in `events`, by its own clock (spec 005, FR-010,
+    /// FR-010a). On a link: when a point tapped on a watch following its phone reached that phone,
+    /// which is when it was first on the shared link, passed on as it came. To a phone's own
+    /// watch: when the phone had each event. Absent from 1.1 and older.
+    case events(sessionID: UUID, events: [MatchEvent], offsets: [DeviceID: ClockSpan]? = nil, stamps: [Stamp]? = nil)
     /// Whole-log backstop, used on the coalescing application-context channel. `role` is the
     /// sender's, for its own watch; absent from older builds and from what goes to other phones.
     /// `access` is the host's say on what each phone may do, so a guest has it the moment it has
     /// the match: from the host to everybody, and from a guest to its own watch. Absent from older
     /// builds, whose guests go on allowing everything until told.
-    case snapshot(MatchLog, role: SessionRole? = nil, access: ShareAccessTable? = nil)
+    /// `stamps`, to this device's own watch only, are when the phone had the points of the last
+    /// minute, by their place in the log's order, as on `events`: whichever of the two reaches the
+    /// watch first times the hop.
+    case snapshot(MatchLog, role: SessionRole? = nil, access: ShareAccessTable? = nil, stamps: [Stamp]? = nil)
     /// "The session you are offering ended here." Retiring a session is otherwise
     /// knowledge one device holds alone: it refuses every packet for that session, and a
     /// counterpart that never heard the ending goes on scoring into a match that can no

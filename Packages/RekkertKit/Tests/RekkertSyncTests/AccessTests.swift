@@ -102,7 +102,7 @@ nonisolated private final class Overhearing: @unchecked Sendable {
 
     var snapshots: [(log: MatchLog, access: ShareAccessTable?)] {
         lock.withLock {
-            heard.compactMap { if case .snapshot(let log, _, let access) = $0 { (log, access) } else { nil } }
+            heard.compactMap { if case .snapshot(let log, _, let access, _) = $0 { (log, access) } else { nil } }
         }
     }
 }
@@ -301,7 +301,7 @@ struct AccessTests {
         let hello = try Wire.hello(sessionID: UUID(), vector: VersionVector(), from: DeviceID()).encoded()
         let answer = await guestEnd.sendLive(hello).flatMap { try? Wire.decode($0) }
 
-        guard case .snapshot(let log, _, let access)? = answer else { Issue.record("not a snapshot"); return }
+        guard case .snapshot(let log, _, let access, _)? = answer else { Issue.record("not a snapshot"); return }
         #expect(log.sessionID == host.log.sessionID)
         #expect(access == host.accessTable)
     }
@@ -332,7 +332,7 @@ struct AccessTests {
         await eventually { toTheWatch.snapshots.contains { $0.log.sessionID == hostLog.sessionID } }
         let handedOn = toTheWatch.snapshots.first { $0.log.sessionID == hostLog.sessionID }
         #expect(handedOn?.access == list, "the watch is handed the list with the match")
-        let toOtherPhones = scripted.published.compactMap { if case .snapshot(_, _, let access) = $0 { access } else { nil } }
+        let toOtherPhones = scripted.published.compactMap { if case .snapshot(_, _, let access, _) = $0 { access } else { nil } }
         #expect(toOtherPhones.isEmpty, "a guest's copy is for its own watch")
     }
 

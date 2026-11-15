@@ -58,6 +58,38 @@ public struct ClockBounds: Codable, Sendable, Hashable {
     }
 }
 
+/// When the sender had an event, by its own clock, as it travels with the events it is about:
+/// the event by its place among them, the time as milliseconds after the event's own tap reading,
+/// and how many milliseconds that could be out, from the clocks it was read through on the way.
+/// No time at all when nothing on the way could bound it. Over Bluetooth the bytes count.
+public struct Stamp: Codable, Sendable, Hashable {
+    public var index: Int
+    public var sinceTap: Int?
+    public var spread: Int
+
+    public init(index: Int, sinceTap: Int? = nil, spread: Int = 0) {
+        self.index = index
+        self.sinceTap = sinceTap
+        self.spread = spread
+    }
+
+    public init(from decoder: Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        let index = try container.decode(Int.self)
+        let sinceTap = container.isAtEnd ? nil : try container.decode(Int.self)
+        let spread = container.isAtEnd ? 0 : try container.decode(Int.self)
+        self.init(index: index, sinceTap: sinceTap, spread: spread)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.unkeyedContainer()
+        try container.encode(index)
+        guard let sinceTap else { return }
+        try container.encode(sinceTap)
+        if spread > 0 { try container.encode(spread) }
+    }
+}
+
 /// Bounds as they travel: whole milliseconds, rounded outwards so they never claim more than
 /// was known, and no sample time, since the receiver takes them as of their arrival.
 public struct ClockSpan: Codable, Sendable, Hashable {

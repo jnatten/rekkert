@@ -36,6 +36,7 @@ The phone↔watch link is `pair`, as today, and has no radio.
 | `id`, `time`, `device`, `session`, `link`, `kind` | as today | — | |
 | `radios` | `[LinkRadio]?` | **new**, optional | The radio a host or guest link entry is about, or every radio up to that device for a reach or delay entry; both are written `bt+wifi`. Absent on `pair` and `radio` entries, and in older lines |
 | `detail` | `String?` | **new**, optional | One code from `DropDetail` (below) for a local-network drop. Never the platform's description text, a name, a score or a code |
+| `leg` | `Leg?` | **new**, optional | With a delay, where FR-010 or FR-010a times it from when that is not the tap: `link(seconds?)` for a point tapped on a watch following its phone, on every other phone, from when that phone had it; `hop(seconds?)` on a watch following its phone, from when the phone had it. `nil` inside is unknown |
 
 Older lines decode with both fields absent. An older phone drops a newer watch's lines it cannot
 decode, as it does today.
@@ -144,11 +145,13 @@ on the phone.
 |---|---|---|
 | `start`, `end` | `Date` | One stint: from `sharingStarted`, `sharingRestored` or `joined`, to `sharingStopped`, leaving, or the last entry of the day |
 | `role` | host / guest | From the stint's first entry |
-| `points` | `Int` | `pointArrived` entries in the stint |
-| `knownDelays` | `Int` | Those with a latency |
-| `medianDelay`, `slowestDelay` | `TimeInterval?` | Over the known delays |
-| `withinOne`, `withinTwo` | `Double?` | The share of known delays ≤ 1 s and ≤ 2 s, over arrivals where `ArrivalConditions.nothingWrong` holds (FR-010) |
-| `unknownShare` | `Double?` | The share of points whose delay is unknown, leaving out `older` ones. Above 10%, FR-010 cannot be judged for that device (FR-006) |
+| `points` | `Int` | `pointArrived` entries in the stint that FR-010 judges: those not on the `pair` link |
+| `knownDelays` | `Int` | Those with an FR-010 delay: the `link` time where there is one, else the delay from the tap |
+| `medianDelay`, `slowestDelay` | `TimeInterval?` | Over the known FR-010 delays |
+| `withinOne`, `withinTwo` | `Double?` | The share of known FR-010 delays ≤ 1 s and ≤ 2 s, over arrivals where `ArrivalConditions.nothingWrong` holds (FR-010) |
+| `unknownShare` | `Double?` | The share of those points whose FR-010 delay is unknown, leaving out `older` ones. Above 10%, FR-010 cannot be judged for that device (FR-006) |
+| `hops`, `timedHops` | `Int` | `pointArrived` entries on the `pair` link, and those timed: on the phone, its watch's taps; on the watch, its `hop` (FR-010a) |
+| `medianHop`, `slowestHop` | `TimeInterval?` | Over the timed hops (FR-010a) |
 | `judgeable` | `Bool` | Whether FR-010 can be judged: at least 100 timed points (FR-010), and `unknownShare` ≤ 10% |
 | `drops` | `[LinkRadio: Int]` | `dropped`, `wroteOff` and `redialled` entries per radio, since any connection ending is a drop, leaving out `dropped(radioOff)` from the host's own Bluetooth restarting (FR-007) |
 | `hostRestarts` | `Int` | How many times the host's Bluetooth went off and came back by itself during the stint |

@@ -82,8 +82,9 @@ The same records found three bugs, fixed since on this branch:
 
 | Check | Requirement | Result |
 |---|---|---|
-| Points within 1 s / 2 s, per device | FR-010, SC-002 | _ |
-| Share unknown, per device | FR-006 | _ |
+| Points within 1 s / 2 s, per phone | FR-010, SC-002 | _ |
+| Watch hops within 1 s / 2 s, per watch and phone | FR-010a | _ |
+| Share unknown, per phone, of the points FR-010 judges | FR-006 | _ |
 | Drops per guest per hour | FR-007, SC-003 | _ |
 | Drop details | D-7 | _ |
 | Back after the burst | FR-011 | _ |
@@ -105,6 +106,7 @@ The same records found three bugs, fixed since on this branch:
 | Check | Requirement | Result |
 |---|---|---|
 | Everyone on, "9 of 9 on" | SC-001 | _ |
-| Points within 1 s / 2 s on every device | FR-010, SC-002 | _ |
+| Points within 1 s / 2 s on every phone | FR-010, SC-002 | _ |
+| Watch hops within 1 s / 2 s | FR-010a | _ |
 | Prediction error at the 95th percentile | FR-018, SC-006 | _ |
 | Battery | SC-005 | _ |

@@ -124,6 +124,28 @@ struct LinkRecordTests {
         #expect(lines.map(\.link) == ["host A41D", "host A41D", "host A41D", "host A41D", "guest A41D", "radio"])
     }
 
+    /// Spec 005, FR-001: where FR-010 or FR-010a times a point from somewhere other than the tap.
+    @Test func linksAndHopsComeBackAsWritten() {
+        let entries = [
+            LinkRecordEntry(time: at(0), device: .phone, session: match, link: .host(guest), kind: .pointArrived(latency: 0.412), radios: [.bluetooth], leg: .link(0.101)),
+            LinkRecordEntry(time: at(1), device: .phone, session: match, link: .host(guest), kind: .pointArrived(latency: nil), radios: [.bluetooth], leg: .link(nil)),
+            LinkRecordEntry(time: at(2), device: .phone, session: match, link: .host(guest), kind: .pointArrived(latency: nil), detail: "older", leg: .link(nil)),
+            LinkRecordEntry(time: at(3), device: .watch, session: match, link: .pair, kind: .pointArrived(latency: 0.7), leg: .hop(0.29)),
+            LinkRecordEntry(time: at(4), device: .watch, session: match, link: .pair, kind: .pointArrived(latency: nil), leg: .hop(nil)),
+        ]
+        let text = LinkRecord(entries).export(header, now: at(60), in: calendar)
+        #expect(text.contains("pointArrived(0.412s; link 0.101s)"))
+        #expect(text.contains("pointArrived(unknown; link unknown)"))
+        #expect(text.contains("pointArrived(unknown; older; link unknown)"))
+        #expect(text.contains("pointArrived(0.700s; hop 0.290s)"))
+        #expect(text.contains("pointArrived(unknown; hop unknown)"))
+
+        let lines = LinkRecord.parse(text, in: calendar)
+        #expect(lines.map(\.kind) == entries.map(\.kind))
+        #expect(lines.map(\.detail) == entries.map(\.detail))
+        #expect(lines.map(\.leg) == entries.map(\.leg))
+    }
+
     @Test func anOlderLineWithoutRadiosStillDecodes() throws {
         let older = #"{"id":"6E3B0000-0000-4000-8000-000000000009","time":0,"device":"phone","link":{"radio":{}},"kind":{"pointArrived":{"latency":0.25}}}"#
         let entry = try JSONDecoder().decode(LinkRecordEntry.self, from: Data(older.utf8))

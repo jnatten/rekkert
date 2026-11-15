@@ -32,9 +32,10 @@ new and changed suites:
 | `ClockBoundsTests` *(new)* | FR-006 | Bounds from t₁/t₂/t₄, ageing at 50 ppm, composing two hops, and `unknown` past 0.1 s all hold |
 | `ClockOffsetTests` *(new)* | FR-006 | With every simulated device's clock offset by up to ±3 s and drifting, every recorded delay is within 0.1 s of the true one, or reads `unknown` |
 | `LinkRecordTests` | FR-001, FR-002 | New kinds, radios and drop details round-trip, and an older export parses unchanged |
-| `SharingSummaryTests` *(new)* | FR-003, SC-007 | Stint boundaries, shares within 1 s and 2 s, drops per radio, unreachable time and battery per hour come out right |
+| `SharingSummaryTests` *(new)* | FR-003, FR-006, FR-010a, SC-007 | Stint boundaries, shares within 1 s and 2 s over FR-010 delays, the watch hops apart, drops per radio, unreachable time and battery per hour come out right |
 | `WireCompatibilityTests` *(new)* | FR-015 | Every changed message decodes with and without its new fields, in both directions |
-| `ArrivalConditionsTests` *(new)* | FR-010 | "Nothing is wrong" is decided right for phones, the host, and watches following their phones |
+| `ArrivalConditionsTests` *(new)* | FR-010, FR-010a | "Nothing is wrong" is decided right for phones, the host and a watch standing in, and for a hop between a watch and its own phone on that link alone |
+| `SharedLinkTimingTests` *(new)* | FR-001, FR-006, FR-010, FR-010a | A point tapped on a watch is timed on every other phone from when its phone had it, and a watch following its phone times its hop from it, each within 0.1 s or unknown; through a 1.1 host, unknown |
 | `DropDetailTests` *(new)* | FR-002, FR-004 | Every platform error maps to one code from the fixed set, and none carries the error's own text |
 | `RecordPrivacyTests` *(new)* | FR-004 | An exported record from a named, coded match holds no name, code, share id or score |
 | `LinkRepliesTests` | Principle III | `LinkHealth.observe(_:)`: answers reset the count, timeouts are misses, failed sends count as neither |
@@ -43,12 +44,12 @@ new and changed suites:
 | `WifiFirstTests` *(new, only if needed)* | FR-010, D-8 | Only if the nine-guest prediction misses: Wi-Fi first, Bluetooth after 400 ms, convergence unchanged |
 | `NoEchoTests` *(new)* | FR-008 | A guest on both links never sends the host's points back to it, and Bluetooth chunks per point are about half of today's |
 | `LinkChangeTrafficTests` *(new)* | FR-008 | A second link dropping and coming back sends one hello on that link, and nothing on the others |
-| `BusyHallTests` *(new)* | FR-008, FR-010, FR-011, SC-002 | A host and four guests, each on both links with the second dropping on the field schedule, in a busy hall for 60 simulated minutes, with a second match on the next court. On every device, where nothing was wrong: at least 95% of points within 1 s, and all within 2 s. Otherwise: spec 001's times |
+| `BusyHallTests` *(new)* | FR-008, FR-010, FR-011, SC-002 | A host and four guests, each on both links with the second dropping on the field schedule, in a busy hall for 60 simulated minutes, with a second match on the next court. On every phone, where nothing was wrong: at least 95% of points within 1 s, and all within 2 s, from when each point was first on the shared link. Otherwise, and on every watch from the tap: spec 001's times. Each watch's hops are reported against FR-010a |
 | `HostRadioRestartTests` *(new)* | FR-009, SC-004 | The host's Bluetooth off for 2 s and on again: every guest is back in step within 10 s |
 | `WristFullTests` *(new)* | FR-013 | A wrist join to a full match shows "No room on this match" within 15 s, whichever half heard it |
 | `CapacityTests` | FR-012, FR-013 | Parameterised on `Participants.limit`: that many get on, and the next is told within 15 s |
 | `CalibrationTests` *(new)* | FR-017, SC-006 | Replaying the level-4 record with `Airwaves.Settings.calibrated` gives a 95th-percentile delay within 25% of the real one |
-| `ClubNightTests` | FR-011, FR-012, FR-016, FR-020 | A two-court americano with a host and as many guests as the limit (nine once raised), each with a watch and two links, busy hall, 30 simulated minutes: FR-010 on every device, and spec 001's times where something was wrong. `predict(guests: 9)` runs it at nine before the limit is raised |
+| `ClubNightTests` | FR-011, FR-012, FR-016, FR-020 | A two-court americano with a host and as many guests as the limit (nine once raised), each with a watch and two links, busy hall, 30 simulated minutes: FR-010 on every phone, spec 001's times where something was wrong and on every watch from the tap, and each watch's hops reported against FR-010a. `predict(guests: 9)` runs it at nine before the limit is raised |
 
 `CalibrationTests` and the nine-guest `ClubNightTests` run after level 4 has produced its record.
 Until then, `ClubNightTests` runs at seven with today's settings, and the limit stays 7
@@ -109,8 +110,9 @@ Expected, read from each phone's summary:
 
 | Check | Requirement | Pass |
 |---|---|---|
-| Points within 1 s / 2 s | FR-010, SC-002 | ≥ 95% / 100% of timed points, on every phone and watch |
-| Timed points | FR-006 | Few `unknown`. If more than 10% are unknown, the clock bounds need a look before the numbers count |
+| Points within 1 s / 2 s | FR-010, SC-002 | ≥ 95% / 100% of timed points, on every phone, from when each point was first on the shared link (a `link` time, where there is one) |
+| Watch hops | FR-010a | Reported against ≥ 95% within 1 s and all within 2 s, from each summary's "watch hops" line |
+| Timed points | FR-006 | Few `unknown` among the points FR-010 judges. If more than 10% are unknown, the clock bounds need a look before the numbers count |
 | Wi-Fi drops per guest per hour | FR-007, SC-003 | ≤ 5. If more, read the drop details, which starts D-7's time box |
 | Back after the burst | FR-011 | The walkers catch up within spec 001's FR-002 times |
 | Battery per hour with and without sharing | FR-019, SC-005 | Reported in `validation.md`, with no limit |
@@ -135,7 +137,7 @@ Expected:
 | Check | Requirement | Pass |
 |---|---|---|
 | Everyone gets on; nobody told the match is full | SC-001 | All nine guests on, "9 of 9 on" on the host's phone and watch |
-| Points within 1 s / 2 s on every device | FR-010, SC-002 | As in level 4 |
+| Points within 1 s / 2 s on every phone, and watch hops reported | FR-010, FR-010a, SC-002 | As in level 4 |
 | The simulation agreed | FR-018, SC-006 | The 95th-percentile delay is within 25% of `ClubNightTests`' prediction |
 | Battery | SC-005 | Reported |
 

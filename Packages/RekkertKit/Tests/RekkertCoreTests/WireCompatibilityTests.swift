@@ -87,7 +87,7 @@ struct WireCompatibilityTests {
         let payload = try Wire.snapshot(MatchLog()).encoded()
         #expect(!String(decoding: payload, as: UTF8.self).contains("role"))
         #expect(!String(decoding: payload, as: UTF8.self).contains("access"))
-        guard case .snapshot(_, let role, let access) = try Wire.decode(payload) else { Issue.record("not a snapshot"); return }
+        guard case .snapshot(_, let role, let access, _) = try Wire.decode(payload) else { Issue.record("not a snapshot"); return }
         #expect(role == nil)
         #expect(access == nil)
     }
@@ -212,5 +212,30 @@ struct WireAcrossVersionsTests {
     @Test func offsetsTravelAsTwoWholeMillisecondsEach() throws {
         let data = try JSONCoding.encoder.encode([device: ClockSpan(lower: -2_701, upper: -2_690)])
         #expect(String(decoding: data, as: UTF8.self).contains("[-2701,-2690]"))
+    }
+
+    /// Spec 005, FR-010: when a phone had a point travels with it, and a 1.1 build skips it.
+    @Test func eventsWithStampsRoundTripAndOlderBuildsReadThem() throws {
+        let events = Wire.events(sessionID: session, events: [], stamps: [Stamp(index: 0, sinceTap: 312), Stamp(index: 1, sinceTap: -40, spread: 21), Stamp(index: 2)])
+        #expect(try Wire.decode(events.encoded()) == events)
+        guard case .events(let id, _) = try JSONCoding.decoder.decode(OlderWire.self, from: events.encoded()) else {
+            Issue.record("not events")
+            return
+        }
+        #expect(id == session)
+    }
+
+    @Test func aSnapshotWithStampsRoundTrips() throws {
+        let snapshot = Wire.snapshot(MatchLog(), role: .guest, stamps: [Stamp(index: 3, sinceTap: 250)])
+        #expect(try Wire.decode(snapshot.encoded()) == snapshot)
+    }
+
+    /// Two numbers from the phone that had it, three once relayed, one when nothing bounds it.
+    @Test func aStampTravelsAsAtMostThreeNumbers() throws {
+        for (stamp, text) in [(Stamp(index: 0, sinceTap: 350), "[0,350]"), (Stamp(index: 2, sinceTap: 1_204, spread: 21), "[2,1204,21]"), (Stamp(index: 1), "[1]")] {
+            let data = try JSONCoding.encoder.encode(stamp)
+            #expect(String(decoding: data, as: UTF8.self) == text)
+            #expect(try JSONCoding.decoder.decode(Stamp.self, from: data) == stamp)
+        }
     }
 }

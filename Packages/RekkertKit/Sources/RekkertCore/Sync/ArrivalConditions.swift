@@ -1,29 +1,18 @@
 import Foundation
 
-/// Whether nothing was wrong for one point arriving on one device (spec 005, FR-010), read from
-/// the sharing record alone.
+/// Whether nothing was wrong for one point arriving on one device (spec 005, FR-010), or for one
+/// hop between a watch and its own phone (FR-010a), read from the sharing record alone.
 public enum ArrivalConditions {
     public static let window: TimeInterval = 30
 
-    /// `from` is the guest the point came from, on the host. `pairEntries` are the phone's
-    /// entries, for a watch following that phone. A point from the device's own phone or watch
-    /// needs only the link between the two.
+    /// On a device on the shared link: a phone, or a watch standing in for it on its own link.
+    /// `from` is the guest the point came from, on the host.
     public static func nothingWrong(
         arrivalAt time: Date,
-        on device: LinkRecordEntry.Device,
         from guest: DeviceID? = nil,
-        fromPairedDevice: Bool = false,
-        entries: [LinkRecordEntry],
-        pairEntries: [LinkRecordEntry]? = nil
+        entries: [LinkRecordEntry]
     ) -> Bool {
         let entries = entries.filter { $0.time <= time }.sorted { $0.time < $1.time }
-        if fromPairedDevice { return isUp(entries, on: { $0 == .pair }) }
-        // A watch standing in for its phone is on the host itself, and judged as its phone would be.
-        let isOnTheHost = isUp(entries, on: { if case .host = $0 { true } else { false } })
-        if device == .watch, let pairEntries, !isOnTheHost {
-            return isUp(entries, on: { $0 == .pair })
-                && nothingWrong(arrivalAt: time, on: .phone, from: guest, entries: pairEntries)
-        }
         let relevant: (LinkRecordEntry.Link) -> Bool = { link in
             switch (link, guest) {
             case (.guest(let device), let guest?): device == guest
@@ -48,6 +37,21 @@ public enum ArrivalConditions {
             }
         }
         return !outOfReach
+    }
+
+    /// `entries` are the device's own, the watch's or the phone's: the hop needs only the link
+    /// between the two, up and not lost or caught up over in the half minute before.
+    public static func hopNothingWrong(arrivalAt time: Date, entries: [LinkRecordEntry]) -> Bool {
+        let entries = entries.filter { $0.time <= time && $0.link == .pair }.sorted { $0.time < $1.time }
+        guard isUp(entries, on: { $0 == .pair }) else { return false }
+        let since = time.addingTimeInterval(-window)
+        return !entries.contains { entry in
+            guard entry.time >= since else { return false }
+            switch entry.kind {
+            case .dropped, .wroteOff, .redialled, .caughtUp: return true
+            default: return false
+            }
+        }
     }
 
     private static func isUp(_ entries: [LinkRecordEntry], on relevant: (LinkRecordEntry.Link) -> Bool) -> Bool {

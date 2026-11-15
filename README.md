@@ -815,7 +815,10 @@ device asks the others the time over a message small enough for one radio chunk 
 a link comes up and every 30 seconds, and keeps the narrowest bound the round trips give. A
 phone asks its own watch too, every 30 seconds, and the watch learns its half from the phone's
 pushes. Pushes carry the sender's bounds on each point's author, so a guest can time a point another
-guest tapped through the host. A clock set by hand, or a point from a 1.1 device that says
+guest tapped through the host. A point tapped on a watch is timed on every other phone from when
+the watch's own phone had it: that phone stamps it, the stamp travels with the point, and the
+record notes it as `link`. A watch notes how long after its phone had each point it arrived, as
+`hop`, and the summary gives those hops apart from the shared link's delays. A clock set by hand, or a point from a 1.1 device that says
 nothing of its clock, reads `unknown`. Each link entry names its radio, `bt` or `wifi`, and a
 Wi-Fi drop says why in one short code, such as `ETIMEDOUT`, never the error's own text. The
 battery level is noted when sharing starts and stops, and every ten minutes otherwise.

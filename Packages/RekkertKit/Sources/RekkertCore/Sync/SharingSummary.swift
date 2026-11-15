@@ -22,6 +22,11 @@ public struct SharingSummary: Sendable, Hashable {
     public var withinOne: Double?
     public var withinTwo: Double?
     public var unknownShare: Double?
+    /// FR-010a: points between a watch and its own phone, either way, kept out of the above.
+    public var hops = 0
+    public var timedHops = 0
+    public var medianHop: TimeInterval?
+    public var slowestHop: TimeInterval?
     public var drops: [LinkRadio: Int] = [:]
     public var hostRestarts = 0
     public var unreachable: [String: TimeInterval] = [:]
@@ -44,8 +49,9 @@ extension LinkRecordEntry {
     /// The kind as the record writes it, with the drop's detail inside its parentheses.
     public var kindText: String {
         let text = kind.text
-        guard let detail, text.hasSuffix(")") else { return text }
-        return String(text.dropLast()) + "; \(detail))"
+        let extras = [detail, leg?.text].compactMap { $0 }
+        guard !extras.isEmpty, text.hasSuffix(")") else { return text }
+        return String(text.dropLast()) + "; " + extras.joined(separator: "; ") + ")"
     }
 }
 
@@ -123,28 +129,37 @@ extension LinkRecord {
         var known: [TimeInterval] = []
         var judged: [TimeInterval] = []
         var unknown = 0
+        var hops: [TimeInterval] = []
         for entry in stint {
             guard case .pointArrived(let latency) = entry.kind else { continue }
+            guard entry.link != .pair else {
+                summary.hops += 1
+                let hop: TimeInterval? = if entry.device == .phone { latency } else if case .hop(let seconds)? = entry.leg { seconds } else { nil }
+                if let hop { hops.append(hop) }
+                continue
+            }
             summary.points += 1
             if entry.detail == "older" {
                 summary.olderPoints += 1
                 continue
             }
-            guard let latency else {
+            let delay: TimeInterval? = if case .link(let seconds)? = entry.leg { seconds } else { latency }
+            guard let delay else {
                 unknown += 1
                 continue
             }
-            known.append(latency)
+            known.append(delay)
             let fine = ArrivalConditions.nothingWrong(
                 arrivalAt: entry.time,
-                on: entry.device,
                 from: { if case .guest(let device) = entry.link { device } else { nil } }(),
-                fromPairedDevice: entry.device == .phone && entry.link == .pair,
-                entries: entry.device == .phone ? phone : watch,
-                pairEntries: entry.device == .watch ? phone : nil
+                entries: entry.device == .phone ? phone : watch
             )
-            if fine { judged.append(latency) }
+            if fine { judged.append(delay) }
         }
+        let sortedHops = hops.sorted()
+        summary.timedHops = sortedHops.count
+        summary.medianHop = sortedHops.isEmpty ? nil : sortedHops[sortedHops.count / 2]
+        summary.slowestHop = sortedHops.last
         summary.knownDelays = known.count
         let counted = summary.points - summary.olderPoints
         summary.unknownShare = counted > 0 ? Double(unknown) / Double(counted) : nil
@@ -209,6 +224,7 @@ extension SharingSummary {
         } else {
             parts.append("\(percent(withinOne)) within 1 s · \(percent(withinTwo)) within 2 s")
         }
+        if hops > 0 { parts.append("watch hops \(hops) · median \(seconds(medianHop)) · slowest \(seconds(slowestHop))") }
         let radios = [LinkRadio.wifi, .bluetooth].map { "\($0.short) \(drops[$0, default: 0])" }
         parts.append("drops \(radios.joined(separator: ", "))")
         if hostRestarts > 0 { parts.append("host Bluetooth restarted \(hostRestarts)") }
@@ -241,6 +257,12 @@ extension SharingSummary {
                     "\(percent(withinTwo)) within 2 s", String(format: "slowest %.1f s", slowestDelay ?? 0), timed,
                 ].joined(separator: " · "))
             }
+        }
+        if hops > 0 {
+            let timed = "\(Self.grouped(timedHops)) of \(Self.grouped(hops)) timed"
+            lines.append(timedHops == 0 ? "Watch hops: \(timed)" : [
+                String(format: "Watch hops: %.1f s typical", medianHop ?? 0), String(format: "slowest %.1f s", slowestHop ?? 0), timed,
+            ].joined(separator: " · "))
         }
         let wifi = drops[.wifi, default: 0]
         var reach = ["Wi-Fi dropped \(wifi == 1 ? "once" : "\(wifi) times")", "Bluetooth \(drops[.bluetooth, default: 0])"]

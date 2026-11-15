@@ -15,8 +15,12 @@ struct ClubNightTests {
     /// What a full club night came to on every device: arrivals where nothing was wrong, the
     /// others, and whether one guest too many was told within 15 s.
     struct Night {
+        /// FR-010, on the phones: the shared link.
         var fine: [String: CourtHarness.DelayStats] = [:]
         var wrong: [String: CourtHarness.DelayStats] = [:]
+        /// FR-010a's hops where nothing was wrong, and FR-011 from the tap, on the watches.
+        var hops: [String: CourtHarness.DelayStats] = [:]
+        var fromTheTap: [String: CourtHarness.DelayStats] = [:]
         var everybodyOn = false
         var inStepAtEveryCheck = true
         var oneTooManyRefusedInTime = false
@@ -58,6 +62,11 @@ struct ClubNightTests {
         flapper.stop()
 
         for device in onTheNightDevices {
+            night.hops[device.name] = CourtHarness.DelayStats(court.hops(on: device).filter(\.nothingWrong))
+            if device.isWatch {
+                night.fromTheTap[device.name] = court.fromTheTap(on: device)
+                continue
+            }
             let arrivals = court.arrivals(on: device)
             night.fine[device.name] = CourtHarness.DelayStats(arrivals.filter(\.nothingWrong))
             night.wrong[device.name] = CourtHarness.DelayStats(arrivals.filter { !$0.nothingWrong })
@@ -125,6 +134,16 @@ struct ClubNightTests {
                 }
             }
             print("ClubNight \(name): \(fine.count) fine, median \(String(describing: fine.median)), p95 \(String(describing: fine.p95)), slowest \(String(describing: fine.slowest)); \(night.wrong[name]?.count ?? 0) not")
+        }
+        for (name, fromTheTap) in night.fromTheTap.sorted(by: { $0.key < $1.key }) {
+            #expect(night.hops[name]?.isJudgeable == true, "\(name): \(night.hops[name]?.count ?? 0) hops where nothing was wrong")
+            withKnownIssue("FR-011 in a busy hall is judged on calibrated radio speeds (T059)", isIntermittent: true) {
+                #expect(fromTheTap.share(within: .seconds(30)) == 1, "\(name): FR-011's 30 s")
+                #expect(fromTheTap.share(within: .seconds(5)) >= 0.95, "\(name): FR-011's 5 s")
+            }
+        }
+        for (name, hops) in night.hops.sorted(by: { $0.key < $1.key }) {
+            print("ClubNight \(name) hops: \(hops.count), median \(String(describing: hops.median)), p95 \(String(describing: hops.p95)), slowest \(String(describing: hops.slowest))")
         }
     }
 

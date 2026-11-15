@@ -10,8 +10,9 @@ struct SharingSummaryTests {
     private func at(_ seconds: Double) -> Date { start.addingTimeInterval(seconds) }
 
     private func entry(_ seconds: Double, _ kind: LinkEvent, _ link: LinkRecordEntry.Link = .radio,
-                       on device: LinkRecordEntry.Device = .phone, radios: [LinkRadio]? = nil, detail: String? = nil) -> LinkRecordEntry {
-        LinkRecordEntry(time: at(seconds), device: device, link: link, kind: kind, radios: radios, detail: detail)
+                       on device: LinkRecordEntry.Device = .phone, radios: [LinkRadio]? = nil, detail: String? = nil,
+                       leg: LinkRecordEntry.Leg? = nil) -> LinkRecordEntry {
+        LinkRecordEntry(time: at(seconds), device: device, link: link, kind: kind, radios: radios, detail: detail, leg: leg)
     }
 
     /// A guest on the host over both radios, and `count` points arriving every 10 s.
@@ -137,6 +138,43 @@ struct SharingSummaryTests {
         #expect(summary.points == 0)
         #expect(summary.medianDelay == nil)
         #expect(summary.withinOne == nil)
+    }
+
+    /// Spec 005, FR-010: a point tapped on a watch following its phone is judged from when that
+    /// phone had it, and FR-006's cap counts its link, known or not.
+    @Test func aPointTappedOnAWatchIsJudgedOnItsLink() {
+        var entries = guestStint(points: [])
+        for index in 0 ..< 100 {
+            let leg: LinkRecordEntry.Leg = .link(index < 5 ? nil : 0.2)
+            entries.append(entry(40 + Double(index) * 10, .pointArrived(latency: 1.4), .host(host), radios: [.wifi], leg: leg))
+        }
+        let summary = LinkRecord(entries).summaries()[0]
+        #expect(summary.points == 100)
+        #expect(summary.knownDelays == 95)
+        #expect(summary.unknownShare == 0.05)
+        #expect(summary.medianDelay == 0.2)
+        #expect(summary.withinOne == 1)
+    }
+
+    /// FR-010a: hops between a watch and its own phone are left out of FR-010's numbers, and
+    /// summed up apart: the scorer's watch to its phone, and a phone to the watch following it.
+    @Test func hopsBetweenAWatchAndItsPhoneAreSummarisedApart() {
+        var entries = guestStint(points: [0.3])
+        entries.append(entry(2, .proven, .pair))
+        entries.append(entry(2, .proven, .pair, on: .watch))
+        entries.append(entry(60, .pointArrived(latency: 0.5), .pair))
+        entries.append(entry(61, .pointArrived(latency: 0.8), .pair, on: .watch, leg: .hop(0.3)))
+        entries.append(entry(62, .pointArrived(latency: nil), .pair, on: .watch, leg: .hop(nil)))
+        entries.append(entry(63, .pointArrived(latency: 1.6), .pair, on: .watch, leg: .hop(0.9)))
+        let summary = LinkRecord(entries).summaries()[0]
+        #expect(summary.points == 1)
+        #expect(summary.knownDelays == 1)
+        #expect(summary.unknownShare == 0)
+        #expect(summary.hops == 4)
+        #expect(summary.medianHop == 0.5)
+        #expect(summary.slowestHop == 0.9)
+        #expect(summary.line(in: .current).contains("watch hops 4 · median 0.50 s · slowest 0.90 s"))
+        #expect(summary.headerLines(in: .current).contains("Watch hops: 0.5 s typical · slowest 0.9 s · 3 of 4 timed"))
     }
 
     @Test func theHeaderReadsAsTheScreensContractSays() {

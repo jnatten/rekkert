@@ -77,11 +77,12 @@ struct ClockOffsetTests {
                 return latency >= 0
             }
             #expect(fromWatch.count >= 100, "\(player.phone.name): \(fromWatch.count) of its watch's delays")
-            let ownTimed = record.entries.count {
-                guard $0.device == .phone, case .pointArrived(_?) = $0.kind else { return false }
+            // The watch's arrivals are its hops from the phone (FR-010a), beside the phone's own.
+            let ownHops = record.entries.count {
+                guard $0.device == .phone, $0.link == .pair, case .pointArrived = $0.kind else { return false }
                 return true
             }
-            #expect((record.summaries().last?.knownDelays ?? 0) > ownTimed, "\(player.phone.name): the summary leaves the watch out")
+            #expect((record.summaries().last?.hops ?? 0) > ownHops, "\(player.phone.name): the summary leaves the watch out")
         }
     }
 

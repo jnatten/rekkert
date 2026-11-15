@@ -19,7 +19,8 @@
 | Message | Before | After | Who sets it | Who reads it |
 |---|---|---|---|---|
 | `hello` | `hello(sessionID:, vector:, from:)` | `+ clock: Date?`, `+ protocol: Int?` | Every sender from this release. `clock` is the sender's time when it encodes the hello | The other end, to time a round trip (D-2) |
-| `events` | `events(sessionID:, events:)` | `+ offsets: [DeviceID: ClockSpan]?` | Every sender from this release, on every push | The receiver, to bound the sender's clock and compose its offset to each event's author |
+| `events` | `events(sessionID:, events:)` | `+ offsets: [DeviceID: ClockSpan]?`, `+ stamps: [Stamp]?` | Every sender from this release, on every push. On a link, `stamps` say when a point tapped on a watch following its phone reached that phone; each device that passes one on rewrites it in its own clock. To a phone's own watch, `stamps` say when the phone had each point | The receiver, to bound the sender's clock and compose its offset to each event's author; and to time a point from where FR-010 or FR-010a starts |
+| `snapshot` | `snapshot(log, role:, access:)` | `+ stamps: [Stamp]?` | A phone, to its own watch only: when it had the points of the last minute | The watch, to time the hop when the snapshot gets there before the push |
 | `noRoom` | `noRoom(sessionID:)` | `+ limit: Int?` | The host | The guest's phone and watch, to say how many fit |
 | `GuestCard` | `device, name, pairedTo, leaving` | `+ protocol: Int?` | Guests from this release | The host, to know which guests can understand `needsUpdate` |
 | `HostingStatus` (phone → watch) | `…, participants, …` | `+ limit: Int?` | The host's phone | The host's watch, for "N of M on" |
@@ -63,6 +64,14 @@ offset(far − near) ∈ [t₂ − t₄, t₂ − t₁]
 | This release host ↔ 1.1 guest | 1.1 skips `clock`, `protocol`, `offsets` and `limit`, and is never sent a `clock` question. Its hellos have no `clock`, so its delays read `unknown` on the host. It is counted once, as today |
 | 1.1 host ↔ this release guest | The guest gets no `offsets` and no `limit`. Delays from the host are known from direct samples; relayed delays read `unknown`. The guest's text falls back to "Match is full" without a number |
 | 1.0 guest over Wi-Fi | Unchanged from today. Known limit, D-14 |
+
+A `Stamp` is about the sender's own clock, and travels as at most three numbers: the event's
+place in the message (in the log's order, in a snapshot), milliseconds after the event's own tap
+reading, and how many milliseconds that could be out. A phone stamping its own watch's point
+writes `[0,350]`. A device passing a stamp on reads it through its bounds on the sender's clock,
+writes it in its own, and adds that bound's half-width to the spread, `[0,362,21]`. `[0]` means
+nothing on the way could bound it, and the point's link reads unknown. A receiver whose total
+spread is past FR-006's tenth records the link as unknown.
 
 `WireCompatibilityTests` decodes each changed message with and without its new fields, and
 decodes a 1.1-shaped payload with the new decoder, and the other way round.

@@ -4,7 +4,7 @@ import RekkertCore
 /// Where the sharing record is written from: the store, the coordinator and the stand-in each say
 /// what happened to a link as it happens.
 public protocol LinkRecording: AnyObject {
-    func record(_ kind: LinkEvent, link: LinkRecordEntry.Link, session: UUID?, radios: [LinkRadio]?, detail: String?)
+    func record(_ kind: LinkEvent, link: LinkRecordEntry.Link, session: UUID?, radios: [LinkRadio]?, detail: String?, leg: LinkRecordEntry.Leg?)
     func offer(batteryLevel level: Double?)
 }
 
@@ -13,9 +13,9 @@ extension LinkRecording {
 
     public func note(
         _ kind: LinkEvent, on link: LinkRecordEntry.Link = .radio, in session: UUID? = nil,
-        radios: [LinkRadio]? = nil, detail: String? = nil
+        radios: [LinkRadio]? = nil, detail: String? = nil, leg: LinkRecordEntry.Leg? = nil
     ) {
-        record(kind, link: link, session: session, radios: radios, detail: detail)
+        record(kind, link: link, session: session, radios: radios, detail: detail, leg: leg)
     }
 }
 
@@ -61,10 +61,10 @@ public final class LinkRecorder: LinkRecording {
             .appendingPathComponent("SharingRecord", isDirectory: true)
     }
 
-    public func record(_ kind: LinkEvent, link: LinkRecordEntry.Link, session: UUID?, radios: [LinkRadio]?, detail: String?) {
+    public func record(_ kind: LinkEvent, link: LinkRecordEntry.Link, session: UUID?, radios: [LinkRadio]?, detail: String?, leg: LinkRecordEntry.Leg?) {
         let entry = LinkRecordEntry(
             time: now(), device: device, session: session, link: link, kind: kind,
-            radios: radios.flatMap { $0.isEmpty ? nil : $0 }, detail: detail
+            radios: radios.flatMap { $0.isEmpty ? nil : $0 }, detail: detail, leg: leg
         )
         let day = LinkRecord.day(of: entry.time, in: calendar)
         if prunedOn != day { prune(today: entry.time) }

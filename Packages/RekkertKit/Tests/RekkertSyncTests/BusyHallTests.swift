@@ -48,6 +48,18 @@ struct BusyHallTests {
 
         var p95: [String: Duration] = [:]
         for device in court.devices {
+            // FR-010a's hops, reported, and FR-011 from the tap on a watch following its phone.
+            let hops = CourtHarness.DelayStats(court.hops(on: device).filter(\.nothingWrong))
+            print("BusyHall \(device.name) hops: \(hops.count), median \(String(describing: hops.median)), p95 \(String(describing: hops.p95)), slowest \(String(describing: hops.slowest))")
+            if device.isWatch {
+                #expect(hops.isJudgeable, "\(device.name): \(hops.count) hops where nothing was wrong")
+                let fromTheTap = court.fromTheTap(on: device)
+                withKnownIssue("FR-011 in a busy hall is judged on calibrated radio speeds (T059)", isIntermittent: true) {
+                    #expect(fromTheTap.share(within: .seconds(30)) == 1, "\(device.name): FR-011's 30 s")
+                    #expect(fromTheTap.share(within: .seconds(5)) >= 0.95, "\(device.name): FR-011's 5 s")
+                }
+                continue
+            }
             let arrivals = court.arrivals(on: device)
             let fine = CourtHarness.DelayStats(arrivals.filter(\.nothingWrong))
             let wrong = CourtHarness.DelayStats(arrivals.filter { !$0.nothingWrong })

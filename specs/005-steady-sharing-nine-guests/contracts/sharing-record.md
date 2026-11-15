@@ -19,6 +19,8 @@
 | A point's delay, known | `pointArrived(<seconds, 3 places>s)` | `pointArrived(0.412s)` |
 | A point's delay, unknown (FR-006) | `pointArrived(unknown)` | `pointArrived(unknown)` |
 | A point's delay, unknown because it came from or through a 1.1 device | `pointArrived(unknown; older)` | `pointArrived(unknown; older)` |
+| A point tapped on a watch following its phone, on every other phone: also how long after that phone had it (FR-010) | `; link <seconds>s` or `; link unknown` after the delay | `pointArrived(0.412s; link 0.101s)` |
+| On a watch following its phone: also how long after that phone had the point (FR-010a) | `; hop <seconds>s` or `; hop unknown` after the delay | `pointArrived(0.700s; hop 0.290s)` |
 | A battery reading | `battery(<percent>%)`, on the `radio` link | `battery(83%)` |
 | Reach on the host, with the radios up | Both radios up gives `bt+wifi` | `guest 255B bt+wifi  outOfReach` |
 

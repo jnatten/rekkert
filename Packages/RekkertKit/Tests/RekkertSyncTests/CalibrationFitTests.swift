@@ -35,6 +35,27 @@ struct CalibrationFitTests {
         #expect(measured.away.map { [$0.from, $0.to] } == [[90.5, 120.5], [190.5, 195.5]])
     }
 
+    /// Spec 005, FR-017: a point tapped on a guest's watch is fitted from when it reached the
+    /// guest's phone, so the watch's hop is not taken for the radio's speed.
+    @Test func pointsTappedOnWatchesAreFittedOnTheirLink() throws {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let guest = DeviceID()
+        var entries = [LinkRecordEntry(time: start, device: .phone, link: .guest(guest), kind: .proven, radios: [.bluetooth])]
+        for index in 0 ..< 30 {
+            entries.append(LinkRecordEntry(
+                time: start.addingTimeInterval(10 + Double(index) * 10), device: .phone, link: .guest(guest),
+                kind: .pointArrived(latency: 1.4), radios: [.bluetooth], leg: .link(0.2)
+            ))
+        }
+        let export = LinkRecord(entries).export(
+            LinkRecord.Header(app: "1.2 (80)", phoneSystem: "iOS 27.0", phone: DeviceID()), now: start.addingTimeInterval(400), in: calendar
+        )
+        let measured = try #require(Calibration.measure(export, in: calendar))
+        #expect(measured.fastest == .seconds(0.2))
+        #expect(measured.p95 == .seconds(0.2))
+        #expect(measured.taps.first?.at == 0)
+    }
+
     @Test func aRecordFromAKnownRadioIsFittedBackWithinAQuarter() async throws {
         var known = Airwaves.Settings()
         known.latency = .milliseconds(25)

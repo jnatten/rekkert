@@ -31,7 +31,7 @@ struct LongEveningRecordTests {
         for index in 0 ..< points {
             clock.now += 12
             phone.note(.pointArrived(latency: 0.4 + Double(index % 7) / 10), on: .host(host), radios: [.bluetooth, .wifi])
-            watch.note(.pointArrived(latency: 0.5), on: .pair)
+            watch.note(.pointArrived(latency: 0.5), on: .pair, leg: .hop(0.1))
             if index.isMultiple(of: 100) { phone.offer(batteryLevel: 1 - Double(index) / 2_000) }
             // Every write is on the main actor, as in the app: the suites waiting on it in real
             // time get their turn.
@@ -49,7 +49,8 @@ struct LongEveningRecordTests {
         #expect(LinkRecord.parse(text, in: calendar).count == record.entries.count)
         #expect(text.utf8.count < 500_000, "\(text.utf8.count) bytes exported")
         let summary = try #require(record.summaries().last)
-        #expect(summary.points == points * 2)
+        #expect(summary.points == points)
+        #expect(summary.hops == points)
 
         clock.now += 8 * 86_400
         #expect(phone.read().entries.isEmpty)

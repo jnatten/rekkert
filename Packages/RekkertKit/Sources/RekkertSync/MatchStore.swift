@@ -180,6 +180,11 @@ public final class MatchStore {
     /// Tests only: how many times the host asked a guest it had not heard from.
     @ObservationIgnored private(set) var quietGuestsAsked = 0
     @ObservationIgnored private var quietGuestAskedAt: [DeviceID: Date] = [:]
+    /// Who first had each point on the shared link, for one tapped on a watch following its phone,
+    /// and when this phone had each point it passes on to its watch (spec 005, FR-010, FR-010a).
+    @ObservationIgnored private var linkStamps: [EventID: Had] = [:]
+    @ObservationIgnored private var hadAt: [EventID: Date] = [:]
+    @ObservationIgnored private var stampedSession: UUID?
     /// Bounds on other devices' clocks, for timing points from the tap (spec 005, D-2).
     @ObservationIgnored private var clocks = ClockBook()
     /// After this device's clock jumped, what others still know of it is stale for a while.
@@ -1653,7 +1658,8 @@ public final class MatchStore {
             deliver(lacking, on: link, in: session)
         }
         let offsets = clockOffsets(for: pairedDevice, authors: events)
-        guard let payload = try? Wire.events(sessionID: session, events: events, offsets: offsets).encoded() else { return }
+        let stamps = keepsHistory ? stamps(for: events) { hadAt[$0.id].map { Had(at: $0, spread: 0) } } : nil
+        guard let payload = try? Wire.events(sessionID: session, events: events, offsets: offsets, stamps: stamps).encoded() else { return }
         Task {
             let asked = now()
             guard let reply = await sendLiveBesideLinks(payload) else {
@@ -1670,7 +1676,8 @@ public final class MatchStore {
     @discardableResult
     private func deliver(_ events: [MatchEvent], on link: LinkID, in session: UUID) -> Task<Void, Never>? {
         let offsets = clockOffsets(for: farEnds[link], authors: events)
-        guard let payload = try? Wire.events(sessionID: session, events: events, offsets: offsets).encoded() else { return nil }
+        let stamps = stamps(for: events) { linkStamps[$0.id] }
+        guard let payload = try? Wire.events(sessionID: session, events: events, offsets: offsets, stamps: stamps).encoded() else { return nil }
         let ids = Set(events.map(\.id))
         delivering[link, default: []].formUnion(ids)
         return Task {
@@ -1773,6 +1780,76 @@ public final class MatchStore {
         for (author, hop) in offsets where author != device && author != sender {
             clocks.learn(onSender.composed(with: hop.bounds(at: arrival)), for: author, at: arrival)
         }
+    }
+
+    /// When this device had a point, by its own clock, and how far that could be out: `nil`
+    /// when nothing on the way bounded it.
+    private struct Had {
+        var at: Date?
+        var spread: TimeInterval
+    }
+
+    private func stamps(for events: [MatchEvent], had: (MatchEvent) -> Had?) -> [Stamp]? {
+        guard !actsAsOlderBuild else { return nil }
+        let stamps = events.enumerated().compactMap { index, event -> Stamp? in
+            guard let tap = event.at, let had = had(event) else { return nil }
+            guard let at = had.at else { return Stamp(index: index) }
+            return Stamp(
+                index: index, sinceTap: Int((at.timeIntervalSince(tap) * 1_000).rounded()),
+                spread: Int((had.spread * 1_000).rounded(.up))
+            )
+        }
+        return stamps.isEmpty ? nil : stamps
+    }
+
+    /// `sender`'s stamps, read on this device's clock through what it knows of the sender's.
+    private func had(_ stamps: [Stamp]?, in events: [MatchEvent], from sender: DeviceID?) -> [EventID: Had] {
+        guard let stamps, !actsAsOlderBuild else { return [:] }
+        let arrival = now()
+        let bounds = sender.flatMap { olderDevices.contains($0) ? nil : clocks[$0]?.aged(at: arrival) }
+        var had: [EventID: Had] = [:]
+        for stamp in stamps where events.indices.contains(stamp.index) {
+            let event = events[stamp.index]
+            guard let tap = event.at else { continue }
+            guard let sinceTap = stamp.sinceTap, let bounds else {
+                had[event.id] = Had(at: nil, spread: 0)
+                continue
+            }
+            let onSender = tap.addingTimeInterval(TimeInterval(sinceTap) / 1_000)
+            had[event.id] = Had(at: onSender.addingTimeInterval(-bounds.estimate), spread: TimeInterval(stamp.spread) / 1_000 + bounds.halfWidth)
+        }
+        return had
+    }
+
+    /// How long after this device had a point, by `had`, it arrived: unknown past FR-006's tenth.
+    private func delay(since had: Had, arrivedAt arrival: Date) -> TimeInterval? {
+        guard let at = had.at, had.spread + ClockBounds.rounding <= ClockBounds.budget else { return nil }
+        if let jumped = clockChangedAt, arrival.timeIntervalSince(jumped) < 60, arrival >= jumped { return nil }
+        return arrival.timeIntervalSince(at)
+    }
+
+    /// The part of the way FR-010 or FR-010a judges, for a point that arrived here, where it is
+    /// not from the tap. Notes what this device passes on as it goes.
+    private func leg(
+        of event: MatchEvent, tapDelay latency: TimeInterval?, had: Had?, arrivedAt arrival: Date, from packet: InboundPacket
+    ) -> LinkRecordEntry.Leg? {
+        if stampedSession != log.sessionID {
+            stampedSession = log.sessionID
+            linkStamps = [:]
+            hadAt = [:]
+        }
+        guard packet.isFromPairedDevice else {
+            if keepsHistory { hadAt[event.id] = arrival }
+            guard let had else { return nil }
+            linkStamps[event.id] = had
+            return .link(delay(since: had, arrivedAt: arrival))
+        }
+        if keepsHistory {
+            if event.id.device == pairedDevice { linkStamps[event.id] = Had(at: arrival, spread: 0) }
+            return nil
+        }
+        if event.id.device == pairedDevice { return .hop(latency) }
+        return .hop(had.flatMap { delay(since: $0, arrivedAt: arrival) })
     }
 
     /// How long after its tap `event` arrived from `sender`, and whether an unknown answer is
@@ -1964,7 +2041,7 @@ public final class MatchStore {
                 learn(packet.reply == nil ? vector : vector.merging(log.coverage), on: link)
             }
 
-        case .events(let sessionID, let events, let offsets):
+        case .events(let sessionID, let events, let offsets, let stamps):
             if retired.contains(sessionID) {
                 guard let ended = overturnedEnding(of: sessionID, by: events) else {
                     return announceRetirement(of: sessionID, to: packet)
@@ -1979,7 +2056,7 @@ public final class MatchStore {
                     heldOnLink[sibling] = held.extended(by: events.map(\.id))
                 }
             }
-            relay(events, from: packet, offsets: offsets)
+            relay(events, from: packet, offsets: offsets, stamps: stamps)
             packet.reply?(encode(ownHello))
 
         case .retired(let sessionID, let archive, let farewell):
@@ -2198,7 +2275,7 @@ public final class MatchStore {
             }
             packet.reply?(encode(ownHello))
 
-        case .snapshot(let incoming, let pairRole, let access):
+        case .snapshot(let incoming, let pairRole, let access, let stamps):
             if packet.isFromPairedDevice, let pairRole { heardThePairIsOn(incoming, as: pairRole) }
             if retired.contains(incoming.sessionID) {
                 guard let ended = overturnedEnding(of: incoming.sessionID, by: incoming.ordered) else {
@@ -2206,7 +2283,7 @@ public final class MatchStore {
                 }
                 pickBackUp(ended)
                 arrive(on: ended.sessionID, from: packet)
-                relay(incoming.ordered, from: packet)
+                relay(incoming.ordered, from: packet, stamps: packet.isFromPairedDevice ? stamps : nil)
             } else if incoming.isEmpty {
                 // A peer that has not started anything yet is not a competing session, but
                 // it does need ours — and it cannot ask for it, since the reply it would
@@ -2228,7 +2305,7 @@ public final class MatchStore {
                     // adopting would file the live match to History as displaced and drop
                     // whatever was scored here while out of reach.
                     arrive(on: incoming.sessionID, from: packet)
-                    relay(incoming.ordered, from: packet)
+                    relay(incoming.ordered, from: packet, stamps: packet.isFromPairedDevice ? stamps : nil)
                 } else {
                     // A code was typed, so this is the session that was asked for, whatever
                     // the clocks say about which of the two was started more recently — and
@@ -2303,7 +2380,7 @@ public final class MatchStore {
                 }
             } else if incoming.sessionID == log.sessionID {
                 arrive(on: incoming.sessionID, from: packet)
-                relay(incoming.ordered, from: packet)
+                relay(incoming.ordered, from: packet, stamps: packet.isFromPairedDevice ? stamps : nil)
             } else if packet.isFromPairedDevice, pairedRole == .host {
                 // A host is never taken over, so the watch on the same wrist is the one that
                 // gives way, whatever it thought it was on.
@@ -2392,12 +2469,13 @@ public final class MatchStore {
         if counterpartLeftSessionID == session { counterpartLeftSessionID = nil }
     }
 
-    private func relay(_ incoming: [MatchEvent], from packet: InboundPacket, offsets: [DeviceID: ClockSpan]? = nil) {
+    private func relay(_ incoming: [MatchEvent], from packet: InboundPacket, offsets: [DeviceID: ClockSpan]? = nil, stamps: [Stamp]? = nil) {
         if packet.link != nil { echoesHeard += incoming.count { $0.id.device == device } }
         let arrival = now()
         let sender = packet.isFromPairedDevice ? pairedDevice : packet.link.flatMap { farEnds[$0] }
         if let offsets, let sender { learnOffsets(offsets, from: sender, at: arrival) }
         let fresh = incoming.filter { log.events[$0.id] == nil }
+        let had = had(stamps, in: incoming, from: sender)
         let before = state
         let session = log.sessionID
         guard log.merge(fresh) else { return }
@@ -2405,9 +2483,10 @@ public final class MatchStore {
         for event in fresh {
             guard case .point = event.kind else { continue }
             let (latency, older) = delay(of: event, arrivedAt: arrival, from: sender)
+            let leg = leg(of: event, tapDelay: latency, had: had[event.id], arrivedAt: arrival, from: packet)
             recorder?.note(
                 .pointArrived(latency: latency), on: source(of: packet), in: session,
-                radios: radios(of: packet), detail: older ? "older" : nil
+                radios: radios(of: packet), detail: older ? "older" : nil, leg: leg
             )
         }
         let overruled = packet.isFromPairedDevice ? [] : overrule(endingsIn: fresh)
@@ -2713,7 +2792,15 @@ public final class MatchStore {
     /// to every link at once and, with seven joining, once for each of them.
     private func snapshot(forThePair: Bool = true, withTheList: Bool = true) -> Data {
         let access = (role == .host && withTheList) || (forThePair && role == .guest) ? accessTable : nil
-        return encode(.snapshot(log, role: forThePair ? role : nil, access: access))
+        return encode(.snapshot(log, role: forThePair ? role : nil, access: access, stamps: forThePair ? recentStamps() : nil))
+    }
+
+    private func recentStamps() -> [Stamp]? {
+        guard keepsHistory, stampedSession == log.sessionID else { return nil }
+        let moment = now()
+        return stamps(for: log.ordered) { event in
+            hadAt[event.id].flatMap { moment.timeIntervalSince($0) <= 60 ? Had(at: $0, spread: 0) : nil }
+        }
     }
 
     /// Put down before anything is weighed. Only a guest is acted on here: the other roles carry

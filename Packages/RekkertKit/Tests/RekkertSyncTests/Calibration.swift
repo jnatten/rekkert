@@ -38,7 +38,8 @@ enum Calibration {
 
         let arrivals = lines.compactMap { line -> (time: Date, latency: TimeInterval?, guest: Int, radios: [LinkRadio]?)? in
             guard case .pointArrived(let latency) = line.kind, let guest = guests.firstIndex(of: line.link) else { return nil }
-            return (line.time, latency, guest, line.radios)
+            let delay: TimeInterval? = if case .link(let seconds)? = line.leg { seconds } else { latency }
+            return (line.time, delay, guest, line.radios)
         }
         let delays = arrivals.filter { $0.radios == [.bluetooth] }.compactMap(\.latency).sorted()
         guard delays.count >= 20 else { return nil }

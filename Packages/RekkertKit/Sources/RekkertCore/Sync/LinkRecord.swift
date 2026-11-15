@@ -46,10 +46,43 @@ public struct LinkRecordEntry: Codable, Sendable, Hashable, Identifiable {
     public var radios: [LinkRadio]?
     /// One short code with a drop (`ETIMEDOUT`), or `older` with a delay a 1.1 device left unknown.
     public var detail: String?
+    /// With a delay, the part of the way FR-010 or FR-010a judges, where it is not from the tap.
+    public var leg: Leg?
+
+    /// `nil` inside is unknown.
+    public enum Leg: Codable, Sendable, Hashable {
+        /// A point tapped on a watch following its phone, from when that phone had it (FR-010).
+        case link(TimeInterval?)
+        /// On a watch following its phone, from when that phone had the point (FR-010a).
+        case hop(TimeInterval?)
+
+        var text: String {
+            switch self {
+            case .link(let seconds): "link " + Self.text(seconds)
+            case .hop(let seconds): "hop " + Self.text(seconds)
+            }
+        }
+
+        init?(text: String) {
+            let words = text.split(separator: " ", maxSplits: 1).map(String.init)
+            guard words.count == 2 else { return nil }
+            let seconds: TimeInterval?? = words[1] == "unknown" ? .some(nil) : TimeInterval(words[1].dropLast()).map { .some($0) }
+            guard let seconds else { return nil }
+            switch words[0] {
+            case "link": self = .link(seconds)
+            case "hop": self = .hop(seconds)
+            default: return nil
+            }
+        }
+
+        private static func text(_ seconds: TimeInterval?) -> String {
+            seconds.map { String(format: "%.3fs", $0) } ?? "unknown"
+        }
+    }
 
     public init(
         id: UUID = UUID(), time: Date, device: Device, session: UUID? = nil, link: Link = .radio,
-        kind: LinkEvent, radios: [LinkRadio]? = nil, detail: String? = nil
+        kind: LinkEvent, radios: [LinkRadio]? = nil, detail: String? = nil, leg: Leg? = nil
     ) {
         self.id = id
         self.time = time
@@ -59,6 +92,7 @@ public struct LinkRecordEntry: Codable, Sendable, Hashable, Identifiable {
         self.kind = kind
         self.radios = radios.map { Array(Set($0)).sorted() }
         self.detail = detail
+        self.leg = leg
     }
 }
 
@@ -244,6 +278,7 @@ public struct LinkRecord: Sendable, Hashable {
         public var session: String?
         public var radios: [LinkRadio]? = nil
         public var detail: String? = nil
+        public var leg: LinkRecordEntry.Leg? = nil
     }
 
     /// The plain text of `contracts/sharing-record.md`.
@@ -290,8 +325,10 @@ public struct LinkRecord: Sendable, Hashable {
                     link = words.dropLast().joined(separator: " ")
                 }
             }
-            let detail = columns[3].range(of: "; ").map { String(columns[3][$0.upperBound...].dropLast()) }
-            return Line(time: time, device: device, link: link, kind: kind, session: session, radios: radios, detail: detail)
+            let extras = columns[3].range(of: "; ").map { String(columns[3][$0.upperBound...].dropLast()).components(separatedBy: "; ") } ?? []
+            let leg = extras.lazy.compactMap(LinkRecordEntry.Leg.init(text:)).first
+            let detail = extras.first { LinkRecordEntry.Leg(text: $0) == nil }
+            return Line(time: time, device: device, link: link, kind: kind, session: session, radios: radios, detail: detail, leg: leg)
         }
     }
 

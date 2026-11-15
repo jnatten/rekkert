@@ -203,6 +203,26 @@ final class CourtHarness {
         }
     }
 
+    /// Each `link` or `hop` `device` recorded, beside the true one: from when the scorer's phone
+    /// had the point, or from when this watch's own phone did (spec 005, FR-010, FR-010a).
+    func recordedLegs(on device: Device) -> [(leg: LinkRecordEntry.Leg, truth: TimeInterval)] {
+        let key = ObjectIdentifier(device)
+        let kind: LinkRecordEntry.Device = device.isWatch ? .watch : .phone
+        return device.recorder.read().entries.compactMap { entry in
+            guard entry.device == kind, case .pointArrived = entry.kind, let leg = entry.leg else { return nil }
+            let instant = (entry.time.timeIntervalSince(CourtHarness.epoch) - device.clockOffset) / (1 + device.drift)
+            let nearest = scored.filter { arrived[$0.key]?[key] != nil }
+                .min { abs(arrived[$0.key]![key]!.seconds - instant) < abs(arrived[$1.key]![key]!.seconds - instant) }
+            guard let nearest, abs(arrived[nearest.key]![key]!.seconds - instant) < 1 else { return nil }
+            let from: Device? = switch leg {
+            case .link: scorer[nearest.key].flatMap(scoringPhone(of:))
+            case .hop: counterpart(of: device)
+            }
+            guard let from, let had = arrived[nearest.key]?[ObjectIdentifier(from)] else { return nil }
+            return (leg, instant - had.seconds)
+        }
+    }
+
     /// The time `device` shows when the radio's clock reads `instant`.
     func deviceTime(of device: Device, at instant: Duration) -> Date {
         CourtHarness.epoch.addingTimeInterval(instant.seconds * (1 + device.drift) + device.clockOffset)
@@ -420,30 +440,89 @@ final class CourtHarness {
         let nothingWrong: Bool
     }
 
-    /// Every point tapped elsewhere, as it reached `device`: the scorer's own phone or watch
-    /// counts, the device that tapped does not (spec 005, FR-010).
+    /// FR-010: every point that reached `device` on the shared link, timed from when it was first
+    /// there: the tap, or for a point tapped on a watch following its phone, that phone having it.
+    /// A watch following its phone has none, and nor does the device the point was first on.
     func arrivals(on device: Device) -> [Arrival] {
         let key = ObjectIdentifier(device)
-        let entries = device.recorder.read().entries.filter { $0.device == (device.isWatch ? .watch : .phone) }
-        let pair = counterpart(of: device)
-        let pairEntries = device.isWatch ? pair?.recorder.read().entries.filter { $0.device == .phone } : nil
+        let entries = ownEntries(of: device)
+        let onHost = device === host.phone || device === host.watch
+        return scored.compactMap { event, tapped -> Arrival? in
+            guard let by = scorer[event], by != key, let start = firstOnTheSharedLink(event, tappedAt: tapped),
+                  start.device !== device
+            else { return nil }
+            let landed = arrived[event]?[key]
+            let time = deviceTime(of: device, at: landed ?? clock.now)
+            guard isOnTheSharedLink(device, entries: entries, at: time) else { return nil }
+            let fine = ArrivalConditions.nothingWrong(
+                arrivalAt: time, from: onHost ? scoringPhone(of: by)?.id : nil, entries: entries
+            )
+            return Arrival(event: event, delay: landed.map { $0 - start.at }, nothingWrong: fine)
+        }
+    }
+
+    /// FR-010a: the hops between `device` and its own phone or watch. On a phone, its watch's taps
+    /// reaching it; on a watch following its phone, every other point, from when the phone had it.
+    func hops(on device: Device) -> [Arrival] {
+        let key = ObjectIdentifier(device)
+        guard let other = counterpart(of: device) else { return [] }
+        let otherKey = ObjectIdentifier(other)
+        let entries = ownEntries(of: device)
         return scored.compactMap { event, tapped -> Arrival? in
             guard let by = scorer[event], by != key else { return nil }
             let landed = arrived[event]?[key]
-            let instant = landed ?? clock.now
-            let fromPair = pair.map { ObjectIdentifier($0) == by } ?? false
-            let onHost = device === host.phone || device === host.watch
-            let fromGuest = onHost ? scoringPhone(of: by)?.id : nil
-            let fine = ArrivalConditions.nothingWrong(
-                arrivalAt: deviceTime(of: device, at: instant),
-                on: device.isWatch ? .watch : .phone,
-                from: fromGuest,
-                fromPairedDevice: fromPair,
-                entries: entries,
-                pairEntries: fromPair ? nil : pairEntries
+            let time = deviceTime(of: device, at: landed ?? clock.now)
+            let from: Duration?
+            if device.isWatch {
+                guard !isOnTheSharedLink(device, entries: entries, at: time) else { return nil }
+                from = by == otherKey ? tapped : arrived[event]?[otherKey]
+            } else {
+                guard by == otherKey, firstOnTheSharedLink(event, tappedAt: tapped)?.device === device else { return nil }
+                from = tapped
+            }
+            guard let from else { return nil }
+            return Arrival(
+                event: event, delay: landed.map { $0 - from },
+                nothingWrong: ArrivalConditions.hopNothingWrong(arrivalAt: time, entries: entries)
             )
-            return Arrival(event: event, delay: landed.map { $0 - tapped }, nothingWrong: fine)
         }
+    }
+
+    /// FR-011: every point tapped elsewhere, from the tap, as spec 001's times count it.
+    func fromTheTap(on device: Device) -> DelayStats {
+        let key = ObjectIdentifier(device)
+        return DelayStats(delays: scored.compactMap { event, tapped -> Duration?? in
+            guard let by = scorer[event], by != key else { return nil }
+            return .some(arrived[event]?[key].map { $0 - tapped })
+        })
+    }
+
+    private func ownEntries(of device: Device) -> [LinkRecordEntry] {
+        device.recorder.read().entries.filter { $0.device == (device.isWatch ? .watch : .phone) }
+    }
+
+    /// A phone, or a watch standing in for it on its own link to the host.
+    private func isOnTheSharedLink(_ device: Device, entries: [LinkRecordEntry], at time: Date) -> Bool {
+        guard device.isWatch else { return true }
+        var open = 0
+        for entry in entries where entry.time <= time {
+            guard case .host = entry.link else { continue }
+            switch entry.kind {
+            case .proven: open += 1
+            case .dropped, .wroteOff, .redialled: open = max(0, open - 1)
+            default: break
+            }
+        }
+        return open > 0
+    }
+
+    private func firstOnTheSharedLink(_ event: EventID, tappedAt tapped: Duration) -> (device: Device, at: Duration)? {
+        guard let by = scorer[event], let tapper = devices.first(where: { ObjectIdentifier($0) == by }) else { return nil }
+        if isOnTheSharedLink(tapper, entries: ownEntries(of: tapper), at: deviceTime(of: tapper, at: tapped)) {
+            return (tapper, tapped)
+        }
+        guard let phone = counterpart(of: tapper), let had = arrived[event]?[ObjectIdentifier(phone)] else { return nil }
+        return (phone, had)
     }
 
     private func scoringPhone(of key: ObjectIdentifier) -> Device? {

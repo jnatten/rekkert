@@ -78,7 +78,9 @@ struct CourtHarnessTests {
         #expect(await court.until(within: .seconds(30)) { court.allInStep() })
     }
 
-    @Test func arrivalsLeaveOutOnlyTheDeviceThatTapped() async {
+    /// Spec 005, FR-010 and FR-010a: the shared link counts from where a point was first on it,
+    /// and each watch's hop to or from its phone is counted apart.
+    @Test func arrivalsCountTheSharedLinkAndHopsApart() async {
         let court = CourtHarness(guests: 1)
         court.startMatch()
         court.share()
@@ -88,11 +90,21 @@ struct CourtHarnessTests {
         #expect(await court.until(within: .seconds(30)) { court.allInStep() })
 
         #expect(court.arrivals(on: court.host.phone).isEmpty)
-        #expect(court.arrivals(on: court.host.watch!).count == 1)
+        #expect(court.arrivals(on: court.host.watch!).isEmpty)
+        #expect(court.hops(on: court.host.watch!).count == 1)
         let onGuest = court.arrivals(on: court.guests.first!.phone)
         #expect(onGuest.count == 1)
         #expect(onGuest.first?.delay != nil)
         #expect(onGuest.first?.nothingWrong == true)
+
+        let guest = court.guests.first!
+        court.score(on: guest.watch!)
+        #expect(await court.until(within: .seconds(30)) { court.allInStep() })
+        #expect(court.arrivals(on: guest.phone).count == 1, "only the host's point: the watch's starts the link here")
+        #expect(court.hops(on: guest.phone).count == 1)
+        #expect(court.arrivals(on: court.host.phone).count == 1)
+        #expect(court.hops(on: court.host.watch!).count == 2)
+        #expect(court.fromTheTap(on: court.host.watch!).count == 2)
     }
 
     @Test func aPointThatNeverArrivesCountsAsLate() {
