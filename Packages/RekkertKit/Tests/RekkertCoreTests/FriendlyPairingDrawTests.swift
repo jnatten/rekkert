@@ -119,4 +119,35 @@ struct FriendlyPairingDrawTests {
         let elapsed = try clock.measure { _ = try draw(session, rounds: 30) }
         #expect(elapsed < .milliseconds(500))
     }
+
+    @Test func fourWithTwoTogetherRepeat() throws {
+        let session = try draw(ruled(makeFriendly(players: 4), together(0, 1)), rounds: 20)
+        let p = session.players.map(\.id)
+        #expect(arePartners(session.rounds[0], p[0], p[1]))
+        #expect(session.rounds.allSatisfy { $0.teams == session.rounds[0].teams && $0.unkept.isEmpty })
+    }
+
+    @Test func sixWithTwoTogether() throws {
+        let session = try draw(ruled(makeFriendly(players: 6), together(0, 1)), rounds: 12)
+        let p = session.players.map(\.id)
+        var counts = Dictionary(uniqueKeysWithValues: p.map { ($0, 0) })
+        for round in session.rounds {
+            let onCourt = Set(round.teams.a + round.teams.b)
+            if onCourt.contains(p[0]), onCourt.contains(p[1]) {
+                #expect(arePartners(round, p[0], p[1]))
+            }
+            #expect(round.unkept.isEmpty)
+            for id in round.sitOuts { counts[id, default: 0] += 1 }
+            #expect((counts.values.max() ?? 0) - (counts.values.min() ?? 0) <= 1)
+        }
+    }
+
+    @Test func togetherAndApartThatCannotBothHoldAreFlagged() throws {
+        let rules = { (ids: [PlayerID]) in together(0, 1)(ids) + apart(2, 3)(ids) }
+        let session = try draw(ruled(makeFriendly(players: 4), rules), rounds: 9)
+        #expect(session.rounds.allSatisfy { $0.unkept.count == 1 })
+        for round in session.rounds {
+            #expect(round.teams == session.rounds[round.index % 3].teams)
+        }
+    }
 }

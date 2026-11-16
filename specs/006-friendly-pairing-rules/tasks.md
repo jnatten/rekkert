@@ -315,7 +315,7 @@ round with both on court has them as partners, and the other four rotate as usua
 
 ### Tests for User Story 3 ⚠️ (write first; they must fail)
 
-- [ ] T027 [P] [US3] Add to `CoreTests/FriendlyPairingDrawTests.swift`:
+- [X] T027 [P] [US3] Add to `CoreTests/FriendlyPairingDrawTests.swift`:
   - `fourWithTwoTogetherRepeat`: 20 rounds with P0 and P1 together. Every round has the same `teams` as round 1, sides included.
   - `sixWithTwoTogether`: 12 rounds with P0 and P1 together.
     - Every round with both on court has them as partners, and `unkept` is empty.
@@ -325,11 +325,11 @@ round with both on court has them as partners, and the other four rotate as usua
 
 ### Implementation for User Story 3
 
-- [ ] T028 [US3] Extend `App/Sources/Views/PairingRulesEditor.swift` for keep-together and clashes (screens §1–§2; FR-009).
+- [X] T028 [US3] Extend `App/Sources/Views/PairingRulesEditor.swift` for keep-together and clashes (screens §1–§2; FR-009).
   - **The add row.** A **Keep two together…** row.
   - **The sheet for that kind.** Titled "Keep together"; exactly two ticked, a third tick replacing the oldest; the keep-together footer.
   - **Clashes.** A warning glyph on every row whose id appears in `rules.conflicts`, with the footer sentences from `PairingText.conflict`. Done in the sheet is disabled when saving would create a clash.
-- [ ] T029 [US3] In `App/Sources/Views/NewSessionView.swift`, make `canStart` for `.friendly` also require `pairingRules.pruned(to: namedPlayers.map(\.id)).conflicts.isEmpty` (FR-009). **Done when** T027 passes (the engine already handles `.together` from T004 and T016) and the editor flows in screens §1–§2 work in the simulator.
+- [X] T029 [US3] In `App/Sources/Views/NewSessionView.swift`, make `canStart` for `.friendly` also require `pairingRules.pruned(to: namedPlayers.map(\.id)).conflicts.isEmpty` (FR-009). **Done when** T027 passes (the engine already handles `.together` from T004 and T016) and the editor flows in screens §1–§2 work in the simulator.
 
 **Checkpoint**: Both kinds of rule work from setup, and contradictions cannot be started.
 

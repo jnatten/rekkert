@@ -940,7 +940,7 @@ struct NewSessionView: View {
         case .winnerCourt where allCourts:
             namedPlayers.count >= 4 && (ladder.partners == .split || namedPlayers.count.isMultiple(of: 2))
         case .traditional, .pointCount, .winnerCourt: true
-        case .friendly: namedPlayers.count >= 2
+        case .friendly: namedPlayers.count >= 2 && pairingRules.pruned(to: namedPlayers.map(\.id)).conflicts.isEmpty
         case .americano, .mexicano: namedPlayers.count >= 4
         }
     }
