@@ -323,3 +323,65 @@ struct DisplayPreferenceTests {
         #expect(theirs.adopting(mine) == theirs)
     }
 }
+
+private func ruledFriendlyPreset() -> (Preset, [Player]) {
+    let players = ["Jonas", "Ada", "Kim", "Sam"].map { Player(name: $0) }
+    let preset = Preset(name: "Fridays", configuration: .friendly(
+        name: "Friday", players: players, rules: TraditionalRules(setsToWin: 1, gamesPerSet: 6),
+        pairing: [
+            PairingRule(kind: .apart, players: [players[0].id, players[1].id]),
+            PairingRule(kind: .together, players: [players[2].id, players[3].id]),
+        ]
+    ))
+    return (preset, players)
+}
+
+@Suite("A friendly preset's pairing rules")
+struct FriendlyPresetRulesTests {
+    @Test func friendlyKeepsItsRulesThroughFreshIds() throws {
+        let (preset, saved) = ruledFriendlyPreset()
+        guard case .friendly(let session) = preset.configuration.makeSetup() else {
+            Issue.record("not a friendly")
+            return
+        }
+        #expect(Set(session.players.map(\.id)).isDisjoint(with: Set(saved.map(\.id))))
+        let names = { (rule: PairingRule) in Set(rule.players.map(session.name)) }
+        #expect(session.pairingRules.map(\.kind) == [.apart, .together])
+        #expect(session.pairingRules.map(names) == [["Jonas", "Ada"], ["Kim", "Sam"]])
+    }
+
+    @Test func aPresetMissingAPlayerPrunesTheRule() {
+        let players = ["Jonas", "Ada", "Kim", "Sam"].map { Player(name: $0) }
+        let preset = PresetConfiguration.friendly(
+            name: "", players: players, rules: TraditionalRules(),
+            pairing: [PairingRule(kind: .apart, players: [players[0].id, PlayerID()])]
+        )
+        guard case .friendly(let session) = preset.makeSetup() else {
+            Issue.record("not a friendly")
+            return
+        }
+        #expect(session.pairingRules.isEmpty)
+    }
+
+    @Test func anOlderFriendlyPresetStillReads() throws {
+        let data = try JSONEncoder().encode(friendlyPreset())
+        var object = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        var configuration = object["configuration"] as! [String: Any]
+        var friendly = configuration["friendly"] as! [String: Any]
+        friendly.removeValue(forKey: "pairing")
+        configuration["friendly"] = friendly
+        object["configuration"] = configuration
+        let read = try JSONDecoder().decode(Preset.self, from: JSONSerialization.data(withJSONObject: object))
+        guard case .friendly(let session) = read.configuration.makeSetup() else {
+            Issue.record("not a friendly")
+            return
+        }
+        #expect(session.pairingRules.isEmpty)
+        #expect(session.players.count == 5)
+    }
+
+    @Test func summaryCountsTheRules() {
+        #expect(ruledFriendlyPreset().0.configuration.summary == "Friendly · 4 players · first to 6 · 2 rules")
+        #expect(friendlyPreset().configuration.summary == "Friendly · 5 players · first to 4")
+    }
+}

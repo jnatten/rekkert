@@ -45,10 +45,11 @@ struct NewSessionView: View {
         case .winnerCourt(let rules, let teams):
             _winnerCourtRules = State(initialValue: rules)
             seed(teams)
-        case .friendly(let name, let players, let rules):
+        case .friendly(let name, let players, let rules, let pairing):
             _sessionName = State(initialValue: name)
             _players = State(initialValue: players)
             _rules = State(initialValue: rules)
+            _pairingRules = State(initialValue: pairing ?? [])
         case .tournament(let format, let name, let players, let config):
             _sessionName = State(initialValue: name)
             _players = State(initialValue: players)
@@ -397,7 +398,10 @@ struct NewSessionView: View {
         case .winnerCourt:
             .winnerCourt(rules: winnerCourtRules, teams: teams)
         case .friendly:
-            .friendly(name: sessionName, players: namedPlayers, rules: rules)
+            .friendly(
+                name: sessionName, players: namedPlayers, rules: rules,
+                pairing: pairingRules.isEmpty ? nil : pairingRules.pruned(to: namedPlayers.map(\.id))
+            )
         case .americano, .mexicano:
             .tournament(
                 format: format,

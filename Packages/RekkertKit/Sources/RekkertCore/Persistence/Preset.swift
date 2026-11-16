@@ -8,7 +8,7 @@ public enum PresetConfiguration: Codable, Sendable, Hashable {
     case winnerCourt(rules: WinnerCourtRules, teams: BySide<TeamInfo>)
     case tournament(format: TournamentFormat, name: String, players: [Player], config: TournamentConfig)
     case pointCount(rules: PointCountRules, teams: BySide<TeamInfo>)
-    case friendly(name: String, players: [Player], rules: TraditionalRules)
+    case friendly(name: String, players: [Player], rules: TraditionalRules, pairing: [PairingRule]? = nil)
 
     public func makeSetup() -> SessionSetup {
         switch self {
@@ -26,13 +26,29 @@ public enum PresetConfiguration: Codable, Sendable, Hashable {
                 players: players.map { Player(name: $0.name) },
                 config: config
             ))
-        case .friendly(let name, let players, let rules):
-            .friendly(FriendlySession(
-                id: FriendlyID(),
-                name: name,
-                rules: rules,
-                players: players.map { Player(name: $0.name) }
-            ))
+        case .friendly(let name, let players, let rules, let pairing):
+            .friendly(Self.minted(name: name, players: players, rules: rules, pairing: pairing ?? []))
+        }
+    }
+
+    /// Fresh players, as every start from a preset gets, with the rules moved over to them.
+    private static func minted(name: String, players: [Player], rules: TraditionalRules, pairing: [PairingRule]) -> FriendlySession {
+        let fresh = players.map { Player(name: $0.name) }
+        let renamed = Dictionary(uniqueKeysWithValues: zip(players.map(\.id), fresh.map(\.id)))
+        let moved = pairing.map { rule in
+            PairingRule(id: rule.id, kind: rule.kind, players: rule.players.map { renamed[$0] ?? $0 })
+        }
+        return FriendlySession(
+            id: FriendlyID(), name: name, rules: rules, players: fresh,
+            pairingRules: moved.pruned(to: fresh.map(\.id))
+        )
+    }
+
+    private static func ruleCount(_ pairing: [PairingRule]) -> String {
+        switch pairing.count {
+        case 0: ""
+        case 1: " · 1 rule"
+        default: " · \(pairing.count) rules"
         }
     }
 
@@ -79,10 +95,10 @@ public enum PresetConfiguration: Codable, Sendable, Hashable {
         case .tournament(let format, _, let players, let config):
             "\(format.displayName) · \(players.count) players · \(config.courtCount) court\(config.courtCount == 1 ? "" : "s") · "
                 + Self.length(format, config)
-        case .friendly(_, let players, let rules):
+        case .friendly(_, let players, let rules, let pairing):
             "Friendly · \(players.count) players · " + (rules.setsToWin == 1
                 ? "first to \(rules.gamesPerSet)"
-                : "best of \(rules.setsToWin * 2 - 1)")
+                : "best of \(rules.setsToWin * 2 - 1)") + Self.ruleCount(pairing ?? [])
         }
     }
 }

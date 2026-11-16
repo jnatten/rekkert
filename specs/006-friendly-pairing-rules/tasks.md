@@ -424,7 +424,7 @@ them from their rule.
 
 ### Tests for User Story 5 ⚠️ (write first; they must fail)
 
-- [ ] T038 [P] [US5] Add to `CoreTests/PresetTests.swift`:
+- [X] T038 [P] [US5] Add to `CoreTests/PresetTests.swift`:
   - `friendlyKeepsItsRulesThroughFreshIds`: `makeSetup()` gives new `PlayerID`s, and the rules name the new ids of the same names. It fails today because rules are not saved.
   - `aPresetMissingAPlayerPrunesTheRule`.
   - `anOlderFriendlyPresetStillReads`: JSON of a `.friendly` preset without `pairing` decodes with no rules.
@@ -432,13 +432,13 @@ them from their rule.
 
 ### Implementation for User Story 5
 
-- [ ] T039 [US5] In `RekkertCore/Persistence/Preset.swift`:
+- [X] T039 [US5] In `RekkertCore/Persistence/Preset.swift`:
   - change the case to `.friendly(name: String, players: [Player], rules: TraditionalRules, pairing: [PairingRule]? = nil)`;
   - in `makeSetup()`, map each old player id to its fresh `Player`'s id, rewrite every rule's members through the map, and prune;
   - make `summary` append " · N rule(s)" when `pairing` is not empty.
 
   **Done when** T038 passes.
-- [ ] T040 [US5] Update every pattern match on `PresetConfiguration.friendly` to the new arity. Find them with `grep -rn "\.friendly(" App Shared WatchApp Packages/RekkertKit/Sources`, which includes `Shared/AppModel.swift`'s demo preset. Then, in `App/Sources/Views/NewSessionView.swift`:
+- [X] T040 [US5] Update every pattern match on `PresetConfiguration.friendly` to the new arity. Find them with `grep -rn "\.friendly(" App Shared WatchApp Packages/RekkertKit/Sources`, which includes `Shared/AppModel.swift`'s demo preset. Then, in `App/Sources/Views/NewSessionView.swift`:
   - `init(editing:)` loads `pairing ?? []` into `pairingRules`;
   - `configuration` passes `pairing: pairingRules.isEmpty ? nil : pairingRules`.
 
