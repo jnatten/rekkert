@@ -76,10 +76,10 @@ enum PairingSearch {
     private static let repeatOpponentCost = 1
 
     static func teams(
-        from playing: [PlayerID], courts: Int, history: PairingHistory
+        from playing: [PlayerID], courts: Int, history: PairingHistory, rules: [PairingRule] = []
     ) -> [BySide<[PlayerID]>] {
         var teams = greedyTeams(from: playing, courts: courts, history: history)
-        improve(&teams, history: history)
+        improve(&teams, history: history, rules: rules)
         return teams
     }
 
@@ -143,7 +143,7 @@ enum PairingSearch {
 
     /// Bounded, deterministic local search: swap two players between slots whenever it
     /// lowers the repeat cost. Greedy alone can leave obvious repeats on the table.
-    private static func improve(_ teams: inout [BySide<[PlayerID]>], history: PairingHistory) {
+    private static func improve(_ teams: inout [BySide<[PlayerID]>], history: PairingHistory, rules: [PairingRule]) {
         let slots = teams.indices.flatMap { court in
             TeamSide.allCases.flatMap { side in (0 ..< 2).map { (court, side, $0) } }
         }
@@ -160,7 +160,11 @@ enum PairingSearch {
                     candidate[one.0][one.1][one.2] = candidate[two.0][two.1][two.2]
                     candidate[two.0][two.1][two.2] = held
 
-                    if cost(candidate, history: history) < cost(teams, history: history) {
+                    // Rules first, compared rather than weighted: a long evening's repeats can
+                    // outgrow any weight.
+                    let proposed = (rules.breakCount(candidate), cost(candidate, history: history))
+                    let current = (rules.breakCount(teams), cost(teams, history: history))
+                    if proposed < current {
                         teams = candidate
                         improved = true
                     }

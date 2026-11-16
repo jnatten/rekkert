@@ -28,6 +28,7 @@ public enum FriendlyScheduler {
             history.record([round.teams], sitOuts: round.sitOuts)
         }
         var generator = SeededGenerator(session.id.raw, salt: UInt64(index))
+        let rules = session.activeRules
 
         let teams: BySide<[PlayerID]>
         let sitting: [PlayerID]
@@ -37,7 +38,7 @@ public enum FriendlyScheduler {
             // colours every round, which reads as a bug rather than as a draw.
             teams = BySide(a: [session.players[0].id], b: [session.players[1].id])
             sitting = []
-        } else if let replay = replayedTeams(for: session) {
+        } else if let replay = replayedTeams(for: session, rules: rules) {
             teams = replay
             sitting = []
         } else {
@@ -49,16 +50,21 @@ public enum FriendlyScheduler {
             teams = session.teamSize == 1
                 // The bench has already made the only choice there is: whoever is left plays.
                 ? BySide(a: [split.playing[0]], b: [split.playing[1]])
-                : PairingSearch.teams(from: split.playing, courts: 1, history: history)[0]
+                : PairingSearch.teams(from: split.playing, courts: 1, history: history, rules: rules)[0]
         }
 
-        return FriendlyRound(
+        return makeRound(index: index, teams: teams, sitOuts: sitting, in: session)
+    }
+
+    static func makeRound(index: Int, teams: BySide<[PlayerID]>, sitOuts: [PlayerID], in session: FriendlySession) -> FriendlyRound {
+        FriendlyRound(
             index: index,
             teams: teams,
-            sitOuts: sitting,
+            sitOuts: sitOuts,
             // Moves the first serve of the evening around instead of handing it to the same
             // slot every round.
-            score: TraditionalState(firstServerIndex: index % ServeRotation.order.count)
+            score: TraditionalState(firstServerIndex: index % ServeRotation.order.count),
+            unkept: session.activeRules.breaks(teams)
         )
     }
 
@@ -68,7 +74,7 @@ public enum FriendlyScheduler {
     /// replayed as it stood, sides and all, ties going to the one that came up first: round
     /// four is round one again. Nil for any other number of players, and while a fresh
     /// partition is still to be had, so the ordinary draw runs exactly as before.
-    private static func replayedTeams(for session: FriendlySession) -> BySide<[PlayerID]>? {
+    private static func replayedTeams(for session: FriendlySession, rules: [PairingRule]) -> BySide<[PlayerID]>? {
         guard session.players.count == 4 else { return nil }
         let four = Set(session.players.map(\.id))
 
@@ -87,9 +93,22 @@ public enum FriendlyScheduler {
             seen[key]?.plays += 1
         }
 
-        // Three ways to split four into pairs. `first` differs between them, so the minimum is
-        // unique and the dictionary's order cannot leak into the draw.
-        guard seen.count == 3 else { return nil }
-        return seen.values.min { ($0.plays, $0.first) < ($1.plays, $1.first) }?.teams
+        // Only the line-ups that break the fewest rules come round again: with none, all three.
+        let allowed = allowedPartitions(of: session.players.map(\.id), rules: rules)
+        guard allowed.isSubset(of: Set(seen.keys)) else { return nil }
+        // `first` differs between them, so the minimum is unique and the dictionary's order
+        // cannot leak into the draw.
+        return seen.filter { allowed.contains($0.key) }.values.min { ($0.plays, $0.first) < ($1.plays, $1.first) }?.teams
+    }
+
+    static func allowedPartitions(of four: [PlayerID], rules: [PairingRule]) -> Set<Set<PairKey>> {
+        let partitions = [(1, 2, 3), (2, 1, 3), (3, 1, 2)].map { partner, third, fourth in
+            BySide(a: [four[0], four[partner]], b: [four[third], four[fourth]])
+        }
+        let breaks = partitions.map { rules.breaks($0).count }
+        let fewest = breaks.min() ?? 0
+        return Set(zip(partitions, breaks).filter { $0.1 == fewest }.map { teams, _ in
+            Set([PairKey(teams.a[0], teams.a[1]), PairKey(teams.b[0], teams.b[1])])
+        })
     }
 }

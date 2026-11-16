@@ -194,12 +194,12 @@ same sides whenever it comes round.
 
 ### Tests for User Story 1 ⚠️ (write first; they must fail)
 
-- [ ] T013 [P] [US1] Write `CoreTests/FriendlyPairingDrawTests.swift` (`@Suite("A friendly draws with its pairing rules")`), using `FriendlyTestSupport` with `pairingRules` set on the session. Each fails today because the rules are ignored:
+- [X] T013 [P] [US1] Write `CoreTests/FriendlyPairingDrawTests.swift` (`@Suite("A friendly draws with its pairing rules")`), using `FriendlyTestSupport` with `pairingRules` set on the session. Each fails today because the rules are ignored:
   - `fourWithTwoApartAlternate`: 20 rounds with P0 and P1 apart (SC-001). P0 and P1 are never on one side. `rounds[k].teams == rounds[k % 2].teams` for every k, and the two partitions differ. Every `unkept` is empty.
   - `aPairApartIsAlwaysKept` (arguments 5…12 players): 30 rounds with P0 and P1 apart. They are never partners, and `unkept` is always empty. With four on court a pair can always be split.
   - `singlesIgnoreRules` (2 and 3 players): rounds with a rule equal rounds without it.
   - `clashingRulesDrawAsNone` (D-8): five players with a clashing set draw exactly as with none.
-- [ ] T014 [P] [US1] Write `SyncTests/FriendlyPairingSyncTests.swift` (`@Suite("Pairing rules across devices", .serialized) @MainActor`) with `phoneAndWatchDrawTheSameWithRules` (SC-004).
+- [X] T014 [P] [US1] Write `SyncTests/FriendlyPairingSyncTests.swift` (`@Suite("Pairing rules across devices", .serialized) @MainActor`) with `phoneAndWatchDrawTheSameWithRules` (SC-004).
   - Use `CourtHarness` with the host's watch and `startFriendly` (T008) with six players and P0 and P1 apart.
   - Play 12 rounds. Each round: one point, then `endRound()`, then `nextRound()`, alternating which device draws.
   - Within 5 s of each draw, the phone and the watch hold equal `rounds.map(\.teams)` and `rounds.map(\.unkept)`, and P0 and P1 are never partners.
@@ -208,29 +208,29 @@ same sides whenever it comes round.
 
 ### Implementation for User Story 1
 
-- [ ] T015 [US1] Make the line-up search rule-aware in `RekkertCore/Tournament/RoundScheduler.swift` (D-2).
+- [X] T015 [US1] Make the line-up search rule-aware in `RekkertCore/Tournament/RoundScheduler.swift` (D-2).
   - Give `PairingSearch.teams(from:courts:history:)` a `rules: [PairingRule] = []` parameter.
   - In `improve`, accept a swap only when `(rules.breakCount(candidate), cost(candidate))` is lexicographically below the current pair. Use an ordered comparison, never a weighted sum.
   - Do not change `greedyTeams`, `cost` or the Americano and Mexicano callers (FR-016).
   - With `rules` empty every comparison resolves as before. Run the fingerprint and `SeededDrawTests`.
-- [ ] T016 [US1] Make the friendly draw rule-aware in `RekkertCore/Friendly/FriendlyScheduler.swift` (D-2, D-4).
+- [X] T016 [US1] Make the friendly draw rule-aware in `RekkertCore/Friendly/FriendlyScheduler.swift` (D-2, D-4).
   - **The line-up.** Pass `session.activeRules` to `PairingSearch.teams`.
   - **The four-player cycle.** Generalise `replayedTeams`: the *allowed* partitions are those of the three with the fewest `activeRules` breaks. Replay only once every allowed partition has been played, choosing among allowed ones the least played, ties going to the first drawn, with its sides. With no rules, allowed is all three, which is today's `seen.count == 3`.
   - **The round's record.** Factor the `FriendlyRound(...)` construction into an internal `makeRound(index:teams:sitOuts:in:)` that also stamps `unkept: session.activeRules.breaks(teams)` (`[]` in singles). T034 reuses it.
   - **Leave alone** the two-player path and the singles path.
   - **Done when** T013 passes, and the fingerprint, `FriendlyTests` and `SeededDrawTests` stay green.
-- [ ] T017 [US1] Create `App/Sources/Views/PairingRulesEditor.swift` (contracts/screens.md §1–§2; D-11):
+- [X] T017 [US1] Create `App/Sources/Views/PairingRulesEditor.swift` (contracts/screens.md §1–§2; D-11):
   - **The section.** `PairingRulesSection`, bound to `[PairingRule]`, given the named `[Player]` and an optional `PairingForecast`.
     - Below four players it shows only the footer "Pairing rules apply when four or more play doubles."
     - Otherwise it shows a row per rule (`PairingText.rule`, swipe to delete, tap to edit) and a **Keep players apart…** row.
   - **The rule sheet.** `PairingRuleSheet`, titled "Keep apart", has a checklist of the players with the keep-apart footer from screens §2, and Done is disabled below two ticked.
   - Give both a `kind` parameter, so US3 adds Keep together without restructuring.
-- [ ] T018 [US1] Wire setup in `App/Sources/Views/NewSessionView.swift` (D-7, D-11):
+- [X] T018 [US1] Wire setup in `App/Sources/Views/NewSessionView.swift` (D-7, D-11):
   - add `@State private var friendlyID = FriendlyID()` and `@State private var pairingRules: [PairingRule] = []`;
   - put `PairingRulesSection` in `friendlySections`, directly below `playersSection(footer: friendlyFooter)`;
   - prune the rules whenever the named players change (`pairingRules = pairingRules.pruned(to: namedPlayers.map(\.id))`);
   - in `start()` for `.friendly`, build `FriendlySession(id: friendlyID, …, pairingRules: pairingRules)`.
-- [ ] T019 [US1] In `App/Sources/Views/FriendlyMatchView.swift`'s `footer`, show `PairingText.watchNeedsUpdate` above the bench line when `model.store.pairNeedsUpdateForRules` (screens §4b): footnote, secondary, with `Image(systemName: "applewatch.slash")`, on that phone only.
+- [X] T019 [US1] In `App/Sources/Views/FriendlyMatchView.swift`'s `footer`, show `PairingText.watchNeedsUpdate` above the bench line when `model.store.pairNeedsUpdateForRules` (screens §4b): footnote, secondary, with `Image(systemName: "applewatch.slash")`, on that phone only.
 
 **Checkpoint**: US1 is fully usable: set up a keep-apart pair and play. A lagging watch is held back with a clear line. The fingerprint is still green.
 

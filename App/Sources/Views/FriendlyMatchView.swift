@@ -127,6 +127,12 @@ struct FriendlyMatchView: View {
     private func footer(_ session: FriendlySession) -> some View {
         if let round = session.currentRound {
             VStack(spacing: 10) {
+                if model.store.pairNeedsUpdateForRules {
+                    Label(PairingText.watchNeedsUpdate, systemImage: "applewatch.slash")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
                 if round.isFinished {
                     upNext(session, after: round)
                 } else {

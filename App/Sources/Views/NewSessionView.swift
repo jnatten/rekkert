@@ -88,6 +88,8 @@ struct NewSessionView: View {
     @State private var config = TournamentConfig()
     @State private var plannedRounds = 7
     @State private var players: [Player] = (0 ..< 4).map { _ in Player(name: "") }
+    @State private var friendlyID = FriendlyID()
+    @State private var pairingRules: [PairingRule] = []
     @State private var warmup = false
     @FocusState private var focused: Field?
 
@@ -577,6 +579,11 @@ struct NewSessionView: View {
 
         playersSection(footer: friendlyFooter)
 
+        PairingRulesSection(rules: $pairingRules, players: namedPlayers)
+            .onChange(of: namedPlayers.map(\.id)) { _, ids in
+                pairingRules = pairingRules.pruned(to: ids)
+            }
+
         sportSection
         scoringSection
         formatSection
@@ -962,9 +969,11 @@ struct NewSessionView: View {
         case .friendly:
             model.remember(players: namedPlayers.map(\.name))
             model.store.configure(.friendly(FriendlySession(
+                id: friendlyID,
                 name: sessionName,
                 rules: rules,
-                players: namedPlayers
+                players: namedPlayers,
+                pairingRules: pairingRules.pruned(to: namedPlayers.map(\.id))
             )), warmup: warmup)
             // Nothing to score until there is a round, exactly as a tournament works.
             model.store.nextRound()
