@@ -37,7 +37,7 @@ public struct PairingForecast: Sendable, Hashable {
 
 public enum PairingText {                   // RekkertCore/Presentation/PairingText.swift
     public static func rule(_ rule: PairingRule, in session: FriendlySession) -> String
-    public static func conflict(_ conflict: PairingConflict, in session: FriendlySession) -> String
+    public static func conflict(_ conflict: PairingConflict, in session: FriendlySession, rules: [PairingRule]) -> String
     public static func forecast(_ forecast: PairingForecast, in session: FriendlySession) -> String?
     public static func unkept(_ unkept: UnkeptRule, in session: FriendlySession, offered: Bool) -> String
     public static func turnedAway(_ phones: Int) -> String?
@@ -102,8 +102,8 @@ public func setPairingRules(_ rules: [PairingRule])
 // setChangeEnds itself now records its friendly with the rules unstated, so it never reverts them.
 ```
 
-`PeerTransport` gains a settable `holdsSessionFromPair: Bool` (default: reads false, ignores
-writes). `FanOutTransport` honours it by skipping its `.pairedDevice` child for `.events` and
+`PeerTransport` gains `holdSessionFromPair(_ holding: Bool)`, declared on the protocol so it
+dispatches through `any PeerTransport`, with a default that does nothing. `FanOutTransport` honours it by skipping its `.pairedDevice` child for `.events` and
 `.snapshot`, while still updating its cache and its link-carrying children.
 
 `nextRound()` for a friendly now records `placed`. Its signature is unchanged.

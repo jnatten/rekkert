@@ -161,7 +161,7 @@ Every story needs these, and the gates make even the MVP safe to share.
 - [X] T010 Hold a friendly with rules back from an older own watch, in `RekkertSync/MatchStore.swift` and `RekkertSync/FanOutTransport.swift` (D-9 item 5; contracts/wire-protocol.md, "Pair scope").
   - **The flag.** Add `public private(set) var pairNeedsUpdateForRules = false` to `MatchStore`. Recompute it in `refresh(to:)`, on launch (from the persisted protocol, T007), and whenever the pair's `hello` is heard. It is true when this store is the phone (`keepsHistory`), `peerProtocols[pairedDevice]` is known and below 3, and the session in play is a friendly with non-empty `activeRules`.
   - **One choke point in the transport** (U1).
-    - Add a settable `holdsSessionFromPair: Bool` to `PeerTransport` (in `RekkertCore/Sync/Wire.swift`), with a protocol-extension default that reads false and ignores writes, so every other transport is untouched.
+    - Add `holdSessionFromPair(_ holding: Bool)` to `PeerTransport` (in `RekkertCore/Sync/Wire.swift`), declared on the protocol (a member only in an extension dispatches statically through `any PeerTransport`), with a default that does nothing, so every other transport is untouched.
     - On `FanOutTransport`, store it under its lock. While it is true, skip the `.pairedDevice` child (the scope with `isPairedDevice`) for `.events` and `.snapshot` payloads, in `sendLiveBesideLinks`, `sendLive`, `queue` and `publishSnapshot`.
     - `publishSnapshot` still updates `lastSnapshot` and every link-carrying child, because other phones read that cache. Only the watch's application context is left as it was.
     - `MatchStore` sets the switch whenever `pairNeedsUpdateForRules` changes.
@@ -281,8 +281,8 @@ is on court.
     1. From today's `benchFirst` order, take the players who must sit out: those with fewer sit-outs than the last bench place.
     2. Take the boundary group: those with exactly that count.
     3. Enumerate every way to fill the remaining places from the boundary group, lexicographically by position in the shuffled order, so the first combination is today's choice.
-    4. Keep the first whose on-court players have a partition with zero `breakCount`.
-    5. Failing that, keep the one with the fewest, earliest on ties.
+    4. Score each by `(breaks on court now, fewest breaks the next round could manage)`. The second part looks one round ahead, with the sit-outs as this bench would leave them, within a fixed budget of benches considered.
+    5. Keep the first with `(0, 0)`, or failing that the lowest score, earliest on ties. Looking ahead is what stops a bench that keeps this round from forcing three of a keep-apart group onto the next court (SC-005).
   - **The bench's order.** `sitting` is `benchFirst` filtered to the chosen bench, which equals today's prefix when nothing moved. `playing` is filtered from `shuffled` as today.
   - **Without rules**, return exactly today's result.
   - **Keep it small.** A static helper that scores the three partitions of four players is enough, because doubles seats four.
@@ -450,7 +450,7 @@ them from their rule.
 
 **Purpose**: Words, a demo switch, the gate, and evidence
 
-- [ ] T041 [P] Update `README.md` (D-12; screens §6).
+- [X] T041 [P] Update `README.md` (D-12; screens §6).
   - **Friendly.** After the paragraph on the draw, add one paragraph that says:
     - keep apart and keep together exist;
     - the bench stays as fair as ever and leans towards the rules only among players equally due;
@@ -459,9 +459,9 @@ them from their rule.
     - rules change in play from the match menu and apply from the next round;
     - older Rekkert phones are kept off a friendly with rules, and a watch that has not yet updated is held back with a line on its phone.
   - **Who may do what.** Add "the pairing rules" to what *Only score* may not touch.
-- [ ] T042 [P] In `RekkertCore/Help/ModeHelp.swift`, replace the friendly's second point with "No repeat partners while a fresh one is left. Rules can keep players apart or together." (87 characters; `HelpTests` caps a point at 90 and a mode at three points). Run `swift test --package-path Packages/RekkertKit --filter Help`.
-- [ ] T043 [P] In `Shared/AppModel.swift`, add the debug flag `-rekkert-demo-friendly-apart` to the `"friendly"` demo: keep the first two demo players apart. List it in README's debug-flags paragraph beside `-rekkert-demo-friendly-players N`. It serves quickstart level 3 and `scripts/shots.sh`.
-- [ ] T044 Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh`; both must pass. `FriendlyTests`, `SeededDrawTests`, `NeedsUpdateTests`, the T002 fingerprint and every sharing suite pass unchanged.
+- [X] T042 [P] In `RekkertCore/Help/ModeHelp.swift`, replace the friendly's second point with "No repeat partners while a fresh one is left. Rules can keep players apart or together." (87 characters; `HelpTests` caps a point at 90 and a mode at three points). Run `swift test --package-path Packages/RekkertKit --filter Help`.
+- [X] T043 [P] In `Shared/AppModel.swift`, add the debug flag `-rekkert-demo-friendly-apart` to the `"friendly"` demo: keep the first two demo players apart. List it in README's debug-flags paragraph beside `-rekkert-demo-friendly-players N`. It serves quickstart level 3 and `scripts/shots.sh`.
+- [X] T044 Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh`; both must pass. `FriendlyTests`, `SeededDrawTests`, `NeedsUpdateTests`, the T002 fingerprint and every sharing suite pass unchanged.
 - [ ] T045 Run quickstart.md level 3 on simulators: steps 1–7 against contracts/screens.md, plus the two-phone `scripts/share.sh --keep` check, at the largest Dynamic Type size and with VoiceOver on. Fix what is found.
 - [ ] T046 Run quickstart.md level 4 on real devices before release, and record the outcome in `specs/006-friendly-pairing-rules/validation.md`, as `specs/005-steady-sharing-nine-guests/validation.md` does.
 

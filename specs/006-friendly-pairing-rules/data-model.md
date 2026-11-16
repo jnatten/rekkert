@@ -131,4 +131,4 @@ back by its phone:
 |---|---|---|
 | `pairNeedsUpdateForRules` | `Bool`, observable | True on a phone whose paired watch last said hello below protocol 3 while the session in play is a friendly with active rules. While it is true, the phone sends the watch nothing of that session, and its board says so. |
 | The pair's protocol | persisted with `pairedDevice` | So a relaunched phone knows an older watch before that watch says hello. |
-| `PeerTransport.holdsSessionFromPair` | `Bool`, settable; default reads false | Set by `MatchStore` from `pairNeedsUpdateForRules`. `FanOutTransport` skips its paired-device child for `.events` and `.snapshot` while it is true. |
+| `PeerTransport.holdSessionFromPair(_:)` | method, declared on the protocol; default does nothing | Set by `MatchStore` from `pairNeedsUpdateForRules`. `FanOutTransport` skips its paired-device child for `.events` and `.snapshot` while it is true. |

@@ -180,8 +180,13 @@ shows the next round's names and can start it, and it starts friendlies only fro
   - From the boundary group, take every way of filling the remaining bench places, in the
     shuffled order: lexicographic by shuffled position, so the first combination is today's
     choice.
-  - Keep the first whose players on court have a line-up that keeps every rule.
-  - If none does, keep the one whose best line-up breaks the fewest, ties going to the earliest
+  - Score each by the breaks its court cannot avoid now, then by the fewest the next round
+    could manage with the sit-outs as this bench leaves them. Looking one round ahead is what
+    keeps eight players with four kept apart from ever breaking (SC-005): without it, a bench
+    that keeps this round can leave three of the four due on the next court together. The
+    lookahead stops after a fixed budget of benches considered, so the draw stays quick and
+    deterministic.
+  - Keep the first scoring `(0, 0)`. If none does, keep the lowest, ties going to the earliest
     combination.
 - **Rationale**:
   - The bench stays exactly as even as today, because only the boundary choice moves.
@@ -297,7 +302,7 @@ shows the next round's names and can start it, and it starts friendlies only fro
      - While the session in play is a friendly with active rules, the phone sends that session
        nothing: no pushed events, no queued events, no events in reply to the watch's hello,
        and no snapshot, the application context included.
-     - The hold is one switch on the transport, `holdsSessionFromPair`, that `FanOutTransport`
+     - The hold is one switch on the transport, `holdSessionFromPair(_:)`, that `FanOutTransport`
        applies to its `.pairedDevice` child only. Its snapshot cache and its links to other
        phones are untouched, because guests read them.
      - The watch's protocol is persisted with `pairedDevice`, so a relaunched phone holds back

@@ -90,6 +90,9 @@ Unchanged. Rules are not shown there (spec, Assumptions).
   - a round that cannot keep them says so;
   - rules can be changed in play from the match menu, and apply from the next round.
 - **README › Who may do what**: add "the pairing rules" to the list *Only score* cannot touch.
+- **HelpCatalog › phone.fixes**: a "Pairing rules" item for the match menu's
+  `person.2.badge.gearshape`, since `HelpTests` requires every symbol on screen to be explained:
+  "Keeps players apart, or together, from the next round on."
 - **ModeHelp › friendly**: the second point becomes "No repeat partners while a fresh one is
   left. Rules can keep players apart or together." `HelpTests` caps a mode at three points of 90
   characters.

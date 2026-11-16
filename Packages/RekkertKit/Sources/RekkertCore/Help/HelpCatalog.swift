@@ -632,6 +632,13 @@ public enum HelpCatalog {
                     only: "Match and Friendly"
                 ),
                 HelpItem(
+                    "Pairing rules",
+                    symbol: "person.2.badge.gearshape",
+                    what: "Keeps players apart, or together, from the next round on.",
+                    example: "Ada and Bob win every round they partner. Keep them apart.",
+                    only: "Friendly"
+                ),
+                HelpItem(
                     "Swap colours",
                     symbol: "circle.lefthalf.filled",
                     what: "Swaps the two teams' colours, on every device.",

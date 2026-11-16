@@ -38,7 +38,7 @@ extension GameMode {
                 pickItWhen: "For a group swapping partners: real matches, a fresh draw each round.",
                 points: [
                     "Four or more play doubles, two or three singles. Extras sit out in turn.",
-                    "Nobody partners the same person twice while a new pairing is left.",
+                    "No repeat partners while a fresh one is left. Rules can keep players apart or together.",
                     "When a round is won the board waits. Start round draws the next.",
                 ]
             )

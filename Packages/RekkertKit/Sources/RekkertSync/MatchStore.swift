@@ -2990,8 +2990,6 @@ public final class MatchStore {
         record(.configure(.friendly(session)))
     }
 
-    /// On the host, how many guests now on the match speak a protocol that cannot draw with
-    /// pairing rules, and would be turned away by the first one.
     public var olderGuestsTurnedAwayByRules: Int {
         guard role == .host else { return 0 }
         let owners = transport.links.filter { !refusedLinks.contains($0) }.compactMap { linkOwners[$0] ?? farEnds[$0] }

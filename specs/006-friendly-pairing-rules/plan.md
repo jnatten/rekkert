@@ -168,12 +168,12 @@ Packages/RekkertKit/
 │   ├── Sync/
 │   │   ├── SessionReducer.swift      # friendly nextRound takes a fitting placed; configure adopts
 │   │   │                             #   pairingRules (D-5, D-6)
-│   │   └── Wire.swift                # sharingProtocol = 3; PeerTransport.holdsSessionFromPair (D-9)
+│   │   └── Wire.swift                # sharingProtocol = 3; PeerTransport.holdSessionFromPair(_:) (D-9)
 │   ├── Persistence/Preset.swift      # friendly case + pairing; makeSetup remaps ids; summary (D-10)
 │   ├── Presentation/PairingText.swift  # NEW: every pairing sentence in screens.md, built from engine values
 │   └── Help/ModeHelp.swift           # friendly's second point reworded (D-12)
 ├── Sources/RekkertSync/
-│   ├── FanOutTransport.swift         # holdsSessionFromPair: skip the paired-device child for events and snapshots (D-9)
+│   ├── FanOutTransport.swift         # holdSessionFromPair(_:): skip the paired-device child for events and snapshots (D-9)
 │   └── MatchStore.swift              # placed on a friendly draw; setPairingRules; canEditPairingRules;
 │                                     #   holds a friendly with rules back from an older own watch;
 │                                     #   pairNeedsUpdateForRules; the pair's protocol persisted;

@@ -570,6 +570,12 @@ final class AppModel {
                 )
             ), warmup: warmup)
         case "friendly":
+            // `-rekkert-demo-friendly-players 3` cuts the group down, which is how the
+            // singles and the bench get onto a screenshot.
+            let players = Array(
+                ["Jonas", "Ola", "Kari", "Trond", "Siri"].map { Player(name: $0) }
+                    .prefix(friendlyPlayerCount(arguments))
+            )
             store.configure(.friendly(FriendlySession(
                 // Pinned, so a screenshot draws the same partnerships every time.
                 id: FriendlyID(UUID(uuidString: "00000000-0000-0000-0000-0000000000C0")!),
@@ -579,12 +585,10 @@ final class AppModel {
                     deuceRule: .goldenPoint,
                     changeEnds: demoChangeEnds(arguments)
                 ),
-                // `-rekkert-demo-friendly-players 3` cuts the group down, which is how the
-                // singles and the bench get onto a screenshot.
-                players: Array(
-                    ["Jonas", "Ola", "Kari", "Trond", "Siri"].map { Player(name: $0) }
-                        .prefix(friendlyPlayerCount(arguments))
-                )
+                players: players,
+                pairingRules: arguments.contains("-rekkert-demo-friendly-apart") && players.count >= 2
+                    ? [PairingRule(kind: .apart, players: [players[0].id, players[1].id])]
+                    : []
             )), warmup: warmup)
             store.nextRound()
             // `-rekkert-demo-friendly-rounds 3` plays three of them out, which is the only

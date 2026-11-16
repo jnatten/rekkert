@@ -89,6 +89,22 @@ only who has played with and against whom, never the scores, so the phone and th
 the same round without negotiating it, and correcting a point can never re-partner a round
 already drawn.
 
+**Pairing rules** even out a group that is not. Setup can keep two or more players apart —
+none of them ever partners another, though they can still play against each other — or keep
+two together, partners whenever both are on court. The draw keeps the rules first and only
+then looks for fresh partners and match-ups, so four players with the two strongest kept apart
+alternate between the two line-ups that split them, same pairs on the same sides. The bench
+stays exactly as fair as ever: where several are equally due to sit out, it picks the ones
+that let the rules hold this round and the next. When the players on court leave no way to
+keep them, the round breaks as few as it can and says so, on the offer of the round and under
+the board, on every phone. Setup plays the draw forward over one turn of the bench and warns
+how often that will happen — "Ada, Bob and Cy can't all be kept apart in 2 of every 5 rounds" —
+and refuses rules that contradict each other. The match menu changes them during the evening,
+from the next round on; the round being played stays as it was drawn. A preset keeps them.
+A phone on an older Rekkert is kept off a friendly with rules and told to update, and a
+phone's own watch that has not updated yet is left out of it, with a line on the phone saying
+so.
+
 Rounds go on until somebody finishes the session. The rounds list, in the match menu, holds
 every round played and the table so far — ranked on rounds won, ties broken on games won —
 and both turn up again on the result screen and in History.
@@ -410,8 +426,8 @@ each can be given a level of its own or put back on the default.
 
 *Only score* is everything on a court: points, a typed or stepped score, the serve and the
 deciding point's side, and taking those back. Not the whistle, drawing or confirming a round,
-the round clock, who sits out or the change-ends rule; and an Undo that would take back one of
-those is not offered. *Read-only* follows the match and changes nothing. Finishing it stays
+the round clock, who sits out, the change-ends rule or a friendly's pairing rules; and an Undo
+that would take back one of those is not offered. *Read-only* follows the match and changes nothing. Finishing it stays
 the host's whatever the level, as before, and so does the question a tournament asks when its
 planned rounds are played. A guest's watch goes by its phone's level.
 
@@ -878,7 +894,7 @@ xcrun simctl boot <pair udid>
 
 Debug builds accept `-rekkert-demo traditional|winnercourt|friendly|americano|mexicano|ladder` (plus
 `-rekkert-demo-minutes N`, `-rekkert-demo-split`, `-rekkert-demo-warmup`, `-rekkert-demo-points N`, `-rekkert-demo-deuce`, `-rekkert-demo-rounds`,
-`-rekkert-demo-friendly-rounds N`, `-rekkert-demo-friendly-players N`,
+`-rekkert-demo-friendly-rounds N`, `-rekkert-demo-friendly-players N`, `-rekkert-demo-friendly-apart`,
 `-rekkert-demo-rounds-sheet`,
 `-rekkert-demo-undo-draw`, `-rekkert-demo-browse-round N`, `-rekkert-demo-sit-outs [name]`,
 `-rekkert-demo-open-court R,C`, `-rekkert-demo-roster`, `-rekkert-demo-presets`,
