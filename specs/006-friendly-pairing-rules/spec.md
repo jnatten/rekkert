@@ -20,6 +20,19 @@
 - Q: Can the rules be changed once the friendly has started? → A: Yes, from the phone's match
   menu. A change applies from the next round drawn; the round in play and the rounds before it
   never change.
+- Q: In a shared friendly, which phones may change the rules mid-session? → A: Any phone that
+  may run rounds — the host and guests with Full access — as with picking who sits out. Only
+  score and Read-only guests may not.
+- Q: When should setup warn that the rules won't always hold? → A: Whenever some round would
+  break one. Setup plays the draw forward over a full rotation of the bench and, if any round
+  in it breaks a rule, says how often and which players; the friendly can still start.
+- Q: Where is it said that a round's line-up breaks a rule? → A: On the next-round offer, and
+  under the board for the round in play (so round 1 is covered), on every phone in the
+  friendly, guests included. Not on the watch.
+- Q: With four players, how does the draw choose between the allowed line-ups after the rules
+  change mid-session? → A: It counts every round played, before the change as well as after:
+  the next round is the allowed line-up played least, ties going to the one first drawn, same
+  pairs on the same sides.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -93,8 +106,9 @@ twice while an allowed fresh partner is on court.
    equally due to sit out, **Then** the draw benches the ones that leave no more than two of
    the group on court.
 4. **Given** a round where every fair bench leaves three or more of the group on court,
-   **When** it is drawn, **Then** it breaks as few rules as it can, and the phone says which
-   players it could not keep apart.
+   **When** it is offered and then played, **Then** it breaks as few rules as it can, and every
+   phone in the friendly says which players it could not keep apart, on the offer and under
+   the board.
 
 ---
 
@@ -146,6 +160,9 @@ unchanged on the phone and on the watch.
 3. **Given** a rule changed while a round is in play, **When** the change arrives on the watch
    or a guest's device, **Then** the round in play keeps its partnerships and the next round
    offered follows the new rule on every device.
+4. **Given** a shared friendly, **When** a guest with Full access opens the match menu,
+   **Then** they can change the rules as the host can; a guest with Only score or Read-only is
+   not offered it.
 
 ---
 
@@ -182,8 +199,11 @@ players in the new setup removes them from their rule.
   player kept together with two different people, or two players kept together who are also in
   the same keep-apart group. Setup does not accept these and says which rule clashes with which.
 - **Rules that cannot hold with the players listed.** With four players, a keep-apart group of
-  three cannot be kept: someone in it has to partner someone else in it. Setup says before the
-  friendly starts that the rules cannot always be kept, and the friendly can still be started.
+  three cannot be kept: someone in it has to partner someone else in it, every round. With
+  five players and the same three kept apart, the rule breaks in two rounds out of five. Setup
+  says either before the friendly starts — "Ada, Bob and Cy can't be kept apart in 2 of every
+  5 rounds" — and the friendly can still be started. The warning changes as names are added
+  or removed.
 - **Rules the bench breaks.** With players sitting out, who is on court changes every round,
   and some benches leave more of a keep-apart group on court than can be kept apart. The bench
   stays as even as today, and only its tie-breaks lean towards the rules, so with five players
@@ -191,6 +211,9 @@ players in the new setup removes them from their rule.
 - **Four players and fewer allowed line-ups.** Four pair up in three ways. A keep-apart pair
   leaves two, a keep-together pair leaves one. The rounds cycle through whatever is allowed,
   in the order first drawn, same pairs on the same sides, just as all three cycle today.
+- **Four players, rules changed mid-session.** Rounds 1–3 used all three line-ups with no
+  rules; then Ada and Bob are kept apart. Both allowed line-ups have been played once, so round
+  4 is the one of them that came up first, and the two alternate from there.
 - **A player is removed from the list.** They leave every rule they were in. A keep-apart
   group left with one player and a keep-together pair left with one player are dropped.
 - **A name is corrected.** The rules follow the person, not the spelling: renaming Bob keeps
@@ -224,17 +247,26 @@ players in the new setup removes them from their rule.
   lets every rule be kept, if one exists. If none does, the round MUST break the rules as
   little as it can: as few partnerships inside a keep-apart group, and as few keep-together
   pairs split up while both are on court, as the players on court allow.
-- **FR-007**: When a round's line-up breaks a rule, the phone MUST say so where it offers that
-  round, naming the players the rule could not keep apart or together.
+- **FR-007**: When a round's line-up breaks a rule, every phone in the friendly, guests
+  included, MUST say so on the offer of that round and under the board while it is in play,
+  naming the players the rule could not keep apart or together. Round 1, which is never
+  offered, is covered by the board. The watch MUST NOT show it.
 - **FR-008**: With exactly four players, the draw MUST use each allowed line-up once before
-  repeating any, and then cycle through them in the order first drawn, same pairs on the same
-  sides. With no rules this is today's behaviour; a keep-apart pair leaves two line-ups that
-  alternate, a keep-together pair leaves one that repeats.
+  repeating any. Once all have been played, each round MUST be the allowed line-up played
+  least so far, ties going to the one first drawn, with the same pairs on the same sides as
+  when it was first drawn. Every round played counts, including rounds played before the
+  rules last changed. With no rules this is today's behaviour; a keep-apart pair leaves two
+  line-ups that alternate, a keep-together pair leaves one that repeats.
 - **FR-009**: Setup MUST NOT accept rules that contradict each other: the same two players
   kept apart and together, one player in two keep-together rules, or a keep-together pair
   inside a keep-apart group. It MUST say which rules clash.
-- **FR-010**: Setup MUST tell the organiser, before the friendly starts, when the rules cannot
-  be kept in every round with the players listed, and MUST still let the friendly start.
+- **FR-010**: Setup MUST play the draw forward over one full rotation of the bench, with the
+  players and rules as they stand, and warn before the friendly starts if any round in it
+  breaks a rule, saying in how many rounds of the rotation and which players. It MUST still let
+  the friendly start. A full rotation is the rounds it takes for everyone to have sat out
+  equally often (five rounds for five players, three for six, two for eight); with exactly
+  four, it is the rounds it takes to play every allowed line-up once. When rules are changed
+  during the friendly, the same check plays forward from the rounds already drawn.
 - **FR-011**: Rules MUST follow the person: correcting a player's name keeps them in their
   rules; removing a player takes them out of every rule, and drops any rule left with fewer
   than two players.
@@ -242,8 +274,11 @@ players in the new setup removes them from their rule.
   the same round from the same events. The rules travel with the friendly, and the draw stays
   a function of the session, the round number, who has played with and against whom, and the
   rules; never of the scores.
-- **FR-013**: The organiser MUST be able to add, change and remove pairing rules during the
-  friendly from the phone's match menu, under the same checks as setup (FR-009, FR-010).
+- **FR-013**: Any phone that may run rounds — the host's, and a guest's with Full access —
+  MUST be able to add, change and remove pairing rules during the friendly from its match
+  menu, under the same checks as setup (FR-009, FR-010). A guest with Only score or Read-only
+  MUST NOT be offered it, and an Undo that would take back a rule change MUST NOT be offered
+  to them either.
   A change MUST NOT alter any round already drawn, including the round in play; it applies
   to the rounds drawn after it, and to the next round the board offers.
 - **FR-014**: A device on a version of Rekkert that predates pairing rules MUST NOT be left
@@ -280,10 +315,14 @@ players in the new setup removes them from their rule.
 - **SC-005**: With eight players and a keep-apart group of four, no round in 30 has two of the
   group as partners, and nobody partners the same person twice while an allowed fresh partner
   is on court.
-- **SC-006**: When a rule could not be kept, the phone said so on the round that broke it, in
-  every case.
+- **SC-006**: When a rule could not be kept, every phone in the friendly said so on the offer
+  of the round that broke it (where it was offered) and under the board while it was played,
+  in every case.
 - **SC-007**: The next round is offered as promptly as it is today once a round ends, with up
   to 16 players and any rules.
+- **SC-008**: When neither the players nor the rules change after setup, the number of rounds
+  in the first full rotation that setup said would break a rule equals the number that do, in
+  every case.
 
 ## Assumptions
 
@@ -292,6 +331,10 @@ players in the new setup removes them from their rule.
   whom.
 - Rules are set up on the phone. The watch shows and plays the rounds the rules produce, but
   does not set or change them.
+- Who may change the rules follows the sharing levels as they stand: it is running the rounds,
+  like picking who sits out, so it belongs to Full access. As with the levels themselves, this
+  is a convention each phone keeps rather than a lock. "The organiser" in this spec is whoever
+  sets the friendly up and, once it is shared, anyone on a phone with Full access.
 - The draw does not learn levels or ratings, and does not even teams up from scores: it reads
   no scores, which the project's convergence principle requires. Balancing by skill rating is
   out of scope.
