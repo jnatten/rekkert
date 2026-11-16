@@ -3,9 +3,10 @@
 **Feature**: [spec.md](spec.md) · **Plan**: [plan.md](plan.md) · **Decisions**: [research.md](research.md)
 
 Everything here is in `RekkertCore` and nonisolated, except the protocol table in
-`RekkertSync`'s `MatchStore`. All new stored fields are additive. They are read with
-`decodeIfPresent` and written only when they hold something, so a friendly without rules
-encodes exactly as it does today.
+`RekkertSync`'s `MatchStore`. All new stored fields are additive, and read with
+`decodeIfPresent`. `FriendlyRound.unkept` and a preset's `pairing` are written only when they
+hold something. `FriendlySession`'s rules are always written by this build, an empty list
+included, so that an absent key means "an older build wrote this" (research D-1).
 
 ## PairingRule *(new)*
 
@@ -53,7 +54,8 @@ What a drawn round could not keep. Value type, `Codable`, `Hashable`.
 
 | Field | Type | Change |
 |---|---|---|
-| `pairingRules` | `[PairingRule]` | **New.** Defaults to `[]`, decoded with `decodeIfPresent`, encoded only when not empty. Needs a hand-written `init(from:)`/`encode(to:)`, like `FriendlyRound`'s. |
+| `statedPairingRules` | `[PairingRule]?` | **New, stored**, under the key `pairingRules`. `nil` means "never stated": the friendly came from a build older than this feature. Decoded with `decodeIfPresent`. Encoded whenever it is not nil, an empty list included. Every `FriendlySession` this build creates states it (`[]` by default). Needs a hand-written `init(from:)`/`encode(to:)`, like `FriendlyRound`'s. |
+| `pairingRules` | `[PairingRule]` | **New, computed**: `statedPairingRules ?? []`. Setting it states it. |
 
 New read-only API:
 
@@ -68,7 +70,9 @@ New read-only API:
    `configure(.friendly(session with rules))`, or a preset does, with ids remapped and pruned
    (D-10).
 2. **Changed in play.** `setPairingRules` records another `configure(.friendly(…))`. The reducer
-   adopts `pairingRules` beside `name`, `rules` and `players`, and keeps the id and the rounds.
+   adopts the rules beside `name`, `rules` and `players` **only when the incoming friendly states
+   them** (`statedPairingRules != nil`), and keeps the id and the rounds. An older build's
+   correction states nothing, and leaves the rules as they were.
 3. **Read by every draw after that.** No round already drawn is touched.
 4. **Finished, restored or saved as a preset.** The rules travel unchanged.
 
@@ -102,7 +106,7 @@ session as it stands (D-7).
 |---|---|---|
 | `rounds` | `Int` | The rotation's length: `n / gcd(n, 4)` for n ≥ 5; the number of allowed line-ups for n = 4 |
 | `breaking` | `Int` | How many of those rounds break a rule |
-| `players` | `[PlayerID]` | Everyone named in any break, in list order, for the message |
+| `unkept` | `[UnkeptRule]` | Every distinct pair broken in those rounds, in the order first met, so the message can name the players and say "apart", "together" or both |
 
 The forecast is nil for fewer than four players, or with no active rules.
 
@@ -119,5 +123,10 @@ The forecast is nil for fewer than four players, or with no active rules.
 | `Wire.sharingProtocol` | `2` | `3`: the first build that draws with pairing rules |
 | `MatchStore` peer bookkeeping | `olderDevices` / `currentDevices` sets | Adds each device's protocol number (`nil` read as 1). The sets stay, derived from it, for the code that reads them. |
 
-The host's admission rule while the friendly has active rules: a guest below 3 is turned away, as
-in [contracts/wire-protocol.md](contracts/wire-protocol.md).
+While the friendly has active rules, a guest below 3 is turned away by the host, as in
+[contracts/wire-protocol.md](contracts/wire-protocol.md). A phone's own watch below 3 is held
+back by its phone:
+
+| `MatchStore` member | Type | Meaning |
+|---|---|---|
+| `pairNeedsUpdateForRules` | `Bool`, observable | True on a phone whose paired watch last said hello below protocol 3 while the session in play is a friendly with active rules. While it is true, the phone sends the watch nothing of that session, and its board says so. |

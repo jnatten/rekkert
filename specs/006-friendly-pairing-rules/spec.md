@@ -221,7 +221,8 @@ players in the new setup removes them from their rule.
 - **A late point.** Rules, like everything else the draw reads, never come from the scores, so
   correcting or undoing a point cannot change who partners whom in a round already drawn.
 - **A device on an older Rekkert.** A guest's phone or watch on a version that predates pairing
-  rules would draw without them. See FR-014.
+  rules would draw without them, and so would a phone's own watch that has not yet installed
+  the update. See FR-014.
 
 ## Requirements *(mandatory)*
 
@@ -278,13 +279,17 @@ players in the new setup removes them from their rule.
   MUST be able to add, change and remove pairing rules during the friendly from its match
   menu, under the same checks as setup (FR-009, FR-010). A guest with Only score or Read-only
   MUST NOT be offered it, and an Undo that would take back a rule change MUST NOT be offered
-  to them either.
+  to them either. On a guest it is offered only when the host's Rekkert can draw with pairing
+  rules (FR-014), and on any phone only with four or more players, since singles have no
+  partners.
   A change MUST NOT alter any round already drawn, including the round in play; it applies
   to the rounds drawn after it, and to the next round the board offers.
 - **FR-014**: A device on a version of Rekkert that predates pairing rules MUST NOT be left
   scoring a friendly with rules on partnerships other than the ones every up-to-date device
   shows. Keeping such a device out of a friendly that has rules, and telling it to update, is
-  acceptable.
+  acceptable. This includes a phone's own watch that has not yet installed the update: its
+  phone stops passing it the friendly while the friendly has rules, and says on the phone that
+  the watch needs updating.
 - **FR-015**: A friendly preset MUST save its pairing rules, and a friendly started from it
   MUST start with them, subject to FR-011 for any player removed before it starts.
 - **FR-016**: Pairing rules MUST apply only to the Friendly format. Match, Winner court,
@@ -319,7 +324,8 @@ players in the new setup removes them from their rule.
   of the round that broke it (where it was offered) and under the board while it was played,
   in every case.
 - **SC-007**: The next round is offered as promptly as it is today once a round ends, with up
-  to 16 players and any rules.
+  to 16 players and any rules: 30 rounds for 16 players are drawn in under half a second in
+  all.
 - **SC-008**: When neither the players nor the rules change after setup, the number of rounds
   in the first full rotation that setup said would break a rule equals the number that do, in
   every case.

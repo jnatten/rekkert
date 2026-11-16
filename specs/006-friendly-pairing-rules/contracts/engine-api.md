@@ -32,7 +32,16 @@ public struct PairingConflict: Sendable, Hashable {
 public struct PairingForecast: Sendable, Hashable {
     public var rounds: Int
     public var breaking: Int
-    public var players: [PlayerID]
+    public var unkept: [UnkeptRule]         // distinct, in the order first met
+}
+
+public enum PairingText {                   // RekkertCore/Presentation/PairingText.swift
+    public static func rule(_ rule: PairingRule, in session: FriendlySession) -> String
+    public static func conflict(_ conflict: PairingConflict, in session: FriendlySession) -> String
+    public static func forecast(_ forecast: PairingForecast, in session: FriendlySession) -> String?
+    public static func unkept(_ unkept: UnkeptRule, in session: FriendlySession, offered: Bool) -> String
+    public static func turnedAway(_ phones: Int) -> String?
+    public static let watchNeedsUpdate: String  // "Update Rekkert on your Apple Watch to follow this friendly there."
 }
 
 extension Array where Element == PairingRule {
@@ -41,7 +50,8 @@ extension Array where Element == PairingRule {
 }
 
 extension FriendlySession {
-    public var pairingRules: [PairingRule]             // stored
+    var statedPairingRules: [PairingRule]?             // stored as "pairingRules"; nil = written by an older build
+    public var pairingRules: [PairingRule]             // statedPairingRules ?? []; setting it states it
     public var activeRules: [PairingRule] { get }      // pruned; empty if clashing or < 4 players
     public func nextDraw() -> FriendlyRound?           // unchanged signature; round carries `unkept`
     public func forecast() -> PairingForecast?         // nil for singles or no active rules
@@ -68,16 +78,22 @@ extension PresetConfiguration {
   included (FR-012).
 - `forecast()` equals what is then drawn over the same rotation while players and rules stay
   unchanged (SC-008).
+- A correcting `configure` whose friendly has `statedPairingRules == nil` leaves the rules as
+  they were. One that states them, even as `[]`, replaces them (research D-1, D-6).
 - Nothing here reads a score (Principle II).
 
 ## RekkertSync — `MatchStore`
 
 ```swift
 public var canEditPairingRules: Bool { get }
-// canRunRounds, state is a friendly, and (role != .guest || host protocol ≥ 3)
+// canRunRounds, state is a friendly with four or more players, and (role != .guest || host protocol ≥ 3)
 
 public var olderGuestsTurnedAwayByRules: Int { get }
 // On the host: how many guests now linked speak a protocol below 3. Zero elsewhere.
+
+public private(set) var pairNeedsUpdateForRules: Bool
+// On a phone: its own watch last said hello below protocol 3, and the session in play is a
+// friendly with active rules. While true, nothing of that session is sent to the watch.
 
 public func setPairingRules(_ rules: [PairingRule])
 // Guarded by canEditPairingRules and by rules.conflicts.isEmpty.

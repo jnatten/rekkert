@@ -121,16 +121,22 @@ shows the next round's names and can start it, and it starts friendlies only fro
 - **Decision**:
   - A new `PairingRule` in `RekkertCore/Friendly/PairingRules.swift`: an id, a kind (`apart` or
     `together`), and the players it names, kept sorted.
-  - `FriendlySession.pairingRules: [PairingRule]` is decoded with `decodeIfPresent`, and
-    **encoded only when it is not empty**. A friendly without rules is byte-for-byte what it is
-    today.
+  - `FriendlySession` stores `statedPairingRules: [PairingRule]?`, where nil means "never
+    stated", because the friendly came from a build older than this feature. It exposes
+    `pairingRules: [PairingRule]` as `statedPairingRules ?? []`.
+  - **This build always writes the key, an empty list included.** An absent key therefore
+    means an older build wrote the friendly, which is what lets D-6 tell "no rules now" from
+    "this build knows nothing of rules".
   - Pure helpers on `[PairingRule]` cover the rest: the conflicts (FR-009), pruning to the
     players listed (FR-011), and the rules that apply to the players on court.
 - **Rationale**:
   - Principle I: the rules live in the engine.
-  - An empty array omitted on the wire keeps every existing log, snapshot, history record and
-    older-build exchange unchanged.
+  - An older build ignores the extra key and draws as it always has. Every device folding the
+    same events holds the same optional, so equality between devices is unaffected.
   - Sorted members make equal rules encode to equal bytes, the same habit as `ShareAccessTable`.
+  - The alternative, "write the key only when non-empty", was the first draft. It cannot tell
+    removing the last rule from an older build's correction, and so lets the latter wipe the
+    rules (D-6).
 - **Alternatives considered**:
   - Rules as a separate event stream: rejected, because the reducer would need a new event kind
     that older builds read as `.unrecognised` and ignore. That is no better than D-9's gate,
@@ -223,10 +229,14 @@ shows the next round's names and can start it, and it starts friendlies only fro
 
 - **Decision**:
   - `MatchStore.setPairingRules(_:)` records `.configure(.friendly(session))` with the new rules,
-    as `setChangeEnds` does, and the reducer's correction branch adopts `pairingRules` beside
-    `name`, `rules` and `players`.
-  - It is allowed when `canRunRounds` and, on a guest, only when the host speaks protocol 3 or
-    later (D-9).
+    as `setChangeEnds` does.
+  - **The reducer's correction branch adopts the rules only when the incoming friendly states
+    them** (`statedPairingRules != nil`, D-1), beside `name`, `rules` and `players` as today.
+    An older build's correction carries no rules key; it leaves the rules as they were rather
+    than wiping them for everyone. An example is a 1.2 guest's "swap sides" sent just before
+    the host turns it away, sorting after the rule change.
+  - It is allowed when `canRunRounds`, with four or more players, and, on a guest, only when
+    the host speaks protocol 3 or later (D-9).
   - Because `.configure` is not undoable, no Undo ever takes a rule change back. That satisfies
     FR-013's ban on offering one to Only score, and Full access too, consistently.
 - **Rationale**: it is the existing mechanism for exactly this kind of correction. There is no
@@ -237,7 +247,8 @@ shows the next round's names and can start it, and it starts friendlies only fro
 
 - **Decision**:
   - `FriendlyScheduler.forecast(for:)` copies the session, draws one full rotation forward, and
-    counts the rounds whose `unkept` is not empty, naming their players.
+    counts the rounds whose `unkept` is not empty. It collects the distinct pairs broken, so
+    the message can name the players and the kind.
   - A full rotation is `n / gcd(n, n − 4)` rounds for five or more players, and the number of
     allowed line-ups (D-2) for exactly four. It is nil for singles, where rules do not apply.
   - **Setup fixes the `FriendlyID` when the form opens** and starts the friendly with that same
@@ -277,17 +288,26 @@ shows the next round's names and can start it, and it starts friendlies only fro
      could not draw with them.
   4. **The host's rules editor says how many phones on the match will be turned away** before
      the change is saved.
+  5. **A phone holds a friendly with rules back from its own watch when the watch is below 3.**
+     The watch app installs with the iPhone app, but it can lag. The phone learns the watch's
+     protocol from its `hello`.
+     - While the session in play is a friendly with active rules, the phone sends that session
+       nothing: no pushed events, no queued events, no events in reply to the watch's hello,
+       and no snapshot.
+     - The phone sets `pairNeedsUpdateForRules`, and its board says the watch needs updating.
+     - The watch keeps whatever it last had. A point it sends for an earlier round is addressed
+       by round and side, and lands where it was aimed, or is dropped if that round is over.
+     - Once the watch says hello at 3 or later, or the rules are gone, the phone sends it what
+       it is missing as usual.
 - **Rationale**:
   - FR-014 allows keeping older devices out, and spec 005 built the refusal for this.
   - The gate is at the hub of a star (R-7), so no older guest can see a friendly with rules.
-- **Known limits**:
-  - **1.1 says the match is full**, not that it needs updating. Its wording cannot be changed
-    from here.
-  - **A watch app lagging its phone's update.** The watch app ships inside the iPhone app and
-    installs with it, but if it has not yet, it would draw without rules on the wrist. Scores
-    still land on the right sides, because points are addressed by round and side; only the
-    names differ. This is accepted as a narrow, transient risk and recorded in plan.md. It is
-    not designed around.
+  - A phone is the only way onto its own watch, so it is the only place the watch can be held
+    back. An older watch cannot be told anything new, so the phone says it instead.
+  - Together these keep Principle II whole: no device that cannot draw with the rules ever
+    holds a friendly with rules.
+- **Known limit**: **1.1 says the match is full**, not that it needs updating. Its wording
+  cannot be changed from here.
 - **Alternatives considered**: carrying the whole drawn round so older builds take it as it is.
   Not possible: older builds already ignore `placed` for a friendly (R-4).
 
@@ -325,7 +345,10 @@ shows the next round's names and can start it, and it starts friendlies only fro
 - **Decision**:
   - README › Friendly gains a paragraph on pairing rules.
   - README › Who may do what adds pairing rules to what *Only score* may not change.
-  - `ModeHelp` gains one bullet: "Keep players apart or together to even the matches."
+  - `ModeHelp`'s second friendly point becomes "No repeat partners while a fresh one is left.
+    Rules can keep players apart or together." (87 characters). `HelpTests` allows a mode one
+    to three points of at most 90 characters, and the friendly already has three, so it is
+    reworded rather than added to.
 - **Rationale**: the README is the project's runtime guide (constitution, Governance).
 
 ### D-13 · The watch (R-10)

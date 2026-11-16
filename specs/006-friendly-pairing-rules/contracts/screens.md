@@ -3,7 +3,9 @@
 **Feature**: [../spec.md](../spec.md) · **Engine API**: [engine-api.md](engine-api.md)
 
 All of this is on the iPhone (and iPad). The watch has no new screens (research D-13). Every
-string below comes from the engine's values. The views only lay them out.
+sentence below is built by `PairingText` in `RekkertCore`, so it is tested on macOS. The views
+only lay the sentences out. Names are joined "Ada and Bob" or "Ada, Bob and Cy". A count of one
+is singular: "1 phone on an older Rekkert will be taken off this match."
 
 ## 1. Friendly setup — a Pairing section
 
@@ -16,7 +18,7 @@ Placement: `NewSessionView.friendlySections`, directly below the Players section
 | Rules set | One row per rule, then the two add rows. Swipe to delete; tap to edit. |
 | A rule row | "Ada and Bob apart" · "Ada, Bob and Cy apart" · "Cy and Dan together". The names follow the list as typed. |
 | A clash | The clashing rows show a warning glyph. The footer names it: "Ada and Bob can't be kept both apart and together." · "Cy can only be kept together with one player." · "Cy and Dan are kept together, so they can't be in a group kept apart." **Start** is disabled while any clash stands. |
-| A forecast that breaks | Footer line: "Ada, Bob and Cy can't all be kept apart in 2 of every 5 rounds — whoever sits out decides." When every round of the rotation breaks (`breaking == rounds`), for example four players with three kept apart: "Ada, Bob and Cy can't all be kept apart in any round with these players." Start stays enabled. |
+| A forecast that breaks | Footer line, from the forecast's unkept pairs. Only keep-apart breaks: "Ada, Bob and Cy can't all be kept apart in 2 of every 5 rounds — whoever sits out decides." Only keep-together breaks: "Cy and Dan can't be kept together in 2 of every 5 rounds — whoever sits out decides." Both kinds: "The pairing rules can't all be kept in 2 of every 5 rounds — whoever sits out decides." When every round of the rotation breaks (`breaking == rounds`), for example four players with three kept apart: "Ada, Bob and Cy can't all be kept apart in any round with these players." Start stays enabled. |
 | A forecast that holds | No line. |
 
 Removing a player from the list removes them from every rule at once. A rule left with too few
@@ -66,6 +68,15 @@ Shown on every phone in the friendly, guests included. Never on the watch or the
 **Style**: footnote, secondary, with an `exclamationmark.triangle` glyph, the same weight as the
 bench line. It sits after the bench line in both places.
 
+## 4b. A phone whose watch needs updating (FR-014)
+
+| Where | When | Text |
+|---|---|---|
+| Under the board, in the friendly's footer, above the bench line | `store.pairNeedsUpdateForRules` | "Update Rekkert on your Apple Watch to follow this friendly there." (`PairingText.watchNeedsUpdate`) |
+
+It appears on that phone only, in the same style as §4 but with the `applewatch.slash` glyph. It
+goes away as soon as the watch has updated, or the rules are gone.
+
 ## 5. History, results, rounds sheet, watch
 
 Unchanged. Rules are not shown there (spec, Assumptions).
@@ -79,4 +90,6 @@ Unchanged. Rules are not shown there (spec, Assumptions).
   - a round that cannot keep them says so;
   - rules can be changed in play from the match menu, and apply from the next round.
 - **README › Who may do what**: add "the pairing rules" to the list *Only score* cannot touch.
-- **ModeHelp › friendly**: a fourth point: "Keep players apart or together to even the matches."
+- **ModeHelp › friendly**: the second point becomes "No repeat partners while a fresh one is
+  left. Rules can keep players apart or together." `HelpTests` caps a mode at three points of 90
+  characters.

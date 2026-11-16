@@ -35,9 +35,15 @@ Reading the code (research R-1 to R-11) shaped the approach:
 - **The setup warning is a forecast.** The draw is played forward over one rotation of the
   bench. Setup fixes the friendly's id when the form opens, so the forecast is the draw (D-7,
   SC-008).
-- **Older builds would silently drop the rules** (R-6). While a friendly has rules, the host
-  turns away guests below the new sharing protocol 3: 1.2 is told to update, and 1.1 is told
-  the match is full. A guest offers the editor only to a host that understands it (D-9).
+- **Older builds would silently drop the rules** (R-6). While a friendly has rules:
+  - the host turns away guests below the new sharing protocol 3: 1.2 is told to update, and 1.1
+    is told the match is full;
+  - a phone holds the friendly back from its own watch while that watch lags behind 3, and says
+    so on its board;
+  - a guest offers the editor only to a host that understands it (D-9).
+
+  An older build's correction carries no rules key, and leaves the rules as they were rather
+  than wiping them (D-1, D-6).
 - **Presets mint fresh player ids**, so their rules are remapped along with them (D-10).
 
 There are no new event kinds, targets, dependencies, entitlements or Info.plist keys. The evidence, decisions and
@@ -63,8 +69,8 @@ Nothing new.
 
 - Swift Testing via `swift test --package-path Packages/RekkertKit`, on macOS with no device.
 - New core suites: `FriendlyNoRulesFingerprintTests` (written first), `PairingRulesTests`,
-  `FriendlyPairingDrawTests`, `PairingForecastTests` and `FriendlyPlacementTests`, plus
-  additions to `PresetTests` and `WireCompatibilityTests`.
+  `FriendlyPairingDrawTests`, `PairingForecastTests`, `FriendlyPlacementTests` and
+  `PairingTextTests`, plus additions to `PresetTests` and `WireCompatibilityTests`.
 - New sync suites on `CourtHarness`: `FriendlyPairingSyncTests` and
   `PairingRulesAdmissionTests`.
 - `scripts/verify.sh` is the gate.
@@ -108,18 +114,20 @@ Tuist, over the local Swift package `RekkertKit`.
 | Principle | Gate | Pre-research | Post-design |
 |---|---|---|---|
 | I. Domain logic lives in RekkertCore | Rules stay out of views and adapters | **Pass.** The feature is a draw rule plus its checks. | **Pass.** These are all pure functions in `RekkertCore` (D-1 to D-4, D-7, D-8): the rules, their clashes, pruning, every draw change, `unkept`, the forecast and the preset remap. `MatchStore` gains only a gated `setPairingRules`, `placed` on a friendly draw, and the host's admission rule (D-5, D-6, D-9). The views render rows and strings from engine values ([contracts/screens.md](contracts/screens.md)). |
-| II. Deterministic, convergent state (NON-NEGOTIABLE) | Same events → same state; late events never re-partner a drawn round | **Attention**: a new input to the draw, and changeable mid-session. | **Pass.** <ul><li>The rules travel in the friendly, and the draw stays seeded on the session id and round, reading teams, benches and rules, never scores (FR-012).</li><li>A friendly draw now carries `placed`, so a rule change sorting before a concurrent draw cannot re-partner it (D-5). `FriendlyPlacementTests` fails today for exactly that.</li><li>`unkept` is fixed at the draw (D-4).</li><li>Older builds, which would draw without the rules, are kept off (D-9).</li></ul> |
+| II. Deterministic, convergent state (NON-NEGOTIABLE) | Same events → same state; late events never re-partner a drawn round | **Attention**: a new input to the draw, and changeable mid-session. | **Pass.** <ul><li>The rules travel in the friendly, and the draw stays seeded on the session id and round, reading teams, benches and rules, never scores (FR-012).</li><li>A friendly draw now carries `placed`, so a rule change sorting before a concurrent draw cannot re-partner it (D-5). `FriendlyPlacementTests` fails today for exactly that.</li><li>`unkept` is fixed at the draw (D-4).</li><li>Older builds, which would draw without the rules, are kept off: guests by the host, and a lagging own watch by its phone. An older correction cannot wipe the rules (D-1, D-6, D-9).</li></ul> |
 | III. Test the engine, test-first | Device-free tests pin every rule | **Pass.** | **Pass.** The no-rules fingerprint is committed green on today's code **before** the draw changes. Every rule, the forecast, the placement race, the preset remap and the admission gate get a test that fails first where behaviour changes ([quickstart.md](quickstart.md)). The existing `FriendlyTests` and `SeededDrawTests` pins are untouched. |
 | IV. verify.sh is the gate | Green means `scripts/verify.sh` | **Pass.** | **Pass.** There is no new Info.plist key, entitlement, background mode or embedding change. The new suites run inside `swift test`, which `verify.sh` calls. |
 | V. Local-first, private by construction | Nothing leaves the devices at the court | **Pass.** | **Pass.** The rules travel only on the links a friendly already uses, to the phones and watches on it, and are stored where the friendly is. There is no new data flow. |
 
 No violations. Complexity Tracking is not needed.
 
-**Recorded risk (Principle II, older builds)**: if a watch app has not yet installed its
-phone's update, it would draw without rules on the wrist. Points still land on the right side,
-because they are addressed by round and side; only the names on that watch differ, until it
-updates. The watch app installs with the iPhone app, so this is narrow and transient. It is
-accepted rather than designed around (research D-9).
+**Older builds and Principle II**: no device that cannot draw with the rules ever holds a
+friendly with rules (research D-9):
+- **older guests** are turned away by the host;
+- **a phone's own lagging watch** is held back by the phone, which says on its board that the
+  watch needs updating;
+- **an older build's correction** cannot wipe the rules, because it carries no rules key
+  (D-1, D-6).
 
 ## Project Structure
 
@@ -162,9 +170,12 @@ Packages/RekkertKit/
 │   │   │                             #   pairingRules (D-5, D-6)
 │   │   └── Wire.swift                # sharingProtocol = 3 (D-9)
 │   ├── Persistence/Preset.swift      # friendly case + pairing; makeSetup remaps ids; summary (D-10)
-│   └── Help/ModeHelp.swift           # one more friendly point (D-12)
+│   ├── Presentation/PairingText.swift  # NEW: every pairing sentence in screens.md, built from engine values
+│   └── Help/ModeHelp.swift           # friendly's second point reworded (D-12)
 ├── Sources/RekkertSync/
 │   └── MatchStore.swift              # placed on a friendly draw; setPairingRules; canEditPairingRules;
+│                                     #   holds a friendly with rules back from an older own watch;
+│                                     #   pairNeedsUpdateForRules;
 │                                     #   per-device protocol; host turns away < 3 while rules are
 │                                     #   active, at hello and when rules appear;
 │                                     #   olderGuestsTurnedAwayByRules; test switch to speak protocol 2
@@ -175,6 +186,7 @@ Packages/RekkertKit/
     │   ├── FriendlyPairingDrawTests.swift         # NEW
     │   ├── PairingForecastTests.swift             # NEW
     │   ├── FriendlyPlacementTests.swift           # NEW
+    │   ├── PairingTextTests.swift                 # NEW
     │   ├── PresetTests.swift                      # + rules through fresh ids; older preset reads
     │   └── WireCompatibilityTests.swift           # + rules dropped by older decoder; placed round trip
     └── RekkertSyncTests/
