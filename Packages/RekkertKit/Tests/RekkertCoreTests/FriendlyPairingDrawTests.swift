@@ -150,4 +150,16 @@ struct FriendlyPairingDrawTests {
             #expect(round.teams == session.rounds[round.index % 3].teams)
         }
     }
+
+    @Test func fourAfterAMidSessionChange() throws {
+        var session = try draw(makeFriendly(players: 4), rounds: 3)
+        let p = session.players.map(\.id)
+        let allowed = session.rounds.filter { !arePartners($0, p[0], p[1]) }
+        #expect(allowed.count == 2)
+        session.pairingRules = [PairingRule(kind: .apart, players: [p[0], p[1]])]
+        let after = try draw(session, rounds: 3)
+        #expect(after.rounds[3].teams == allowed[0].teams, "the allowed line-up that came up first, sides and all")
+        #expect(after.rounds[4].teams == allowed[1].teams)
+        #expect(after.rounds[5].teams == allowed[0].teams)
+    }
 }

@@ -139,4 +139,20 @@ struct PairingRulesAdmissionTests {
         })
         #expect(!phone.store.pairNeedsUpdateForRules)
     }
+
+    @Test func rulesAddedMidMatchTakeOlderGuestsOff() async {
+        let court = CourtHarness(guests: 1, withWatches: false)
+        let guest = court.guests.first!
+        guest.phone.store.speaksProtocol = 2
+        court.startFriendly()
+        court.share()
+        court.join(guest)
+        #expect(await court.until(within: .seconds(30)) { court.allInStep(includingWatches: false) })
+        #expect(court.host.phone.store.olderGuestsTurnedAwayByRules == 1)
+
+        let players = court.friendly(on: court.host.phone)!.players
+        court.host.phone.store.setPairingRules(firstTwoApart(players))
+        #expect(await court.until(within: .seconds(15)) { guest.phone.sharing.phase == .failed(.needsUpdate) })
+        #expect(court.host.phone.store.olderGuestsTurnedAwayByRules == 0)
+    }
 }

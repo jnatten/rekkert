@@ -26,4 +26,21 @@ public struct RoundPlacement: Codable, Sendable, Hashable {
         }
         return Round(index: tournament.rounds.count, matches: matches, sitOuts: sitOuts)
     }
+
+    public init(_ round: FriendlyRound) {
+        courts = [round.teams]
+        sitOuts = round.sitOuts
+    }
+
+    /// The friendly round as placed, as long as it places the friendly's players, each of them
+    /// once, `teamSize` a side, and benches as many as the seats leave over.
+    func friendlyRound(for session: FriendlySession) -> FriendlyRound? {
+        guard courts.count == 1, let teams = courts.first else { return nil }
+        let everyone = Set(session.players.map(\.id))
+        let placed = teams.a + teams.b + sitOuts
+        guard teams.a.count == session.teamSize, teams.b.count == session.teamSize,
+              sitOuts.count == session.sitOutCount,
+              placed.count == everyone.count, Set(placed) == everyone else { return nil }
+        return FriendlyScheduler.makeRound(index: session.rounds.count, teams: teams, sitOuts: sitOuts, in: session)
+    }
 }

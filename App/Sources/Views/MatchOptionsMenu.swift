@@ -10,6 +10,7 @@ struct MatchOptionsMenu: View {
     @State private var settling = false
     @State private var showingTV = false
     @State private var showingHelp = false
+    @State private var showingPairing = false
     var round = 0
     var court = 0
     /// For the modes that play several rounds and have something to look back at. Here
@@ -93,6 +94,9 @@ struct MatchOptionsMenu: View {
                 }
                 .pickerStyle(.menu)
             }
+            if model.store.canEditPairingRules {
+                Button("Pairing rules…", systemImage: "person.2.badge.gearshape") { showingPairing = true }
+            }
             Button("Swap colours", systemImage: "circle.lefthalf.filled") {
                 model.store.toggleTeamColors()
             }
@@ -105,6 +109,9 @@ struct MatchOptionsMenu: View {
         .accessibilityLabel("Match options")
         .sheet(isPresented: $showingTV) { TVGuideSheet() }
         .sheet(isPresented: $showingHelp) { HelpSheet() }
+        .sheet(isPresented: $showingPairing) {
+            if case .friendly(let session)? = model.store.state { PairingRulesSheet(session: session) }
+        }
         .confirmationDialog(
             "Use this phone's score?",
             isPresented: $settling,

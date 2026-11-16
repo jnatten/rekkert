@@ -331,7 +331,7 @@ public final class MatchStore {
             record(.configure(.traditional(rules: session.rules, teams: session.teams)))
         case .friendly(var session):
             session.rules.changeEnds = rule
-            record(.configure(.friendly(session)))
+            record(.configure(.friendly(session.leavingPairingRulesUnstated())))
         case .tournament, .winnerCourt, .pointCount, .none:
             break
         }
@@ -360,7 +360,7 @@ public final class MatchStore {
                 placed: TournamentEngine.placement(of: tournament)
             ))
         case .friendly(let session):
-            record(.nextRound(after: session.rounds.count - 1, at: Date()))
+            record(.nextRound(after: session.rounds.count - 1, at: Date(), placed: session.nextDraw().map(RoundPlacement.init)))
         case .traditional, .winnerCourt, .pointCount, .none:
             break
         }
@@ -624,6 +624,7 @@ public final class MatchStore {
             participants = Participants()
             linkOwners = [:]
             refusedLinks = []
+            refusedForRules = [:]
         }
         role = .host
         if log.isEmpty { betweenMatches.sharingStarted(now: now()) }
@@ -1988,10 +1989,15 @@ public final class MatchStore {
             packet.reply?(encode(.needsUpdate(sessionID: log.sessionID)))
             return transport.refuse(link)
         }
+        if let link = packet.link, !packet.isFromPairedDevice, let speaks = refusedForRules[link] {
+            packet.reply?(encode(refusalForRules(speaks: speaks)))
+            return
+        }
         if role == .host, case .hello(_, _, let sender, _, let speaks) = wire, let link = packet.link,
            !packet.isFromPairedDevice, (speaks ?? 1) < Self.pairingRulesProtocol, Self.hasActiveRules(state) {
             packet.reply?(encode(refusalForRules(speaks: speaks ?? 1)))
             refusedLinks.insert(link)
+            refusedForRules[link] = speaks ?? 1
             transport.refuse(link)
             recorder?.note(.refused(.needsUpdate), on: .guest(sender ?? DeviceID(link.raw)), in: log.sessionID)
             return
@@ -2966,7 +2972,23 @@ public final class MatchStore {
 
     static let pairingRulesProtocol = 3
 
+    /// Links turned away for the rules, and what each one speaks: everything they send after is
+    /// answered with the same refusal, so a guest is never told the match is full instead.
+    @ObservationIgnored private var refusedForRules: [LinkID: Int] = [:]
+
     public private(set) var pairNeedsUpdateForRules = false
+
+    public var canEditPairingRules: Bool {
+        guard canRunRounds, case .friendly(let session)? = state, session.players.count >= 4 else { return false }
+        guard role == .guest else { return true }
+        return (hostDevice.flatMap { peerProtocols[$0] } ?? 1) >= Self.pairingRulesProtocol
+    }
+
+    public func setPairingRules(_ rules: [PairingRule]) {
+        guard canEditPairingRules, rules.conflicts.isEmpty, case .friendly(var session)? = state else { return }
+        session.pairingRules = rules.pruned(to: session.players.map(\.id))
+        record(.configure(.friendly(session)))
+    }
 
     /// On the host, how many guests now on the match speak a protocol that cannot draw with
     /// pairing rules, and would be turned away by the first one.
@@ -2990,6 +3012,7 @@ public final class MatchStore {
             guard let owner = linkOwners[link] ?? farEnds[link], let speaks = peerProtocols[owner],
                   speaks < Self.pairingRulesProtocol else { continue }
             refusedLinks.insert(link)
+            refusedForRules[link] = speaks
             participants.remove(owner)
             recorder?.note(.refused(.needsUpdate), on: .guest(owner), in: log.sessionID)
             let refusal = encode(refusalForRules(speaks: speaks))

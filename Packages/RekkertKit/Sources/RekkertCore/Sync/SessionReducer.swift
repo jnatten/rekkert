@@ -172,8 +172,11 @@ public enum SessionReducer {
                 // round open behind the next with no way back to it.
                 guard !session.isFinished, session.rounds.count == after + 1,
                       session.currentRound?.isFinished ?? true,
-                      var next = try? FriendlyScheduler.appendingRound(to: session),
-                      let drawn = next.rounds.indices.last else { return }
+                      let round = placed?.friendlyRound(for: session) ?? (try? FriendlyScheduler.nextRound(for: session))
+                else { return }
+                var next = session
+                next.rounds.append(round)
+                let drawn = next.rounds.count - 1
                 next.rounds[drawn].startedAt = at
                 state = .friendly(next)
 
@@ -284,6 +287,8 @@ public enum SessionReducer {
             session.name = incoming.name
             session.rules = incoming.rules
             session.players = incoming.players
+            // An older build's correction says nothing of the rules, and leaves them as they were.
+            if let stated = incoming.statedPairingRules { session.statedPairingRules = stated }
             state = .friendly(session)
 
         case (.friendly(let incoming), _):

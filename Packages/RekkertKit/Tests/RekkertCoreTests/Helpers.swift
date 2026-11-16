@@ -56,7 +56,10 @@ extension MatchLog {
         guard case .friendly(let session)? = SessionReducer.state(of: self) else {
             return append(.nextRound(after: -1, at: at), from: device)
         }
-        return append(.nextRound(after: session.rounds.count - 1, at: at), from: device)
+        return append(
+            .nextRound(after: session.rounds.count - 1, at: at, placed: session.nextDraw().map(RoundPlacement.init)),
+            from: device
+        )
     }
 
     /// Mirrors `MatchStore.endRound()`.

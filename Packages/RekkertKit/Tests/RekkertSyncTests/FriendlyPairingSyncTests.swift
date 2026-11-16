@@ -59,4 +59,84 @@ struct FriendlyPairingSyncTests {
         #expect(rounds.count == 10)
         #expect(rounds.count { !$0.unkept.isEmpty } == 4)
     }
+
+    private func sharedFriendly(players: [String] = ["Ada", "Bob", "Cy", "Dan"], access: ShareAccess = .full) async -> CourtHarness {
+        let court = CourtHarness(guests: 1, withWatches: true)
+        if access != .full { court.host.phone.store.setDefaultAccess(access) }
+        court.startFriendly(players: players)
+        court.share()
+        court.joinAll()
+        await court.until(within: .seconds(60)) { court.allInStep() }
+        return court
+    }
+
+    private func apartRule(_ court: CourtHarness, on device: CourtHarness.Device) -> [PairingRule] {
+        let players = court.friendly(on: device)!.players
+        return [PairingRule(kind: .apart, players: [players[0].id, players[1].id])]
+    }
+
+    @Test func aFullAccessGuestChangesTheRules() async throws {
+        let court = await sharedFriendly()
+        let host = court.host
+        let guest = court.guests.first!.phone
+        let devices = [host.phone, host.watch!, guest]
+        #expect(sameRounds(court, devices))
+        let inPlay = try #require(court.friendly(on: host.phone)?.rounds)
+
+        let rules = apartRule(court, on: guest)
+        guest.store.setPairingRules(rules)
+        #expect(await court.until(within: .seconds(10)) {
+            devices.allSatisfy { court.friendly(on: $0)?.pairingRules == rules }
+        })
+        #expect(court.friendly(on: host.phone)?.rounds == inPlay, "the round in play stays as it was")
+
+        court.playFriendlyRound(on: host.phone)
+        #expect(await court.until(within: .seconds(10)) {
+            sameRounds(court, devices) && court.friendly(on: guest)?.rounds.count == inPlay.count + 1
+        })
+        let drawn = try #require(court.friendly(on: guest)?.rounds.last)
+        let ids = rules[0].players
+        #expect(!TeamSide.allCases.contains { Set(drawn.teams[$0]) == Set(ids) })
+    }
+
+    @Test func aRuleChangeIsNeverUndone() async throws {
+        let court = await sharedFriendly()
+        let host = court.host.phone
+        let guest = court.guests.first!.phone
+        let rules = apartRule(court, on: host)
+        host.store.setPairingRules(rules)
+        let round = try #require(court.friendly(on: host)?.currentIndex)
+        host.store.tap(round: round, court: 0, team: .a)
+        #expect(await court.until(within: .seconds(10)) { court.friendly(on: guest)?.pairingRules == rules })
+
+        host.store.undoLast()
+        guest.store.undoLast()
+        await court.run(for: .seconds(5))
+        for device in [host, guest, court.host.watch!] {
+            #expect(court.friendly(on: device)?.pairingRules == rules)
+        }
+    }
+
+    @Test func onlyScoreIsNotOffered() async {
+        let court = await sharedFriendly(access: .score)
+        #expect(court.host.phone.store.canEditPairingRules)
+        #expect(!court.guests.first!.phone.store.canEditPairingRules)
+
+        let readOnly = await sharedFriendly(access: .readOnly)
+        #expect(!readOnly.guests.first!.phone.store.canEditPairingRules)
+
+        let threes = await sharedFriendly(players: ["Ada", "Bob", "Cy"])
+        #expect(!threes.host.phone.store.canEditPairingRules, "singles have no partners")
+        #expect(!threes.guests.first!.phone.store.canEditPairingRules)
+    }
+
+    @Test func aGuestOfAnOlderHostIsNotOffered() async {
+        let court = CourtHarness(guests: 1, withWatches: false)
+        court.host.phone.store.speaksProtocol = 2
+        court.startFriendly()
+        court.share()
+        court.joinAll()
+        #expect(await court.until(within: .seconds(60)) { court.allInStep(includingWatches: false) })
+        #expect(!court.guests.first!.phone.store.canEditPairingRules)
+    }
 }

@@ -158,3 +158,53 @@ struct PairingRuleSheet: View {
         if kind == .together, picked.count > 2 { picked.removeFirst() }
     }
 }
+
+struct PairingRulesSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let session: FriendlySession
+    @State private var rules: [PairingRule]
+
+    init(session: FriendlySession) {
+        self.session = session
+        _rules = State(initialValue: session.pairingRules)
+    }
+
+    private var edited: FriendlySession {
+        var edited = session
+        edited.pairingRules = rules.pruned(to: session.players.map(\.id))
+        return edited
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                PairingRulesSection(rules: $rules, players: session.players, forecast: edited.forecast())
+                Section {
+                } footer: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Changes apply from the next round. The round being played stays as it is.")
+                        if session.activeRules.isEmpty, !edited.activeRules.isEmpty,
+                           let line = PairingText.turnedAway(model.store.olderGuestsTurnedAwayByRules) {
+                            Text(line)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Pairing rules")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        model.store.setPairingRules(rules)
+                        dismiss()
+                    }
+                    .disabled(!rules.conflicts.isEmpty)
+                }
+            }
+        }
+    }
+}

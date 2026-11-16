@@ -263,4 +263,11 @@ struct FriendlyRulesWireTests {
         let passedOn = try JSONCoding.decoder.decode(FriendlySession.self, from: JSONCoding.encoder.encode(older))
         #expect(passedOn.statedPairingRules == nil, "an older build drops the rules unread, and says nothing of them")
     }
+
+    @Test func aFriendlyDrawCarriesItsPlacement() throws {
+        let p = (0 ..< 5).map { _ in PlayerID() }
+        let placed = RoundPlacement(courts: [BySide(a: [p[0], p[1]], b: [p[2], p[3]])], sitOuts: [p[4]])
+        let kind = EventKind.nextRound(after: 2, at: nil, sitOuts: nil, placed: placed)
+        #expect(try JSONCoding.decoder.decode(EventKind.self, from: JSONCoding.encoder.encode(kind)) == kind)
+    }
 }

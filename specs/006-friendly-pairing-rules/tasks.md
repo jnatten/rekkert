@@ -346,7 +346,7 @@ new round keeps the two apart, and round 1 is unchanged on the phone and the wat
 
 ### Tests for User Story 4 ⚠️ (write first; they must fail)
 
-- [ ] T030 [P] [US4] Write `CoreTests/FriendlyPlacementTests.swift` (`@Suite("A friendly draw stays where it was placed")`). Build the logs the way `SessionReducerTests` does (`MatchLog.append(_:from:)`, `merge`).
+- [X] T030 [P] [US4] Write `CoreTests/FriendlyPlacementTests.swift` (`@Suite("A friendly draw stays where it was placed")`). Build the logs the way `SessionReducerTests` does (`MatchLog.append(_:from:)`, `merge`).
   - `aRuleChangeRacingADrawKeepsTheRound` (D-5; fails today):
     1. Four players, round 1 drawn and ended.
     2. Copy the log to device A and device B, picking the ids so B's sorts first at equal Lamport stamps.
@@ -365,9 +365,9 @@ new round keeps the two apart, and round 1 is unchanged on the phone and the wat
     4. The same holds for a `setChangeEnds` correction from this build (C2), which leaves the rules out by design (T036). A rule change on one phone and "swap sides" on another, landing in either order, keep both.
 
     It fails until T035.
-- [ ] T031 [P] [US4] Add `fourAfterAMidSessionChange` to `CoreTests/FriendlyPairingDrawTests.swift` (the clarified FR-008): three rules-free rounds, then P0 and P1 apart. Round 4 is whichever of the two allowed line-ups came up first, sides included, and rounds 5 and 6 alternate from it.
-- [ ] T032 [P] [US4] Add `aFriendlyDrawCarriesItsPlacement` to `CoreTests/WireCompatibilityTests.swift`: a `.nextRound(after:at:sitOuts:placed:)` whose `placed` has one court and a bench round-trips through `MatchEvent` encoding.
-- [ ] T033 [P] [US4] Add to `SyncTests/FriendlyPairingSyncTests.swift`:
+- [X] T031 [P] [US4] Add `fourAfterAMidSessionChange` to `CoreTests/FriendlyPairingDrawTests.swift` (the clarified FR-008): three rules-free rounds, then P0 and P1 apart. Round 4 is whichever of the two allowed line-ups came up first, sides included, and rounds 5 and 6 alternate from it.
+- [X] T032 [P] [US4] Add `aFriendlyDrawCarriesItsPlacement` to `CoreTests/WireCompatibilityTests.swift`: a `.nextRound(after:at:sitOuts:placed:)` whose `placed` has one court and a bench round-trips through `MatchEvent` encoding.
+- [X] T033 [P] [US4] Add to `SyncTests/FriendlyPairingSyncTests.swift`:
   - `aFullAccessGuestChangesTheRules` (US-4 #4, FR-013): host, guest and the host's watch on a rules-free friendly of four.
     - Mid-round, the guest calls `setPairingRules([P0+P1 apart])`.
     - Within 5 s the host and the watch hold the rule.
@@ -383,24 +383,24 @@ new round keeps the two apart, and round 1 is unchanged on the phone and the wat
 
 ### Implementation for User Story 4
 
-- [ ] T034 [US4] In `RekkertCore/Tournament/RoundPlacement.swift`, add `public init(_ round: FriendlyRound)` (`courts: [round.teams]`, `sitOuts: round.sitOuts`) and an internal `friendlyRound(for session: FriendlySession) -> FriendlyRound?`. It returns nil unless:
+- [X] T034 [US4] In `RekkertCore/Tournament/RoundPlacement.swift`, add `public init(_ round: FriendlyRound)` (`courts: [round.teams]`, `sitOuts: round.sitOuts`) and an internal `friendlyRound(for session: FriendlySession) -> FriendlyRound?`. It returns nil unless:
   - "every listed player appears exactly once across the sides and the bench";
   - "each side has `teamSize` players";
   - "the bench has `sitOutCount` players";
   - `courts.count == 1`.
 
   When it fits, it builds the round through `FriendlyScheduler.makeRound` (T016), so `unkept` and the first server are stamped as for a drawn round.
-- [ ] T035 [US4] In `RekkertCore/Sync/SessionReducer.swift`:
+- [X] T035 [US4] In `RekkertCore/Sync/SessionReducer.swift`:
   - **The draw.** In the `.nextRound` case for `.friendly`, keep the existing guards, then use `placed?.friendlyRound(for: session)` when it is not nil, and otherwise `FriendlyScheduler.nextRound(for:)`. Append it and stamp `startedAt` as today.
   - **The correction.** In `configure`'s `(.friendly(let incoming), .friendly(var session))` branch, adopt the rules **only when stated**: `if let stated = incoming.statedPairingRules { session.statedPairingRules = stated }`. `name`, `rules` and `players` stay adopted as today.
   - **Done when** T030 and T031 pass and the fingerprint stays green.
-- [ ] T036 [US4] In `RekkertSync/MatchStore.swift` (D-5, D-6):
+- [X] T036 [US4] In `RekkertSync/MatchStore.swift` (D-5, D-6):
   - **The draw.** `nextRound()` for `.friendly` records `placed: session.nextDraw().map(RoundPlacement.init)`.
   - **Who may edit.** Add `public var canEditPairingRules: Bool`. It requires `canRunRounds`, a friendly state with at least four players, and, when `role == .guest`, `(hostDevice.flatMap { peerProtocols[$0] } ?? 1) >= 3`.
   - **The change.** Add `public func setPairingRules(_ rules: [PairingRule])`. It is guarded by `canEditPairingRules` and `rules.conflicts.isEmpty`, sets `session.pairingRules` to the rules pruned to the players (which states them, `[]` included), and records `.configure(.friendly(session))`, exactly as `setChangeEnds` does.
   - **Swap sides leaves the rules alone** (C2). In `setChangeEnds`'s `.friendly` case, record `.configure(.friendly(session.leavingPairingRulesUnstated()))`, so that change never restates, and never reverts, the rules a racing `setPairingRules` just set.
   - **Done when** T032 and T033 pass.
-- [ ] T037 [US4] Add the in-play screen (screens §3).
+- [X] T037 [US4] Add the in-play screen (screens §3).
   - **The sheet.** In `App/Sources/Views/PairingRulesEditor.swift`, add `PairingRulesSheet`:
     - titled "Pairing rules", with Cancel and Save, editing a copy of `session.pairingRules`, with both kinds and the clash display from T028;
     - the footer "Changes apply from the next round. The round being played stays as it is.";
