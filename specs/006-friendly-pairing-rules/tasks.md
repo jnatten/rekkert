@@ -58,7 +58,7 @@ The same idea goes by different names in the spec and in the code. They are one 
 
 **Purpose**: A known-good baseline
 
-- [ ] T001 Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh` on `b8bc5a72`, which is `0d4ff41b` plus docs, and confirm both pass. Any failure found here is not this feature's, and must be raised with the user before going on.
+- [X] T001 Run `swift test --package-path Packages/RekkertKit` and `scripts/verify.sh` on `b8bc5a72`, which is `0d4ff41b` plus docs, and confirm both pass. Any failure found here is not this feature's, and must be raised with the user before going on.
 
 ---
 
@@ -76,7 +76,7 @@ Every story needs these, and the gates make even the MVP safe to share.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T002 Pin today's draw, **before any draw code changes**.
+- [X] T002 Pin today's draw, **before any draw code changes**.
   - **Move the helpers.** Move the `private` helpers at the top of `CoreTests/FriendlyTests.swift` into a new `CoreTests/FriendlyTestSupport.swift` as `internal`: `makeFriendly(players:id:rules:)`, `draw(_:rounds:)`, `partnerCounts`, `opponentCounts`, `benchCounts`, `drawn(_:)` and `partition(_:)`. `FriendlyTests` must compile and pass unchanged.
   - **Write the fingerprint.** Write `CoreTests/FriendlyNoRulesFingerprintTests.swift` (`@Suite("A friendly without rules draws as it always has")`). It holds one parameterised test over `2 ... 12` players that draws 30 rounds with `makeFriendly(players:)` (default id `…0000A1`) and compares `drawn(session)` with a pinned `[String]` literal per player count.
   - **Generate the literals.** Get them by temporarily printing `drawn(...)` on today's code, and paste them in verbatim. Delete the printer.
