@@ -279,8 +279,9 @@ public enum Wire: Codable, Sendable, Hashable {
     /// D-2). Sent only to devices whose hello carried a `protocol`.
     case clock(reading: Date? = nil)
 
-    /// The sharing protocol this build speaks: 2 from spec 005, absent (1) before it.
-    public static let sharingProtocol = 2
+    /// The sharing protocol this build speaks: 3 from spec 006 (pairing rules), 2 from spec 005,
+    /// absent (1) before it.
+    public static let sharingProtocol = 3
 
     public func encoded() throws -> Data {
         try JSONCoding.encoder.encode(self)
@@ -387,6 +388,10 @@ public protocol PeerTransport: Sendable {
 
     /// The radio `link` is on, while it is up (spec 005, D-3).
     func radio(of link: LinkID) -> LinkRadio?
+
+    /// Stops carrying the match to this device's own watch or phone while `holding`, and only
+    /// to it: a watch too old to draw a friendly's pairing rules (spec 006, FR-014).
+    func holdSessionFromPair(_ holding: Bool)
 }
 
 extension PeerTransport {
@@ -402,4 +407,5 @@ extension PeerTransport {
     }
     public var isReachableBesideLinks: Bool { links.isEmpty && isReachable }
     public func radio(of link: LinkID) -> LinkRadio? { nil }
+    public func holdSessionFromPair(_ holding: Bool) {}
 }

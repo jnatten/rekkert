@@ -81,7 +81,7 @@ Every story needs these, and the gates make even the MVP safe to share.
   - **Write the fingerprint.** Write `CoreTests/FriendlyNoRulesFingerprintTests.swift` (`@Suite("A friendly without rules draws as it always has")`). It holds one parameterised test over `2 ... 12` players that draws 30 rounds with `makeFriendly(players:)` (default id `…0000A1`) and compares `drawn(session)` with a pinned `[String]` literal per player count.
   - **Generate the literals.** Get them by temporarily printing `drawn(...)` on today's code, and paste them in verbatim. Delete the printer.
   - **Done when** the suite is green on today's code (SC-003).
-- [ ] T003 [P] Write `CoreTests/PairingRulesTests.swift` (`@Suite("Pairing rules")`). It fails to compile until T004–T005. Cover each of these:
+- [X] T003 [P] Write `CoreTests/PairingRulesTests.swift` (`@Suite("Pairing rules")`). It fails to compile until T004–T005. Cover each of these:
   - **wellFormed**: `.apart` with 1 player or a duplicate is not well formed. `.apart` with 2 or 3 is. `.together` with exactly 2 is; with 3 it is not. Members are stored sorted whatever order they are given in.
   - **conflicts** (FR-009), one test per reason, each naming both rule ids:
     - `sameTwoBothWays`: P0 and P1 kept apart, and P0 and P1 kept together.
@@ -106,7 +106,7 @@ Every story needs these, and the gates make even the MVP safe to share.
     - JSON without the key, as an older build wrote it, decodes with `statedPairingRules == nil` and `pairingRules == []`;
     - a `FriendlyRound` with no `unkept` writes no `unkept` key, and older JSON decodes to `[]`;
     - a session with rules, and a round with `unkept`, round-trip equal.
-- [ ] T004 Create `RekkertCore/Friendly/PairingRules.swift` per data-model.md and contracts/engine-api.md:
+- [X] T004 Create `RekkertCore/Friendly/PairingRules.swift` per data-model.md and contracts/engine-api.md:
   - `PairingRule`: `id: UUID`, `kind: Kind` (`.apart`/`.together`, raw `"apart"`/`"together"`), `players: [PlayerID]` "Sorted ascending, so equal rules encode to equal bytes". `isWellFormed` encodes "`.apart` needs two or more distinct players" and "`.together` needs exactly two distinct players".
   - `UnkeptRule` (`kind`, `players`: exactly two, sorted).
   - `PairingConflict` (`rules: [UUID]`, `reason`).
@@ -118,7 +118,7 @@ Every story needs these, and the gates make even the MVP safe to share.
     - an internal `breakCount(_:)` that sums breaks over several courts' teams.
 
   Everything is public where the engine API lists it.
-- [ ] T005 In `RekkertCore/Friendly/FriendlySession.swift`:
+- [X] T005 In `RekkertCore/Friendly/FriendlySession.swift`:
   - **The session's rules.**
     - Add the stored `var statedPairingRules: [PairingRule]?`, where `nil` means "written by an older build".
     - Add the public computed `pairingRules: [PairingRule]`: get returns `statedPairingRules ?? []`; set states it.
@@ -128,14 +128,14 @@ Every story needs these, and the gates make even the MVP safe to share.
   - **Its coding.** Give `FriendlySession` a hand-written `init(from:)` that reads key `pairingRules` with `decodeIfPresent` into `statedPairingRules`, and an `encode(to:)` that writes it whenever it is not nil, an empty list included. Every other key is written exactly as the synthesized code did.
   - **The round's record.** Add `unkept: [UnkeptRule]` (default `[]`) to `FriendlyRound`'s init, `CodingKeys` and decoder (`decodeIfPresent ?? []`). Add a hand-written `encode(to:)` that omits it when empty.
   - **Done when** T003 passes and the T002 fingerprint stays green.
-- [ ] T006 [P] Add `aFriendlyWithRulesReadsAsOneWithoutOnAnOlderBuild` to `CoreTests/WireCompatibilityTests.swift`. Decode a `FriendlySession` with rules through a test-local copy of the pre-feature shape (a `Decodable` struct with the `0d4ff41b` fields only), and assert that it decodes with nothing to say about rules. This documents R-6, the reason for the gates.
-- [ ] T007 Bump the protocol and track it per device.
+- [X] T006 [P] Add `aFriendlyWithRulesReadsAsOneWithoutOnAnOlderBuild` to `CoreTests/WireCompatibilityTests.swift`. Decode a `FriendlySession` with rules through a test-local copy of the pre-feature shape (a `Decodable` struct with the `0d4ff41b` fields only), and assert that it decodes with nothing to say about rules. This documents R-6, the reason for the gates.
+- [X] T007 Bump the protocol and track it per device.
   - **In `RekkertCore/Sync/Wire.swift`**: set `Wire.sharingProtocol = 3`, and update its doc comment to "3 from spec 006 (pairing rules)".
   - **Per-device protocol.** In `RekkertSync/MatchStore.swift`, keep each device's protocol in a new `peerProtocols: [DeviceID: Int]`, filled where `hello` sets `olderDevices`/`currentDevices`, the pair's hello included (`nil` → 1). Leave those sets working as they do.
   - **Keep the pair's across relaunches** (U2). Persist the paired device's protocol beside `pairedDevice` in `persist()` and the store's restore. Read it back into `peerProtocols[pairedDevice]` on launch. A relaunched phone then knows its older watch before that watch says hello.
   - **A test switch.** Add a test-only `@ObservationIgnored var speaksProtocol: Int?` beside `actsAsOlderBuild`. When set, `ownProtocol` returns it, so a phone or a watch can stand in for 1.2 (protocol 2).
   - **Check old assumptions.** Grep the tests for a literal `2` used as the protocol, and fix any to `Wire.sharingProtocol`.
-- [ ] T008 [P] Write `SyncTests/PairingRulesAdmissionTests.swift` (`@Suite("Older builds stay off a friendly with rules", .serialized) @MainActor`).
+- [X] T008 [P] Write `SyncTests/PairingRulesAdmissionTests.swift` (`@Suite("Older builds stay off a friendly with rules", .serialized) @MainActor`).
   - **A harness helper.** Add `startFriendly(players: [String], rules: (([Player]) -> [PairingRule])? = nil)` to `SyncTests/CourtHarness.swift`. It configures `.friendly(FriendlySession(...))` on the host's phone and then calls `nextRound()`, as `NewSessionView.start()` does.
   - **Guests** (each fails today, because nobody is turned away):
     - `aProtocolTwoGuestIsToldToUpdate`: four players, P0 and P1 apart, shared; a guest with `speaksProtocol = 2` joins. Its phone reaches `sharing.phase == .failed(.needsUpdate)` within 15 s, and its record has `.refused(.needsUpdate)`. Model it on `NeedsUpdateTests`.
@@ -154,11 +154,11 @@ Every story needs these, and the gates make even the MVP safe to share.
       1. Start as `anOlderWatchIsHeldBack…`.
       2. Set the watch's `speaksProtocol = nil` and have it say hello again, as a relaunch after updating would.
       3. Within 10 s the watch holds every round and the rules, and `pairNeedsUpdateForRules` is false.
-- [ ] T009 Implement the host's gate in `RekkertSync/MatchStore.swift` (contracts/wire-protocol.md, "Sharing scope"; D-9 items 1–4).
+- [X] T009 Implement the host's gate in `RekkertSync/MatchStore.swift` (contracts/wire-protocol.md, "Sharing scope"; D-9 items 1–4).
   - **At hello.** In `handle(_:)`, beside the `refusesAsNeedingUpdate` check, if `role == .host`, the packet is a non-pair `hello`, the state is a friendly with non-empty `activeRules`, and the sender's protocol is below 3: reply `.needsUpdate(sessionID:)` for protocol 2, or `.noRoom(sessionID:limit:)` for no protocol. Then `transport.refuse(link)`, insert into `refusedLinks`, note `.refused(.needsUpdate)`, and return.
   - **When rules appear.** In `refresh(to:)`, when a host's state goes from no active rules to some, do the same for every linked guest below 3, found through `linkOwners` and `peerProtocols`, and `participants.remove(_:)` each.
   - **The count.** Add `public var olderGuestsTurnedAwayByRules: Int`: on a host, the number of distinct linked guest devices (not their watches) below protocol 3; zero elsewhere.
-- [ ] T010 Hold a friendly with rules back from an older own watch, in `RekkertSync/MatchStore.swift` and `RekkertSync/FanOutTransport.swift` (D-9 item 5; contracts/wire-protocol.md, "Pair scope").
+- [X] T010 Hold a friendly with rules back from an older own watch, in `RekkertSync/MatchStore.swift` and `RekkertSync/FanOutTransport.swift` (D-9 item 5; contracts/wire-protocol.md, "Pair scope").
   - **The flag.** Add `public private(set) var pairNeedsUpdateForRules = false` to `MatchStore`. Recompute it in `refresh(to:)`, on launch (from the persisted protocol, T007), and whenever the pair's `hello` is heard. It is true when this store is the phone (`keepsHistory`), `peerProtocols[pairedDevice]` is known and below 3, and the session in play is a friendly with non-empty `activeRules`.
   - **One choke point in the transport** (U1).
     - Add a settable `holdsSessionFromPair: Bool` to `PeerTransport` (in `RekkertCore/Sync/Wire.swift`), with a protocol-extension default that reads false and ignores writes, so every other transport is untouched.
@@ -170,14 +170,14 @@ Every story needs these, and the gates make even the MVP safe to share.
     Links to other phones are untouched.
   - **The release.** When the flag turns false (an update, or the rules gone), send the pair what it is missing, as after any gap. Answering its next hello, or a `requestSnapshot`, is enough if that is how the code already catches it up.
   - **Done when** T008 passes in full.
-- [ ] T011 [P] Write `CoreTests/PairingTextTests.swift` (`@Suite("Pairing wording")`). It holds one test per sentence in contracts/screens.md §1–§4b, with Ada, Bob, Cy and Dan:
+- [X] T011 [P] Write `CoreTests/PairingTextTests.swift` (`@Suite("Pairing wording")`). It holds one test per sentence in contracts/screens.md §1–§4b, with Ada, Bob, Cy and Dan:
   - **rule rows**: "Ada and Bob apart", "Ada, Bob and Cy apart", "Cy and Dan together", names in list order;
   - **the three conflict sentences**;
   - **forecast**: apart-only, together-only and mixed; `breaking == rounds` gives "in any round with these players"; nil when `breaking == 0`;
   - **unkept**: both kinds, `offered: true` and `false`;
   - **turnedAway**: nil for 0, singular for 1, plural for 2;
   - **watchNeedsUpdate**: exactly "Update Rekkert on your Apple Watch to follow this friendly there."
-- [ ] T012 Create `RekkertCore/Presentation/PairingText.swift`, a `public enum PairingText` with `rule`, `conflict`, `forecast`, `unkept(_:in:offered:)`, `turnedAway` and `watchNeedsUpdate`, as in contracts/engine-api.md. Names are joined "Ada and Bob" or "Ada, Bob and Cy" in the order of `session.players`, and a missing player reads as `session.name(_:)` does ("—"). **Done when** T011 passes.
+- [X] T012 Create `RekkertCore/Presentation/PairingText.swift`, a `public enum PairingText` with `rule`, `conflict`, `forecast`, `unkept(_:in:offered:)`, `turnedAway` and `watchNeedsUpdate`, as in contracts/engine-api.md. Names are joined "Ada and Bob" or "Ada, Bob and Cy" in the order of `session.players`, and a missing player reads as `session.name(_:)` does ("—"). **Done when** T011 passes.
 
 **Checkpoint**: Rules exist and are stored, every sentence is built, and no older device (a guest, or a phone's own watch) can hold a friendly with rules. Nothing draws with them yet. The fingerprint is still green.
 

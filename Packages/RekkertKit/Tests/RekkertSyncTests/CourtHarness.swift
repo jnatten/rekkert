@@ -674,3 +674,32 @@ nonisolated final class ClockSkew: @unchecked Sendable {
         set { lock.withLock { _offset = newValue } }
     }
 }
+
+// MARK: - Friendlies
+
+extension CourtHarness {
+    /// Sets up a friendly on the host's phone and draws its first round, as `NewSessionView` does.
+    func startFriendly(
+        players names: [String] = ["Ada", "Bob", "Cy", "Dan"],
+        rules: (([RekkertCore.Player]) -> [PairingRule])? = nil
+    ) {
+        let players = names.map { RekkertCore.Player(name: $0) }
+        host.phone.store.configure(.friendly(FriendlySession(
+            name: "Friendly", players: players, pairingRules: rules?(players) ?? []
+        )))
+        host.phone.store.nextRound()
+    }
+
+    /// One point in the round in play, the round called off there, and the next one drawn.
+    func playFriendlyRound(on device: Device) {
+        guard let session = friendly(on: device) else { return }
+        device.store.tap(round: session.currentIndex, court: 0, team: .a)
+        device.store.endRound()
+        device.store.nextRound()
+    }
+
+    func friendly(on device: Device) -> FriendlySession? {
+        guard case .friendly(let session)? = device.store.state else { return nil }
+        return session
+    }
+}

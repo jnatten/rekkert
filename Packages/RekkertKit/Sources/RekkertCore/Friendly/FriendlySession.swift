@@ -18,6 +18,7 @@ public struct FriendlyRound: Codable, Sendable, Hashable, Identifiable {
     /// When the round was drawn, which is what the clock on the board counts from. Stamped by
     /// the reducer from the event that drew it, so both devices read the same one.
     public var startedAt: Date?
+    public var unkept: [UnkeptRule]
 
     public init(
         index: Int,
@@ -25,7 +26,8 @@ public struct FriendlyRound: Codable, Sendable, Hashable, Identifiable {
         sitOuts: [PlayerID] = [],
         score: TraditionalState = TraditionalState(),
         isStopped: Bool = false,
-        startedAt: Date? = nil
+        startedAt: Date? = nil,
+        unkept: [UnkeptRule] = []
     ) {
         self.index = index
         self.teams = teams
@@ -33,6 +35,7 @@ public struct FriendlyRound: Codable, Sendable, Hashable, Identifiable {
         self.score = score
         self.isStopped = isStopped
         self.startedAt = startedAt
+        self.unkept = unkept
     }
 
     /// Over, either way: won outright or stopped short. Nothing more is scored on it.
@@ -51,7 +54,7 @@ public struct FriendlyRound: Codable, Sendable, Hashable, Identifiable {
         }
     }
 
-    private enum CodingKeys: String, CodingKey { case index, teams, sitOuts, score, isStopped, startedAt }
+    private enum CodingKeys: String, CodingKey { case index, teams, sitOuts, score, isStopped, startedAt, unkept }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -61,6 +64,18 @@ public struct FriendlyRound: Codable, Sendable, Hashable, Identifiable {
         score = try container.decode(TraditionalState.self, forKey: .score)
         isStopped = try container.decodeIfPresent(Bool.self, forKey: .isStopped) ?? false
         startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
+        unkept = try container.decodeIfPresent([UnkeptRule].self, forKey: .unkept) ?? []
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(index, forKey: .index)
+        try container.encode(teams, forKey: .teams)
+        try container.encode(sitOuts, forKey: .sitOuts)
+        try container.encode(score, forKey: .score)
+        try container.encode(isStopped, forKey: .isStopped)
+        try container.encodeIfPresent(startedAt, forKey: .startedAt)
+        if !unkept.isEmpty { try container.encode(unkept, forKey: .unkept) }
     }
 }
 
@@ -79,6 +94,14 @@ public struct FriendlySession: Codable, Sendable, Hashable {
     public var rounds: [FriendlyRound]
     public var isFinished: Bool
     public var warmupStartedAt: Date?
+    /// Nil when an older build wrote this friendly, which knew nothing of rules. A correction
+    /// that leaves it nil leaves the rules where they were.
+    var statedPairingRules: [PairingRule]?
+
+    public var pairingRules: [PairingRule] {
+        get { statedPairingRules ?? [] }
+        set { statedPairingRules = newValue }
+    }
 
     public init(
         id: FriendlyID = FriendlyID(),
@@ -87,7 +110,8 @@ public struct FriendlySession: Codable, Sendable, Hashable {
         players: [Player] = [],
         rounds: [FriendlyRound] = [],
         isFinished: Bool = false,
-        warmupStartedAt: Date? = nil
+        warmupStartedAt: Date? = nil,
+        pairingRules: [PairingRule] = []
     ) {
         self.id = id
         self.name = name
@@ -96,6 +120,48 @@ public struct FriendlySession: Codable, Sendable, Hashable {
         self.rounds = rounds
         self.isFinished = isFinished
         self.warmupStartedAt = warmupStartedAt
+        self.statedPairingRules = pairingRules
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, rules, players, rounds, isFinished, warmupStartedAt
+        case statedPairingRules = "pairingRules"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(FriendlyID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        rules = try container.decode(TraditionalRules.self, forKey: .rules)
+        players = try container.decode([Player].self, forKey: .players)
+        rounds = try container.decode([FriendlyRound].self, forKey: .rounds)
+        isFinished = try container.decode(Bool.self, forKey: .isFinished)
+        warmupStartedAt = try container.decodeIfPresent(Date.self, forKey: .warmupStartedAt)
+        statedPairingRules = try container.decodeIfPresent([PairingRule].self, forKey: .statedPairingRules)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(rules, forKey: .rules)
+        try container.encode(players, forKey: .players)
+        try container.encode(rounds, forKey: .rounds)
+        try container.encode(isFinished, forKey: .isFinished)
+        try container.encodeIfPresent(warmupStartedAt, forKey: .warmupStartedAt)
+        try container.encodeIfPresent(statedPairingRules, forKey: .statedPairingRules)
+    }
+
+    public func leavingPairingRulesUnstated() -> FriendlySession {
+        var copy = self
+        copy.statedPairingRules = nil
+        return copy
+    }
+
+    public var activeRules: [PairingRule] {
+        guard players.count >= 4 else { return [] }
+        let rules = pairingRules.pruned(to: players.map(\.id)).filter(\.isWellFormed)
+        return rules.conflicts.isEmpty ? rules : []
     }
 
     public var engine: TraditionalEngine { TraditionalEngine(rules: rules) }

@@ -198,7 +198,10 @@ public final class MatchStore {
     @ObservationIgnored var actsAsOlderBuild = false
     /// Tests only: turn every guest away as needing an update, as a later breaking release will.
     @ObservationIgnored var refusesAsNeedingUpdate = false
-    private var ownProtocol: Int? { actsAsOlderBuild ? nil : Wire.sharingProtocol }
+    /// Tests only: speak an older protocol, as 1.2 does with 2.
+    @ObservationIgnored var speaksProtocol: Int?
+    @ObservationIgnored private var peerProtocols: [DeviceID: Int] = [:]
+    private var ownProtocol: Int? { actsAsOlderBuild ? nil : (speaksProtocol ?? Wire.sharingProtocol) }
     /// Whether any link to the match was up, and the pair, when reachability last changed.
     @ObservationIgnored private var lastPresence: (onLinks: Bool, pair: Bool)?
     /// The host this device last heard from on a link, for a guest's record.
@@ -250,6 +253,7 @@ public final class MatchStore {
         self.leftSessionID = session?.leftSessionID
         self.counterpartLeftSessionID = session?.counterpartLeftSessionID
         self.pairedDevice = session?.pairedDevice
+        if let paired = session?.pairedDevice, let heard = session?.pairedProtocol { peerProtocols[paired] = heard }
         self.accessTable = session?.access
         self.guests = session?.guests ?? []
         self.identity = session?.identity
@@ -269,6 +273,7 @@ public final class MatchStore {
         self.haptics = store?.loadHaptics() ?? HapticPreferences()
         self.state = SessionReducer.state(of: self.log)
         self.sessionInPlay = state == nil ? nil : log.sessionID
+        updatePairHold()
     }
 
     // MARK: - Local mutations
@@ -1652,7 +1657,7 @@ public final class MatchStore {
     private func push(_ events: [MatchEvent], in session: UUID, from source: LinkID? = nil) {
         guard !events.isEmpty, transport.isReachable else { return }
         let came = source.map { Set(links(to: $0)) } ?? []
-        for link in transport.links where !came.contains(link) {
+        for link in transport.links where !came.contains(link) && !refusedLinks.contains(link) {
             let lacking = held(on: link).map { held in events.filter { $0.id.seq > held[$0.id.device] } } ?? events
             guard !lacking.isEmpty else { continue }
             deliver(lacking, on: link, in: session)
@@ -1983,6 +1988,14 @@ public final class MatchStore {
             packet.reply?(encode(.needsUpdate(sessionID: log.sessionID)))
             return transport.refuse(link)
         }
+        if role == .host, case .hello(_, _, let sender, _, let speaks) = wire, let link = packet.link,
+           !packet.isFromPairedDevice, (speaks ?? 1) < Self.pairingRulesProtocol, Self.hasActiveRules(state) {
+            packet.reply?(encode(refusalForRules(speaks: speaks ?? 1)))
+            refusedLinks.insert(link)
+            transport.refuse(link)
+            recorder?.note(.refused(.needsUpdate), on: .guest(sender ?? DeviceID(link.raw)), in: log.sessionID)
+            return
+        }
         guard noteParticipant(wire, from: packet) else {
             packet.reply?(encode(.noRoom(sessionID: log.sessionID, limit: guestLimit)))
             if let link = packet.link {
@@ -2005,6 +2018,11 @@ public final class MatchStore {
                 recorder?.note(.proven, on: farLink(owner), in: sessionID, radios: linkRadios[link].map { [$0] })
             }
             if let sender, sender != device {
+                let heard = sharingProtocol ?? 1
+                if peerProtocols[sender] != heard {
+                    peerProtocols[sender] = heard
+                    if packet.isFromPairedDevice { persist() }
+                }
                 if sharingProtocol == nil {
                     olderDevices.insert(sender)
                     currentDevices.remove(sender)
@@ -2019,6 +2037,7 @@ public final class MatchStore {
                 pairedDevice = sender
                 persist()
             }
+            if packet.isFromPairedDevice { updatePairHold() }
             // The pair coming back is what these are said again for. Every other phone's hello
             // repeated them to this one's own watch, and onto its queue whenever it was slow.
             if packet.isFromPairedDevice {
@@ -2035,6 +2054,7 @@ public final class MatchStore {
             }
             guard sessionID == log.sessionID else { return requestSnapshot(packet) }
             arrive(on: sessionID, from: packet)
+            if packet.isFromPairedDevice, pairNeedsUpdateForRules { return packet.reply?(encode(ownHello)) ?? () }
             packet.reply?(encode(.events(sessionID: log.sessionID, events: log.events(missingRelativeTo: vector))))
             if let link = packet.link, !packet.isFromPairedDevice {
                 // Answered with everything it lacked, so it holds at least everything here too.
@@ -2778,6 +2798,7 @@ public final class MatchStore {
     }
 
     private func requestSnapshot(_ packet: InboundPacket) {
+        if packet.isFromPairedDevice, pairNeedsUpdateForRules { return packet.reply?(encode(ownHello)) ?? () }
         packet.reply?(snapshot(forThePair: packet.isFromPairedDevice))
     }
 
@@ -2909,8 +2930,11 @@ public final class MatchStore {
 
     /// With the board already folded where the caller needed it first, so each event folds the log once.
     private func refresh(to reduced: SessionState?) {
+        let hadRules = Self.hasActiveRules(state)
         state = reduced
         absorbTakeBack()
+        if role == .host, !hadRules, Self.hasActiveRules(state) { turnAwayOlderGuestsForRules() }
+        updatePairHold()
         // A session in play supersedes whatever result was on screen — including one the
         // counterpart took back, which arrives here as a new session.
         if state != nil {
@@ -2938,13 +2962,65 @@ public final class MatchStore {
         joiningForThePair = false
     }
 
+    // MARK: - Pairing rules and older builds (spec 006, FR-014)
+
+    static let pairingRulesProtocol = 3
+
+    public private(set) var pairNeedsUpdateForRules = false
+
+    /// On the host, how many guests now on the match speak a protocol that cannot draw with
+    /// pairing rules, and would be turned away by the first one.
+    public var olderGuestsTurnedAwayByRules: Int {
+        guard role == .host else { return 0 }
+        let owners = transport.links.filter { !refusedLinks.contains($0) }.compactMap { linkOwners[$0] ?? farEnds[$0] }
+        return Set(owners).filter { (peerProtocols[$0] ?? Self.pairingRulesProtocol) < Self.pairingRulesProtocol }.count
+    }
+
+    private static func hasActiveRules(_ state: SessionState?) -> Bool {
+        guard case .friendly(let session)? = state else { return false }
+        return !session.activeRules.isEmpty
+    }
+
+    private func refusalForRules(speaks: Int) -> Wire {
+        speaks <= 1 ? .noRoom(sessionID: log.sessionID, limit: guestLimit) : .needsUpdate(sessionID: log.sessionID)
+    }
+
+    private func turnAwayOlderGuestsForRules() {
+        for link in transport.links where !refusedLinks.contains(link) {
+            guard let owner = linkOwners[link] ?? farEnds[link], let speaks = peerProtocols[owner],
+                  speaks < Self.pairingRulesProtocol else { continue }
+            refusedLinks.insert(link)
+            participants.remove(owner)
+            recorder?.note(.refused(.needsUpdate), on: .guest(owner), in: log.sessionID)
+            let refusal = encode(refusalForRules(speaks: speaks))
+            Task {
+                _ = await sendLive(refusal, on: link)
+                transport.refuse(link)
+            }
+        }
+    }
+
+    private func updatePairHold() {
+        let olderPair = pairedDevice.flatMap { peerProtocols[$0] }.map { $0 < Self.pairingRulesProtocol } ?? false
+        let holds = keepsHistory && olderPair && Self.hasActiveRules(state)
+        guard holds != pairNeedsUpdateForRules else { return }
+        pairNeedsUpdateForRules = holds
+        transport.holdSessionFromPair(holds)
+        if !holds {
+            publishSnapshot(force: true)
+            offerOurSession()
+            queuePending()
+        }
+    }
+
     private func persist() {
         if role == .guest, !log.isEmpty { guestOf = log.sessionID }
         try? store?.save(ActiveSession(
             log: log, outbox: outbox, retired: retired, discarded: discarded, role: role,
             pairedRole: pairedRole, guestOf: guestOf,
             leftSessionID: leftSessionID, counterpartLeftSessionID: counterpartLeftSessionID,
-            pairedDevice: pairedDevice, access: accessTable, guests: guests, identity: identity,
+            pairedDevice: pairedDevice, pairedProtocol: pairedDevice.flatMap { peerProtocols[$0] },
+            access: accessTable, guests: guests, identity: identity,
             betweenMatches: betweenMatches
         ))
     }

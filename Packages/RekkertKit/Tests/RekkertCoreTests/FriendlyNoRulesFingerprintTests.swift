@@ -2,10 +2,7 @@ import Foundation
 import Testing
 @testable import RekkertCore
 
-/// What a friendly without pairing rules draws, round for round, for two to twelve players, as
-/// it was before pairing rules existed (spec 006, FR-005). Rules are allowed to change a draw;
-/// their absence is not. A failure here re-partners every Thursday that has no rules: fix the
-/// draw, never these lines.
+/// Pinned before pairing rules existed (spec 006, FR-005). Fix the draw, never these lines.
 @Suite("A friendly without rules draws as it always has")
 struct FriendlyNoRulesFingerprintTests {
     @Test(arguments: 2 ... 12)

@@ -88,6 +88,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
     private var lastSnapshot: Data?
     /// Per durable child, the events its queue already holds.
     private var queued: [ObjectIdentifier: QueueLedger] = [:]
+    private var holdsSession = false
 
     /// How long any one child is waited on. The network and the radio give up on a quiet peer
     /// after four seconds of their own; WatchConnectivity does not promise to answer at all, and
@@ -140,7 +141,9 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
             )
         }
         transport.activate()
-        if let snapshot = lock.withLock({ lastSnapshot }) { transport.publishSnapshot(Self.snapshot(snapshot, for: scope)) }
+        if let snapshot = lock.withLock({ lastSnapshot }), !(scope.isPairedDevice && lock.withLock({ holdsSession })) {
+            transport.publishSnapshot(Self.snapshot(snapshot, for: scope))
+        }
         reachabilityChanged()
         return token
     }
@@ -206,7 +209,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
 
     private func sendLive(_ payload: Data, to children: [Child]) async -> Data? {
         guard let wire = try? Wire.decode(payload) else { return nil }
-        let recipients = children.filter { $0.scope.carries(wire) }
+        let recipients = children.filter { $0.scope.carries(wire) && !isHeld($0, wire) }
         // Only a child that was there counts towards "everybody answered". One that is not
         // connected was never really sent to, and holding the acknowledgement for it would
         // stop a phone with no watch paired from ever draining its outbox.
@@ -294,7 +297,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
     public func publishSnapshot(_ payload: Data) {
         guard let wire = try? Wire.decode(payload) else { return }
         lock.withLock { lastSnapshot = payload }
-        for child in snapshotOfChildren() where child.scope.carries(wire) {
+        for child in snapshotOfChildren() where child.scope.carries(wire) && !isHeld(child, wire) {
             child.transport.publishSnapshot(Self.snapshot(payload, for: child.scope))
         }
     }
@@ -310,7 +313,7 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
 
     public func queue(_ payload: Data) {
         guard let wire = try? Wire.decode(payload) else { return }
-        for child in snapshotOfChildren() where child.scope.isDurable && child.scope.carries(wire) {
+        for child in snapshotOfChildren() where child.scope.isDurable && child.scope.carries(wire) && !isHeld(child, wire) {
             keep(payload, wire, on: child)
         }
     }
@@ -330,6 +333,18 @@ nonisolated public final class FanOutTransport: PeerTransport, @unchecked Sendab
     ///
     /// Every child's copy too. The network and the radio each keep their own for the phones
     /// that dial in to them, and those arrive as links inside a child rather than as children.
+    public func holdSessionFromPair(_ holding: Bool) {
+        lock.withLock { holdsSession = holding }
+    }
+
+    private func isHeld(_ child: Child, _ wire: Wire) -> Bool {
+        guard child.scope.isPairedDevice, lock.withLock({ holdsSession }) else { return false }
+        switch wire {
+        case .events, .snapshot: return true
+        default: return false
+        }
+    }
+
     public func forgetSnapshot() {
         lock.withLock { lastSnapshot = nil }
         for child in snapshotOfChildren() { child.transport.forgetSnapshot() }

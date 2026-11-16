@@ -132,7 +132,7 @@ struct WireAcrossVersionsTests {
     }
 
     @Test func olderBuildsReadTheNewHello() throws {
-        let hello = Wire.hello(sessionID: session, vector: VersionVector(), from: device, clock: clock, protocol: 2)
+        let hello = Wire.hello(sessionID: session, vector: VersionVector(), from: device, clock: clock, protocol: Wire.sharingProtocol)
         guard case .hello(let id, _, let from) = try JSONCoding.decoder.decode(OlderWire.self, from: hello.encoded()) else {
             Issue.record("not a hello")
             return
@@ -163,7 +163,7 @@ struct WireAcrossVersionsTests {
     }
 
     @Test func aGuestCardCarriesItsProtocolAndOlderBuildsReadIt() throws {
-        let card = GuestCard(device: device, name: "Ada", protocol: 2)
+        let card = GuestCard(device: device, name: "Ada", protocol: Wire.sharingProtocol)
         let data = try JSONCoding.encoder.encode(card)
         #expect(try JSONCoding.decoder.decode(GuestCard.self, from: data) == card)
         #expect(try JSONCoding.decoder.decode(OlderGuestCard.self, from: data).name == "Ada")
@@ -237,5 +237,30 @@ struct WireAcrossVersionsTests {
             #expect(String(decoding: data, as: UTF8.self) == text)
             #expect(try JSONCoding.decoder.decode(Stamp.self, from: data) == stamp)
         }
+    }
+}
+
+private struct FriendlyBeforeRules: Codable {
+    var id: FriendlyID
+    var name: String
+    var rules: TraditionalRules
+    var players: [Player]
+    var rounds: [FriendlyRound]
+    var isFinished: Bool
+    var warmupStartedAt: Date?
+}
+
+@Suite("A friendly's pairing rules on the wire")
+struct FriendlyRulesWireTests {
+    @Test func aFriendlyWithRulesReadsAsOneWithoutOnAnOlderBuild() throws {
+        let players = (0 ..< 4).map { Player(name: "P\($0)") }
+        let session = FriendlySession(
+            name: "Thursday", players: players,
+            pairingRules: [PairingRule(kind: .apart, players: [players[0].id, players[1].id])]
+        )
+        let older = try JSONCoding.decoder.decode(FriendlyBeforeRules.self, from: JSONCoding.encoder.encode(session))
+        #expect(older.players == players)
+        let passedOn = try JSONCoding.decoder.decode(FriendlySession.self, from: JSONCoding.encoder.encode(older))
+        #expect(passedOn.statedPairingRules == nil, "an older build drops the rules unread, and says nothing of them")
     }
 }

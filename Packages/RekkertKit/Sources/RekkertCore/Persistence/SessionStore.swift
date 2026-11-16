@@ -27,6 +27,8 @@ public struct ActiveSession: Codable, Sendable, Hashable {
     /// come off the pair's persisted channels before any hello, and whether a match is the
     /// pair's own has to be answered on them.
     public var pairedDevice: DeviceID?
+    /// The sharing protocol the pair last said it speaks.
+    public var pairedProtocol: Int?
     public var access: ShareAccessTable?
     public var guests: [GuestCard]
     public var identity: String?
@@ -43,6 +45,7 @@ public struct ActiveSession: Codable, Sendable, Hashable {
         leftSessionID: UUID? = nil,
         counterpartLeftSessionID: UUID? = nil,
         pairedDevice: DeviceID? = nil,
+        pairedProtocol: Int? = nil,
         access: ShareAccessTable? = nil,
         guests: [GuestCard] = [],
         identity: String? = nil,
@@ -58,6 +61,7 @@ public struct ActiveSession: Codable, Sendable, Hashable {
         self.leftSessionID = leftSessionID
         self.counterpartLeftSessionID = counterpartLeftSessionID
         self.pairedDevice = pairedDevice
+        self.pairedProtocol = pairedProtocol
         self.access = access
         self.guests = guests
         self.identity = identity
@@ -66,7 +70,7 @@ public struct ActiveSession: Codable, Sendable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case log, outbox, retired, discarded, role, pairedRole, guestOf, leftSessionID, counterpartLeftSessionID, pairedDevice
-        case access, guests, identity, betweenMatches
+        case pairedProtocol, access, guests, identity, betweenMatches
     }
 
     public init(from decoder: any Decoder) throws {
@@ -81,6 +85,7 @@ public struct ActiveSession: Codable, Sendable, Hashable {
         leftSessionID = try container.decodeIfPresent(UUID.self, forKey: .leftSessionID)
         counterpartLeftSessionID = try container.decodeIfPresent(UUID.self, forKey: .counterpartLeftSessionID)
         pairedDevice = try container.decodeIfPresent(DeviceID.self, forKey: .pairedDevice)
+        pairedProtocol = try container.decodeIfPresent(Int.self, forKey: .pairedProtocol)
         access = try container.decodeIfPresent(ShareAccessTable.self, forKey: .access)
         guests = try container.decodeIfPresent([GuestCard].self, forKey: .guests) ?? []
         identity = try container.decodeIfPresent(String.self, forKey: .identity)
