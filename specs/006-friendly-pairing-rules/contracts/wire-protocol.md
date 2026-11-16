@@ -51,7 +51,7 @@ receives everything today, and draws with them through the shared reducer.
 
 | Rule | Detail |
 |---|---|
-| **A watch below protocol 3 is held back** | The phone reads its watch's protocol from the watch's `hello`. While the session in play is a friendly with active rules and the watch is below 3, the phone sends the watch nothing of that session: no pushed `events`, no queued events, no `events` in reply to the watch's `hello`, and no `snapshot`. `pairNeedsUpdateForRules` is true, and the phone's board says the watch needs updating. |
+| **A watch below protocol 3 is held back** | The phone reads its watch's protocol from the watch's `hello`, and persists it with `pairedDevice` so a relaunch remembers it. While the session in play is a friendly with active rules and the watch is below 3, the phone sends the watch nothing of that session: no pushed `events`, no queued events, no `events` in reply to the watch's `hello` (it gets a bare `hello` back), and no `snapshot`, the published application context included. The hold is applied by `FanOutTransport` to its paired-device child alone, so other phones and the snapshot cache they read are untouched. `pairNeedsUpdateForRules` is true, and the phone's board says the watch needs updating. |
 | **Released** | When the watch says hello at 3 or later, or the session no longer has active rules, the phone sends what the watch is missing, as it does after any gap. |
 | **From the older watch** | Whatever it sends is folded as usual. A point is addressed by round and side, so one for a round already over is dropped. |
 

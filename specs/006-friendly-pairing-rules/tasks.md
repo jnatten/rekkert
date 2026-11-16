@@ -123,6 +123,7 @@ Every story needs these, and the gates make even the MVP safe to share.
     - Add the stored `var statedPairingRules: [PairingRule]?`, where `nil` means "written by an older build".
     - Add the public computed `pairingRules: [PairingRule]`: get returns `statedPairingRules ?? []`; set states it.
     - Add an `init` parameter `pairingRules: [PairingRule] = []` that *states* it, so every session this build makes states its rules.
+    - Add `public func leavingPairingRulesUnstated() -> FriendlySession`, a copy with `statedPairingRules = nil`. A correction that is not about the rules (T036's `setChangeEnds`) uses it, so as not to restate them.
     - Add `activeRules` (pruned to `players`; empty when `players.count < 4` or when `conflicts` is not empty).
   - **Its coding.** Give `FriendlySession` a hand-written `init(from:)` that reads key `pairingRules` with `decodeIfPresent` into `statedPairingRules`, and an `encode(to:)` that writes it whenever it is not nil, an empty list included. Every other key is written exactly as the synthesized code did.
   - **The round's record.** Add `unkept: [UnkeptRule]` (default `[]`) to `FriendlyRound`'s init, `CodingKeys` and decoder (`decodeIfPresent ?? []`). Add a hand-written `encode(to:)` that omits it when empty.
@@ -131,6 +132,7 @@ Every story needs these, and the gates make even the MVP safe to share.
 - [ ] T007 Bump the protocol and track it per device.
   - **In `RekkertCore/Sync/Wire.swift`**: set `Wire.sharingProtocol = 3`, and update its doc comment to "3 from spec 006 (pairing rules)".
   - **Per-device protocol.** In `RekkertSync/MatchStore.swift`, keep each device's protocol in a new `peerProtocols: [DeviceID: Int]`, filled where `hello` sets `olderDevices`/`currentDevices`, the pair's hello included (`nil` → 1). Leave those sets working as they do.
+  - **Keep the pair's across relaunches** (U2). Persist the paired device's protocol beside `pairedDevice` in `persist()` and the store's restore. Read it back into `peerProtocols[pairedDevice]` on launch. A relaunched phone then knows its older watch before that watch says hello.
   - **A test switch.** Add a test-only `@ObservationIgnored var speaksProtocol: Int?` beside `actsAsOlderBuild`. When set, `ownProtocol` returns it, so a phone or a watch can stand in for 1.2 (protocol 2).
   - **Check old assumptions.** Grep the tests for a literal `2` used as the protocol, and fix any to `Wire.sharingProtocol`.
 - [ ] T008 [P] Write `SyncTests/PairingRulesAdmissionTests.swift` (`@Suite("Older builds stay off a friendly with rules", .serialized) @MainActor`).
@@ -146,6 +148,7 @@ Every story needs these, and the gates make even the MVP safe to share.
       1. Start a friendly with P0 and P1 apart.
       2. Within 5 s the phone's `pairNeedsUpdateForRules` is true.
       3. Draw three rounds on the phone. The watch's store never holds a friendly whose `pairingRules` is not empty, and never more rounds than it had when the rules appeared.
+      4. Relaunch the phone, the way `CourtHarness` relaunches an app (U2), and draw another round before the watch says hello. The watch still receives nothing of the friendly, and `pairNeedsUpdateForRules` is true as soon as the phone is back.
     - `anOlderWatchFollowsAFriendlyWithoutRules`: with no rules, `pairNeedsUpdateForRules` stays false, and the watch holds the phone's rounds within 5 s of each draw.
     - `theWatchCatchesUpOnceUpdated`:
       1. Start as `anOlderWatchIsHeldBack…`.
@@ -155,13 +158,14 @@ Every story needs these, and the gates make even the MVP safe to share.
   - **At hello.** In `handle(_:)`, beside the `refusesAsNeedingUpdate` check, if `role == .host`, the packet is a non-pair `hello`, the state is a friendly with non-empty `activeRules`, and the sender's protocol is below 3: reply `.needsUpdate(sessionID:)` for protocol 2, or `.noRoom(sessionID:limit:)` for no protocol. Then `transport.refuse(link)`, insert into `refusedLinks`, note `.refused(.needsUpdate)`, and return.
   - **When rules appear.** In `refresh(to:)`, when a host's state goes from no active rules to some, do the same for every linked guest below 3, found through `linkOwners` and `peerProtocols`, and `participants.remove(_:)` each.
   - **The count.** Add `public var olderGuestsTurnedAwayByRules: Int`: on a host, the number of distinct linked guest devices (not their watches) below protocol 3; zero elsewhere.
-- [ ] T010 Hold a friendly with rules back from an older own watch, in `RekkertSync/MatchStore.swift` (D-9 item 5; contracts/wire-protocol.md, "Pair scope").
-  - **The flag.** Add `public private(set) var pairNeedsUpdateForRules = false`. Recompute it in `refresh(to:)` and whenever the pair's `hello` is heard. It is true when this store is the phone (`keepsHistory`), `peerProtocols[pairedDevice]` is known and below 3, and the session in play is a friendly with non-empty `activeRules`.
-  - **The hold-back.** While it is true, send the paired device nothing of the session in play. Find every place that does today, and guard each with the flag:
-    - the `sendLiveBesideLinks` in `push(_:in:from:)`;
-    - `queuePending()`;
-    - the `.events` reply to a `hello` that `isFromPairedDevice`;
-    - any `.snapshot` sent beside the links.
+- [ ] T010 Hold a friendly with rules back from an older own watch, in `RekkertSync/MatchStore.swift` and `RekkertSync/FanOutTransport.swift` (D-9 item 5; contracts/wire-protocol.md, "Pair scope").
+  - **The flag.** Add `public private(set) var pairNeedsUpdateForRules = false` to `MatchStore`. Recompute it in `refresh(to:)`, on launch (from the persisted protocol, T007), and whenever the pair's `hello` is heard. It is true when this store is the phone (`keepsHistory`), `peerProtocols[pairedDevice]` is known and below 3, and the session in play is a friendly with non-empty `activeRules`.
+  - **One choke point in the transport** (U1).
+    - Add a settable `holdsSessionFromPair: Bool` to `PeerTransport` (in `RekkertCore/Sync/Wire.swift`), with a protocol-extension default that reads false and ignores writes, so every other transport is untouched.
+    - On `FanOutTransport`, store it under its lock. While it is true, skip the `.pairedDevice` child (the scope with `isPairedDevice`) for `.events` and `.snapshot` payloads, in `sendLiveBesideLinks`, `sendLive`, `queue` and `publishSnapshot`.
+    - `publishSnapshot` still updates `lastSnapshot` and every link-carrying child, because other phones read that cache. Only the watch's application context is left as it was.
+    - `MatchStore` sets the switch whenever `pairNeedsUpdateForRules` changes.
+  - **The reply to the watch's hello.** In `handle(_:)`, a `hello` that `isFromPairedDevice` is answered with `ownHello` instead of `.events` while the flag is true, so the watch is never left hanging.
 
     Links to other phones are untouched.
   - **The release.** When the flag turns false (an update, or the rules gone), send the pair what it is missing, as after any gap. Answering its next hello, or a `requestSnapshot`, is enough if that is how the code already catches it up.
@@ -358,6 +362,7 @@ new round keeps the two apart, and round 1 is unchanged on the phone and the wat
     1. Rules are set by a stating `configure`.
     2. A later correction arrives whose friendly has `statedPairingRules == nil`, built by decoding JSON without the key, as a 1.2 guest's "swap sides" would be, and sorting after it.
     3. The rules are unchanged, and its `rules.changeEnds` is adopted.
+    4. The same holds for a `setChangeEnds` correction from this build (C2), which leaves the rules out by design (T036). A rule change on one phone and "swap sides" on another, landing in either order, keep both.
 
     It fails until T035.
 - [ ] T031 [P] [US4] Add `fourAfterAMidSessionChange` to `CoreTests/FriendlyPairingDrawTests.swift` (the clarified FR-008): three rules-free rounds, then P0 and P1 apart. Round 4 is whichever of the two allowed line-ups came up first, sides included, and rounds 5 and 6 alternate from it.
@@ -393,6 +398,7 @@ new round keeps the two apart, and round 1 is unchanged on the phone and the wat
   - **The draw.** `nextRound()` for `.friendly` records `placed: session.nextDraw().map(RoundPlacement.init)`.
   - **Who may edit.** Add `public var canEditPairingRules: Bool`. It requires `canRunRounds`, a friendly state with at least four players, and, when `role == .guest`, `(hostDevice.flatMap { peerProtocols[$0] } ?? 1) >= 3`.
   - **The change.** Add `public func setPairingRules(_ rules: [PairingRule])`. It is guarded by `canEditPairingRules` and `rules.conflicts.isEmpty`, sets `session.pairingRules` to the rules pruned to the players (which states them, `[]` included), and records `.configure(.friendly(session))`, exactly as `setChangeEnds` does.
+  - **Swap sides leaves the rules alone** (C2). In `setChangeEnds`'s `.friendly` case, record `.configure(.friendly(session.leavingPairingRulesUnstated()))`, so that change never restates, and never reverts, the rules a racing `setPairingRules` just set.
   - **Done when** T032 and T033 pass.
 - [ ] T037 [US4] Add the in-play screen (screens §3).
   - **The sheet.** In `App/Sources/Views/PairingRulesEditor.swift`, add `PairingRulesSheet`:

@@ -201,8 +201,8 @@ players in the new setup removes them from their rule.
 - **Rules that cannot hold with the players listed.** With four players, a keep-apart group of
   three cannot be kept: someone in it has to partner someone else in it, every round. With
   five players and the same three kept apart, the rule breaks in two rounds out of five. Setup
-  says either before the friendly starts — "Ada, Bob and Cy can't be kept apart in 2 of every
-  5 rounds" — and the friendly can still be started. The warning changes as names are added
+  says either before the friendly starts — "Ada, Bob and Cy can't all be kept apart in 2 of
+  every 5 rounds — whoever sits out decides." — and the friendly can still be started. The warning changes as names are added
   or removed.
 - **Rules the bench breaks.** With players sitting out, who is on court changes every round,
   and some benches leave more of a keep-apart group on court than can be kept apart. The bench

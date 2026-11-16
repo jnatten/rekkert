@@ -52,6 +52,7 @@ extension Array where Element == PairingRule {
 extension FriendlySession {
     var statedPairingRules: [PairingRule]?             // stored as "pairingRules"; nil = written by an older build
     public var pairingRules: [PairingRule]             // statedPairingRules ?? []; setting it states it
+    public func leavingPairingRulesUnstated() -> FriendlySession  // for corrections not about the rules
     public var activeRules: [PairingRule] { get }      // pruned; empty if clashing or < 4 players
     public func nextDraw() -> FriendlyRound?           // unchanged signature; round carries `unkept`
     public func forecast() -> PairingForecast?         // nil for singles or no active rules
@@ -98,6 +99,11 @@ public private(set) var pairNeedsUpdateForRules: Bool
 public func setPairingRules(_ rules: [PairingRule])
 // Guarded by canEditPairingRules and by rules.conflicts.isEmpty.
 // Records .configure(.friendly(session with rules)), like setChangeEnds.
+// setChangeEnds itself now records its friendly with the rules unstated, so it never reverts them.
 ```
+
+`PeerTransport` gains a settable `holdsSessionFromPair: Bool` (default: reads false, ignores
+writes). `FanOutTransport` honours it by skipping its `.pairedDevice` child for `.events` and
+`.snapshot`, while still updating its cache and its link-carrying children.
 
 `nextRound()` for a friendly now records `placed`. Its signature is unchanged.

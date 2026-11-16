@@ -235,6 +235,9 @@ shows the next round's names and can start it, and it starts friendlies only fro
     An older build's correction carries no rules key; it leaves the rules as they were rather
     than wiping them for everyone. An example is a 1.2 guest's "swap sides" sent just before
     the host turns it away, sorting after the rule change.
+  - **A correction that is not about the rules leaves them unstated.** `setChangeEnds` records
+    its friendly through `leavingPairingRulesUnstated()`. A swap-sides change and a rule change
+    from two phones then both survive, whichever sorts last.
   - It is allowed when `canRunRounds`, with four or more players, and, on a guest, only when
     the host speaks protocol 3 or later (D-9).
   - Because `.configure` is not undoable, no Undo ever takes a rule change back. That satisfies
@@ -293,7 +296,12 @@ shows the next round's names and can start it, and it starts friendlies only fro
      protocol from its `hello`.
      - While the session in play is a friendly with active rules, the phone sends that session
        nothing: no pushed events, no queued events, no events in reply to the watch's hello,
-       and no snapshot.
+       and no snapshot, the application context included.
+     - The hold is one switch on the transport, `holdsSessionFromPair`, that `FanOutTransport`
+       applies to its `.pairedDevice` child only. Its snapshot cache and its links to other
+       phones are untouched, because guests read them.
+     - The watch's protocol is persisted with `pairedDevice`, so a relaunched phone holds back
+       before the watch's first hello.
      - The phone sets `pairNeedsUpdateForRules`, and its board says the watch needs updating.
      - The watch keeps whatever it last had. A point it sends for an earlier round is addressed
        by round and side, and lands where it was aimed, or is dropped if that round is over.
