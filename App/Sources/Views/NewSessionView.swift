@@ -579,7 +579,13 @@ struct NewSessionView: View {
 
         playersSection(footer: friendlyFooter)
 
-        PairingRulesSection(rules: $pairingRules, players: namedPlayers)
+        PairingRulesSection(
+            rules: $pairingRules, players: namedPlayers,
+            forecast: FriendlySession(
+                id: friendlyID, name: sessionName, rules: rules, players: namedPlayers,
+                pairingRules: pairingRules.pruned(to: namedPlayers.map(\.id))
+            ).forecast()
+        )
             .onChange(of: namedPlayers.map(\.id)) { _, ids in
                 pairingRules = pairingRules.pruned(to: ids)
             }

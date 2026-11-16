@@ -10,6 +10,16 @@ public enum BenchOrder: String, Codable, Sendable, Hashable {
     case longestRested
 }
 
+private struct BenchDue: Comparable {
+    let notChosen: Int
+    let sitOuts: Int
+    let rested: Int
+
+    static func < (lhs: BenchDue, rhs: BenchDue) -> Bool {
+        (lhs.notChosen, lhs.sitOuts, lhs.rested) < (rhs.notChosen, rhs.sitOuts, rhs.rested)
+    }
+}
+
 enum RoundScheduler {
     /// Everyone who can't be given a seat this round. Benches whoever has sat out least
     /// so far, so sit-outs spread evenly; ties break on a seeded order rather than on
@@ -21,6 +31,7 @@ enum RoundScheduler {
         history: PairingHistory,
         order benchOrder: BenchOrder = .fewestSitOuts,
         chosen: [PlayerID] = [],
+        rules: [PairingRule] = [],
         generator: inout SeededGenerator
     ) -> (playing: [PlayerID], sitting: [PlayerID]) {
         let shuffled = players.map(\.id).shuffled(seededBy: &generator)
@@ -29,24 +40,102 @@ enum RoundScheduler {
 
         let order = Dictionary(uniqueKeysWithValues: shuffled.enumerated().map { ($1, $0) })
         let chosenSet = Set(chosen)
+        let due = { (id: PlayerID) in
+            BenchDue(
+                notChosen: chosenSet.contains(id) ? 0 : 1, sitOuts: history.sitOutCount(id),
+                rested: benchOrder == .longestRested ? history.lastSitOut(id) ?? -1 : 0
+            )
+        }
         let benchFirst = shuffled.sorted { one, two in
-            let isChosen = chosenSet.contains(one)
-            if isChosen != chosenSet.contains(two) { return isChosen }
-            let a = history.sitOutCount(one)
-            let b = history.sitOutCount(two)
+            let a = due(one)
+            let b = due(two)
             if a != b { return a < b }
-            if benchOrder == .longestRested {
-                let rested = history.lastSitOut(one) ?? -1
-                let other = history.lastSitOut(two) ?? -1
-                if rested != other { return rested < other }
-            }
             return order[one, default: 0] < order[two, default: 0]
         }
 
-        let sitting = Array(benchFirst.prefix(shuffled.count - seatCount))
+        let benchSize = shuffled.count - seatCount
+        var sitting = Array(benchFirst.prefix(benchSize))
+        if !rules.isEmpty, seatCount == 4 {
+            let dueNext = { (benched: Set<PlayerID>) in
+                { (id: PlayerID) in
+                    BenchDue(
+                        notChosen: 1, sitOuts: history.sitOutCount(id) + (benched.contains(id) ? 1 : 0),
+                        rested: benchOrder == .longestRested ? (benched.contains(id) ? history.recorded : history.lastSitOut(id) ?? -1) : 0
+                    )
+                }
+            }
+            sitting = benchKeeping(rules, benchFirst: benchFirst, size: benchSize, due: due, dueNext: dueNext)
+        }
         let sittingSet = Set(sitting)
         let playing = shuffled.filter { !sittingSet.contains($0) }
         return (playing, sitting)
+    }
+
+    /// The bench as even as ever, its tie-breaks leaning towards the rules (spec 006, FR-006):
+    /// whoever must sit out does, and of those equally due the first combination, in the seeded
+    /// order, whose court keeps the rules and leaves the next round able to keep them too.
+    /// Failing that, the one that breaks fewest. With every combination keeping them, the first
+    /// is the bench drawn without rules.
+    private static func benchKeeping(
+        _ rules: [PairingRule], benchFirst: [PlayerID], size: Int,
+        due: (PlayerID) -> BenchDue, dueNext: (Set<PlayerID>) -> (PlayerID) -> BenchDue
+    ) -> [PlayerID] {
+        var budget = 20_000
+        var best: (score: (Int, Int), bench: [PlayerID])?
+        forEachBench(of: benchFirst, size: size, due: due) { bench in
+            let benched = Set(bench)
+            let now = rules.fewestBreaks(among: benchFirst.filter { !benched.contains($0) })
+            if let best, now > best.score.0 { return true }
+            let ahead = budget > 0
+                ? fewestBreaks(rules, players: benchFirst, size: size, due: dueNext(benched), budget: &budget)
+                : 0
+            if best == nil || (now, ahead) < best!.score { best = ((now, ahead), bench) }
+            return (now, ahead) != (0, 0)
+        }
+        let chosen = Set(best?.bench ?? [])
+        return benchFirst.filter(chosen.contains)
+    }
+
+    private static func fewestBreaks(
+        _ rules: [PairingRule], players: [PlayerID], size: Int, due: (PlayerID) -> BenchDue, budget: inout Int
+    ) -> Int {
+        let ordered = players.enumerated().sorted { (due($0.element), $0.offset) < (due($1.element), $1.offset) }.map(\.element)
+        var fewest = Int.max
+        var spent = budget
+        forEachBench(of: ordered, size: size, due: due) { bench in
+            spent -= 1
+            let benched = Set(bench)
+            fewest = min(fewest, rules.fewestBreaks(among: ordered.filter { !benched.contains($0) }))
+            return fewest > 0 && spent > 0
+        }
+        budget = spent
+        return fewest == .max ? 0 : fewest
+    }
+
+    /// Every bench the rotation allows, in the seeded order: those with fewer sit-outs than the
+    /// last place on it, and every way of filling the rest from those equally due. `visit`
+    /// returns whether to go on.
+    private static func forEachBench(
+        of benchFirst: [PlayerID], size: Int, due: (PlayerID) -> BenchDue, _ visit: ([PlayerID]) -> Bool
+    ) {
+        let boundaryDue = due(benchFirst[size - 1])
+        let mustSit = Array(benchFirst.prefix { due($0) < boundaryDue })
+        let boundary = benchFirst.filter { due($0) == boundaryDue }
+        var picks = Array(0 ..< (size - mustSit.count))
+        while visit(mustSit + picks.map { boundary[$0] }) {
+            guard let next = nextCombination(picks, of: boundary.count) else { return }
+            picks = next
+        }
+    }
+
+    private static func nextCombination(_ picks: [Int], of count: Int) -> [Int]? {
+        var picks = picks
+        var index = picks.count - 1
+        while index >= 0, picks[index] == count - picks.count + index { index -= 1 }
+        guard index >= 0 else { return nil }
+        picks[index] += 1
+        for later in (index + 1) ..< picks.count { picks[later] = picks[later - 1] + 1 }
+        return picks
     }
 
     static func chosen(_ sitOuts: [PlayerID]?, in tournament: Tournament) throws -> [PlayerID] {

@@ -225,6 +225,10 @@ public struct FriendlySession: Codable, Sendable, Hashable {
         try? FriendlyScheduler.nextRound(for: self)
     }
 
+    public func forecast() -> PairingForecast? {
+        FriendlyScheduler.forecast(for: self)
+    }
+
     /// Whether anything was actually played, as opposed to merely drawn.
     public var wasPlayed: Bool { rounds.contains { $0.wasPlayed } }
 }

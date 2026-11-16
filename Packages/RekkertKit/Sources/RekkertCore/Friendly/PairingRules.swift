@@ -136,3 +136,15 @@ extension Array where Element == PairingRule {
         courts.reduce(0) { $0 + breaks($1).count }
     }
 }
+
+func fourWayPartitions(_ four: [PlayerID]) -> [BySide<[PlayerID]>] {
+    [(1, 2, 3), (2, 1, 3), (3, 1, 2)].map { partner, third, fourth in
+        BySide(a: [four[0], four[partner]], b: [four[third], four[fourth]])
+    }
+}
+
+extension Array where Element == PairingRule {
+    func fewestBreaks(among four: [PlayerID]) -> Int {
+        fourWayPartitions(four).map { breaks($0).count }.min() ?? 0
+    }
+}

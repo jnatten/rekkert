@@ -44,7 +44,7 @@ public enum FriendlyScheduler {
         } else {
             let split = RoundScheduler.split(
                 players: session.players, seats: session.seats,
-                history: history, generator: &generator
+                history: history, rules: rules, generator: &generator
             )
             sitting = split.sitting
             teams = session.teamSize == 1
@@ -54,6 +54,29 @@ public enum FriendlyScheduler {
         }
 
         return makeRound(index: index, teams: teams, sitOuts: sitting, in: session)
+    }
+
+    public static func forecast(for session: FriendlySession) -> PairingForecast? {
+        let count = session.players.count
+        let rules = session.activeRules
+        guard count >= 4, !rules.isEmpty else { return nil }
+        let rounds = count == 4
+            ? allowedPartitions(of: session.players.map(\.id), rules: rules).count
+            : count / greatestCommonDivisor(count, session.seats)
+        var drawn = session
+        var breaking = 0
+        var unkept: [UnkeptRule] = []
+        for _ in 0 ..< rounds {
+            guard let next = try? appendingRound(to: drawn), let round = next.rounds.last else { break }
+            drawn = next
+            if !round.unkept.isEmpty { breaking += 1 }
+            for one in round.unkept where !unkept.contains(one) { unkept.append(one) }
+        }
+        return PairingForecast(rounds: rounds, breaking: breaking, unkept: unkept)
+    }
+
+    private static func greatestCommonDivisor(_ one: Int, _ two: Int) -> Int {
+        two == 0 ? one : greatestCommonDivisor(two, one % two)
     }
 
     static func makeRound(index: Int, teams: BySide<[PlayerID]>, sitOuts: [PlayerID], in session: FriendlySession) -> FriendlyRound {
@@ -102,9 +125,7 @@ public enum FriendlyScheduler {
     }
 
     static func allowedPartitions(of four: [PlayerID], rules: [PairingRule]) -> Set<Set<PairKey>> {
-        let partitions = [(1, 2, 3), (2, 1, 3), (3, 1, 2)].map { partner, third, fourth in
-            BySide(a: [four[0], four[partner]], b: [four[third], four[fourth]])
-        }
+        let partitions = fourWayPartitions(four)
         let breaks = partitions.map { rules.breaks($0).count }
         let fewest = breaks.min() ?? 0
         return Set(zip(partitions, breaks).filter { $0.1 == fewest }.map { teams, _ in

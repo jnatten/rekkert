@@ -149,6 +149,7 @@ struct FriendlyMatchView: View {
                     }
 
                     bench(session, in: round)
+                    unkept(session, in: round, offered: false)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -181,6 +182,7 @@ struct FriendlyMatchView: View {
                     // The bench that goes with the round being offered, not the one just
                     // played — this whole block is about what happens next.
                     bench(session, in: next)
+                    unkept(session, in: next, offered: true)
                 }
             }
 
@@ -201,6 +203,16 @@ struct FriendlyMatchView: View {
     private func bench(_ session: FriendlySession, in round: FriendlyRound) -> some View {
         if !round.sitOuts.isEmpty {
             Text("Sitting out: \(session.sitOutNames(in: round).joined(separator: ", "))")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+    }
+
+    @ViewBuilder
+    private func unkept(_ session: FriendlySession, in round: FriendlyRound, offered: Bool) -> some View {
+        ForEach(round.unkept, id: \.self) { rule in
+            Label(PairingText.unkept(rule, in: session, offered: offered), systemImage: "exclamationmark.triangle")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

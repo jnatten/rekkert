@@ -248,7 +248,7 @@ is on court.
 
 ### Tests for User Story 2 ⚠️ (write first; they must fail)
 
-- [ ] T020 [P] [US2] Add to `CoreTests/FriendlyPairingDrawTests.swift`:
+- [X] T020 [P] [US2] Add to `CoreTests/FriendlyPairingDrawTests.swift`:
   - `eightWithFourApart` (SC-005): 30 rounds, with P0–P3 apart.
     - No two of P0–P3 are ever partners.
     - Whenever a round repeats a partnership, every rule-keeping partition of those four on court also repeats one: enumerate the three partitions.
@@ -259,14 +259,14 @@ is on court.
     - In the other six, P0–P2 never partner.
   - `fourWithThreeApartFlagsEveryRound`: four players with P0–P2 apart. Every round has a non-empty `unkept`, and the rounds cycle all three line-ups as `FriendlyTests.fourPlayersReplayTheFirstThreeRoundsInOrder` expects.
   - `sixteenPlayersDrawPromptly` (SC-007): 16 players with P0–P7 apart. 30 rounds take under 0.5 s on `ContinuousClock`.
-- [ ] T021 [P] [US2] Write `CoreTests/PairingForecastTests.swift` (`@Suite("The pairing forecast")`):
+- [X] T021 [P] [US2] Write `CoreTests/PairingForecastTests.swift` (`@Suite("The pairing forecast")`):
   - `rotationLength` (D-7):
     - 5 → 5, 6 → 3, 7 → 7, 8 → 2, 12 → 3, 16 → 4, each with P0–P2 apart;
     - four players: 2 with an apart pair, 1 with a together pair, 3 with P0–P2 apart;
     - nil for 2 and 3 players, and nil with no active rules.
   - `matchesTheDraw` (SC-008): for 4…12 players and the rule sets {P0+P1 apart, P0–P2 apart, the first half apart, P0+P1 together, P0+P1 together with P2+P3 apart}, `forecast.breaking` equals the number of rounds with a non-empty `unkept` among the next `forecast.rounds` drawn, and `forecast.unkept` equals their distinct pairs in first-met order.
   - `midSessionPlaysOnFromHere`: after three rounds are drawn, the forecast equals what rounds four onward draw.
-- [ ] T022 [P] [US2] Add `everyDeviceRecordsTheSameBrokenRounds` to `SyncTests/FriendlyPairingSyncTests.swift` (G2; SC-004, SC-006).
+- [X] T022 [P] [US2] Add `everyDeviceRecordsTheSameBrokenRounds` to `SyncTests/FriendlyPairingSyncTests.swift` (G2; SC-004, SC-006).
   - Set up a host phone with its watch and one guest phone, all current, on a friendly of five with P0–P2 apart.
   - Play ten rounds as in T014.
   - Before each draw, the guest's `nextDraw()?.unkept` equals the host's: the source of the offer's notice.
@@ -276,7 +276,7 @@ is on court.
 
 ### Implementation for User Story 2
 
-- [ ] T023 [US2] Give the bench a rule-aware tie-break in `RekkertCore/Tournament/RoundScheduler.swift` (D-3). Give `RoundScheduler.split` a `rules: [PairingRule] = []` parameter.
+- [X] T023 [US2] Give the bench a rule-aware tie-break in `RekkertCore/Tournament/RoundScheduler.swift` (D-3). Give `RoundScheduler.split` a `rules: [PairingRule] = []` parameter.
   - **With rules and a bench:**
     1. From today's `benchFirst` order, take the players who must sit out: those with fewer sit-outs than the last bench place.
     2. Take the boundary group: those with exactly that count.
@@ -286,7 +286,7 @@ is on court.
   - **The bench's order.** `sitting` is `benchFirst` filtered to the chosen bench, which equals today's prefix when nothing moved. `playing` is filtered from `shuffled` as today.
   - **Without rules**, return exactly today's result.
   - **Keep it small.** A static helper that scores the three partitions of four players is enough, because doubles seats four.
-- [ ] T024 [US2] Use the bench rule and add the forecast in `RekkertCore/Friendly/FriendlyScheduler.swift` and `RekkertCore/Friendly/FriendlySession.swift`.
+- [X] T024 [US2] Use the bench rule and add the forecast in `RekkertCore/Friendly/FriendlyScheduler.swift` and `RekkertCore/Friendly/FriendlySession.swift`.
   - **The bench.** Pass `session.activeRules` to `RoundScheduler.split`.
   - **The forecast.** Add `public static func forecast(for:) -> PairingForecast?` (D-7).
     - It is nil with no active rules or fewer than four players.
@@ -294,12 +294,12 @@ is on court.
     - It draws that many rounds onto a copy with `appendingRound`, counts those with a non-empty `unkept`, and collects their distinct pairs in first-met order.
   - **A shortcut.** Add `FriendlySession.forecast()` calling it.
   - **Done when** T020–T022 pass and the fingerprint stays green.
-- [ ] T025 [US2] Show the notices in `App/Sources/Views/FriendlyMatchView.swift` (FR-007; screens §4).
+- [X] T025 [US2] Show the notices in `App/Sources/Views/FriendlyMatchView.swift` (FR-007; screens §4).
   - **In `upNext`**, after `bench(session, in: next)`, show one line per `next.unkept` with `PairingText.unkept(_:in:offered: true)`.
   - **In `footer`**, while the round is in play, show the same after `bench(session, in: round)` with `offered: false`.
   - **Style**: footnote, secondary, with `Image(systemName: "exclamationmark.triangle")`, centred like the bench line.
   - **Everyone sees them**: not gated on `canRunRounds`. Nothing on the watch or the TV board.
-- [ ] T026 [US2] Show the forecast in setup. In `App/Sources/Views/NewSessionView.swift`, pass `FriendlySession(id: friendlyID, name: sessionName, rules: rules, players: namedPlayers, pairingRules: pairingRules).forecast()` to `PairingRulesSection`. In `App/Sources/Views/PairingRulesEditor.swift`, show `PairingText.forecast` as a footer line when it is not nil. Start stays enabled (FR-010).
+- [X] T026 [US2] Show the forecast in setup. In `App/Sources/Views/NewSessionView.swift`, pass `FriendlySession(id: friendlyID, name: sessionName, rules: rules, players: namedPlayers, pairingRules: pairingRules).forecast()` to `PairingRulesSection`. In `App/Sources/Views/PairingRulesEditor.swift`, show `PairingText.forecast` as a footer line when it is not nil. Start stays enabled (FR-010).
 
 **Checkpoint**: US1 and US2 both work. Groups are kept apart, the bench stays fair, broken rounds say so on every phone, and setup warns ahead.
 

@@ -57,4 +57,66 @@ struct FriendlyPairingDrawTests {
         #expect(drawn(drawnClashing) == drawn(plain))
         #expect(drawnClashing.rounds.allSatisfy { $0.unkept.isEmpty })
     }
+
+    @Test func eightWithFourApart() throws {
+        let session = try draw(ruled(makeFriendly(players: 8), apart(0, 1, 2, 3)), rounds: 30)
+        let group = Set(session.players.prefix(4).map(\.id))
+        var history = PairingHistory()
+        for round in session.rounds {
+            for side in TeamSide.allCases {
+                #expect(Set(round.teams[side]).intersection(group).count < 2, "two of the four as partners")
+            }
+            let repeats = { (teams: BySide<[PlayerID]>) in
+                TeamSide.allCases.contains { history.partnerCount(teams[$0][0], teams[$0][1]) > 0 }
+            }
+            if repeats(round.teams) {
+                let four = round.teams.a + round.teams.b
+                let keeping = fourWayPartitions(four).filter { session.activeRules.breaks($0).isEmpty }
+                #expect(keeping.allSatisfy(repeats), "a fresh partner was there to be had")
+            }
+            history.record([round.teams], sitOuts: round.sitOuts)
+        }
+    }
+
+    @Test(arguments: 5 ... 12)
+    func benchStaysFair(players: Int) throws {
+        let session = try draw(ruled(makeFriendly(players: players), apart(0, 1, 2)), rounds: 30)
+        var counts = Dictionary(uniqueKeysWithValues: session.players.map { ($0.id, 0) })
+        for round in session.rounds {
+            for id in round.sitOuts { counts[id, default: 0] += 1 }
+            #expect((counts.values.max() ?? 0) - (counts.values.min() ?? 0) <= 1)
+        }
+    }
+
+    @Test func tieBreakLeansTowardsTheRules() throws {
+        let session = try draw(ruled(makeFriendly(players: 5), apart(0, 1, 2)), rounds: 10)
+        let group = Set(session.players.prefix(3).map(\.id))
+        let broken = session.rounds.filter { !$0.unkept.isEmpty }
+        #expect(broken.count == 4, "two in every five: when the bench has to take one of the other two")
+        for round in broken {
+            #expect(round.unkept.count == 1)
+            #expect(round.unkept.allSatisfy { $0.kind == .apart && Set($0.players).isSubset(of: group) })
+        }
+        for round in session.rounds where round.unkept.isEmpty {
+            for side in TeamSide.allCases {
+                #expect(Set(round.teams[side]).intersection(group).count < 2)
+            }
+        }
+    }
+
+    @Test func fourWithThreeApartFlagsEveryRound() throws {
+        let session = try draw(ruled(makeFriendly(players: 4), apart(0, 1, 2)), rounds: 9)
+        #expect(session.rounds.allSatisfy { !$0.unkept.isEmpty })
+        #expect(Set(session.rounds.prefix(3).map(partition)).count == 3)
+        for round in session.rounds {
+            #expect(round.teams == session.rounds[round.index % 3].teams)
+        }
+    }
+
+    @Test func sixteenPlayersDrawPromptly() throws {
+        let session = ruled(makeFriendly(players: 16), apart(0, 1, 2, 3, 4, 5, 6, 7))
+        let clock = ContinuousClock()
+        let elapsed = try clock.measure { _ = try draw(session, rounds: 30) }
+        #expect(elapsed < .milliseconds(500))
+    }
 }
