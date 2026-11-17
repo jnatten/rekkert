@@ -116,6 +116,21 @@ Launch a debug build on an iPhone simulator with the friendly demo:
 xcrun simctl launch <udid> dev.natten.rekkert -rekkert-demo friendly -rekkert-demo-friendly-players 4
 ```
 
+Every pairing screen can also be put up without a tap, for `xcrun simctl io <udid> screenshot`.
+These flags exist in debug builds only:
+
+| Screen | Launch arguments |
+|---|---|
+| Setup with a keep-apart group and its forecast | `-rekkert-demo-new friendly -rekkert-demo-new-players Ada,Bob,Cy,Dan,Eve -rekkert-demo-new-apart 3` |
+| The rule sheet over it | the same, plus `-rekkert-demo-rule-sheet apart` (or `together`) |
+| A clash, with Start disabled | the setup line, plus `-rekkert-demo-new-together` |
+| The notice under the board | `-rekkert-demo friendly -rekkert-demo-friendly-players 4 -rekkert-demo-friendly-apart 3` |
+| The notice on Up next | the same, plus `-rekkert-demo-friendly-rounds 1` |
+| The in-play Pairing rules sheet | `-rekkert-demo friendly -rekkert-demo-friendly-apart -rekkert-demo-pairing-rules` |
+
+Add `-rekkert-demo-portrait` if the last run left the simulator on its side. Reinstall the app
+before each launch, as `scripts/shots.sh` does, so no earlier session is restored instead.
+
 Then, by hand, against [contracts/screens.md](contracts/screens.md):
 
 1. Start a new friendly with Ada, Bob, Cy and Dan.

@@ -132,6 +132,7 @@ struct FriendlyMatchView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
+                        .minimumScaleFactor(0.5)
                 }
                 if round.isFinished {
                     upNext(session, after: round)
@@ -216,6 +217,9 @@ struct FriendlyMatchView: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+                // Under the board the sentence shrinks rather than stopping short. The offer has
+                // no room to spare at the largest sizes, and says it in full once the round starts.
+                .minimumScaleFactor(offered ? 1 : 0.5)
         }
     }
 

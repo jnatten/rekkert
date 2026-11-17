@@ -561,3 +561,9 @@ Each step keeps the fingerprint green and `scripts/verify.sh` passing.
 - Commit after each task or logical group, in the conventional style the history uses, with no
   AI attribution trailers.
 - Stop at any checkpoint to validate a story on its own.
+
+---
+
+## Phase 9: Convergence
+
+- [X] T047 Review the debug-only screenshot flags added beyond T043 (`-rekkert-demo-new-players`, `-rekkert-demo-new-apart`, `-rekkert-demo-new-together`, `-rekkert-demo-rule-sheet`, `-rekkert-demo-pairing-rules`, and the count on `-rekkert-demo-friendly-apart`, in `App/Sources/Views/DemoLaunch.swift`, `App/Sources/Views/NewSessionView.swift`, `App/Sources/Views/PairingRulesEditor.swift`, `App/Sources/Views/MatchOptionsMenu.swift` and `Shared/AppModel.swift`): keep them and record them in `specs/006-friendly-pairing-rules/quickstart.md` level 3 as the way to capture each pairing screen without tapping, or remove them per T043 / quickstart.md level 3 (unrequested)
