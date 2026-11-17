@@ -586,9 +586,7 @@ final class AppModel {
                     changeEnds: demoChangeEnds(arguments)
                 ),
                 players: players,
-                pairingRules: arguments.contains("-rekkert-demo-friendly-apart") && players.count >= 2
-                    ? [PairingRule(kind: .apart, players: [players[0].id, players[1].id])]
-                    : []
+                pairingRules: friendlyApart(arguments, of: players)
             )), warmup: warmup)
             store.nextRound()
             // `-rekkert-demo-friendly-rounds 3` plays three of them out, which is the only
@@ -754,6 +752,15 @@ final class AppModel {
               index + 1 < arguments.count,
               let minutes = Int(arguments[index + 1]) else { return LadderRules.defaultRoundMinutes }
         return max(1, minutes)
+    }
+
+    /// `-rekkert-demo-friendly-apart` keeps the first two apart, and `-rekkert-demo-friendly-apart 3`
+    /// the first three, which four players cannot keep: the way the notice gets onto a screenshot.
+    private func friendlyApart(_ arguments: [String], of players: [Player]) -> [PairingRule] {
+        guard let index = arguments.firstIndex(of: "-rekkert-demo-friendly-apart") else { return [] }
+        let count = index + 1 < arguments.count ? Int(arguments[index + 1]) ?? 2 : 2
+        guard count >= 2, count <= players.count else { return [] }
+        return [PairingRule(kind: .apart, players: players.prefix(count).map(\.id))]
     }
 
     private func friendlyPlayerCount(_ arguments: [String]) -> Int {

@@ -109,6 +109,11 @@ struct MatchOptionsMenu: View {
         .accessibilityLabel("Match options")
         .sheet(isPresented: $showingTV) { TVGuideSheet() }
         .sheet(isPresented: $showingHelp) { HelpSheet() }
+        .task {
+            #if DEBUG
+            if DemoLaunch.pairingRules, model.store.canEditPairingRules { showingPairing = true }
+            #endif
+        }
         .sheet(isPresented: $showingPairing) {
             if case .friendly(let session)? = model.store.state { PairingRulesSheet(session: session) }
         }

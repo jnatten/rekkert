@@ -20,6 +20,20 @@ struct NewSessionView: View {
         if mode == .friendly {
             _rules = State(initialValue: TraditionalRules(setsToWin: 1))
         }
+        #if DEBUG
+        if let names = DemoLaunch.newPlayers {
+            let named = names.map { Player(name: $0) }
+            _players = State(initialValue: named)
+            var demoRules: [PairingRule] = []
+            if let apart = DemoLaunch.newApart, apart >= 2, apart <= named.count {
+                demoRules.append(PairingRule(kind: .apart, players: named.prefix(apart).map(\.id)))
+            }
+            if DemoLaunch.newTogether, named.count >= 2 {
+                demoRules.append(PairingRule(kind: .together, players: named.prefix(2).map(\.id)))
+            }
+            _pairingRules = State(initialValue: demoRules)
+        }
+        #endif
         guard let played else { return }
         _players = State(initialValue: played.players.map { Player(name: $0.name) })
         _sessionName = State(initialValue: played.name)

@@ -6,6 +6,7 @@ struct PairingRulesSection: View {
     let players: [Player]
     var forecast: PairingForecast?
     var kinds: [PairingRule.Kind] = [.apart, .together]
+    var notes: [String] = []
     @State private var editing: EditedRule?
 
     private var session: FriendlySession { FriendlySession(players: players, pairingRules: rules) }
@@ -16,7 +17,7 @@ struct PairingRulesSection: View {
                 ForEach(rules) { rule in
                     Button { editing = EditedRule(kind: rule.kind, rule: rule) } label: {
                         HStack {
-                            Text(PairingText.rule(rule, in: session)).foregroundStyle(.primary)
+                            Text(PairingText.rule(rule, in: session))
                             Spacer()
                             if clashing.contains(rule.id) {
                                 Image(systemName: "exclamationmark.triangle.fill")
@@ -25,6 +26,7 @@ struct PairingRulesSection: View {
                             }
                         }
                     }
+                    .tint(.primary)
                 }
                 .onDelete { rules.remove(atOffsets: $0) }
 
@@ -40,6 +42,13 @@ struct PairingRulesSection: View {
         } footer: {
             footer
         }
+        .task {
+            #if DEBUG
+            if let kind = DemoLaunch.ruleSheet.flatMap(PairingRule.Kind.init(rawValue:)) {
+                editing = EditedRule(kind: kind, rule: rules.first { $0.kind == kind })
+            }
+            #endif
+        }
         .sheet(item: $editing) { edited in
             PairingRuleSheet(
                 kind: edited.kind, players: players, original: edited.rule,
@@ -54,17 +63,17 @@ struct PairingRulesSection: View {
         }
     }
 
-    @ViewBuilder
     private var footer: some View {
-        if players.count < 4 {
-            Text("Pairing rules apply when four or more play doubles.")
-        } else if rules.isEmpty {
-            Text("Say who should never be partners, or who always should, to even the matches.")
-        } else if !rules.conflicts.isEmpty {
-            Text(rules.conflicts.map { PairingText.conflict($0, in: session, rules: rules) }.joined(separator: "\n"))
-        } else if let forecast, let line = PairingText.forecast(forecast, in: session) {
-            Text(line)
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(footerLines + notes, id: \.self) { Text($0) }
         }
+    }
+
+    private var footerLines: [String] {
+        if players.count < 4 { return ["Pairing rules apply when four or more play doubles."] }
+        if rules.isEmpty { return ["Say who should never be partners, or who always should, to even the matches."] }
+        if !rules.conflicts.isEmpty { return rules.conflicts.map { PairingText.conflict($0, in: session, rules: rules) } }
+        return forecast.flatMap { PairingText.forecast($0, in: session) }.map { [$0] } ?? []
     }
 
     private var clashing: Set<UUID> { Set(rules.conflicts.flatMap(\.rules)) }
@@ -113,13 +122,14 @@ struct PairingRuleSheet: View {
                     ForEach(players) { player in
                         Button { toggle(player.id) } label: {
                             HStack {
-                                Text(player.name).foregroundStyle(.primary)
+                                Text(player.name)
                                 Spacer()
                                 if picked.contains(player.id) {
-                                    Image(systemName: "checkmark").foregroundStyle(.tint)
+                                    Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
                                 }
                             }
                         }
+                        .tint(.primary)
                         .accessibilityAddTraits(picked.contains(player.id) ? .isSelected : [])
                     }
                 } footer: {
@@ -176,20 +186,19 @@ struct PairingRulesSheet: View {
         return edited
     }
 
+    private var notes: [String] {
+        var notes = ["Changes apply from the next round. The round being played stays as it is."]
+        if session.activeRules.isEmpty, !edited.activeRules.isEmpty,
+           let line = PairingText.turnedAway(model.store.olderGuestsTurnedAwayByRules) {
+            notes.append(line)
+        }
+        return notes
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                PairingRulesSection(rules: $rules, players: session.players, forecast: edited.forecast())
-                Section {
-                } footer: {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Changes apply from the next round. The round being played stays as it is.")
-                        if session.activeRules.isEmpty, !edited.activeRules.isEmpty,
-                           let line = PairingText.turnedAway(model.store.olderGuestsTurnedAwayByRules) {
-                            Text(line)
-                        }
-                    }
-                }
+                PairingRulesSection(rules: $rules, players: session.players, forecast: edited.forecast(), notes: notes)
             }
             .navigationTitle("Pairing rules")
             .navigationBarTitleDisplayMode(.inline)

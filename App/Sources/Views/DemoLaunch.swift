@@ -150,6 +150,27 @@ enum DemoLaunch {
         ProcessInfo.processInfo.arguments.contains("-rekkert-demo-finish-offer")
     }
 
+    /// Fills the new-session sheet's players: -rekkert-demo-new-players Ada,Bob,Cy,Dan,Eve
+    static var newPlayers: [String]? {
+        value(for: "-rekkert-demo-new-players").map { $0.split(separator: ",").map(String.init) }
+    }
+
+    /// Keeps that many of them apart from the start: -rekkert-demo-new-apart 3
+    static var newApart: Int? { value(for: "-rekkert-demo-new-apart").flatMap(Int.init) }
+
+    /// Keeps the first two together as well, which with -rekkert-demo-new-apart makes a clash.
+    static var newTogether: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-new-together")
+    }
+
+    /// Opens the sheet for one pairing rule over the setup: -rekkert-demo-rule-sheet apart
+    static var ruleSheet: String? { value(for: "-rekkert-demo-rule-sheet") }
+
+    /// Opens a friendly's pairing rules from the match menu.
+    static var pairingRules: Bool {
+        ProcessInfo.processInfo.arguments.contains("-rekkert-demo-pairing-rules")
+    }
+
     private static func value(for flag: String) -> String? {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
