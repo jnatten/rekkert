@@ -72,3 +72,30 @@ FR-010's numbers in that run, set against the runs on the old code recorded in `
 ## Recommendation
 
 Keep the bug open until a game on real devices confirms it. Ship the fix in the next TestFlight build. At the next game with a guest on 1.1 or with phones in bags, count `guest … outOfReach` in the host's record, and compare each against the guest's own record. Expect near zero, apart from real walk-offs. If that holds, mark this bug verified. If the host still loses quiet guests, rerun `/speckit-bug-assess` with that game's records.
+
+## On court (2026-11-18)
+
+The field check above, at an Americano with a guest on 1.1. The host, 57FA, was on 1.2 (79),
+which has the fix (it landed as `a55ded4`). The guests were B701 on 1.2 (79), 7729 on 1.2 (78),
+also with the fix, and 255B on 1.1 (75), each with a watch. The records are the four phones',
+exported the same day, and are written up in spec 005's `validation.md`, "On court".
+
+| Check | Result |
+|-------|--------|
+| Quiet stretches | Each 1.2 phone noted the same 403 points over 1 h 34 min. 132 of the gaps between them were longer than 15 s, the longest 104 s, so guests went quiet as often as on 14 November |
+| 255B (1.1) out of reach on the host | 0, against 143 (20.5 min) on 14 November |
+| B701 out of reach on the host | 0, against 59 (4.4 min) |
+| 7729 out of reach on the host | 2, of 4.2 s each. 18:00:18–18:00:22 was real: both its links had been down since 18:00:07, and its own record has the host out of reach over the same seconds. 18:40:08–18:40:13 was not: both links were up while its watch stood in for it, and the host wrote the watch's link off a second later |
+| The host's summary | `unreachable 7729 0:08`, and nobody else |
+
+- **Quiet guests are no longer lost**, on 1.1 or on this build, wherever the guest's own phone
+  carried it.
+- **A guest whose watch stands in can still flicker.** The 18:40 episode is the 15 s tie in
+  `ci-load-sharing-flakes/test.md`, Residual Risks, now seen on court. It is followed up in spec
+  005's tasks.md as T098, not here.
+- **Not shown: whether the phones were in bags.** Nobody noted it, and the record has no entry
+  for an app going to the background (spec 005, T101). On 14 November the 1.1 phone very likely
+  was in a bag.
+
+Mark this bug verified once the players confirm their phones were in bags. If they were not,
+repeat the count at the next game where they are.

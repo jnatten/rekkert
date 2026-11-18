@@ -71,6 +71,51 @@ The same records found three bugs, fixed since on this branch:
 - **Bluetooth links carried no radio label** in the record (`1540d035`).
 - **No phone asked its own watch the time** (`1d9bb934`).
 
+## On court: an Americano, 18 November
+
+Neither the small field run (T058) nor the two-court evening (T065). Nine played on two courts,
+but only the host and three guests shared, each with a watch, on three builds, one of them 1.1.
+There was no walk-out burst and no hour without sharing, and nothing in the records says whether
+phones were in bags. A one-minute share just before (`EB22…`, 17:49–17:50) ended with its match
+and is left out. The records are the four phones', exported on 18 November.
+
+| | |
+|---|---|
+| Date | 2026-11-18, 17:57–19:31 (`1848…`) |
+| Devices (build) | Host 57FA on 1.2 (79), guest B701 on 1.2 (79), guest 7729 on 1.2 (78), guest 255B on 1.1 (75), each with a watch |
+| Length, points | 1 h 34 min, 403 points arriving on each 1.2 phone |
+
+| Check | Requirement | Result |
+|---|---|---|
+| Points within 1 s, per phone | FR-010, SC-002 | Met on every 1.2 phone, each judged on over 100 points by the "nothing is wrong" rule: host 135 of 135, B701 99.1% of 231, 7729 99.3% of 268. Typically 0.09 s on the host and 0.15–0.20 s on the guests. The host's slowest was 0.74 s |
+| Points within 2 s, per phone | FR-010 | Missed on both 1.2 guests, by the same two points: 2.37 s and 2.54 s on B701, 2.32 s and 2.58 s on 7729, at 18:39:41 and 18:46:58. Each arrived as 7729's watch joined the host to stand in, and the host had it first on a link the watch had not yet named, so it was very likely tapped on that watch before its own link was up. FR-010 looks only at the receiving phone, where nothing was wrong, so both count |
+| Share unknown | FR-006 | Host 2.2%, within the cap. Both guests over it as recorded, 26% on B701 and 24% on 7729, so their summaries read `too many unknown`. 80 of B701's 83 and 81 of 7729's 85 are the 1.1 guest's points relayed by the host: each lands about 0.15 s after one of the host's 81 `unknown; older` arrivals from 255B, but the guests write plain `unknown`. Left out as FR-006 says, they are 1.3% and 1.5% |
+| Drops cost nothing | FR-008 | Met. On B701, points within 30 s after a Wi-Fi drop: typically 0.17 s, 95th percentile 0.71 s (98 points), against 0.15 s and 0.53 s otherwise. On 7729: 0.15 s and 0.41 s (43), against 0.21 s and 0.52 s |
+| Drops per guest per hour | FR-007, SC-003 | B701: 49 on Wi-Fi, none on Bluetooth (14 Nov: 48). 7729: 23 on Wi-Fi and 1 on Bluetooth, and its watch's own link 13 more. 255B: Wi-Fi gave up after 6 drops in its first two minutes, then 8 on Bluetooth, each back within 3–10 s. About 27 an hour across the three. Target 5 |
+| Drop details | D-7 | At the host, 119 Wi-Fi drops: 111 `ECONNRESET`, 6 `path unsatisfied`, 1 `ETIMEDOUT`, 1 written off. D-7 stays closed (T059) |
+| Watch hops | FR-010a | Met only from B701's watch to its phone: 97% within 1 s, all within 1.7 s (87 hops). Host's watch to phone 60% within 1 s, slowest 16.2 s (183); host's phone to watch 76%, slowest 19.6 s (219). 7729's watch to phone 55%, slowest 4.1 s (44); 7729's phone to watch 14%, typically 12.1 s, slowest 103 s, and 158 of 342 untimed |
+| Points on a following watch | FR-011 | Missed on 7729's watch: 52 hops took over 30 s, and a hop is only part of the time from the tap. Its link to its phone dropped about 200 times (125 an hour, against 1–5 on the other pairs), and it stood in 51 times. The host's watch: 94% of 107 timed points within 5 s, slowest 20.1 s |
+| A guest on 1.1 | FR-015 | Consistent, not proven. 255B was on from 17:58 to the end, the host had 81 points from it, and never recorded it out of reach. 1.1 notes no arrivals, so the record can't show every point reaching it |
+| The summary and the watch's half | FR-003, FR-005, SC-007 | Wrong three ways. 7729's record is cut into 25 stints, one per stand-in join of its watch, none with 100 timed points, so none can be judged. Its unreachable times include watch absences never closed when the watch stood down: one stint reads `unreachable 57FA 71:15`. B701's watch entries stop at 18:00:26, though the watch stayed in touch and handed its phone 87 points until 18:55, and the header doesn't say so |
+| Battery per hour, sharing | FR-019, SC-005 | In 5% steps: host's phone 7%, host's watch 7%, B701's phone 3%, 7729's phone 3%, 7729's watch 10%. Nothing from 1.1, nor from B701's watch after 17:59. No hour without sharing to compare |
+| Host Bluetooth restart, a full match, nine guests | FR-009, FR-012–FR-014, SC-001 | Not seen: no restart in the records, and three guests |
+
+Verified on court by this session: FR-008, FR-010's 95% within 1 s on 1.2 phones, and FR-006
+on the host's phone. FR-015 is consistent but not proven. The host no longer loses quiet guests
+(`.specify/bugs/host-loses-quiet-guests/test.md`, On court). The rest of FR-010 waits for T058
+and T065, which need one build on every device and the conditions this session lacked.
+
+Contradicted, with follow-ups in tasks.md Phase 11:
+- **FR-010's 2 s, a watch standing in as it joins** (T096).
+- **FR-006, a 1.1 guest's points relayed to guests** read `unknown`, not `older` (T092).
+- **FR-003 and SC-007**: stints cut by a watch's joins, and watch absences left open (T093, T094).
+- **FR-005**: a watch in touch whose entries never reached its phone (T095).
+- **FR-010a and FR-011** on the watch that kept losing its phone (T097).
+- **FR-007** stays a target: no task, and D-7 stays closed with 1 `ETIMEDOUT` in 119.
+
+The records could not show which round each device was on, whether every device drew the same
+teams, what model or watchOS each watch had, or whether phones were in bags (T099–T101).
+
 ## Level 4: small field run
 
 | | |
