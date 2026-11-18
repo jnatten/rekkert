@@ -61,15 +61,15 @@ round is drawn once every court is won. A timed court nobody kept can have its g
 in, before the whistle or after it, until the next round is drawn; one still level after the
 whistle is settled by tapping whoever won its deciding point.
 
-Players over the courts sit out as in Americano, fewest sit-outs first, and come back in on
-the bottom court; a fixed pair sits out together. Each round is drawn from how the one before
-finished by the device that draws it, and the draw carries who it put where, so every other
-device takes it as it is rather than working it out again. The next round is only offered
-once every court is settled, but once it is drawn it stays: a point that arrives late — one
-that raced the whistle, say — can change a score, never a round people have walked onto.
-The table is the ladder — the last round's finishing order, court by court and
-winners above losers, with rounds won and games beside it — and the evening is won by
-whoever won court 1 last.
+Players over the courts sit out fewest sit-outs first and, of those, whoever sat out longest
+ago, and come back in on the bottom court; a fixed pair sits out together. Each round is
+drawn from how the one before finished by the device that draws it, and the draw carries who
+it put where, so every other device takes it as it is rather than working it out again. The
+next round is only offered once every court is settled, but once it is drawn it stays: a
+point that arrives late — one that raced the whistle, say — can change a score, never a
+round people have walked onto. The table is the ladder — the last round's finishing order,
+court by court and winners above losers, with rounds won and games beside it — and the
+evening is won by whoever won court 1 last.
 
 **Friendly** — you put in the names and play real matches, redrawing the partnerships after
 every one of them. A round is a match on the ordinary rules — sets to win, games per set,
@@ -120,11 +120,14 @@ paired 1+4 vs 2+3. The device that draws a Mexicano round works it out from the 
 the draw carries who it put where, so a point or a correction that turns up late — two
 devices taking a court's last point at once, say — can change the table but never a round
 people have walked onto. Player counts that are not a multiple of four rotate sit-outs by
-whoever has sat out least and, of those, whoever sat out longest ago, so nobody is benched
-again sooner than the numbers force. Benched players score a configurable number of points
-(half the target by default). Until the first point of a round, who sits it out can be
-changed on the phone — for whoever is late — and the round is drawn again around the pick.
-A picked sit-out counts like any other, so whoever it spared is next in line.
+whoever has sat out least, and of those mix who sits out together, so the same people are
+not benched side by side rotation after rotation; the gap between anyone's sit-outs is at
+most a round shorter than a full turn of the bench. The device that draws picks the bench
+and the draw carries it, so a phone or watch on an older version benches the same players.
+Benched players score a configurable number of points (half the target by default). Until
+the first point of a round, who sits it out can be changed on the phone — for whoever is
+late — and the round is drawn again around the pick. A picked sit-out counts like any other,
+so whoever it spared is next in line.
 
 A tournament plays on until it is finished, unless setup gives it a **Length**: a number of
 rounds, or — in Americano — a full rotation, which runs until everybody has partnered

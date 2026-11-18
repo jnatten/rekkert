@@ -388,6 +388,37 @@ struct SyncTests {
         #expect(pair.phone.state == pair.watch.state)
     }
 
+    /// Ten players on two courts, drawn on the phone and now and then on the watch: the bench
+    /// each draw carries lands on both, and nobody sits out with the same player twice.
+    @Test func theBenchADrawCarriesLandsOnBothDevices() async throws {
+        let tournament = Tournament(
+            name: "Thursday",
+            format: .americano,
+            players: (0 ..< 10).map { Player(name: "P\($0)") },
+            config: TournamentConfig(courtCount: 2)
+        )
+        let pair = Pair()
+        let tasks = pair.run()
+        defer { tasks.forEach { $0.cancel() } }
+
+        pair.phone.configure(.tournament(tournament))
+        for round in 0 ..< 15 {
+            (round % 3 == 2 ? pair.watch : pair.phone).nextRound()
+            await eventually {
+                guard case .tournament(let synced) = pair.watch.state else { return false }
+                return synced.rounds.count == round + 1 && pair.watch.state == pair.phone.state
+            }
+        }
+
+        guard case .tournament(let played) = pair.watch.state else {
+            Issue.record("watch has no tournament")
+            return
+        }
+        #expect(played.rounds.count == 15)
+        #expect(pair.phone.state == pair.watch.state)
+        #expect(Set(played.rounds.map { Set($0.sitOuts) }).count == 15, "fifteen different pairs on the bench")
+    }
+
     /// The phone confirms the round and draws straight after: the round it carries is drawn
     /// from the table with the confirmed round in it.
     @Test func aMexicanoDrawCarriesTheRoundTheConfirmedTableMakes() async throws {

@@ -22,6 +22,7 @@ struct PairingHistory: Sendable {
     private(set) var sitOuts: [PlayerID: Int] = [:]
     /// How many rounds had been recorded when each player last sat out.
     private(set) var lastSatOut: [PlayerID: Int] = [:]
+    private(set) var benchedTogether: [PairKey: Int] = [:]
     private(set) var recorded = 0
 
     init() {}
@@ -46,9 +47,12 @@ struct PairingHistory: Sendable {
                 }
             }
         }
-        for id in benched {
-            sitOuts[id, default: 0] += 1
-            lastSatOut[id] = recorded
+        for (index, one) in benched.enumerated() {
+            sitOuts[one, default: 0] += 1
+            lastSatOut[one] = recorded
+            for two in benched[(index + 1)...] {
+                benchedTogether[PairKey(one, two), default: 0] += 1
+            }
         }
         recorded += 1
     }
@@ -57,4 +61,5 @@ struct PairingHistory: Sendable {
     func opponentCount(_ one: PlayerID, _ two: PlayerID) -> Int { opposed[PairKey(one, two)] ?? 0 }
     func sitOutCount(_ id: PlayerID) -> Int { sitOuts[id] ?? 0 }
     func lastSitOut(_ id: PlayerID) -> Int? { lastSatOut[id] }
+    func satOutTogether(_ one: PlayerID, _ two: PlayerID) -> Int { benchedTogether[PairKey(one, two)] ?? 0 }
 }

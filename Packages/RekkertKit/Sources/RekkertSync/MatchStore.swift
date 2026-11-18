@@ -354,10 +354,12 @@ public final class MatchStore {
         // -1 when nothing has been drawn yet, so the first round is "the one after none".
         case .tournament(let tournament):
             guard !tournament.isLadder || tournament.canDrawNextRound else { return }
+            let sitOuts = TournamentEngine.sitOuts(for: tournament)
             record(.nextRound(
                 after: tournament.rounds.count - 1,
                 at: Date(),
-                placed: TournamentEngine.placement(of: tournament)
+                sitOuts: sitOuts,
+                placed: TournamentEngine.placement(of: tournament, sitOuts: sitOuts)
             ))
         case .friendly(let session):
             record(.nextRound(after: session.rounds.count - 1, at: Date(), placed: session.nextDraw().map(RoundPlacement.init)))
@@ -370,11 +372,12 @@ public final class MatchStore {
     /// only while nothing has been played in it.
     public func redrawRound(sittingOut sitOuts: [PlayerID]) {
         guard canRunRounds, case .tournament(let tournament) = state, let last = tournament.rounds.indices.last else { return }
+        let bench = TournamentEngine.sitOuts(for: tournament, picked: sitOuts, redrawing: true) ?? sitOuts
         record(.nextRound(
             after: last - 1,
             at: Date(),
-            sitOuts: sitOuts,
-            placed: TournamentEngine.placement(of: tournament, sitOuts: sitOuts, redrawing: true)
+            sitOuts: bench,
+            placed: TournamentEngine.placement(of: tournament, sitOuts: bench, redrawing: true)
         ))
     }
 

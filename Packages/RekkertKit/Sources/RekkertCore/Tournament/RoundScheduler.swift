@@ -20,6 +20,28 @@ private struct BenchDue: Comparable {
     }
 }
 
+/// How far a bench falls short of spreading sit-outs out: the rounds each of them is short of
+/// `gap` since they last sat out, and how often its pairs have sat out together before.
+private struct BenchSpread {
+    let history: PairingHistory
+    let gap: Int
+
+    /// `previous` is a bench drawn the round before this one, for looking a round ahead.
+    func cost(of bench: [PlayerID], after previous: Set<PlayerID> = []) -> (short: Int, together: Int) {
+        let now = history.recorded + (previous.isEmpty ? 0 : 1)
+        var short = 0
+        var together = 0
+        for (index, one) in bench.enumerated() {
+            let since = previous.contains(one) ? 1 : history.lastSitOut(one).map { now - $0 }
+            if let since { short += max(0, gap - since) }
+            for two in bench[(index + 1)...] {
+                together += history.satOutTogether(one, two) + (previous.contains(one) && previous.contains(two) ? 1 : 0)
+            }
+        }
+        return (short, together)
+    }
+}
+
 enum RoundScheduler {
     /// Everyone who can't be given a seat this round. Benches whoever has sat out least
     /// so far, so sit-outs spread evenly; ties break on a seeded order rather than on
@@ -110,6 +132,69 @@ enum RoundScheduler {
         }
         budget = spent
         return fewest == .max ? 0 : fewest
+    }
+
+    /// The bench as even as ever, mixing who sits out together: of those equally due, the first
+    /// combination in the seeded order that leaves nobody sitting out again sooner than a
+    /// rotation less one and puts fewest back on the bench with someone they sat out with,
+    /// counting the best bench the round after it would leave. With no history to go on that is
+    /// the bench `split` draws. The search stops after a fixed amount of work, the same on every
+    /// device, and the bench `.longestRested` would draw stands in for it whenever it did better
+    /// than all the search got to.
+    static func mixedBench(
+        players: [Player], seats: Int, history: PairingHistory, chosen: [PlayerID] = [],
+        generator: inout SeededGenerator
+    ) -> [PlayerID] {
+        let shuffled = players.map(\.id).shuffled(seededBy: &generator)
+        let size = shuffled.count - seats
+        guard size > 0 else { return [] }
+
+        let chosenSet = Set(chosen)
+        let due = { (id: PlayerID) in
+            BenchDue(notChosen: chosenSet.contains(id) ? 0 : 1, sitOuts: history.sitOutCount(id), rested: 0)
+        }
+        let benchFirst = ordered(shuffled, by: due) { _ in 0 }
+        let rotation = (shuffled.count + size - 1) / size
+        let spread = BenchSpread(history: history, gap: max(2, rotation - 1))
+        let work = size * (size + 1) / 2
+        var budget = 200_000
+
+        func score(_ bench: [PlayerID]) -> (Int, Int, Int) {
+            let now = spread.cost(of: bench)
+            let benched = Set(bench)
+            let dueNext = { (id: PlayerID) in
+                BenchDue(notChosen: 1, sitOuts: history.sitOutCount(id) + (benched.contains(id) ? 1 : 0), rested: 0)
+            }
+            var ahead = (short: Int.max, together: Int.max)
+            let nextFirst = ordered(benchFirst, by: dueNext) { benched.contains($0) ? history.recorded : history.lastSitOut($0) ?? -1 }
+            forEachBench(of: nextFirst, size: size, due: dueNext) { next in
+                budget -= work
+                let cost = spread.cost(of: next, after: benched)
+                if (cost.short, cost.together) < (ahead.short, ahead.together) { ahead = cost }
+                return (ahead.short, ahead.together) != (0, 0) && budget > 0
+            }
+            return (now.short + ahead.short, now.together + ahead.together, now.short)
+        }
+
+        let rested = Array(ordered(shuffled, by: due) { history.lastSitOut($0) ?? -1 }.prefix(size))
+        let restedScore = score(rested)
+        var best: (score: (Int, Int, Int), bench: [PlayerID])?
+        forEachBench(of: benchFirst, size: size, due: due) { bench in
+            budget -= work
+            let now = spread.cost(of: bench)
+            if let best, (now.short, now.together) >= (best.score.0, best.score.1) { return budget > 0 }
+            let candidate = score(bench)
+            if best == nil || candidate < best!.score { best = (candidate, bench) }
+            return candidate != (0, 0, 0) && budget > 0
+        }
+        let picked = Set(best.map { $0.score <= restedScore ? $0.bench : rested } ?? rested)
+        return benchFirst.filter(picked.contains)
+    }
+
+    private static func ordered(_ ids: [PlayerID], by due: (PlayerID) -> BenchDue, rested: (PlayerID) -> Int) -> [PlayerID] {
+        ids.enumerated()
+            .sorted { (due($0.element), rested($0.element), $0.offset) < (due($1.element), rested($1.element), $1.offset) }
+            .map(\.element)
     }
 
     /// Every bench the rotation allows, in the seeded order: those with fewer sit-outs than the
@@ -379,5 +464,39 @@ public enum TournamentEngine {
             try? appendingRound(to: tournament, sitOuts: sitOuts)
         }
         return drawn?.rounds.last.map(RoundPlacement.init)
+    }
+
+    /// Who sits out the next round, or with `redrawing` the round in play drawn again: `picked`
+    /// first, the rest as evenly as ever while mixing who sits out together. A ladder's bench is
+    /// drawn as it always is. Nil when the round cannot be drawn.
+    public static func bench(for tournament: Tournament, picked: [PlayerID] = [], redrawing: Bool = false) -> [PlayerID]? {
+        var base = tournament
+        if redrawing { _ = base.rounds.popLast() }
+        switch base.format {
+        case .winnerCourt:
+            return (try? appendingRound(to: base, sitOuts: picked.isEmpty ? nil : picked))?.currentRound?.sitOuts
+        case .americano, .mexicano:
+            guard base.playableCourts >= 1, let chosen = try? RoundScheduler.chosen(picked, in: base) else { return nil }
+            var generator = SeededGenerator(base.id.raw, salt: UInt64(base.rounds.count))
+            return RoundScheduler.mixedBench(
+                players: base.players, seats: base.playableCourts * 4, history: PairingHistory(base),
+                chosen: chosen, generator: &generator
+            )
+        }
+    }
+
+    /// What the event drawing that round carries as `sitOuts`: the bench `bench(for:)` picks
+    /// wherever it is not the one the draw makes without it. Every build since sit-outs could be
+    /// picked benches exactly those and draws the courts around them, so an older device lands on
+    /// the same round without knowing how the bench was chosen; the draw itself never mixes, or
+    /// it would disagree with them over an event that carries nothing.
+    public static func sitOuts(for tournament: Tournament, picked: [PlayerID]? = nil, redrawing: Bool = false) -> [PlayerID]? {
+        guard tournament.format != .winnerCourt,
+              let bench = bench(for: tournament, picked: picked ?? [], redrawing: redrawing) else { return picked }
+        let drawn = redrawing
+            ? try? redrawingLastRound(of: tournament, sitOuts: picked ?? [])
+            : try? appendingRound(to: tournament, sitOuts: picked)
+        if let round = drawn?.currentRound, Set(round.sitOuts) == Set(bench) { return picked }
+        return bench
     }
 }

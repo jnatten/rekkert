@@ -33,18 +33,36 @@ extension MatchLog {
         guard case .tournament(let tournament)? = SessionReducer.state(of: self) else {
             return append(.nextRound(after: -1, at: at), from: device)
         }
+        let sitOuts = TournamentEngine.sitOuts(for: tournament)
         return append(
-            .nextRound(after: tournament.rounds.count - 1, at: at, placed: TournamentEngine.placement(of: tournament)),
+            .nextRound(
+                after: tournament.rounds.count - 1, at: at, sitOuts: sitOuts,
+                placed: TournamentEngine.placement(of: tournament, sitOuts: sitOuts)
+            ),
+            from: device
+        )
+    }
+
+    /// `drawRound` as a build from before the bench mixed company records it: nothing carried
+    /// but a Mexicano or ladder round's placement.
+    @discardableResult
+    mutating func drawRoundAsOlderBuild(from device: DeviceID) -> MatchEvent {
+        guard case .tournament(let tournament)? = SessionReducer.state(of: self) else {
+            return append(.nextRound(after: -1), from: device)
+        }
+        return append(
+            .nextRound(after: tournament.rounds.count - 1, placed: TournamentEngine.placement(of: tournament)),
             from: device
         )
     }
 
     /// Mirrors `MatchStore.redrawRound(sittingOut:)`.
     @discardableResult
-    mutating func redrawRound(sittingOut sitOuts: [PlayerID], from device: DeviceID) -> MatchEvent {
+    mutating func redrawRound(sittingOut picked: [PlayerID], from device: DeviceID) -> MatchEvent {
         guard case .tournament(let tournament)? = SessionReducer.state(of: self) else {
-            return append(.nextRound(after: -1, sitOuts: sitOuts), from: device)
+            return append(.nextRound(after: -1, sitOuts: picked), from: device)
         }
+        let sitOuts = TournamentEngine.sitOuts(for: tournament, picked: picked, redrawing: true) ?? picked
         let placed = TournamentEngine.placement(of: tournament, sitOuts: sitOuts, redrawing: true)
         return append(.nextRound(after: tournament.rounds.count - 2, sitOuts: sitOuts, placed: placed), from: device)
     }

@@ -90,7 +90,7 @@ struct SitOutPickerView: View {
             if count == 1 {
                 Text("One player sits out. The courts are drawn again around whoever you pick.")
             } else {
-                Text("\(count) sit out. Any you leave open are chosen fairly: whoever has sat out least, then whoever sat out longest ago. The courts are drawn again around them.")
+                Text("\(count) sit out. Any you leave open are chosen fairly: whoever has sat out least, mixing who sits out together. The courts are drawn again around them.")
             }
         }
     }
@@ -165,7 +165,7 @@ struct SitOutPickerView: View {
 
     private func preview(_ tournament: Tournament) -> [PlayerID]? {
         guard !chosen.isEmpty else { return nil }
-        return try? TournamentEngine.redrawingLastRound(of: tournament, sitOuts: picked(in: tournament)).currentRound?.sitOuts
+        return TournamentEngine.bench(for: tournament, picked: picked(in: tournament), redrawing: true)
     }
 
     /// The bench to redraw around, or nil when there is nothing to do: nobody picked, play
