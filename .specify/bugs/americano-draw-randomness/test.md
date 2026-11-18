@@ -111,3 +111,31 @@ longer shows repeating sit-out pairs, the regression suite is green, and the pre
 replays logs from the fixed code identically (and the reverse). Before release, time a
 12–16-player draw on an Apple Watch SE (1st generation), and check that the picker preview
 matches the redraw it records.
+
+## Extra verification: older devices (2026-11-18)
+
+Run against the builds testers and App Store users can actually have. The CI TestFlight runs
+from 28 Sep to 17 Nov give 20 builds, which hold 8 distinct versions of the draw and fold code
+(`RekkertCore/Tournament/**`, `SessionReducer`, `MatchEvent`, `MatchLog`, and
+`MatchStore.nextRound`/`redrawRound`). Build 50 (`f55d3630`, 22 Sep) stands in for the
+manually uploaded 1.0 builds that predate the sit-out field; TestFlight keeps those until about
+mid-December. Each build was exported from its commit with `jj file show` and run in a scratch
+copy. The fixed build is `358d7a27`.
+
+| Check | Builds | Result |
+|-------|--------|--------|
+| **Log handoff**: fixed records 15 rounds (redraw in round 10) → old folds, draws round 16 and redraws it → fixed folds, draws 17–21 and redraws → old folds | `890e0c52`, `14f7a2c9` (1.2), `576fb358`, `86ffb741`, `bb79ccac`, `c51a2cab`, `1125959d`, `eb775886` (oldest CI) | pass. 0 differing rounds at every fold, Americano and Mexicano. The whole decoded `SessionState` was equal each time. |
+| **Pre-field build**: build 50 folds the fixed log | `f55d3630` | Differs from round 6 (9/15 Americano, 10/15 Mexicano). It differs just as much from today's `main` (10/15 each). This build already disagreed with `main`, and the fix doesn't make it worse. |
+| **Live sync over the real protocol**: two processes, each a real `MatchStore` whose loopback end is bridged through files (live sends with replies, queue, snapshots). New draws 1–8 and redraws, old draws 9–10 and redraws, new draws 11, then both tap at once for rounds 12–16. | `890e0c52`, `86ffb741`, `eb775886`; Americano and Mexicano | pass, 6/6. Identical event sets and rounds on both sides, with two draw events per raced round, including races where the fixed build carried a bench and the old one didn't. |
+| **Determinism across processes**: the same tournament recorded in 3 processes, each with its own hash seed | fixed | pass. Identical draws and identical carried benches, order included, in 16 draw events per format, 7 carrying a bench. |
+
+- **32-bit watch:** still not run on hardware. Code review of the new path finds no
+  `Int`-width dependence:
+  - every random draw goes through `SeededGenerator` (`UInt64`);
+  - sorts use a total order with an index tiebreak;
+  - there is no dictionary or set iteration;
+  - all `Int` values stay below 2³¹ (the budget is 200 000, and the `Int.max` sentinel is
+    overwritten before any arithmetic).
+- **Harness note:** in one Mexicano live run, a side saw the other's draw before tapping and
+  drew an extra round, giving 18 rounds instead of 16. Both sides still held identical logs.
+  That is the test's timing, not a disagreement.
