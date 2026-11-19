@@ -90,8 +90,10 @@ private enum OlderEventKind: Codable, Equatable {
 
 @Suite("Mixing who sits out together")
 struct MixedBenchTests {
+    /// Mexicano mixes who sits out together. Americano gives that up where it has to, to keep
+    /// anybody from partnering twice in a turn (`PartnerTurnTests`).
     @Test func tenPlayersNeverSitOutWithTheSamePlayerTwice() throws {
-        let played = try #require(tournament(drawing(log(), rounds: 15)))
+        let played = try #require(tournament(drawing(log(.mexicano), rounds: 15, settling: true)))
         #expect(benches(played).allSatisfy { $0.count == 2 })
         #expect(repeatedPairs(played) == 0, "\(benches(played).map { $0.compactMap { played.player($0)?.name }.sorted() })")
         #expect(gaps(played).allSatisfy { $0 >= 4 }, "\(gaps(played))")
@@ -116,16 +118,20 @@ struct MixedBenchTests {
         let bench = players - courts * 4
         let rotation = (players + bench - 1) / bench
         for seed in 1 ... 8 {
-            let played = try #require(tournament(drawing(log(players: players, courts: courts, seed: seed), rounds: rounds)))
-            #expect(evenAfterEveryRound(played), "seed \(seed)")
-            #expect(gaps(played).allSatisfy { $0 >= max(2, rotation - 1) }, "seed \(seed): \(gaps(played))")
+            let mexicano = try #require(tournament(drawing(log(.mexicano, players: players, courts: courts, seed: seed), rounds: rounds, settling: true)))
+            #expect(evenAfterEveryRound(mexicano), "seed \(seed)")
+            #expect(gaps(mexicano).allSatisfy { $0 >= max(2, rotation - 1) }, "seed \(seed): \(gaps(mexicano))")
+
+            let americano = try #require(tournament(drawing(log(players: players, courts: courts, seed: seed), rounds: rounds)))
+            #expect(evenAfterEveryRound(americano), "seed \(seed)")
+            #expect(gaps(americano).allSatisfy { $0 >= 2 }, "seed \(seed): nobody two rounds running, \(gaps(americano))")
         }
     }
 
     @Test(arguments: [(10, 2, 15), (14, 3, 21)])
     func pairsDoNotRepeatWhileFreshOnesAreLeft(players: Int, courts: Int, rounds: Int) throws {
         for seed in 1 ... 8 {
-            let played = try #require(tournament(drawing(log(players: players, courts: courts, seed: seed), rounds: rounds)))
+            let played = try #require(tournament(drawing(log(.mexicano, players: players, courts: courts, seed: seed), rounds: rounds, settling: true)))
             #expect(repeatedPairs(played) == 0, "seed \(seed)")
         }
     }

@@ -114,30 +114,37 @@ and both turn up again on the result screen and in History.
 either ends when both scores together reach the target — so every court finishes at the
 same time — or when one team reaches it on its own; that is a setting.
 
-Americano builds each round so everyone partners everyone, avoiding repeat partners and
-repeat opponents. Mexicano re-ranks after every round and puts the top four on court 1,
-paired 1+4 vs 2+3. The device that draws a Mexicano round works it out from the table, and
-the draw carries who it put where, so a point or a correction that turns up late — two
-devices taking a court's last point at once, say — can change the table but never a round
-people have walked onto. Player counts that are not a multiple of four rotate sit-outs by
-whoever has sat out least, and of those mix who sits out together, so the same people are
-not benched side by side rotation after rotation; the gap between anyone's sit-outs is at
-most a round shorter than a full turn of the bench. The device that draws picks the bench
-and the draw carries it, so a phone or watch on an older version benches the same players.
-Benched players score a configurable number of points (half the target by default). Until
-the first point of a round, who sits it out can be changed on the phone — for whoever is
-late — and the round is drawn again around the pick. A picked sit-out counts like any other,
-so whoever it spared is next in line.
+Americano builds each round so everyone partners everyone. Wherever somebody sits out,
+nobody partners the same player twice before everyone has partnered everyone: the device
+that draws plans who sits out for the rest of that turn so that each round's teams come out
+fresh, and past the first turn nobody partners anyone a third time before everyone has
+twice, nor last round's partner again. With nobody sitting out (8, 12 or 16 players) there
+is no bench to plan with, and the draw only avoids repeat partners and repeat opponents
+round by round. Mexicano re-ranks after every round and puts the top four on court 1, paired
+1+4 vs 2+3. The device that draws a Mexicano round works it out from the table, and the draw
+carries who it put where, so a point or a correction that turns up late — two devices taking
+a court's last point at once, say — can change the table but never a round people have
+walked onto. Player counts that are not a multiple of four rotate sit-outs by whoever has
+sat out least, and nobody sits out two rounds running unless a turn without a repeated
+partner can't be had otherwise. Mexicano also mixes who sits out together, so the same
+people are not benched side by side rotation after rotation, and the gap between anyone's
+sit-outs is at most a round shorter than a full turn of the bench; Americano gives some of
+that up where it has to for the partners. The device that draws picks the bench and the draw
+carries it, so a phone or watch on an older version benches the same players and draws the
+same teams. Benched players score a configurable number of points (half the target by
+default). Until the first point of a round, who sits it out can be changed on the phone —
+for whoever is late — and the round is drawn again around the pick. A picked sit-out counts
+like any other, so whoever it spared is next in line.
 
 A tournament plays on until it is finished, unless setup gives it a **Length**: a number of
 rounds, or — in Americano — a full rotation, which runs until everybody has partnered
 everybody. A cancelled round does not count towards either. The courts screen says how far
 along it is, and once the last planned round is played out the phone that may finish asks,
-once, whether to finish or play another round. Nothing finishes by itself and there is always
-another round; past the plan, Finish tournament moves to the top. A full rotation takes at
-least as many rounds as the partnerships allow — 7 for 8 players on 2 courts — and the draw,
-picking one round at a time, sometimes needs one more; with players sitting out it can take
-several more.
+once, whether to finish or play another round. Nothing finishes by itself and there is
+always another round; past the plan, Finish tournament moves to the top. A full rotation
+takes at least as many rounds as the partnerships allow — 7 for 8 players on 2 courts. With
+players sitting out the draw plans the turn and finishes it in exactly that many; with
+nobody sitting out it picks one round at a time and sometimes needs one more.
 
 On the phone, the court list is the main tournament screen: every court with its score,
 plus standings and round history. Scores can be tapped in point by point, typed, nudged

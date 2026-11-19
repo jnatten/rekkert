@@ -90,7 +90,7 @@ struct SitOutPickerView: View {
             if count == 1 {
                 Text("One player sits out. The courts are drawn again around whoever you pick.")
             } else {
-                Text("\(count) sit out. Any you leave open are chosen fairly: whoever has sat out least, mixing who sits out together. The courts are drawn again around them.")
+                Text("\(count) sit out. Any you leave open are chosen fairly: whoever has sat out least, never anyone two rounds running where it can be helped, and in Americano so nobody gets a partner twice. The courts are drawn again around them.")
             }
         }
     }

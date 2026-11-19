@@ -389,7 +389,8 @@ struct SyncTests {
     }
 
     /// Ten players on two courts, drawn on the phone and now and then on the watch: the bench
-    /// each draw carries lands on both, and nobody sits out with the same player twice.
+    /// each draw carries lands on both, nobody partners anybody twice in the eleven rounds of a
+    /// turn, and nobody sits out two rounds running.
     @Test func theBenchADrawCarriesLandsOnBothDevices() async throws {
         let tournament = Tournament(
             name: "Thursday",
@@ -416,7 +417,9 @@ struct SyncTests {
         }
         #expect(played.rounds.count == 15)
         #expect(pair.phone.state == pair.watch.state)
-        #expect(Set(played.rounds.map { Set($0.sitOuts) }).count == 15, "fifteen different pairs on the bench")
+        let partners = played.rounds.prefix(11).flatMap { round in round.matches.flatMap { [Set($0.teams.a), Set($0.teams.b)] } }
+        #expect(Set(partners).count == partners.count, "no partners twice in the turn")
+        #expect(zip(played.rounds.dropFirst(), played.rounds).allSatisfy { Set($0.sitOuts).isDisjoint(with: $1.sitOuts) })
     }
 
     /// The phone confirms the round and draws straight after: the round it carries is drawn

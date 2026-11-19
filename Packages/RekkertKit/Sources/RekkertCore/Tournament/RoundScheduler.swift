@@ -191,6 +191,119 @@ enum RoundScheduler {
         return benchFirst.filter(picked.contains)
     }
 
+    /// Americano's benches from this round to the end of the turn, planned for the partners they
+    /// leave (bug americano-partner-repeats). Older builds work out a round's teams themselves
+    /// from its bench and never take them from the draw, so the bench is the one thing that can
+    /// steer them: each round's teams are drawn here exactly as every build will draw them, from
+    /// that round's seeded order less the bench, and a bench whose teams would pair anybody again
+    /// is passed over. The turn is as many rounds as the pairs not yet partnered as often as the
+    /// rest can fill, so past the first turn nobody partners a third time before everyone has
+    /// twice, and never with last round's partner. Benches are tried as sit-outs prefer them:
+    /// fewest sit-outs, then the spread `mixedBench` keeps, from the first few hundred a round
+    /// allows; nobody sits out two rounds running unless no turn can be found without. Each
+    /// pass stops after a fixed amount of work, the same on every device; short of a whole turn
+    /// it keeps the plan that got furthest, and with not even one round it takes the bench whose
+    /// teams repeat least, never last round's partners where it can help it.
+    static func plannedTurn(
+        players: [Player], courts: Int, seed: UUID, round first: Int, history: PairingHistory,
+        chosen: [PlayerID] = []
+    ) -> [[PlayerID]] {
+        let ids = players.map(\.id)
+        let size = ids.count - courts * 4
+        guard size > 0, courts >= 1 else { return [] }
+
+        var least = Int.max
+        for (index, one) in ids.enumerated() {
+            for two in ids[(index + 1)...] { least = min(least, history.partnerCount(one, two)) }
+        }
+        let cap = least + 1
+        var open = 0
+        for (index, one) in ids.enumerated() {
+            for two in ids[(index + 1)...] where history.partnerCount(one, two) < cap { open += 1 }
+        }
+        let horizon = open / (courts * 2)
+        let orders = (0 ..< max(horizon, 1)).map { offset in
+            var generator = SeededGenerator(seed, salt: UInt64(first + offset))
+            return ids.shuffled(seededBy: &generator)
+        }
+        let gap = max(2, (ids.count + size - 1) / size - 1)
+
+        let weighing = size * (size + 1) / 2
+        let drawing = courts * courts * 100
+        var budget = 200_000
+        func benches(_ depth: Int, _ history: PairingHistory, _ chosen: Set<PlayerID>, twiceRunning: Bool) -> [[PlayerID]] {
+            let due = { (id: PlayerID) in
+                BenchDue(notChosen: chosen.contains(id) ? 0 : 1, sitOuts: history.sitOutCount(id), rested: 0)
+            }
+            let spread = BenchSpread(history: history, gap: gap)
+            var found: [(key: (Int, Int, Int, Int), bench: [PlayerID])] = []
+            forEachBench(of: ordered(orders[depth], by: due) { _ in 0 }, size: size, due: due) { bench in
+                budget -= weighing
+                let again = bench.count { !chosen.contains($0) && history.lastSitOut($0) == history.recorded - 1 }
+                if twiceRunning || again == 0 {
+                    let cost = spread.cost(of: bench)
+                    found.append(((again, cost.short, cost.together, found.count), bench))
+                }
+                return found.count < 300 && budget > 0
+            }
+            return found.sorted { $0.key < $1.key }.map(\.bench)
+        }
+        func draw(_ depth: Int, _ bench: [PlayerID], _ history: PairingHistory) -> [BySide<[PlayerID]>] {
+            budget -= drawing
+            let benched = Set(bench)
+            return PairingSearch.teams(from: orders[depth].filter { !benched.contains($0) }, courts: courts, history: history)
+        }
+        func partners(_ teams: [BySide<[PlayerID]>]) -> [(PlayerID, PlayerID)] {
+            teams.flatMap { match in TeamSide.allCases.map { (match[$0][0], match[$0][1]) } }
+        }
+
+        var path: [[PlayerID]] = []
+        var furthest: [[PlayerID]] = []
+        func search(_ depth: Int, _ history: PairingHistory, _ chosen: Set<PlayerID>, twiceRunning: Bool) -> Bool {
+            if depth == horizon { return true }
+            for bench in benches(depth, history, chosen, twiceRunning: twiceRunning) {
+                guard budget > 0 else { return false }
+                let teams = draw(depth, bench, history)
+                let fresh = partners(teams).allSatisfy { pair in
+                    history.partnerCount(pair.0, pair.1) < cap && !history.partneredLastRound(pair.0, pair.1)
+                }
+                guard fresh else { continue }
+                var next = history
+                next.record(teams, sitOuts: bench)
+                path.append(bench)
+                if path.count > furthest.count { furthest = path }
+                if search(depth + 1, next, [], twiceRunning: twiceRunning) { return true }
+                path.removeLast()
+            }
+            return false
+        }
+        if horizon > 0 {
+            if search(0, history, Set(chosen), twiceRunning: false) { return path }
+            let kept = furthest
+            budget = 100_000
+            path = []
+            furthest = []
+            if search(0, history, Set(chosen), twiceRunning: true) { return path }
+            if kept.count >= furthest.count, !kept.isEmpty { return kept }
+            if !furthest.isEmpty { return furthest }
+        }
+
+        budget = 50_000
+        var best: (key: (Int, Int, Int, Int, Int), bench: [PlayerID])?
+        for (index, bench) in benches(0, history, Set(chosen), twiceRunning: true).enumerated() where best == nil || budget > 0 {
+            let again = bench.count { !chosen.contains($0) && history.lastSitOut($0) == history.recorded - 1 }
+            var key = (0, 0, again, 0, index)
+            for pair in partners(draw(0, bench, history)) {
+                let count = history.partnerCount(pair.0, pair.1)
+                if history.partneredLastRound(pair.0, pair.1) { key.0 += 1 }
+                if count >= cap { key.1 += 1 }
+                key.3 += count
+            }
+            if best == nil || key < best!.key { best = (key, bench) }
+        }
+        return best.map { [$0.bench] } ?? []
+    }
+
     private static func ordered(_ ids: [PlayerID], by due: (PlayerID) -> BenchDue, rested: (PlayerID) -> Int) -> [PlayerID] {
         ids.enumerated()
             .sorted { (due($0.element), rested($0.element), $0.offset) < (due($1.element), rested($1.element), $1.offset) }
@@ -467,15 +580,22 @@ public enum TournamentEngine {
     }
 
     /// Who sits out the next round, or with `redrawing` the round in play drawn again: `picked`
-    /// first, the rest as evenly as ever while mixing who sits out together. A ladder's bench is
-    /// drawn as it always is. Nil when the round cannot be drawn.
+    /// first, the rest as evenly as ever. Americano plans them so nobody partners anybody twice
+    /// in a turn, and Mexicano mixes who sits out together. A ladder's bench is drawn as it
+    /// always is. Nil when the round cannot be drawn.
     public static func bench(for tournament: Tournament, picked: [PlayerID] = [], redrawing: Bool = false) -> [PlayerID]? {
         var base = tournament
         if redrawing { _ = base.rounds.popLast() }
         switch base.format {
         case .winnerCourt:
             return (try? appendingRound(to: base, sitOuts: picked.isEmpty ? nil : picked))?.currentRound?.sitOuts
-        case .americano, .mexicano:
+        case .americano:
+            guard base.playableCourts >= 1, let chosen = try? RoundScheduler.chosen(picked, in: base) else { return nil }
+            return RoundScheduler.plannedTurn(
+                players: base.players, courts: base.playableCourts, seed: base.id.raw, round: base.rounds.count,
+                history: PairingHistory(base), chosen: chosen
+            ).first ?? []
+        case .mexicano:
             guard base.playableCourts >= 1, let chosen = try? RoundScheduler.chosen(picked, in: base) else { return nil }
             var generator = SeededGenerator(base.id.raw, salt: UInt64(base.rounds.count))
             return RoundScheduler.mixedBench(
