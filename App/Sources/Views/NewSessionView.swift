@@ -105,6 +105,7 @@ struct NewSessionView: View {
     @State private var players: [Player] = (0 ..< 4).map { _ in Player(name: "") }
     @State private var friendlyID = FriendlyID()
     @State private var pairingRules: [PairingRule] = []
+    @State private var editingRule: PairingRuleEdit?
     @State private var warmup = false
     @FocusState private var focused: Field?
 
@@ -137,6 +138,10 @@ struct NewSessionView: View {
             }
             .navigationTitle(mode.title)
             .navigationBarTitleDisplayMode(.inline)
+            .pairingRuleSheet($editingRule, rules: $pairingRules, players: namedPlayers)
+            .onChange(of: namedPlayers.map(\.id)) { _, ids in
+                pairingRules = pairingRules.pruned(to: ids)
+            }
             .stepOffConfirmation(isPresented: $confirmingStepOff) { start() }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -598,15 +603,12 @@ struct NewSessionView: View {
         playersSection(footer: friendlyFooter)
 
         PairingRulesSection(
-            rules: $pairingRules, players: namedPlayers,
+            rules: $pairingRules, editing: $editingRule, players: namedPlayers,
             forecast: FriendlySession(
                 id: friendlyID, name: sessionName, rules: rules, players: namedPlayers,
                 pairingRules: pairingRules.pruned(to: namedPlayers.map(\.id))
             ).forecast()
         )
-            .onChange(of: namedPlayers.map(\.id)) { _, ids in
-                pairingRules = pairingRules.pruned(to: ids)
-            }
 
         sportSection
         scoringSection

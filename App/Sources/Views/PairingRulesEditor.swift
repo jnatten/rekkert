@@ -3,11 +3,11 @@ import SwiftUI
 
 struct PairingRulesSection: View {
     @Binding var rules: [PairingRule]
+    @Binding var editing: PairingRuleEdit?
     let players: [Player]
     var forecast: PairingForecast?
     var kinds: [PairingRule.Kind] = [.apart, .together]
     var notes: [String] = []
-    @State private var editing: EditedRule?
 
     private var session: FriendlySession { FriendlySession(players: players, pairingRules: rules) }
 
@@ -15,7 +15,7 @@ struct PairingRulesSection: View {
         Section {
             if players.count >= 4 {
                 ForEach(rules) { rule in
-                    Button { editing = EditedRule(kind: rule.kind, rule: rule) } label: {
+                    Button { editing = PairingRuleEdit(kind: rule.kind, rule: rule) } label: {
                         HStack {
                             Text(PairingText.rule(rule, in: session))
                             Spacer()
@@ -31,35 +31,16 @@ struct PairingRulesSection: View {
                 .onDelete { rules.remove(atOffsets: $0) }
 
                 if kinds.contains(.apart) {
-                    Button("Keep players apart…", systemImage: "person.2.slash") { editing = EditedRule(kind: .apart) }
+                    Button("Keep players apart…", systemImage: "person.2.slash") { editing = PairingRuleEdit(kind: .apart) }
                 }
                 if kinds.contains(.together) {
-                    Button("Keep two together…", systemImage: "person.2") { editing = EditedRule(kind: .together) }
+                    Button("Keep two together…", systemImage: "person.2") { editing = PairingRuleEdit(kind: .together) }
                 }
             }
         } header: {
             Text("Pairing")
         } footer: {
             footer
-        }
-        .task {
-            #if DEBUG
-            if let kind = DemoLaunch.ruleSheet.flatMap(PairingRule.Kind.init(rawValue:)) {
-                editing = EditedRule(kind: kind, rule: rules.first { $0.kind == kind })
-            }
-            #endif
-        }
-        .sheet(item: $editing) { edited in
-            PairingRuleSheet(
-                kind: edited.kind, players: players, original: edited.rule,
-                others: rules.filter { $0.id != edited.rule?.id }
-            ) { saved in
-                if let index = rules.firstIndex(where: { $0.id == saved.id }) {
-                    rules[index] = saved
-                } else {
-                    rules.append(saved)
-                }
-            }
         }
     }
 
@@ -79,10 +60,49 @@ struct PairingRulesSection: View {
     private var clashing: Set<UUID> { Set(rules.conflicts.flatMap(\.rules)) }
 }
 
-private struct EditedRule: Identifiable {
+struct PairingRuleEdit: Identifiable {
     let id = UUID()
     var kind: PairingRule.Kind
     var rule: PairingRule?
+}
+
+extension View {
+    /// Goes on the Form, never on the Section: a Section hands its modifiers to every row, and
+    /// one sheet per row means a tap opens several, which throws away the screen underneath.
+    func pairingRuleSheet(
+        _ editing: Binding<PairingRuleEdit?>, rules: Binding<[PairingRule]>, players: [Player]
+    ) -> some View {
+        modifier(PairingRuleSheetPresenter(editing: editing, rules: rules, players: players))
+    }
+}
+
+private struct PairingRuleSheetPresenter: ViewModifier {
+    @Binding var editing: PairingRuleEdit?
+    @Binding var rules: [PairingRule]
+    let players: [Player]
+
+    func body(content: Content) -> some View {
+        content
+            .task {
+                #if DEBUG
+                if let kind = DemoLaunch.ruleSheet.flatMap(PairingRule.Kind.init(rawValue:)) {
+                    editing = PairingRuleEdit(kind: kind, rule: rules.first { $0.kind == kind })
+                }
+                #endif
+            }
+            .sheet(item: $editing) { edited in
+                PairingRuleSheet(
+                    kind: edited.kind, players: players, original: edited.rule,
+                    others: rules.filter { $0.id != edited.rule?.id }
+                ) { saved in
+                    if let index = rules.firstIndex(where: { $0.id == saved.id }) {
+                        rules[index] = saved
+                    } else {
+                        rules.append(saved)
+                    }
+                }
+            }
+    }
 }
 
 struct PairingRuleSheet: View {
@@ -174,6 +194,7 @@ struct PairingRulesSheet: View {
     @Environment(\.dismiss) private var dismiss
     let session: FriendlySession
     @State private var rules: [PairingRule]
+    @State private var editing: PairingRuleEdit?
 
     init(session: FriendlySession) {
         self.session = session
@@ -198,8 +219,11 @@ struct PairingRulesSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                PairingRulesSection(rules: $rules, players: session.players, forecast: edited.forecast(), notes: notes)
+                PairingRulesSection(
+                    rules: $rules, editing: $editing, players: session.players, forecast: edited.forecast(), notes: notes
+                )
             }
+            .pairingRuleSheet($editing, rules: $rules, players: session.players)
             .navigationTitle("Pairing rules")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

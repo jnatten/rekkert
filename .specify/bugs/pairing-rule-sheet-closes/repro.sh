@@ -41,9 +41,10 @@ check() {
     --predicate 'process == "Rekkert" AND subsystem == "com.apple.UIKit"' >"$OUT/$name.log" 2>&1 &
   local logger=$!
   sleep 2
-  if ! axe tap --label "$tap" --element-type Button --wait-timeout 5 --udid "$UDID" >/dev/null 2>&1; then
+  local tapped
+  if ! tapped=$(axe tap --label "$tap" --element-type Button --wait-timeout 20 --udid "$UDID" 2>&1); then
     kill "$logger"
-    echo "SKIP $name: no \"$tap\" button on screen"
+    echo "SKIP $name: no \"$tap\" button on screen ($(echo "$tapped" | tail -1))"
     failures=$((failures + 1))
     return
   fi

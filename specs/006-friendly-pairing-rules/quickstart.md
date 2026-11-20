@@ -131,6 +131,10 @@ These flags exist in debug builds only:
 Add `-rekkert-demo-portrait` if the last run left the simulator on its side. Reinstall the app
 before each launch, as `scripts/shots.sh` does, so no earlier session is restored instead.
 
+A flag puts a sheet up without the tap that opens it, so it cannot show a sheet that closes as
+soon as it is tapped open. Tap the rule sheet open too, from setup and from the match menu, with
+`.specify/bugs/pairing-rule-sheet-closes/repro.sh <udid> <Rekkert.app>`. Every case must pass.
+
 Then, by hand, against [contracts/screens.md](contracts/screens.md):
 
 1. Start a new friendly with Ada, Bob, Cy and Dan.
