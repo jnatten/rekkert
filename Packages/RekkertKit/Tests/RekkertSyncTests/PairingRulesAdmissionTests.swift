@@ -91,7 +91,7 @@ struct PairingRulesAdmissionTests {
         watch.store.speaksProtocol = 2
         await court.run(for: .seconds(2))
         court.startFriendly(rules: firstTwoApart)
-        #expect(await court.until(within: .seconds(5)) { phone.store.pairNeedsUpdateForRules })
+        #expect(await court.until(within: .seconds(5)) { phone.store.pairNeedsUpdate })
         for _ in 0 ..< 3 {
             court.playFriendlyRound(on: phone)
             await court.run(for: .seconds(2))
@@ -100,7 +100,7 @@ struct PairingRulesAdmissionTests {
 
         court.endApp(phone)
         court.relaunch(phone)
-        #expect(phone.store.pairNeedsUpdateForRules, "remembered from before, without waiting for the watch")
+        #expect(phone.store.pairNeedsUpdate, "remembered from before, without waiting for the watch")
         court.playFriendlyRound(on: phone)
         await court.run(for: .seconds(5))
         #expect(!holdsRules(watch, in: court))
@@ -119,7 +119,7 @@ struct PairingRulesAdmissionTests {
                 court.friendly(on: watch)?.rounds.count == court.friendly(on: phone)?.rounds.count
             })
         }
-        #expect(!phone.store.pairNeedsUpdateForRules)
+        #expect(!phone.store.pairNeedsUpdate)
     }
 
     @Test func theWatchCatchesUpOnceUpdated() async {
@@ -130,14 +130,14 @@ struct PairingRulesAdmissionTests {
         await court.run(for: .seconds(2))
         court.startFriendly(rules: firstTwoApart)
         court.playFriendlyRound(on: phone)
-        #expect(await court.until(within: .seconds(5)) { phone.store.pairNeedsUpdateForRules })
+        #expect(await court.until(within: .seconds(5)) { phone.store.pairNeedsUpdate })
 
         court.endApp(watch)
         court.relaunch(watch)
         #expect(await court.until(within: .seconds(10)) {
             holdsRules(watch, in: court) && court.friendly(on: watch)?.rounds == court.friendly(on: phone)?.rounds
         })
-        #expect(!phone.store.pairNeedsUpdateForRules)
+        #expect(!phone.store.pairNeedsUpdate)
     }
 
     @Test func rulesAddedMidMatchTakeOlderGuestsOff() async {
@@ -148,11 +148,11 @@ struct PairingRulesAdmissionTests {
         court.share()
         court.join(guest)
         #expect(await court.until(within: .seconds(30)) { court.allInStep(includingWatches: false) })
-        #expect(court.host.phone.store.olderGuestsTurnedAwayByRules == 1)
+        #expect(court.host.phone.store.olderPeersTurnedAway(ifNeeding: 3) == 1)
 
         let players = court.friendly(on: court.host.phone)!.players
         court.host.phone.store.setPairingRules(firstTwoApart(players))
         #expect(await court.until(within: .seconds(15)) { guest.phone.sharing.phase == .failed(.needsUpdate) })
-        #expect(court.host.phone.store.olderGuestsTurnedAwayByRules == 0)
+        #expect(court.host.phone.store.olderPeersTurnedAway(ifNeeding: 3) == 0)
     }
 }

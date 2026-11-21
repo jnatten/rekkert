@@ -279,9 +279,9 @@ public enum Wire: Codable, Sendable, Hashable {
     /// D-2). Sent only to devices whose hello carried a `protocol`.
     case clock(reading: Date? = nil)
 
-    /// The sharing protocol this build speaks: 3 from spec 006 (pairing rules), 2 from spec 005,
-    /// absent (1) before it.
-    public static let sharingProtocol = 3
+    /// The sharing protocol this build speaks: 4 from spec 008 (leaving early), 3 from spec 006
+    /// (pairing rules), 2 from spec 005, absent (1) before it.
+    public static let sharingProtocol = 4
 
     public func encoded() throws -> Data {
         try JSONCoding.encoder.encode(self)

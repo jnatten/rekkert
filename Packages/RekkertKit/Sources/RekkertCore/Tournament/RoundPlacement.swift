@@ -13,18 +13,24 @@ public struct RoundPlacement: Codable, Sendable, Hashable {
         sitOuts = round.sitOuts
     }
 
-    /// The round as placed, as long as it places this tournament's players, each of them
-    /// once, two a side on as many courts as can be played.
+    /// The round as placed, as long as it places everybody here for it, each of them once and
+    /// nobody from outside the tournament, two a side on as many courts as those it places can
+    /// fill. It may place somebody who has left: a draw made before their leaving reached the
+    /// device that drew it stands as people walked onto it (spec 008, D-5). Somebody who has
+    /// left is no longer on its bench, so they earn nothing for it.
     func round(for tournament: Tournament) -> Round? {
-        let everyone = Set(tournament.players.map(\.id))
+        let index = tournament.rounds.count
+        let roster = Set(tournament.players.map(\.id))
+        let here = Set(tournament.present(inRound: index).map(\.id))
         let placed = courts.flatMap { $0.a + $0.b } + sitOuts
-        guard courts.count == tournament.playableCourts,
+        let placedOnce = Set(placed)
+        guard placed.count == placedOnce.count, placedOnce.isSubset(of: roster), here.isSubset(of: placedOnce),
               courts.allSatisfy({ $0.a.count == 2 && $0.b.count == 2 }),
-              placed.count == everyone.count, Set(placed) == everyone else { return nil }
+              courts.count == min(tournament.config.courtCount, placed.count / 4) else { return nil }
         let matches = courts.enumerated().map { court, teams in
             CourtMatch(courtIndex: court, teams: teams, games: tournament.isLadder ? TraditionalState() : nil)
         }
-        return Round(index: tournament.rounds.count, matches: matches, sitOuts: sitOuts)
+        return Round(index: index, matches: matches, sitOuts: sitOuts.filter(here.contains))
     }
 
     public init(_ round: FriendlyRound) {

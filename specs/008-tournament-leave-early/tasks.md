@@ -88,24 +88,24 @@ devices are kept off once one exists. Every story needs all of this before it ca
 
 ### Tests for the foundation ⚠️ (write first; they must fail)
 
-- [ ] T004 [P] Add `startTournament(format:players:courts:absences:)` and `playTournamentRound(on:)` to `SyncTests/CourtHarness.swift`, beside `startFriendly`:
+- [X] T004 [P] Add `startTournament(format:players:courts:absences:)` and `playTournamentRound(on:)` to `SyncTests/CourtHarness.swift`, beside `startFriendly`:
   - **Start.** `host.phone.store.configure(.tournament(Tournament(format:, players:, config: TournamentConfig(courtCount:), absences:)))`, then `nextRound()`.
   - **One round.** Score each court of the last round to the target on `.a` with `setScore`, then `nextRound()` on the given device.
   - `tournament(on:)` returns the device's `Tournament`.
 
   Until T008 adds `absences`, keep that parameter out of the call.
-- [ ] T005 [P] Extend `CoreTests/WireCompatibilityTests.swift`. Each fails today:
+- [X] T005 [P] Extend `CoreTests/WireCompatibilityTests.swift`. Each fails today:
   - `aTournamentNobodyLeftHasNoAbsencesKey`: encoding `makeTournament` gives JSON with no `"absences"` key.
   - `absencesRoundTrip`: a tournament with one closed and one open absence survives encode and decode.
   - `setAwayRoundTrips`: `MatchEvent` with `.setAway(player:isAway:after:placed:)` survives encode and decode, with and without `placed`.
   - `anOlderDecoderReadsSetAwayAsUnrecognised`: the event's JSON with its kind renamed to one this build doesn't know decodes as `.unrecognised` and re-encodes unchanged. Use the pattern the suite already uses for unknown kinds.
   - `americanoDrawsCarryPlacement`: `TournamentEngine.placement(of:)` is non-nil for an Americano, and its round equals `appendingRound`'s.
-- [ ] T006 [P] Write `CoreTests/AbsencePlacementTests.swift` (`@Suite("A carried draw stands")`) for D-5. Each fails today:
+- [X] T006 [P] Write `CoreTests/AbsencePlacementTests.swift` (`@Suite("A carried draw stands")`) for D-5. Each fails today:
   - `americanoAdoptsAFittingPlacement`: an Americano `nextRound` folded with a `placed` differing from the recomputed round (two players swapped across a court) takes `placed`.
   - `aPlacementMayIncludeSomeoneAway`: a tournament whose `absences` marks P3 away from the next round adopts a placement that has P3 on court 1, and the round has P3 on court 1.
   - `awayPlayersOnAPlacedBenchGetNoCredit`: the same with P3 on the placement's bench. The round's `sitOuts` has no P3, and `Leaderboard` gives P3 no compensation for it.
   - `aPlacementMissingSomeonePresentIsRefused`: a placement that leaves out a present player is not adopted, and the round is drawn here.
-- [ ] T007 [P] Write `SyncTests/AbsenceAdmissionTests.swift` (`@Suite("Older builds and a tournament someone left", .serialized) @MainActor`), on T004's helpers and the protocol switch `PairingRulesAdmissionTests` uses to make a device speak an older protocol. Each fails today:
+- [X] T007 [P] Write `SyncTests/AbsenceAdmissionTests.swift` (`@Suite("Older builds and a tournament someone left", .serialized) @MainActor`), on T004's helpers and the protocol switch `PairingRulesAdmissionTests` uses to make a device speak an older protocol. Each fails today:
   - `aGuestOnProtocol3IsTurnedAwayWhenTheFirstAbsenceFolds`: the guest gets `needsUpdate` and its link is refused. The host records `.refused(.needsUpdate)`.
   - `aGuestOnProtocol3IsTurnedAwayAtHelloAfterward`.
   - `aWatchOnProtocol3IsHeldBack`: the host's watch receives nothing of the session, and `pairNeedsUpdate` is true.
@@ -115,34 +115,34 @@ devices are kept off once one exists. Every story needs all of this before it ca
 
 ### Implementation for the foundation
 
-- [ ] T008 Create `RekkertCore/Tournament/TournamentAbsence.swift` with `TournamentAbsence`, `AwayStretch` and `AwayPreview`, as in data-model.md:
+- [X] T008 Create `RekkertCore/Tournament/TournamentAbsence.swift` with `TournamentAbsence`, `AwayStretch` and `AwayPreview`, as in data-model.md:
   - `TournamentAbsence { player: PlayerID; from: Int; until: Int? }`, Codable, Sendable, Hashable. "When set, `until > from`."
   - `AwayStretch { firstMissed: Int; backFor: Int? }`, 1-based.
   - `AwayPreview` with every field in the data model.
-- [ ] T009 Add absences and presence to `RekkertCore/Tournament/Tournament.swift` (D-1):
+- [X] T009 Add absences and presence to `RekkertCore/Tournament/Tournament.swift` (D-1):
   - **The field.** `public var absences: [TournamentAbsence]`, defaulting to `[]` in `init`. In `CodingKeys` and `init(from:)`: "Decoded with `decodeIfPresent` (default `[]`), encoded only when not empty". Write a hand-written `encode(to:)` that skips the key when empty, like `Round.encode`.
   - **Presence.** `isPresent(_:inRound:)`, `present(inRound:)` (roster order), `presentPlayers` (`present(inRound: rounds.count)`), `isAway(_:)`, `hasAbsences`, `isShortOfPlayers`, and `awayPlayersOnCourt(inRound:)`, all as in data-model.md.
   - **Counts.** `playableCourts` and `benchSize` come from `presentPlayers.count`.
   - Keep the invariants in mind for T018. "A player has at most one open absence (`until == nil`)." "Their absences don't overlap, and are kept in the order they were folded."
   - T005's two absence tests pass, and the fingerprint stays green.
-- [ ] T010 Add `case setAway(player: PlayerID, isAway: Bool, after: Int, placed: RoundPlacement? = nil)` to `EventKind` in `RekkertCore/Sync/MatchEvent.swift` (D-2):
+- [X] T010 Add `case setAway(player: PlayerID, isAway: Bool, after: Int, placed: RoundPlacement? = nil)` to `EventKind` in `RekkertCore/Sync/MatchEvent.swift` (D-2):
   - add it to `isUndoable`'s `false` list, and to `payloadDate`'s nil list;
   - in `SessionReducer.swift`, add a `case .setAway: break` placeholder. US1 fills it in.
   - T005's event tests pass.
-- [ ] T011 Make carried draws stand (D-5):
+- [X] T011 Make carried draws stand (D-5):
   - **Americano placement.** In `RekkertCore/Tournament/RoundScheduler.swift`, `TournamentEngine.placement` returns a placement for `.americano` too, drawn the same way as for Mexicano.
   - **Adoption.** `appendingRound` adopts `placed?.round(for:)` for Americano before falling back to `AmericanoScheduler`.
   - **The fit.** In `RekkertCore/Tournament/RoundPlacement.swift`, relax `round(for:)` to the rule in contracts/engine-api.md, and drop away players from the returned round's `sitOuts`.
   - **Done when** T006 and T005's placement test pass, and the fingerprint, `SeededDrawTests`, `PartnerTurnTests` and `MixedBenchTests` stay green.
-- [ ] T012 Raise the protocol and say what a state needs (D-9):
+- [X] T012 Raise the protocol and say what a state needs (D-9):
   - in `RekkertCore/Sync/Wire.swift`, `sharingProtocol = 4`, with the doc comment "4 from spec 008 (leaving early)";
   - in `RekkertCore/Sync/SessionModel.swift`, `SessionState.sharingProtocolNeeded`: 3 for `.friendly` with non-empty `activeRules`, 4 for `.tournament` with `hasAbsences`, 1 otherwise.
-- [ ] T013 Generalise the older-build gate in `RekkertSync/MatchStore.swift` (D-9, D-10):
+- [X] T013 Generalise the older-build gate in `RekkertSync/MatchStore.swift` (D-9, D-10):
   - **The question.** Replace `hasActiveRules(_:)` and `pairingRulesProtocol` comparisons with `state?.sharingProtocolNeeded`. Turning away at hello, turning away when the need rises (not only when rules appear), the refusal kinds and `updatePairHold` all compare a peer's protocol against it.
   - **Renames.** `pairNeedsUpdateForRules` → `pairNeedsUpdate`, and `olderGuestsTurnedAwayByRules` → `olderPeersTurnedAway(ifNeeding:)`. Keep `refusedForRules` working; rename it `refusedForNeed`.
   - **The action.** Add `canMarkAway` (contracts/engine-api.md). Add `setAway(_ player: PlayerID, isAway: Bool)`, guarded by it, recording `.setAway(player:isAway:after: rounds.count - 1, placed: nil)` for now. US2 adds the placement.
   - **Done when** T007 passes and `PairingRulesAdmissionTests` stays green.
-- [ ] T014 [P] Follow the renames in `App/Sources/Views/FriendlyMatchView.swift` (`pairNeedsUpdate`), `App/Sources/Views/PairingRulesEditor.swift` (`olderPeersTurnedAway(ifNeeding: 3)`) and `SyncTests/PairingRulesAdmissionTests.swift`. Change no behaviour.
+- [X] T014 [P] Follow the renames in `App/Sources/Views/FriendlyMatchView.swift` (`pairNeedsUpdate`), `App/Sources/Views/PairingRulesEditor.swift` (`olderPeersTurnedAway(ifNeeding: 3)`) and `SyncTests/PairingRulesAdmissionTests.swift`. Change no behaviour.
 
 **Checkpoint**: `swift test` is green, and so is the fingerprint. A tournament can hold absences,
 nobody older can follow one, and no carried draw can be re-partnered. Nothing yet creates an

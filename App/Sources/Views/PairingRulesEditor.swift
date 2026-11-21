@@ -210,7 +210,7 @@ struct PairingRulesSheet: View {
     private var notes: [String] {
         var notes = ["Changes apply from the next round. The round being played stays as it is."]
         if session.activeRules.isEmpty, !edited.activeRules.isEmpty,
-           let line = PairingText.turnedAway(model.store.olderGuestsTurnedAwayByRules) {
+           let line = PairingText.turnedAway(model.store.olderPeersTurnedAway(ifNeeding: 3)) {
             notes.append(line)
         }
         return notes

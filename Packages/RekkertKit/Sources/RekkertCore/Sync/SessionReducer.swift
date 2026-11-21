@@ -191,6 +191,9 @@ public enum SessionReducer {
             tournament.rounds[round].clock = clock
             state = .tournament(tournament)
 
+        case .setAway:
+            break
+
         case .finish:
             switch state {
             case .tournament(var tournament):

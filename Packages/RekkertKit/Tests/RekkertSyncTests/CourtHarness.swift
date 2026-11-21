@@ -703,3 +703,45 @@ extension CourtHarness {
         return session
     }
 }
+
+// MARK: - Tournaments
+
+extension CourtHarness {
+    /// Sets up an Americano or Mexicano on the host's phone and draws its first round, as
+    /// `NewSessionView` does. Players are named "P0"… in roster order; `away` names by index
+    /// whoever is to start the tournament with an absence already folded in.
+    func startTournament(
+        _ format: TournamentFormat = .americano,
+        players count: Int = 9,
+        courts: Int = 2,
+        away: [(player: Int, from: Int)] = []
+    ) {
+        let players = (0 ..< count).map { RekkertCore.Player(name: "P\($0)") }
+        host.phone.store.configure(.tournament(Tournament(
+            name: "Thursday", format: format, players: players,
+            config: TournamentConfig(courtCount: courts),
+            absences: away.map { TournamentAbsence(player: players[$0.player].id, from: $0.from) }
+        )))
+        host.phone.store.nextRound()
+    }
+
+    /// Every court of the round in play played out, then the next round drawn on `device`.
+    func playTournamentRound(on device: Device) {
+        guard let tournament = tournament(on: device), let round = tournament.currentRound else { return }
+        let target = tournament.config.pointRules.target
+        for match in round.matches {
+            device.store.setScore(round: round.index, court: match.courtIndex, points: BySide(a: target, b: 0))
+        }
+        device.store.nextRound()
+    }
+
+    func tournament(on device: Device) -> Tournament? {
+        guard case .tournament(let tournament)? = device.store.state else { return nil }
+        return tournament
+    }
+
+    /// The roster's id for "P\(index)" on the host's phone.
+    func tournamentPlayer(_ index: Int) -> PlayerID? {
+        tournament(on: host.phone)?.players.first { $0.name == "P\(index)" }?.id
+    }
+}

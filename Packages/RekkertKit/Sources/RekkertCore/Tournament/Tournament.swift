@@ -116,6 +116,9 @@ public struct Tournament: Codable, Sendable, Hashable {
     /// go on being drawn without it, or the rounds already played would be re-partnered.
     public var benchOrder: BenchOrder
     public var warmupStartedAt: Date?
+    /// Who has left and for which rounds, in the order they were folded (spec 008). Changed only
+    /// by `TournamentEngine.settingAway`, never by a correction.
+    public var absences: [TournamentAbsence]
 
     public init(
         id: TournamentID = TournamentID(),
@@ -126,7 +129,8 @@ public struct Tournament: Codable, Sendable, Hashable {
         rounds: [Round] = [],
         isFinished: Bool = false,
         benchOrder: BenchOrder = .longestRested,
-        warmupStartedAt: Date? = nil
+        warmupStartedAt: Date? = nil,
+        absences: [TournamentAbsence] = []
     ) {
         self.id = id
         self.name = name
@@ -137,10 +141,11 @@ public struct Tournament: Codable, Sendable, Hashable {
         self.isFinished = isFinished
         self.benchOrder = benchOrder
         self.warmupStartedAt = warmupStartedAt
+        self.absences = absences
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, format, players, config, rounds, isFinished, benchOrder, warmupStartedAt
+        case id, name, format, players, config, rounds, isFinished, benchOrder, warmupStartedAt, absences
     }
 
     public init(from decoder: any Decoder) throws {
@@ -154,6 +159,22 @@ public struct Tournament: Codable, Sendable, Hashable {
         isFinished = try container.decode(Bool.self, forKey: .isFinished)
         benchOrder = try container.decodeIfPresent(BenchOrder.self, forKey: .benchOrder) ?? .fewestSitOuts
         warmupStartedAt = try container.decodeIfPresent(Date.self, forKey: .warmupStartedAt)
+        absences = try container.decodeIfPresent([TournamentAbsence].self, forKey: .absences) ?? []
+    }
+
+    /// A tournament nobody left encodes exactly as it did before anyone could.
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(format, forKey: .format)
+        try container.encode(players, forKey: .players)
+        try container.encode(config, forKey: .config)
+        try container.encode(rounds, forKey: .rounds)
+        try container.encode(isFinished, forKey: .isFinished)
+        try container.encode(benchOrder, forKey: .benchOrder)
+        try container.encodeIfPresent(warmupStartedAt, forKey: .warmupStartedAt)
+        if !absences.isEmpty { try container.encode(absences, forKey: .absences) }
     }
 
     public var currentRound: Round? { rounds.last }
@@ -178,15 +199,45 @@ public struct Tournament: Codable, Sendable, Hashable {
         self.round(at: round)?.matches.first { $0.side(of: player) != nil }?.courtIndex
     }
 
-    /// Courts that can be filled this round, limited both by physical courts and by
-    /// having four players per court.
+    /// Courts the next round can fill, limited both by physical courts and by having four
+    /// players here per court. A redraw pops the round first, so it reads these for that round.
     public var playableCourts: Int {
-        min(config.courtCount, players.count / 4)
+        min(config.courtCount, presentPlayers.count / 4)
     }
 
-    /// How many sit out each round.
+    /// How many sit out the next round.
     public var benchSize: Int {
-        max(0, players.count - playableCourts * 4)
+        max(0, presentPlayers.count - playableCourts * 4)
+    }
+
+    public func isPresent(_ player: PlayerID, inRound index: Int) -> Bool {
+        !absences.contains { $0.player == player && $0.covers(round: index) }
+    }
+
+    /// The roster, in its order, less whoever is away for that round.
+    public func present(inRound index: Int) -> [Player] {
+        guard !absences.isEmpty else { return players }
+        return players.filter { isPresent($0.id, inRound: index) }
+    }
+
+    /// Who the next round is drawn for.
+    public var presentPlayers: [Player] { present(inRound: rounds.count) }
+
+    public func isAway(_ player: PlayerID) -> Bool {
+        absences.contains { $0.player == player && $0.until == nil }
+    }
+
+    public var hasAbsences: Bool { !absences.isEmpty }
+
+    /// An Americano or Mexicano that can't draw another round for want of four players here.
+    public var isShortOfPlayers: Bool {
+        !isLadder && !isFinished && presentPlayers.count < 4
+    }
+
+    /// Players away for that round whom a draw that raced their leaving put on one of its courts.
+    public func awayPlayersOnCourt(inRound index: Int) -> [PlayerID] {
+        guard let round = round(at: index) else { return [] }
+        return round.matches.flatMap(\.allPlayers).filter { !isPresent($0, inRound: index) }
     }
 
     /// Whether the round in play can still be drawn again around a different bench: nothing

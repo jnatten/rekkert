@@ -127,7 +127,7 @@ struct FriendlyMatchView: View {
     private func footer(_ session: FriendlySession) -> some View {
         if let round = session.currentRound {
             VStack(spacing: 10) {
-                if model.store.pairNeedsUpdateForRules {
+                if model.store.pairNeedsUpdate {
                     Label(PairingText.watchNeedsUpdate, systemImage: "applewatch.slash")
                         .font(.footnote)
                         .foregroundStyle(.secondary)

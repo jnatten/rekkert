@@ -54,6 +54,12 @@ public enum EventKind: Codable, Sendable, Hashable {
     /// A timed ladder round's countdown, paused, resumed or snoozed. The whole clock as the
     /// device that changed it worked it out, so two snoozes at once add their minutes once.
     case setRoundClock(round: Int, clock: RoundClock)
+    /// Marks a player of an Americano or Mexicano as gone, or back (spec 008). What it does is
+    /// decided by the round in play where it folds: `after` is the last round the device that
+    /// marked it held, and `placed` that device's redraw of it, taken only when it is still the
+    /// same round. Not undoable: bringing them back is the same event the other way round.
+    /// An older build reads it as `unrecognised`, which is why older builds are kept off.
+    case setAway(player: PlayerID, isAway: Bool, after: Int, placed: RoundPlacement? = nil)
     /// Ends the session. `archive` is false when it is being thrown away rather than kept,
     /// and travels with the event so the other device does not file it either.
     case finish(archive: Bool)
@@ -134,7 +140,7 @@ public struct MatchEvent: Codable, Sendable, Hashable, Identifiable {
         // A serve correction is its own undo — swapping again puts it back — and undo
         // should keep meaning "take back the last thing that changed the score".
         case .configure, .endWarmup, .restore, .undo, .chooseServeSide, .setFirstServer, .setServeOrder, .setRoundClock,
-             .unrecognised: false
+             .setAway, .unrecognised: false
         }
     }
 }
@@ -147,7 +153,7 @@ extension EventKind {
         case .configure(_, let at, _), .endRound(_, let at), .nextRound(_, let at, _, _): at
         case .endWarmup(let at): at
         case .point, .setScore, .setFirstServer, .setServeOrder, .chooseServeSide, .setRoundClock,
-             .setRoundConfirmed, .setRoundCancelled, .finish, .restore, .undo, .unrecognised: nil
+             .setRoundConfirmed, .setRoundCancelled, .setAway, .finish, .restore, .undo, .unrecognised: nil
         }
     }
 }

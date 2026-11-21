@@ -50,10 +50,10 @@ extension MatchLog {
         guard case .tournament(let tournament)? = SessionReducer.state(of: self) else {
             return append(.nextRound(after: -1), from: device)
         }
-        return append(
-            .nextRound(after: tournament.rounds.count - 1, placed: TournamentEngine.placement(of: tournament)),
-            from: device
-        )
+        // Builds before spec 008 carried where a draw put everybody only for the formats that read
+        // the scores.
+        let placed = tournament.format == .americano ? nil : TournamentEngine.placement(of: tournament)
+        return append(.nextRound(after: tournament.rounds.count - 1, placed: placed), from: device)
     }
 
     /// Mirrors `MatchStore.redrawRound(sittingOut:)`.

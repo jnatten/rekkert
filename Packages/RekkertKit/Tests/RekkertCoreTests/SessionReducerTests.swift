@@ -289,7 +289,10 @@ struct SessionReducerTests {
 
         // What the Undo button reaches for on a freshly drawn tournament.
         let draw = try! #require(log.lastUndoableEvent())
-        #expect(draw.kind == .nextRound(after: -1))
+        guard case .nextRound(after: -1, _, _, _) = draw.kind else {
+            Issue.record("the draw should be the one reached for")
+            return
+        }
         log.append(.undo(draw.id), from: device)
 
         let stranded = try! #require(tournament(log))
@@ -450,8 +453,9 @@ struct SessionReducerTests {
         #expect(try JSONCoding.decoder.decode(EventKind.self, from: JSONCoding.encoder.encode(picked)) == picked)
     }
 
-    @Test func onlyADrawThatReadsTheScoresCarriesItsRound() {
-        #expect(tournament(tournamentLog()).flatMap { TournamentEngine.placement(of: $0) } == nil, "Americano never reads one")
+    /// Americano never reads a score, but somebody leaving can race its draw (spec 008, D-5).
+    @Test func everyTournamentDrawCarriesItsRound() {
+        #expect(tournament(tournamentLog()).flatMap { TournamentEngine.placement(of: $0) } != nil)
         #expect(tournament(tournamentLog(.mexicano)).flatMap { TournamentEngine.placement(of: $0) } != nil)
     }
 

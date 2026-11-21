@@ -535,7 +535,8 @@ public enum TournamentEngine {
     ) throws -> Tournament {
         var next = tournament
         let round = switch tournament.format {
-        case .americano: try AmericanoScheduler.nextRound(for: tournament, sitOuts: sitOuts)
+        case .americano:
+            try placed?.round(for: tournament) ?? AmericanoScheduler.nextRound(for: tournament, sitOuts: sitOuts)
         case .mexicano:
             try placed?.round(for: tournament) ?? MexicanoScheduler.nextRound(for: tournament, sitOuts: sitOuts)
         case .winnerCourt:
@@ -560,17 +561,14 @@ public enum TournamentEngine {
     /// Where the next round puts everybody, for the draw to carry. A ladder is drawn from how
     /// the round before finished and Mexicano from the table; worked out again on each device,
     /// either would be read off scores that a point or a correction racing the draw may since
-    /// have changed, moving people already on their courts. `redrawing` draws the round in
-    /// play again around `sitOuts`. Nil for Americano, which never reads a score.
+    /// have changed, moving people already on their courts. Americano never reads a score, but
+    /// somebody leaving can race its draw just the same (spec 008, D-5). `redrawing` draws the
+    /// round in play again around `sitOuts`.
     public static func placement(
         of tournament: Tournament,
         sitOuts: [PlayerID]? = nil,
         redrawing: Bool = false
     ) -> RoundPlacement? {
-        switch tournament.format {
-        case .americano: return nil
-        case .mexicano, .winnerCourt: break
-        }
         let drawn = if redrawing {
             try? redrawingLastRound(of: tournament, sitOuts: sitOuts ?? [])
         } else {

@@ -271,3 +271,58 @@ struct FriendlyRulesWireTests {
         #expect(try JSONCoding.decoder.decode(EventKind.self, from: JSONCoding.encoder.encode(kind)) == kind)
     }
 }
+
+@Suite("Leaving early on the wire")
+struct LeavingEarlyWireTests {
+    @Test func aTournamentNobodyLeftHasNoAbsencesKey() throws {
+        let json = String(decoding: try JSONCoding.encoder.encode(TournamentFixture.make(.americano, players: 9, courts: 2)), as: UTF8.self)
+        #expect(!json.contains("absences"))
+    }
+
+    @Test func absencesRoundTrip() throws {
+        var tournament = TournamentFixture.make(.americano, players: 9, courts: 2)
+        tournament.absences = [
+            TournamentAbsence(player: TournamentFixture.playerID(2), from: 1, until: 3),
+            TournamentAbsence(player: TournamentFixture.playerID(4), from: 5),
+        ]
+        let decoded = try JSONCoding.decoder.decode(Tournament.self, from: JSONCoding.encoder.encode(tournament))
+        #expect(decoded == tournament)
+    }
+
+    @Test func setAwayRoundTrips() throws {
+        let p = (0 ..< 9).map { TournamentFixture.playerID($0) }
+        let placed = RoundPlacement(
+            courts: [BySide(a: [p[0], p[1]], b: [p[2], p[3]]), BySide(a: [p[5], p[6]], b: [p[7], p[8]])],
+            sitOuts: []
+        )
+        for kind in [
+            EventKind.setAway(player: p[4], isAway: true, after: 3, placed: nil),
+            EventKind.setAway(player: p[4], isAway: false, after: 6, placed: placed),
+        ] {
+            #expect(try JSONCoding.decoder.decode(EventKind.self, from: JSONCoding.encoder.encode(kind)) == kind)
+        }
+    }
+
+    @Test func anOlderBuildReadsSetAwayAsUnrecognisedAndPassesItOn() throws {
+        let event = MatchEvent(
+            id: EventID(device: DeviceID(), seq: 1), lamport: 4,
+            kind: .setAway(player: TournamentFixture.playerID(4), isAway: true, after: 2, placed: nil)
+        )
+        let json = String(decoding: try JSONCoding.encoder.encode(event), as: UTF8.self)
+        #expect(json.contains("\"setAway\""))
+        let older = Data(json.replacingOccurrences(of: "\"setAway\"", with: "\"setAwayFromTheFuture\"").utf8)
+        let read = try JSONCoding.decoder.decode(MatchEvent.self, from: older)
+        #expect(read.kind == .unrecognised)
+        #expect(!read.isUndoable)
+        let passedOn = try JSONCoding.decoder.decode(MatchEvent.self, from: JSONCoding.encoder.encode(read))
+        #expect(passedOn.unrecognisedKind == read.unrecognisedKind)
+    }
+
+    @Test func americanoDrawsCarryPlacement() throws {
+        let tournament = try TournamentFixture.drawing(TournamentFixture.make(.americano, players: 9, courts: 2), rounds: 2)
+        let sitOuts = TournamentEngine.sitOuts(for: tournament)
+        let placed = try #require(TournamentEngine.placement(of: tournament, sitOuts: sitOuts))
+        let drawn = try TournamentEngine.appendingRound(to: tournament, sitOuts: sitOuts)
+        #expect(placed == RoundPlacement(try #require(drawn.currentRound)))
+    }
+}
