@@ -69,4 +69,15 @@ struct AwayTextTests {
     @Test func theCourtsScreenSaysWhenNoRoundCanBeDrawn() {
         #expect(AwayText.shortOfPlayers == "Fewer than four players are here, so no more rounds can be drawn.")
     }
+
+    @Test func historySaysWhoMissedARound() throws {
+        #expect(AwayText.awayInRound([]) == nil)
+        #expect(AwayText.awayInRound(["Eve", "Ada"]) == "Away: Eve, Ada")
+
+        var tournament = try TournamentFixture.drawing(TournamentFixture.make(.americano, players: 9, courts: 2), rounds: 2)
+        tournament = TournamentEngine.settingAway(TournamentFixture.playerID(2), isAway: true, after: 1, placed: nil, in: tournament)
+        tournament = try TournamentFixture.drawing(tournament, rounds: 2)
+        #expect(tournament.missing(inRound: 1).isEmpty)
+        #expect(tournament.missing(inRound: 2).map(\.name) == ["P2"])
+    }
 }

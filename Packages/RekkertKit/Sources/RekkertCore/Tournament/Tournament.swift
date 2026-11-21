@@ -229,6 +229,13 @@ public struct Tournament: Codable, Sendable, Hashable {
 
     public var hasAbsences: Bool { !absences.isEmpty }
 
+    /// Who missed that round: away for it, and on none of its courts.
+    public func missing(inRound index: Int) -> [Player] {
+        guard hasAbsences, let round = round(at: index) else { return [] }
+        let onCourt = Set(round.matches.flatMap(\.allPlayers))
+        return players.filter { !isPresent($0.id, inRound: index) && !onCourt.contains($0.id) }
+    }
+
     /// The rounds that player missed, numbered from 1, as the table shows them.
     public func awayStretches(of player: PlayerID) -> [AwayStretch] {
         absences.filter { $0.player == player }.map { AwayStretch(firstMissed: $0.from + 1, backFor: $0.until.map { $0 + 1 }) }

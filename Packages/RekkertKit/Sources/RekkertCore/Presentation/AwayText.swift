@@ -33,6 +33,11 @@ public enum AwayText {
         return sentence.prefix(1).uppercased() + sentence.dropFirst()
     }
 
+    /// Under a round in History: who missed it.
+    public static func awayInRound(_ names: [String]) -> String? {
+        names.isEmpty ? nil : "Away: \(names.joined(separator: ", "))"
+    }
+
     /// The round in play has nothing on it yet, so it is drawn again.
     public static func redraws(round: Int, name: String, isAway: Bool) -> String {
         "Round \(round) hasn't started, so it's drawn again \(isAway ? "without" : "with") \(name)."

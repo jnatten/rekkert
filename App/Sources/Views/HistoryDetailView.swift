@@ -198,6 +198,11 @@ private struct RecordDetail: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                if let away = AwayText.awayInRound(tournament.missing(inRound: round.index).map(\.name)) {
+                    Text(away)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }

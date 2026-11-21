@@ -37,6 +37,11 @@ struct StandingRow: View {
                 Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if let away = AwayText.stretches(standing.away) {
+                    Text(away)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Spacer()

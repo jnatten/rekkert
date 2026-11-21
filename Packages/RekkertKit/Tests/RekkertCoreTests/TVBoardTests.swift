@@ -279,4 +279,17 @@ struct TVBoardTests {
         let value = board(match { $0.initialState() }, lastResult: finished)
         #expect(court(value) != nil)
     }
+
+    /// Spec 008, screens §5: the live table marks whoever is away, and keeps the difference.
+    @Test func liveStandingsMarkWhoIsAway() throws {
+        var tournament = try TournamentFixture.drawing(TournamentFixture.make(.americano, players: 9, courts: 2), rounds: 4)
+        tournament = TournamentEngine.settingAway(TournamentFixture.playerID(2), isAway: true, after: 3, placed: nil, in: tournament)
+        tournament = try TournamentFixture.drawing(tournament, rounds: 4)
+        let value = board(.tournament(tournament))
+        let gone = try #require(value.standings.first { $0.id == TournamentFixture.playerID(2).raw.uuidString })
+        #expect(gone.name == "P2 · left")
+        let standing = try #require(Leaderboard.standings(for: tournament).first { $0.id == TournamentFixture.playerID(2) })
+        #expect(gone.detail == (standing.differential > 0 ? "+\(standing.differential)" : "\(standing.differential)"))
+        #expect(value.standings.filter { $0.name.hasSuffix(" · left") }.count == 1)
+    }
 }

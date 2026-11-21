@@ -327,4 +327,20 @@ struct PlayerStatsTests {
         #expect(john.partners.isEmpty)
         #expect(john.clashes == [record.id])
     }
+
+    /// Spec 008, FR-015: whoever left averages only the rounds they played.
+    @Test func aPlayerWhoLeftAveragesOnlyRoundsPlayed() throws {
+        var tournament = try TournamentFixture.drawing(TournamentFixture.make(.americano, players: 9, courts: 2), rounds: 4)
+        tournament = TournamentEngine.settingAway(TournamentFixture.playerID(2), isAway: true, after: 3, placed: nil, in: tournament)
+        tournament = try TournamentFixture.drawing(tournament, rounds: 4)
+        let gone = TournamentFixture.playerID(2)
+        let played = tournament.rounds.prefix(4).filter { $0.matches.contains { $0.side(of: gone) != nil } }
+        let pointsFor = played.reduce(0) { total, round in
+            let match = round.matches.first { $0.side(of: gone) != nil }!
+            return total + match.state.points[match.side(of: gone)!]
+        }
+        let tally = try #require(stats(Filed.record(.tournament(tournament), day: 0)).named("P2")?.points[.americano])
+        #expect(tally.rounds == played.count)
+        #expect(tally.pointsFor == pointsFor)
+    }
 }

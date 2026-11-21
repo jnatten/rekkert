@@ -281,4 +281,17 @@ struct SessionResultTests {
             #expect(SessionResult.make(from: state).rounds.isEmpty)
         }
     }
+
+    /// Spec 008, FR-011: the result says who left, and when.
+    @Test func placingsSayWhoLeft() throws {
+        var tournament = try TournamentFixture.drawing(TournamentFixture.make(.americano, players: 9, courts: 2), rounds: 4)
+        tournament = TournamentEngine.settingAway(TournamentFixture.playerID(2), isAway: true, after: 3, placed: nil, in: tournament)
+        tournament = try TournamentFixture.drawing(tournament, rounds: 4)
+        let result = SessionResult.make(from: .tournament(tournament))
+        let order = Leaderboard.standings(for: tournament).map(\.player.id.raw.uuidString)
+        #expect(result.placings.map(\.id) == order)
+        for placing in result.placings {
+            #expect(placing.detail == (placing.name == "P2" ? "Left after round 4" : nil))
+        }
+    }
 }

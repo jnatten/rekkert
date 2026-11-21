@@ -277,7 +277,8 @@ public struct SessionResult: Sendable, Hashable {
                 id: standing.player.id.raw.uuidString,
                 rank: index + 1,
                 name: standing.player.name,
-                value: "\(standing.total)"
+                value: "\(standing.total)",
+                detail: AwayText.stretches(standing.away)
             )
         }
 

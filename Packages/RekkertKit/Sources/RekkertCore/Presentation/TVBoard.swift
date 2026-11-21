@@ -195,7 +195,7 @@ public struct TVBoard: Sendable, Hashable {
             SessionResult.Placing(
                 id: standing.player.id.raw.uuidString,
                 rank: index + 1,
-                name: standing.player.name,
+                name: tournament.isAway(standing.id) ? "\(standing.player.name) · left" : standing.player.name,
                 value: "\(tournament.isLadder ? standing.roundsWon : standing.total)",
                 detail: standing.differential > 0 ? "+\(standing.differential)" : "\(standing.differential)"
             )

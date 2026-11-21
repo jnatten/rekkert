@@ -307,15 +307,15 @@ per-round average on the Players page counts only the rounds they played.
 
 ### Tests for User Story 4 ⚠️ (write first; they must fail)
 
-- [ ] T039 [P] [US4] Extend `CoreTests/SessionResultTests.swift` with `placingsSayWhoLeft`: an Americano where P2 left after round 4 has `Placing.detail == "Left after round 4"` for P2, and nil for everyone else. The order is that of `Leaderboard`.
-- [ ] T040 [P] [US4] Extend `CoreTests/TVBoardTests.swift` with `liveStandingsMarkWhoIsAway`: P2's live name reads "P2 · left", and `detail` is still the difference.
-- [ ] T041 [P] [US4] Add `aPlayerWhoLeftAveragesOnlyRoundsPlayed` to `CoreTests/PlayerStatsTests.swift`, using `PlayerStatsFixtures.swift` (FR-015). With P2 away for rounds 5–8 of 8, P2's `rounds` is 4 and the average is over those 4. This passes today (R-2): it pins the behaviour, and needs no implementation.
+- [X] T039 [P] [US4] Extend `CoreTests/SessionResultTests.swift` with `placingsSayWhoLeft`: an Americano where P2 left after round 4 has `Placing.detail == "Left after round 4"` for P2, and nil for everyone else. The order is that of `Leaderboard`.
+- [X] T040 [P] [US4] Extend `CoreTests/TVBoardTests.swift` with `liveStandingsMarkWhoIsAway`: P2's live name reads "P2 · left", and `detail` is still the difference.
+- [X] T041 [P] [US4] Add `aPlayerWhoLeftAveragesOnlyRoundsPlayed` to `CoreTests/PlayerStatsTests.swift`, using `PlayerStatsFixtures.swift` (FR-015). With P2 away for rounds 5–8 of 8, P2's `rounds` is 4 and the average is over those 4. This passes today (R-2): it pins the behaviour, and needs no implementation.
 
 ### Implementation for User Story 4
 
-- [ ] T042 [US4] In `RekkertCore/Presentation/SessionResult.swift`, set `Placing.detail` for Americano and Mexicano from `AwayText` for anyone with `away`. In `RekkertCore/Presentation/TVBoard.swift`, append " · left" to the live name of anyone `isAway`. **Done when** T039 and T040 pass.
-- [ ] T043 [P] [US4] In `App/Sources/Views/StandingsView.swift`, add the away line under `StandingRow`'s subtitle (screens §3), from `AwayText`.
-- [ ] T044 [P] [US4] In `App/Sources/Views/HistoryDetailView.swift`, add "Away: Eve" under the "Sitting out: …" caption for any round someone missed (screens §4), using `present(inRound:)` on the archived tournament.
+- [X] T042 [US4] In `RekkertCore/Presentation/SessionResult.swift`, set `Placing.detail` for Americano and Mexicano from `AwayText` for anyone with `away`. In `RekkertCore/Presentation/TVBoard.swift`, append " · left" to the live name of anyone `isAway`. **Done when** T039 and T040 pass.
+- [X] T043 [P] [US4] In `App/Sources/Views/StandingsView.swift`, add the away line under `StandingRow`'s subtitle (screens §3), from `AwayText`.
+- [X] T044 [P] [US4] In `App/Sources/Views/HistoryDetailView.swift`, add "Away: Eve" under the "Sitting out: …" caption for any round someone missed (screens §4), using `present(inRound:)` on the archived tournament.
 
 **Checkpoint**: Everywhere a table is shown on the phone, it says who left, and nobody's place
 changes for it.
