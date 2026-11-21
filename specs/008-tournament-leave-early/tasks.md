@@ -367,7 +367,7 @@ for rounds 3 and 4, and no round already played changes.
   - **Who may do what**: "who has left" among the round-running actions Only score phones don't get.
 
   Run `HelpTests`, which checks README sections have help pages.
-- [ ] T053 Run `scripts/verify.sh`, then `scripts/cross-build.sh ca67ad0 b03026e` and `scripts/cross-build.sh --players 13 ca67ad0` (quickstart level 2). If cross-build differs, T011 changed something an older build sees: fix T011.
+- [X] T053 Run `scripts/verify.sh`, then `scripts/cross-build.sh ca67ad0 b03026e` and `scripts/cross-build.sh --players 13 ca67ad0` (quickstart level 2). If cross-build differs, T011 changed something an older build sees: fix T011.
 - [X] T054 Run quickstart.md level 3 on an iPhone simulator, **tapping** each step rather than using launch flags. *(Done on iOS 27 with `axe`: leaving before the first point, mid-round at 3–2, drawing on, coming back, standings and the result. It found that a round whose only court was stopped by a departure offered only Reopen, because the courts screen took any confirmed court to mean the round was closed by hand. Fixed in `TournamentView.swift`: a round is closed by hand when every court is, and the latest one offers the draw. Not checked: the largest Dynamic Type size and VoiceOver, which `axe` cannot drive; left for the real-device evening.)* Check that **Who's here…**, its rows and every confirmation open and stay open until dismissed, and do it at the largest Dynamic Type size and with VoiceOver on. Fix what is found.
 - [ ] T055 Run quickstart.md level 4 on real devices before release, and record the outcome in `specs/008-tournament-leave-early/validation.md`, as `specs/005-steady-sharing-nine-guests/validation.md` does.
 
