@@ -161,56 +161,56 @@ since eight fill two courts. Their points are exactly what they had after round 
 
 ### Tests for User Story 1 ⚠️ (write first; they must fail)
 
-- [ ] T015 [P] [US1] Write `CoreTests/TournamentAbsenceTests.swift` (`@Suite("Marking a player as gone")`), for D-3 case 1, calling `TournamentEngine.settingAway(_:isAway:after:placed:in:)`:
+- [X] T015 [P] [US1] Write `CoreTests/TournamentAbsenceTests.swift` (`@Suite("Marking a player as gone")`), for D-3 case 1, calling `TournamentEngine.settingAway(_:isAway:after:placed:in:)`:
   - `beforeTheFirstRound`: `from == 0`.
   - `afterAFinishedRound`: `from == L.index + 1`, and `L` is unchanged.
   - `afterACancelledRound`: the same.
   - `markingTwiceKeepsTheFirstStart`.
   - `aLadderAFinishedTournamentAndAStrangerAreUntouched`: the result equals the input.
-- [ ] T016 [P] [US1] Write `CoreTests/AbsenceDrawTests.swift` (`@Suite("The draw leaves out whoever has left")`):
+- [X] T016 [P] [US1] Write `CoreTests/AbsenceDrawTests.swift` (`@Suite("The draw leaves out whoever has left")`):
   - `nobodyAwayIsDrawn` (SC-002, `@Test(arguments:)` over both formats × players 5…16 × courts 1…4): play 3 rounds, mark P1 away, and draw 10 more. P1 is in no court and no `sitOuts` of any of them. Each round has `min(courts, present / 4)` courts and the rest benched.
   - `mexicanoRanksOnlyThosePresent`: after marking the table leader away, court 1 of the next round is the top four of those present.
-  - `americanoRepeatsNoMoreThanAFreshStart` (SC-005, players 6…13, 2 courts): P0 leaves after round 2. Over the rounds to the end of the rotation of the rest, the most any pair partners is no more than an Americano started with the remaining count reaches over as many rounds.
+  - `americanoRepeatsNoMoreThanAFreshStart` (SC-005, players 6…13, 2 courts): P0 leaves after round 2, and a rotation of the rest is drawn. Over every round, the most any pair of the rest partners is no more than an Americano started with the remaining count reaches over as many rounds in all. *(Measured over every round, not the rounds after the departure alone: the rest partnered in rounds 1–2 too, and the planner rightly goes on from that, so a window that leaves them out compares against a fresh start that has no history.)*
   - `pickingTheBenchIgnoresWhoIsAway`: `TournamentEngine.sitOuts(for:picked: [awayPlayer], redrawing:)` is refused (`chosen` throws).
-- [ ] T017 [P] [US1] Extend `CoreTests/TournamentTests.swift`:
+- [X] T017 [P] [US1] Extend `CoreTests/TournamentTests.swift`:
   - `nothingIsEarnedWhileAway`: P2 leaves after round 2 of 6. P2's `pointsFor`, `compensation`, `roundsPlayed` and `sitOuts` equal their values after round 2 (SC-003).
   - `theOrderIsUnchanged`: standings sort exactly as `Leaderboard.isRankedAbove` says, the player who left included.
   - `standingsCarryTheAwayStretch`: P2's `away == [AwayStretch(firstMissed: 3, backFor: nil)]`, and everyone else's is empty.
-- [ ] T018 [P] [US1] Write `SyncTests/TournamentAbsenceSyncTests.swift` (`@Suite("Leaving early across devices", .serialized) @MainActor`) with `betweenRoundsEveryDeviceAgrees` (SC-004). Use `CourtHarness` with the host's watch and one Full-access guest, and `startTournament(.americano, players: 9, courts: 2)`. Play two rounds, call `setAway(P4, isAway: true)` on the guest, and play four more rounds, alternating the drawing device. Within 5 s of each draw, all three hold equal `rounds`, `absences` and `Leaderboard.standings`.
+- [X] T018 [P] [US1] Write `SyncTests/TournamentAbsenceSyncTests.swift` (`@Suite("Leaving early across devices", .serialized) @MainActor`) with `betweenRoundsEveryDeviceAgrees` (SC-004). Use `CourtHarness` with the host's watch and one Full-access guest, and `startTournament(.americano, players: 9, courts: 2)`. Play two rounds, call `setAway(P4, isAway: true)` on the guest, and play four more rounds, alternating the drawing device. Within 5 s of each draw, all three hold equal `rounds`, `absences` and `Leaderboard.standings`.
 
 ### Implementation for User Story 1
 
-- [ ] T019 [US1] Make the schedulers read presence in `RekkertCore/Tournament/RoundScheduler.swift` (D-1):
+- [X] T019 [US1] Make the schedulers read presence in `RekkertCore/Tournament/RoundScheduler.swift` (D-1):
   - `AmericanoScheduler.nextRound` and `MexicanoScheduler.nextRound` pass `tournament.presentPlayers` to `split`, and their "not enough players" error counts it.
   - `TournamentEngine.bench` passes `base.presentPlayers` to `plannedTurn` and `mixedBench`.
   - `RoundScheduler.chosen` validates against `presentPlayers`.
   - Leave `LadderScheduler` alone. Ladders are out of scope, and can't hold absences (T020).
   - **Done when** T016's draw tests pass and the fingerprint stays green.
-- [ ] T020 [US1] Create `RekkertCore/Tournament/TournamentEngine+Away.swift`:
+- [X] T020 [US1] Create `RekkertCore/Tournament/TournamentEngine+Away.swift`:
   - **`settingAway`, case 1 only** (D-3): no round, or `L` cancelled or done. The rest is a no-op, which US2 fills in.
   - **The guards.** Ladder, finished tournament or a player not on the roster: return the input.
   - **Marking someone already away** keeps their `from`.
   - **`awayPreview`**: for now it fills `player`, `isAway`, `fromRound`, the courts and bench before and after, and `isShortOfPlayers`.
   - **Done when** T015 passes.
-- [ ] T021 [US1] Fold `setAway` in `RekkertCore/Sync/SessionReducer.swift`: `.tournament` → `TournamentEngine.settingAway(player, isAway:, after:, placed:, in:)`. Anything else is a no-op. The `configure` correction branch keeps the absences it already holds; it adopts only `name`, `players` and `config`, as today.
-- [ ] T022 [US1] Fill `Standing.away` in `RekkertCore/Tournament/Leaderboard.swift` from `absences` (1-based, in order). Change neither the sort nor any total. **Done when** T017 passes.
-- [ ] T023 [P] [US1] Create `RekkertCore/Presentation/AwayText.swift` with the US1 sentences from contracts/screens.md §1–§2:
+- [X] T021 [US1] Fold `setAway` in `RekkertCore/Sync/SessionReducer.swift`: `.tournament` → `TournamentEngine.settingAway(player, isAway:, after:, placed:, in:)`. Anything else is a no-op. The `configure` correction branch keeps the absences it already holds; it adopts only `name`, `players` and `config`, as today.
+- [X] T022 [US1] Fill `Standing.away` in `RekkertCore/Tournament/Leaderboard.swift` from `absences` (1-based, in order). Change neither the sort nor any total. **Done when** T017 passes.
+- [X] T023 [P] [US1] Create `RekkertCore/Presentation/AwayText.swift` with the US1 sentences from contracts/screens.md §1–§2:
   - the footer "Eve has left. The draw leaves her out." Write it with the name, not a pronoun: "The draw leaves Eve out." For several players: "Ada and Eve have left. The draw leaves them out.";
   - the confirmation title "Has Eve left?" and button "Eve has left";
   - the row subtitle "Left after round 4";
   - the older-phones line "1 phone on an older Rekkert will be taken off this tournament. It can join again once updated." and its plural.
 
   Write `CoreTests/AwayTextTests.swift` alongside it for these, singular and plural.
-- [ ] T024 [US1] Create `App/Sources/Views/WhosHereView.swift` (screens §2):
+- [X] T024 [US1] Create `App/Sources/Views/WhosHereView.swift` (screens §2):
   - **The sheet.** Titled "Who's here?", with Done. One row per roster player, from `TournamentView.tournament(model)`, with the subtitle from `AwayText`.
   - **In US1**: a present player's row is tappable only when `tournament.currentRound` is nil, done or cancelled. Otherwise the footer says "Players can leave once this round is over." Away rows aren't tappable until US5.
   - **The confirmation.** Tapping opens a `confirmationDialog` **attached to the `List`**, with the title, the destructive button and, on the host, the older-phones line when `olderPeersTurnedAway(ifNeeding: 4) > 0`. Confirming calls `model.store.setAway(id, isAway: true)`.
-- [ ] T025 [US1] Wire `App/Sources/Views/TournamentView.swift` (screens §1):
+- [X] T025 [US1] Wire `App/Sources/Views/TournamentView.swift` (screens §1):
   - **The button.** In `managementSection`, for `model.store.canMarkAway && !tournament.isLadder`, add **Who's here…** (`person.crop.circle.badge.xmark`), presenting `WhosHereView` from the `List` (not a `Section`).
   - **The footer.** Add the "has left" footer when anyone is away.
   - **The finish offer.** Add the sheet's presented flag to `showingFinishOffer`'s hold-back condition.
   - **The watch.** Show the watch-needs-updating notice when `model.store.pairNeedsUpdate`, with the same wording as `FriendlyMatchView`, minus "pairing rules".
-- [ ] T026 [US1] Run `SyncTests/TournamentAbsenceSyncTests.swift` (T018) and the whole `swift test --package-path Packages/RekkertKit`. Fix the fold or the gate, never the test.
+- [X] T026 [US1] Run `SyncTests/TournamentAbsenceSyncTests.swift` (T018) and the whole `swift test --package-path Packages/RekkertKit`. Fix the fold or the gate, never the test.
 
 **Checkpoint**: US1 works end to end. Marking someone between rounds takes them out of every later
 draw on every device, and older devices are kept off.
@@ -361,7 +361,7 @@ for rounds 3 and 4, and no round already played changes.
 
 **Purpose**: Help, docs, the gate, cross-build, and the screens tapped by hand.
 
-- [ ] T051 [P] Add the help item to `RekkertCore/Help/HelpCatalog.swift`, page `phone.rounds`: **Who's here…** with symbol `person.crop.circle.badge.xmark` and the text in screens §6. Add the line to Americano and Mexicano in `RekkertCore/Help/ModeHelp.swift`. Run `HelpTests`.
+- [ ] T051 [P] Add the help item to `RekkertCore/Help/HelpCatalog.swift`, page `phone.rounds`: **Who's here…** with symbol `person.crop.circle.badge.xmark` and the text in screens §6. *(Done with US1, because `HelpTests` fails on any symbol drawn without a help item. The page already held 9, its limit, so it shares the sit-out item, "Change who sits out, and who's here", with the symbol in `also`. Extend its wording when US5 brings players back.)* Add the line to Americano and Mexicano in `RekkertCore/Help/ModeHelp.swift`. Run `HelpTests`.
 - [ ] T052 [P] Update `README.md`:
   - **Americano / Mexicano**: a paragraph on leaving between rounds and mid-round, the table's label, coming back, and older builds being kept off;
   - **Who may do what**: "who has left" among the round-running actions Only score phones don't get.

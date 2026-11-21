@@ -191,8 +191,9 @@ public enum SessionReducer {
             tournament.rounds[round].clock = clock
             state = .tournament(tournament)
 
-        case .setAway:
-            break
+        case .setAway(let player, let isAway, let after, let placed):
+            guard case .tournament(let tournament) = state else { return }
+            state = .tournament(TournamentEngine.settingAway(player, isAway: isAway, after: after, placed: placed, in: tournament))
 
         case .finish:
             switch state {

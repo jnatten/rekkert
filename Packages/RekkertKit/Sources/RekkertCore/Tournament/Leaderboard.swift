@@ -9,6 +9,8 @@ public struct Standing: Sendable, Hashable, Identifiable {
     public var roundsWon = 0
     /// Ladder only: the court they finished the last round on, or are playing it on.
     public var court: Int?
+    /// The rounds they missed, once they have left (spec 008).
+    public var away: [AwayStretch] = []
 
     public var id: PlayerID { player.id }
     public var total: Int { pointsFor + compensation }
@@ -43,6 +45,9 @@ public enum Leaderboard {
                 byPlayer[id]?.sitOuts += 1
                 byPlayer[id]?.compensation += compensation
             }
+        }
+        for player in tournament.players where tournament.hasAbsences {
+            byPlayer[player.id]?.away = tournament.awayStretches(of: player.id)
         }
 
         return tournament.players

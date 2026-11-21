@@ -429,3 +429,43 @@ struct LeaderboardTests {
         #expect(benched(played) == [["P6"], ["P1"], ["P3"]])
     }
 }
+
+/// Spec 008, FR-005 and FR-011: the table keeps whoever left, with what they earned, and no more.
+@Suite("Standings with somebody gone")
+struct StandingsWithAbsenceTests {
+    private let gone = TournamentFixture.playerID(2)
+
+    private func leftAfterTwoOfSix(_ format: TournamentFormat) throws -> (before: Tournament, after: Tournament) {
+        var tournament = try TournamentFixture.drawing(TournamentFixture.make(format, players: 9, courts: 2), rounds: 2)
+        let before = tournament
+        tournament = TournamentEngine.settingAway(gone, isAway: true, after: 1, placed: nil, in: tournament)
+        tournament = try TournamentFixture.drawing(tournament, rounds: 4)
+        return (before, tournament)
+    }
+
+    @Test(arguments: [TournamentFormat.americano, .mexicano])
+    func nothingIsEarnedWhileAway(format: TournamentFormat) throws {
+        let (before, after) = try leftAfterTwoOfSix(format)
+        let then = try #require(Leaderboard.standings(for: before).first { $0.id == gone })
+        let now = try #require(Leaderboard.standings(for: after).first { $0.id == gone })
+        #expect(now.pointsFor == then.pointsFor)
+        #expect(now.pointsAgainst == then.pointsAgainst)
+        #expect(now.compensation == then.compensation)
+        #expect(now.roundsPlayed == then.roundsPlayed)
+        #expect(now.sitOuts == then.sitOuts)
+    }
+
+    @Test func theOrderIsUnchanged() throws {
+        let (_, after) = try leftAfterTwoOfSix(.americano)
+        let standings = Leaderboard.standings(for: after)
+        #expect(standings.count == 9)
+        #expect(zip(standings, standings.dropFirst()).allSatisfy { !Leaderboard.isRankedAbove($1, $0) })
+    }
+
+    @Test func standingsCarryTheAwayStretch() throws {
+        let (_, after) = try leftAfterTwoOfSix(.americano)
+        for standing in Leaderboard.standings(for: after) {
+            #expect(standing.away == (standing.id == gone ? [AwayStretch(firstMissed: 3)] : []))
+        }
+    }
+}

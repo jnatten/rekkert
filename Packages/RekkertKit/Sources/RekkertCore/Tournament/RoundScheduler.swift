@@ -338,7 +338,7 @@ enum RoundScheduler {
 
     static func chosen(_ sitOuts: [PlayerID]?, in tournament: Tournament) throws -> [PlayerID] {
         guard let sitOuts else { return [] }
-        let known = Set(tournament.players.map(\.id))
+        let known = Set(tournament.presentPlayers.map(\.id))
         guard Set(sitOuts).count == sitOuts.count, sitOuts.allSatisfy(known.contains),
               sitOuts.count <= tournament.benchSize else { throw TournamentError.invalidSitOuts }
         return sitOuts
@@ -466,7 +466,7 @@ public enum AmericanoScheduler {
     public static func nextRound(for tournament: Tournament, sitOuts: [PlayerID]? = nil) throws -> Round {
         let courts = tournament.playableCourts
         guard courts >= 1 else {
-            throw TournamentError.notEnoughPlayers(needed: 4, have: tournament.players.count)
+            throw TournamentError.notEnoughPlayers(needed: 4, have: tournament.presentPlayers.count)
         }
         let chosen = try RoundScheduler.chosen(sitOuts, in: tournament)
 
@@ -474,7 +474,7 @@ public enum AmericanoScheduler {
         let history = PairingHistory(tournament)
         var generator = SeededGenerator(tournament.id.raw, salt: UInt64(index))
         let (playing, sitting) = RoundScheduler.split(
-            players: tournament.players, seats: courts * 4, history: history,
+            players: tournament.presentPlayers, seats: courts * 4, history: history,
             order: tournament.benchOrder, chosen: chosen, generator: &generator
         )
 
@@ -489,7 +489,7 @@ public enum MexicanoScheduler {
     public static func nextRound(for tournament: Tournament, sitOuts: [PlayerID]? = nil) throws -> Round {
         let courts = tournament.playableCourts
         guard courts >= 1 else {
-            throw TournamentError.notEnoughPlayers(needed: 4, have: tournament.players.count)
+            throw TournamentError.notEnoughPlayers(needed: 4, have: tournament.presentPlayers.count)
         }
         let chosen = try RoundScheduler.chosen(sitOuts, in: tournament)
 
@@ -497,7 +497,7 @@ public enum MexicanoScheduler {
         let history = PairingHistory(tournament)
         var generator = SeededGenerator(tournament.id.raw, salt: UInt64(index))
         let (playing, sitting) = RoundScheduler.split(
-            players: tournament.players, seats: courts * 4, history: history,
+            players: tournament.presentPlayers, seats: courts * 4, history: history,
             order: tournament.benchOrder, chosen: chosen, generator: &generator
         )
 
@@ -590,14 +590,14 @@ public enum TournamentEngine {
         case .americano:
             guard base.playableCourts >= 1, let chosen = try? RoundScheduler.chosen(picked, in: base) else { return nil }
             return RoundScheduler.plannedTurn(
-                players: base.players, courts: base.playableCourts, seed: base.id.raw, round: base.rounds.count,
+                players: base.presentPlayers, courts: base.playableCourts, seed: base.id.raw, round: base.rounds.count,
                 history: PairingHistory(base), chosen: chosen
             ).first ?? []
         case .mexicano:
             guard base.playableCourts >= 1, let chosen = try? RoundScheduler.chosen(picked, in: base) else { return nil }
             var generator = SeededGenerator(base.id.raw, salt: UInt64(base.rounds.count))
             return RoundScheduler.mixedBench(
-                players: base.players, seats: base.playableCourts * 4, history: PairingHistory(base),
+                players: base.presentPlayers, seats: base.playableCourts * 4, history: PairingHistory(base),
                 chosen: chosen, generator: &generator
             )
         }

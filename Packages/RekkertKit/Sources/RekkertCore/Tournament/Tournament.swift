@@ -229,6 +229,11 @@ public struct Tournament: Codable, Sendable, Hashable {
 
     public var hasAbsences: Bool { !absences.isEmpty }
 
+    /// The rounds that player missed, numbered from 1, as the table shows them.
+    public func awayStretches(of player: PlayerID) -> [AwayStretch] {
+        absences.filter { $0.player == player }.map { AwayStretch(firstMissed: $0.from + 1, backFor: $0.until.map { $0 + 1 }) }
+    }
+
     /// An Americano or Mexicano that can't draw another round for want of four players here.
     public var isShortOfPlayers: Bool {
         !isLadder && !isFinished && presentPlayers.count < 4

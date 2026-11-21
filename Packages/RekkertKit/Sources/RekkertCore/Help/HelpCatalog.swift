@@ -684,10 +684,11 @@ public enum HelpCatalog {
                     only: "Americano and Mexicano"
                 ),
                 HelpItem(
-                    "Change who sits out",
+                    "Change who sits out, and who's here",
                     symbol: "arrow.triangle.2.circlepath",
-                    what: "Before the first point, pick who sits out and draw it again.",
-                    example: "Sam's running late. Let him sit out round 1.",
+                    also: ["person.crop.circle.badge.xmark"],
+                    what: "Pick who sits out before the first point. Who's here… takes out who went home.",
+                    example: "Sam's late for round 1. Eve goes home after round 4, her points kept.",
                     only: "Americano and Mexicano"
                 ),
                 HelpItem(

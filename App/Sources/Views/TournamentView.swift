@@ -25,6 +25,7 @@ struct CourtListView: View {
     @State private var showingEnd = false
     @State private var showingCancel = false
     @State private var choosingSitOuts = false
+    @State private var showingWhosHere = false
     @State private var showingWhistle = false
     @State private var offeredFinish: Set<FinishPrompt> = []
     @State private var finishOffer: FinishPrompt?
@@ -96,6 +97,9 @@ struct CourtListView: View {
             }
             .sheet(isPresented: $choosingSitOuts) {
                 SitOutPickerView()
+            }
+            .sheet(isPresented: $showingWhosHere) {
+                WhosHereView()
             }
             .task {
                 #if DEBUG
@@ -354,6 +358,12 @@ struct CourtListView: View {
                 }
             }
 
+            if model.store.canMarkAway {
+                Button(AwayText.button, systemImage: "person.crop.circle.badge.xmark") {
+                    showingWhosHere = true
+                }
+            }
+
             if model.store.canEndSession {
                 if !finishFirst {
                     Button(
@@ -375,12 +385,20 @@ struct CourtListView: View {
                 Text(plan.progress).textCase(nil)
             }
         } footer: {
-            if tournament.playableCourts < 1 {
-                Text("A court needs four players — this tournament has \(tournament.players.count).")
-            } else if let round, round.index < tournament.latestRoundIndex {
-                Text(tournament.isLadder
-                     ? "You are looking at an earlier round. The round after it was drawn from how it finished."
-                     : "You are looking at an earlier round. Later rounds were drawn from the standings as they were, so changing a score here will not re-pair them.")
+            VStack(alignment: .leading, spacing: 6) {
+                if tournament.playableCourts < 1 {
+                    Text("A court needs four players — this tournament has \(tournament.presentPlayers.count).")
+                } else if let round, round.index < tournament.latestRoundIndex {
+                    Text(tournament.isLadder
+                         ? "You are looking at an earlier round. The round after it was drawn from how it finished."
+                         : "You are looking at an earlier round. Later rounds were drawn from the standings as they were, so changing a score here will not re-pair them.")
+                }
+                if let away = AwayText.awayFooter(tournament.players.filter { tournament.isAway($0.id) }.map(\.name)) {
+                    Text(away)
+                }
+                if model.store.pairNeedsUpdate {
+                    Label(AwayText.watchNeedsUpdate, systemImage: "applewatch.slash")
+                }
             }
         }
     }
@@ -442,7 +460,7 @@ struct CourtListView: View {
     /// scored in the court's sheet, and the question waits for it to close.
     private var showingFinishOffer: Binding<Bool> {
         Binding(
-            get: { finishOffer != nil && editing == nil && !choosingSitOuts && !model.showingBoard },
+            get: { finishOffer != nil && editing == nil && !choosingSitOuts && !showingWhosHere && !model.showingBoard },
             set: { if !$0 { finishOffer = nil } }
         )
     }
