@@ -29,8 +29,30 @@ struct PairingHistory: Sendable {
     init() {}
 
     init(_ tournament: Tournament) {
+        var returned = Set<Int>()
         for round in tournament.rounds where !round.isCancelled {
+            welcomeBack(in: tournament, upTo: round.index, done: &returned)
             record(round.matches.map(\.teams), sitOuts: round.sitOuts)
+        }
+        welcomeBack(in: tournament, upTo: tournament.rounds.count, done: &returned)
+    }
+
+    /// Whoever is back for round `index` is put level with the least rested of those who play
+    /// that round, as if they had just sat one out: they play their first round back, then sit out
+    /// as often as everybody else, so the bench owes them neither a rest nor a game for the
+    /// rounds they missed (spec 008, D-6). Only the bench's bookkeeping: the table counts real
+    /// sit-outs.
+    private mutating func welcomeBack(in tournament: Tournament, upTo index: Int, done: inout Set<Int>) {
+        for (position, absence) in tournament.absences.enumerated() {
+            guard let until = absence.until, until <= index, done.insert(position).inserted else { continue }
+            let here = tournament.present(inRound: until)
+            let seats = min(tournament.config.courtCount, here.count / 4) * 4
+            let bench = max(0, here.count - seats)
+            let others = here.map(\.id).filter { $0 != absence.player }.map(sitOutCount).sorted()
+            if bench < others.count {
+                sitOuts[absence.player] = max(sitOutCount(absence.player), others[bench])
+            }
+            lastSatOut[absence.player] = recorded - 1
         }
     }
 

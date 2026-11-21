@@ -7,14 +7,14 @@ extension TournamentEngine {
         _ player: PlayerID, isAway: Bool, after: Int, placed: RoundPlacement?, in tournament: Tournament
     ) -> Tournament {
         guard !tournament.isLadder, !tournament.isFinished, tournament.player(player) != nil else { return tournament }
+        guard isAway else { return comingBack(player, after: after, placed: placed, in: tournament) }
         var marked = tournament
         guard let last = tournament.currentRound, !last.isCancelled, !tournament.isDone(last) else {
             // Between rounds: from the next one drawn.
-            guard isAway, !tournament.isAway(player) else { return tournament }
+            guard !tournament.isAway(player) else { return tournament }
             marked.absences.append(TournamentAbsence(player: player, from: tournament.rounds.count))
             return marked
         }
-        guard isAway else { return tournament }
 
         if tournament.canRedrawCurrentRound {
             // Nothing played yet, so nobody has walked onto it: drawn again without them, as
@@ -37,6 +37,28 @@ extension TournamentEngine {
             marked.rounds[last.index].matches[court].isConfirmed = true
         }
         return marked
+    }
+
+    /// Back from the next round, or for the round in play when nothing has been played in it.
+    /// Brought back before missing anything, the absence goes, and they are drawn as if never
+    /// marked.
+    private static func comingBack(
+        _ player: PlayerID, after: Int, placed: RoundPlacement?, in tournament: Tournament
+    ) -> Tournament {
+        guard let open = tournament.absences.lastIndex(where: { $0.player == player && $0.until == nil }) else {
+            return tournament
+        }
+        var back = tournament
+        let last = tournament.currentRound
+        let redraws = last.map { !$0.isCancelled && !tournament.isDone($0) && tournament.canRedrawCurrentRound } ?? false
+        let until = redraws ? last!.index : (last.map { $0.index + 1 } ?? 0)
+        if until <= back.absences[open].from {
+            back.absences.remove(at: open)
+        } else {
+            back.absences[open].until = until
+        }
+        guard redraws, let last else { return back }
+        return redrawingRoundInPlay(of: back, keeping: last.sitOuts, after: after, placed: placed)
     }
 
     /// The round in play drawn again for whoever is here for it, its bench kept as picks as far

@@ -229,15 +229,19 @@ The round stands as drawn, and the phone flags any away player on a court of the
 When `PairingHistory` is built, it reaches each absence's `until` round and adjusts the returner
 before that round is drawn:
 
-- their sit-out count becomes the larger of their own and the fewest held by anyone else present
-  for that round;
+- their sit-out count becomes the larger of their own and the fewest held by anyone else who
+  plays that round (the (bench + 1)-th fewest among the others present);
 - their last sit-out becomes the round just before.
 
-So every bench order (R-6) treats them as level with whoever is next due, and as having just
-rested. They play their first round back (nobody sits out twice running), then rejoin the
-rotation where the least-rested are. The adjustment is computed from the rounds alone, so every
+So every bench order (R-6) treats them as level with the least rested of those playing, and as
+having just rested. They play their first round back (nobody sits out twice running), then sit
+out as often as everybody else. The adjustment is computed from the rounds alone, so every
 device makes it the same way. It touches only the bench's bookkeeping: the table counts real
 sit-outs (R-2).
+
+*Changed during implementation*: the first rule put them level with the fewest sit-outs held by
+anyone present. With a big bench (13 players on 2 courts, five out a round) that is one of the
+most due, so they went straight back to the bench. `ReturnBenchTests` caught it.
 
 *Alternatives*:
 

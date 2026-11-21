@@ -8,6 +8,9 @@ public enum AwayText {
 
     public static func leaveTitle(_ name: String) -> String { "Has \(name) left?" }
     public static func leaveButton(_ name: String) -> String { "\(name) has left" }
+    public static func backTitle(_ name: String) -> String { "Is \(name) back?" }
+    public static func backButton(_ name: String) -> String { "\(name) is back" }
+    public static func playsAgain(_ name: String, from round: Int) -> String { "\(name) plays again from round \(round)." }
 
     /// Under the courts while anybody is away.
     public static func awayFooter(_ names: [String]) -> String? {

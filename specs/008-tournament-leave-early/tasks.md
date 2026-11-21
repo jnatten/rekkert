@@ -333,25 +333,25 @@ for rounds 3 and 4, and no round already played changes.
 
 ### Tests for User Story 5 ⚠️ (write first; they must fail)
 
-- [ ] T045 [P] [US5] Extend `CoreTests/TournamentAbsenceTests.swift` for D-4:
+- [X] T045 [P] [US5] Extend `CoreTests/TournamentAbsenceTests.swift` for D-4:
   - `backBetweenRounds`: `until == L.index + 1`.
   - `backBeforeTheRoundStarts`: `until == L.index`, and `L` is redrawn with them.
   - `aMistakeLeavesNoTrace`: mark and bring back with no round in between. `absences` is empty, and the rounds equal those of a tournament never marked: "An absence closed with `until == from` is removed rather than stored (D-4)".
   - `bringingBackSomeoneHereChangesNothing`.
-- [ ] T046 [P] [US5] Write `CoreTests/ReturnBenchTests.swift` (`@Suite("A returner is owed neither a rest nor a game")`) for D-6, over both formats with 9, 10 and 13 players on 2 courts:
+- [X] T046 [P] [US5] Write `CoreTests/ReturnBenchTests.swift` (`@Suite("A returner is owed neither a rest nor a game")`) for D-6, over both formats with 9, 10 and 13 players on 2 courts:
   - `theyPlayTheirFirstRoundBack`: P1 is away for rounds 3–5 and back for 6. P1 isn't in round 6's `sitOuts`.
   - `theyRejoinTheRotation`: over the next `ceil(present / bench)` rounds, P1's sit-outs from round 6 on end within one of the fewest among the rest.
   - `nobodyLeftMeansTodaysHistory`: `PairingHistory` of a tournament without absences equals today's (field by field).
-- [ ] T047 [P] [US5] Extend `CoreTests/AwayTextTests.swift`:
+- [X] T047 [P] [US5] Extend `CoreTests/AwayTextTests.swift`:
   - "Away rounds 3–4" and "Away rounds 3–4 · left after round 7";
   - "Is Eve back?" / "Eve is back";
   - "Round 6 hasn't started, so it's drawn again with Eve." / "Eve plays again from round 7."
 
 ### Implementation for User Story 5
 
-- [ ] T048 [US5] Add the return to `settingAway` in `RekkertCore/Tournament/TournamentEngine+Away.swift` (D-4): close the open absence at `L.index` with a redraw, or at `L.index + 1`, and remove it when `until == from`. Extend `awayPreview` for `isAway: false`, and `MatchStore.setAway`'s redraw placement in `RekkertSync/MatchStore.swift` to the return redraw. **Done when** T045 passes.
-- [ ] T049 [US5] Apply the returner's bench bookkeeping in `RekkertCore/Tournament/PairingHistory.swift` (D-6): before recording round `r`, for each absence with `until == r`, set the returner's `sitOuts` to `max(own, min over the others present for r)` and their `lastSatOut` to `recorded - 1`. **Done when** T046 passes, and the fingerprint, `PartnerTurnTests` and `MixedBenchTests` stay green.
-- [ ] T050 [US5] Add the US5 sentences to `RekkertCore/Presentation/AwayText.swift` (T047). In `App/Sources/Views/WhosHereView.swift`, make away rows tappable with the "Is … back?" dialog, and add **… is back** to the race dialog.
+- [X] T048 [US5] Add the return to `settingAway` in `RekkertCore/Tournament/TournamentEngine+Away.swift` (D-4): close the open absence at `L.index` with a redraw, or at `L.index + 1`, and remove it when `until == from`. Extend `awayPreview` for `isAway: false`, and `MatchStore.setAway`'s redraw placement in `RekkertSync/MatchStore.swift` to the return redraw. **Done when** T045 passes.
+- [X] T049 [US5] Apply the returner's bench bookkeeping in `RekkertCore/Tournament/PairingHistory.swift` (D-6): before recording round `r`, for each absence with `until == r`, set the returner's `sitOuts` to `max(own, the (bench + 1)-th fewest among the others present for r)` and their `lastSatOut` to `recorded - 1`. *(Was `min over the others`: with 13 players on 2 courts that sent the returner straight back to the bench, which `ReturnBenchTests` caught; research D-6 is updated.)* **Done when** T046 passes, and the fingerprint, `PartnerTurnTests` and `MixedBenchTests` stay green.
+- [X] T050 [US5] Add the US5 sentences to `RekkertCore/Presentation/AwayText.swift` (T047). In `App/Sources/Views/WhosHereView.swift`, make away rows tappable with the "Is … back?" dialog, and add **… is back** to the race dialog.
 
 **Checkpoint**: All five stories work on their own and together.
 

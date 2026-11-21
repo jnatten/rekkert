@@ -185,3 +185,50 @@ struct LeavingMidRoundTests {
         #expect(played.rounds[2].matches.map(\.teams) == raced.courts)
     }
 }
+
+/// Spec 008, D-4: bringing a player back.
+@Suite("Coming back")
+struct ComingBackTests {
+    private let eve = TournamentFixture.playerID(4)
+
+    private func goneAfterTwo() throws -> Tournament {
+        marking(eve, in: try TournamentFixture.drawing(TournamentFixture.make(.americano, players: 9, courts: 2), rounds: 2))
+    }
+
+    @Test func backBetweenRounds() throws {
+        var tournament = try TournamentFixture.drawing(goneAfterTwo(), rounds: 2)
+        tournament = marking(eve, away: false, in: tournament)
+        #expect(tournament.absences == [TournamentAbsence(player: eve, from: 2, until: 4)])
+        tournament = try TournamentFixture.draw(tournament)
+        let round = try #require(tournament.currentRound)
+        #expect(round.matches.flatMap(\.allPlayers).contains(eve) || round.sitOuts.contains(eve))
+    }
+
+    @Test func backBeforeTheRoundStarts() throws {
+        var tournament = try TournamentFixture.draw(TournamentFixture.drawing(goneAfterTwo(), rounds: 1))
+        let unstarted = try #require(tournament.currentRound)
+        #expect(!unstarted.matches.flatMap(\.allPlayers).contains(eve))
+        tournament = marking(eve, away: false, in: tournament)
+        #expect(tournament.absences == [TournamentAbsence(player: eve, from: 2, until: 3)])
+        let redrawn = try #require(tournament.currentRound)
+        #expect(redrawn.index == unstarted.index)
+        #expect(redrawn.matches.flatMap(\.allPlayers).contains(eve) || redrawn.sitOuts.contains(eve))
+    }
+
+    @Test func aMistakeLeavesNoTrace() throws {
+        let start = try TournamentFixture.drawing(TournamentFixture.make(.americano, players: 9, courts: 2), rounds: 2)
+        let undone = marking(eve, away: false, in: marking(eve, in: start))
+        #expect(undone.absences.isEmpty)
+        #expect(try TournamentFixture.drawing(undone, rounds: 3) == TournamentFixture.drawing(start, rounds: 3))
+
+        let unstarted = try TournamentFixture.draw(start)
+        let redrawnBack = marking(eve, away: false, in: marking(eve, in: unstarted))
+        #expect(redrawnBack.absences.isEmpty)
+        #expect(redrawnBack.rounds == unstarted.rounds, "same seed, same players, same round")
+    }
+
+    @Test func bringingBackSomeoneHereChangesNothing() throws {
+        let tournament = try TournamentFixture.drawing(TournamentFixture.make(.americano, players: 9, courts: 2), rounds: 2)
+        #expect(marking(eve, away: false, in: tournament) == tournament)
+    }
+}

@@ -80,4 +80,14 @@ struct AwayTextTests {
         #expect(tournament.missing(inRound: 1).isEmpty)
         #expect(tournament.missing(inRound: 2).map(\.name) == ["P2"])
     }
+
+    @Test func comingBackIsSaid() {
+        #expect(AwayText.stretches([AwayStretch(firstMissed: 3, backFor: 5)]) == "Away rounds 3–4")
+        #expect(AwayText.stretches([AwayStretch(firstMissed: 3, backFor: 4)]) == "Away round 3")
+        #expect(AwayText.stretches([AwayStretch(firstMissed: 3, backFor: 5), AwayStretch(firstMissed: 8)]) == "Away rounds 3–4 · left after round 7")
+        #expect(AwayText.backTitle("Eve") == "Is Eve back?")
+        #expect(AwayText.backButton("Eve") == "Eve is back")
+        #expect(AwayText.redraws(round: 6, name: "Eve", isAway: false) == "Round 6 hasn't started, so it's drawn again with Eve.")
+        #expect(AwayText.playsAgain("Eve", from: 7) == "Eve plays again from round 7.")
+    }
 }

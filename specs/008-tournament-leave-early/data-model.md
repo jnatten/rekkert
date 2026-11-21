@@ -76,7 +76,8 @@ returns a placement for Americano.
 `PairingHistory(tournament)` folds the uncancelled rounds in order, as today. Before folding
 round `r` it applies every absence whose `until == r` (D-6). For that returner:
 
-- `sitOuts` becomes `max(own, min over the others present for r)`;
+- `sitOuts` becomes `max(own, the (bench + 1)-th fewest among the others present for r)`, the
+  least rested of those who play round r;
 - `lastSatOut` becomes `recorded - 1`.
 
 A tournament with no absences builds exactly the history it does today.

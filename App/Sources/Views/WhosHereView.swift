@@ -80,7 +80,7 @@ struct WhosHereView: View {
             .contentShape(.rect)
         }
         .tint(.primary)
-        .disabled(tournament.isFinished || (isAway && raced == nil))
+        .disabled(tournament.isFinished)
     }
 
     /// The court, numbered from 1, a draw that raced their leaving put them on in the round in play.
@@ -92,15 +92,21 @@ struct WhosHereView: View {
 
     private func title(for player: PlayerID, in tournament: Tournament) -> String? {
         guard let name = tournament.player(player)?.name else { return nil }
-        return tournament.isAway(player) ? name : AwayText.leaveTitle(name)
+        guard tournament.isAway(player) else { return AwayText.leaveTitle(name) }
+        return racedCourt(of: player, in: tournament) == nil ? AwayText.backTitle(name) : name
     }
 
     @ViewBuilder
     private func actions(for player: PlayerID, in tournament: Tournament) -> some View {
         let name = tournament.player(player)?.name ?? ""
         if tournament.isAway(player) {
-            Button(AwayText.takeOff(name, round: tournament.latestRoundIndex + 1), role: .destructive) {
-                model.store.setAway(player, isAway: true)
+            if racedCourt(of: player, in: tournament) != nil {
+                Button(AwayText.takeOff(name, round: tournament.latestRoundIndex + 1), role: .destructive) {
+                    model.store.setAway(player, isAway: true)
+                }
+            }
+            Button(AwayText.backButton(name)) {
+                model.store.setAway(player, isAway: false)
             }
         } else {
             Button(AwayText.leaveButton(name), role: .destructive) {
@@ -113,8 +119,12 @@ struct WhosHereView: View {
     private func message(for player: PlayerID, in tournament: Tournament) -> String? {
         let name = tournament.player(player)?.name ?? ""
         var lines: [String] = []
-        if let preview = TournamentEngine.awayPreview(player, isAway: true, in: tournament) {
+        let leaving = !tournament.isAway(player) || racedCourt(of: player, in: tournament) != nil
+        if let preview = TournamentEngine.awayPreview(player, isAway: leaving, in: tournament) {
             lines += AwayText.inPlay(preview, name: name, roundInPlay: tournament.latestRoundIndex + 1)
+            if !preview.isAway, !preview.redrawsRoundInPlay {
+                lines.append(AwayText.playsAgain(name, from: preview.fromRound))
+            }
             if let shape = AwayText.shape(preview) { lines.append(shape) }
         }
         if !tournament.isAway(player), let older = AwayText.turnedAway(model.store.olderPeersTurnedAway(ifNeeding: 4)) {
