@@ -62,14 +62,14 @@ MVP can ship on its own.
 
 **Purpose**: A known-good baseline, and the pin that keeps it.
 
-- [ ] T001 Run `scripts/verify.sh` at `f9297b3` and note the package test counts (608 / 942 / 21 at planning time). This is the baseline the gate is compared against.
-- [ ] T002 [P] Create `CoreTests/TournamentTestSupport.swift` with internal helpers shared by every new core suite:
+- [X] T001 Run `scripts/verify.sh` at `f9297b3` and note the package test counts (608 / 942 / 21 at planning time). This is the baseline the gate is compared against.
+- [X] T002 [P] Create `CoreTests/TournamentTestSupport.swift` with internal helpers shared by every new core suite:
   - `makeTournament(format: TournamentFormat, players: Int, courts: Int, seed: Int = 1) -> Tournament`: players named "P0"… with ids from `uuid(n)`, and the tournament id from the seed (as `PartnerTurnTests` builds them);
   - `drawing(_:rounds:score:)`: appends rounds with `TournamentEngine.appendingRound`, scoring every court with a deterministic `score(round, court) -> BySide<Int>` so Mexicano's table is stable. The default is `a = target`, `b = (round * 3 + court) % target`;
   - `rendered(_ round: Round) -> String`: "P0+P1 v P2+P3 | … (P8 out)", courts in order, names sorted within a side;
   - `fingerprint(_ lines: [String]) -> UInt64`: FNV-1a 64 over the lines joined by "\n".
   Make the private helpers in `TournamentTests.swift` and `PartnerTurnTests.swift` use these only where that is a straight swap. Leave their assertions alone.
-- [ ] T003 Write `CoreTests/TournamentNoAbsenceFingerprintTests.swift` (`@Suite("A tournament nobody leaves draws as it always has")`), **green on today's code** (D-13):
+- [X] T003 Write `CoreTests/TournamentNoAbsenceFingerprintTests.swift` (`@Suite("A tournament nobody leaves draws as it always has")`), **green on today's code** (D-13):
   - `@Test(arguments:)` over `[.americano, .mexicano]` × players 5…16 × courts 1…4.
   - Draw 20 rounds. After round 3, redraw round 3 with the first player of its playing set picked to sit out, using `TournamentEngine.sitOuts(for:picked:redrawing: true)`, as `MatchStore.redrawRound` does.
   - Pin `fingerprint(rounds.map(rendered))` per combination in a `static let pinned: [String: UInt64]` keyed "americano-9-2". Generate the table once on today's code, and head the file with "Pinned before players could leave (spec 008, D-13). Fix the draw, never these values."
