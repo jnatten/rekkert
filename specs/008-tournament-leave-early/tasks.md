@@ -273,11 +273,11 @@ confirming, the next round is drawn that way.
 
 ### Tests for User Story 3 ⚠️ (write first; they must fail)
 
-- [ ] T034 [P] [US3] Extend `CoreTests/TournamentLengthTests.swift`:
+- [X] T034 [P] [US3] Extend `CoreTests/TournamentLengthTests.swift`:
   - `aFullRotationCountsOnlyThosePresent`: nine players, full rotation, and P0 leaves after round 2. `plan.partnershipsLeft` equals the pairs among the other eight not yet partnered, and `isReached` comes when they are all done.
   - `setRoundsAreUnchanged`: a `.rounds(7)` plan's `finalRound` is the same with and without a departure.
   - `belowFourNoRoundIsDrawn`: five players, two leave. `isShortOfPlayers` is true, `appendingRound` throws `notEnoughPlayers`, and a folded `nextRound` changes nothing.
-- [ ] T035 [P] [US3] Extend `CoreTests/AwayTextTests.swift` with the shape lines:
+- [X] T035 [P] [US3] Extend `CoreTests/AwayTextTests.swift` with the shape lines:
   - "From round 7: 1 court, 3 sit out each round." and its singular forms, written only when the courts or the bench change;
   - "Nobody sits out from round 7.";
   - "Fewer than four are left, so no more rounds can be drawn.";
@@ -285,9 +285,9 @@ confirming, the next round is drawn that way.
 
 ### Implementation for User Story 3
 
-- [ ] T036 [US3] In `RekkertCore/Tournament/Tournament+Length.swift`, build the full rotation's unpaired set from `presentPlayers`. Pairs partnered while someone was present still count as partnered. **Done when** T034 passes, and the existing `TournamentLengthTests` and the fingerprint stay green.
-- [ ] T037 [US3] Add the shape lines to `RekkertCore/Presentation/AwayText.swift` from `AwayPreview`'s before and after counts. **Done when** T035 passes.
-- [ ] T038 [US3] Show the shape:
+- [X] T036 [US3] In `RekkertCore/Tournament/Tournament+Length.swift`, build the full rotation's unpaired set from `presentPlayers`. Pairs partnered while someone was present still count as partnered. **Done when** T034 passes, and the existing `TournamentLengthTests` and the fingerprint stay green.
+- [X] T037 [US3] Add the shape lines to `RekkertCore/Presentation/AwayText.swift` from `AwayPreview`'s before and after counts. **Done when** T035 passes.
+- [X] T038 [US3] Show the shape:
   - in `App/Sources/Views/WhosHereView.swift`, add the shape line and the "fewer than four" line to the confirmation;
   - in `App/Sources/Views/TournamentView.swift`, when `tournament.isShortOfPlayers`, replace the Draw button with the courts-screen line and **Finish tournament**, which uses the existing finish path.
 

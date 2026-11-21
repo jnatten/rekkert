@@ -295,7 +295,8 @@ struct CourtListView: View {
         let round = tournament.round(at: index)
         let plan = tournament.plan
         let isReached = plan?.isReached == true
-        let finishFirst = isReached && model.store.canEndSession && hasResults && index == tournament.latestRoundIndex
+        let finishFirst = (isReached || tournament.isShortOfPlayers) && model.store.canEndSession && hasResults
+            && index == tournament.latestRoundIndex
 
         Section {
             if finishFirst {
@@ -320,9 +321,11 @@ struct CourtListView: View {
                     }
                 } else if let round {
                     if round.isCancelled, round.index == tournament.latestRoundIndex {
-                        Button("Draw the next round", systemImage: "arrow.right.circle.fill") {
-                            model.store.nextRound()
-                            browsing = nil
+                        if !tournament.isShortOfPlayers {
+                            Button("Draw the next round", systemImage: "arrow.right.circle.fill") {
+                                model.store.nextRound()
+                                browsing = nil
+                            }
                         }
                         Button("Restore this round", systemImage: "arrow.uturn.backward.circle") {
                             model.store.setRoundCancelled(round.index, false)
@@ -336,13 +339,15 @@ struct CourtListView: View {
                             browsing = nil
                         }
                     } else {
-                        Button(
-                            isReached ? "Play another round" : "Finish round and draw the next",
-                            systemImage: "arrow.right.circle.fill"
-                        ) {
-                            playAnotherRound(after: round)
+                        if !tournament.isShortOfPlayers {
+                            Button(
+                                isReached ? "Play another round" : "Finish round and draw the next",
+                                systemImage: "arrow.right.circle.fill"
+                            ) {
+                                playAnotherRound(after: round)
+                            }
+                            .disabled(!tournament.isDone(round))
                         }
-                        .disabled(!tournament.isDone(round))
 
                         Button("Cancel this round", systemImage: "xmark.circle", role: .destructive) {
                             showingCancel = true
@@ -386,7 +391,9 @@ struct CourtListView: View {
             }
         } footer: {
             VStack(alignment: .leading, spacing: 6) {
-                if tournament.playableCourts < 1 {
+                if tournament.isShortOfPlayers, tournament.hasAbsences {
+                    Text(AwayText.shortOfPlayers)
+                } else if tournament.playableCourts < 1 {
                     Text("A court needs four players — this tournament has \(tournament.presentPlayers.count).")
                 } else if let round, round.index < tournament.latestRoundIndex {
                     Text(tournament.isLadder

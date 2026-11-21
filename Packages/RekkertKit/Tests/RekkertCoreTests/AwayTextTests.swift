@@ -48,4 +48,25 @@ struct AwayTextTests {
         #expect(stop.fromRound == 4)
         #expect(AwayText.inPlay(stop, name: "Eve", roundInPlay: 3) == ["Court 1 stops at 6–5 and counts as it stands."])
     }
+
+    private func preview(courts: (Int, Int), bench: (Int, Int), from round: Int = 7, short: Bool = false) -> AwayPreview {
+        AwayPreview(
+            player: PlayerID(), isAway: true, fromRound: round,
+            courtsBefore: courts.0, courtsAfter: courts.1, benchBefore: bench.0, benchAfter: bench.1,
+            redrawsRoundInPlay: false, stoppingCourt: nil, isShortOfPlayers: short
+        )
+    }
+
+    @Test func theShapeOfTheEveningIsSaidOnlyWhenItChanges() {
+        #expect(AwayText.shape(preview(courts: (2, 2), bench: (2, 1))) == "From round 7: 2 courts, 1 sits out each round.")
+        #expect(AwayText.shape(preview(courts: (2, 1), bench: (0, 3))) == "From round 7: 1 court, 3 sit out each round.")
+        #expect(AwayText.shape(preview(courts: (1, 2), bench: (3, 0))) == "From round 7: 2 courts, nobody sits out.")
+        #expect(AwayText.shape(preview(courts: (2, 2), bench: (1, 0))) == "Nobody sits out from round 7.")
+        #expect(AwayText.shape(preview(courts: (2, 2), bench: (1, 1))) == nil)
+        #expect(AwayText.shape(preview(courts: (1, 0), bench: (0, 3), short: true)) == "Fewer than four are left, so no more rounds can be drawn.")
+    }
+
+    @Test func theCourtsScreenSaysWhenNoRoundCanBeDrawn() {
+        #expect(AwayText.shortOfPlayers == "Fewer than four players are here, so no more rounds can be drawn.")
+    }
 }

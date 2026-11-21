@@ -4,6 +4,7 @@ public enum AwayText {
     public static let button = "Who's here…"
     public static let sheetTitle = "Who's here?"
     public static let watchNeedsUpdate = "Update Rekkert on your Apple Watch to follow this tournament there."
+    public static let shortOfPlayers = "Fewer than four players are here, so no more rounds can be drawn."
 
     public static func leaveTitle(_ name: String) -> String { "Has \(name) left?" }
     public static func leaveButton(_ name: String) -> String { "\(name) has left" }
@@ -59,6 +60,21 @@ public enum AwayText {
             lines.append(stops(court: stopping.court, at: stopping.score))
         }
         return lines
+    }
+
+    /// What the evening becomes, said only when the courts or the bench change.
+    public static func shape(_ preview: AwayPreview) -> String? {
+        if preview.isShortOfPlayers { return "Fewer than four are left, so no more rounds can be drawn." }
+        guard preview.courtsAfter != preview.courtsBefore || preview.benchAfter != preview.benchBefore else { return nil }
+        let round = preview.fromRound
+        if preview.courtsAfter == preview.courtsBefore, preview.benchAfter == 0 { return "Nobody sits out from round \(round)." }
+        let courts = preview.courtsAfter == 1 ? "1 court" : "\(preview.courtsAfter) courts"
+        let bench = switch preview.benchAfter {
+        case 0: "nobody sits out"
+        case 1: "1 sits out each round"
+        default: "\(preview.benchAfter) sit out each round"
+        }
+        return "From round \(round): \(courts), \(bench)."
     }
 
     /// On the host, for the phones a departure would take off the tournament.

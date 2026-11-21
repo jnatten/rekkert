@@ -115,6 +115,7 @@ struct WhosHereView: View {
         var lines: [String] = []
         if let preview = TournamentEngine.awayPreview(player, isAway: true, in: tournament) {
             lines += AwayText.inPlay(preview, name: name, roundInPlay: tournament.latestRoundIndex + 1)
+            if let shape = AwayText.shape(preview) { lines.append(shape) }
         }
         if !tournament.isAway(player), let older = AwayText.turnedAway(model.store.olderPeersTurnedAway(ifNeeding: 4)) {
             lines.append(older)

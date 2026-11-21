@@ -249,3 +249,60 @@ struct TournamentLengthTests {
         #expect(further.rounds.count == 2, "there is always another round")
     }
 }
+
+/// Spec 008, FR-009 and FR-010: a length goes by whoever is still here.
+@Suite("A tournament's length once somebody has left")
+struct LengthWithAbsenceTests {
+    private func leaving(_ index: Int, from tournament: Tournament) -> Tournament {
+        TournamentEngine.settingAway(
+            TournamentFixture.playerID(index), isAway: true, after: tournament.rounds.count - 1, placed: nil, in: tournament
+        )
+    }
+
+    @Test func aFullRotationCountsOnlyThosePresent() throws {
+        var tournament = try TournamentFixture.drawing(
+            TournamentFixture.make(.americano, players: 9, courts: 2, length: .fullRotation), rounds: 2
+        )
+        tournament = leaving(0, from: tournament)
+        let here = (1 ..< 9).map { TournamentFixture.playerID($0) }
+        var partnered = Set<PairKey>()
+        for round in tournament.rounds {
+            for match in round.matches { for side in TeamSide.allCases { partnered.insert(PairKey(match.teams[side][0], match.teams[side][1])) } }
+        }
+        var open = 0
+        for (index, one) in here.enumerated() { for two in here[(index + 1)...] where !partnered.contains(PairKey(one, two)) { open += 1 } }
+        #expect(tournament.plan?.partnershipsLeft == open)
+
+        for _ in 0 ..< 20 where tournament.plan?.isReached != true {
+            tournament = try TournamentFixture.drawing(tournament, rounds: 1)
+        }
+        #expect(tournament.plan?.isReached == true, "everyone still here has partnered everyone")
+    }
+
+    @Test func setRoundsAreUnchanged() throws {
+        var tournament = try TournamentFixture.drawing(
+            TournamentFixture.make(.mexicano, players: 9, courts: 2, length: .rounds(7)), rounds: 2
+        )
+        tournament = leaving(3, from: tournament)
+        tournament = try TournamentFixture.drawing(tournament, rounds: 5)
+        #expect(tournament.plan?.finalRound == 6)
+        #expect(tournament.plan?.isReached == true)
+    }
+
+    @Test func belowFourNoRoundIsDrawn() throws {
+        var tournament = try TournamentFixture.drawing(TournamentFixture.make(.americano, players: 5, courts: 1), rounds: 1)
+        tournament = leaving(0, from: tournament)
+        #expect(!tournament.isShortOfPlayers)
+        tournament = leaving(1, from: tournament)
+        #expect(tournament.isShortOfPlayers)
+        #expect(throws: TournamentError.self) { try TournamentEngine.appendingRound(to: tournament) }
+
+        var state: SessionState? = .tournament(tournament)
+        SessionReducer.apply(.nextRound(after: 0), to: &state)
+        guard case .tournament(let after)? = state else {
+            Issue.record("still a tournament")
+            return
+        }
+        #expect(after.rounds.count == 1)
+    }
+}
