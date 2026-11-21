@@ -3009,9 +3009,20 @@ public final class MatchStore {
         return (hostDevice.flatMap { peerProtocols[$0] } ?? 1) >= Self.absenceProtocol
     }
 
+    /// Carries the round in play as this device draws it again, when leaving or coming back
+    /// redraws it: a Mexicano redraw reads the table, which a point racing it could change.
     public func setAway(_ player: PlayerID, isAway: Bool) {
         guard canMarkAway, case .tournament(let tournament)? = state else { return }
-        record(.setAway(player: player, isAway: isAway, after: tournament.rounds.count - 1, placed: nil))
+        let after = tournament.rounds.count - 1
+        var placed: RoundPlacement?
+        if tournament.canRedrawCurrentRound {
+            let folded = TournamentEngine.settingAway(player, isAway: isAway, after: after, placed: nil, in: tournament)
+            if folded.rounds.count == tournament.rounds.count, let round = folded.currentRound, !round.isCancelled,
+               round != tournament.currentRound {
+                placed = RoundPlacement(round)
+            }
+        }
+        record(.setAway(player: player, isAway: isAway, after: after, placed: placed))
     }
 
     /// On the host: the guests on now who speak older than `needed`, so would be turned away

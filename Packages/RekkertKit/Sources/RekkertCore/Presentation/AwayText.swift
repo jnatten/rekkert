@@ -4,7 +4,6 @@ public enum AwayText {
     public static let button = "Who's here…"
     public static let sheetTitle = "Who's here?"
     public static let watchNeedsUpdate = "Update Rekkert on your Apple Watch to follow this tournament there."
-    public static let onlyBetweenRounds = "Players can leave once this round is over."
 
     public static func leaveTitle(_ name: String) -> String { "Has \(name) left?" }
     public static func leaveButton(_ name: String) -> String { "\(name) has left" }
@@ -31,6 +30,35 @@ public enum AwayText {
         }
         let sentence = parts.joined(separator: " · ")
         return sentence.prefix(1).uppercased() + sentence.dropFirst()
+    }
+
+    /// The round in play has nothing on it yet, so it is drawn again.
+    public static func redraws(round: Int, name: String, isAway: Bool) -> String {
+        "Round \(round) hasn't started, so it's drawn again \(isAway ? "without" : "with") \(name)."
+    }
+
+    /// Their court stops where it stands.
+    public static func stops(court: Int, at score: BySide<Int>) -> String {
+        "Court \(court) stops at \(score.a)–\(score.b) and counts as it stands."
+    }
+
+    /// A draw that raced their leaving put them on a court of the round in play.
+    public static func stillOnCourt(court: Int, round: Int) -> String {
+        "Still drawn on court \(court) in round \(round)."
+    }
+
+    public static func takeOff(_ name: String, round: Int) -> String { "Take \(name) off round \(round)" }
+
+    /// What the confirmation says the change does now: the round in play redrawn, or a court stopped.
+    public static func inPlay(_ preview: AwayPreview, name: String, roundInPlay: Int) -> [String] {
+        var lines: [String] = []
+        if preview.redrawsRoundInPlay {
+            lines.append(redraws(round: roundInPlay, name: name, isAway: preview.isAway))
+        }
+        if let stopping = preview.stoppingCourt {
+            lines.append(stops(court: stopping.court, at: stopping.score))
+        }
+        return lines
     }
 
     /// On the host, for the phones a departure would take off the tournament.

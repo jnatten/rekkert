@@ -229,7 +229,7 @@ leaves the player out.
 
 ### Tests for User Story 2 ⚠️ (write first; they must fail)
 
-- [ ] T027 [P] [US2] Extend `CoreTests/TournamentAbsenceTests.swift` for D-3 cases 2 and 3:
+- [X] T027 [P] [US2] Extend `CoreTests/TournamentAbsenceTests.swift` for D-3 cases 2 and 3:
   - `anUnstartedRoundIsDrawnAgainWithoutThem`: `from == L.index`, `L` no longer has the player, and the result equals `redrawingLastRound` with `L.sitOuts` less the player as picks, cut to the new bench size.
   - `theCarriedRedrawIsTakenWhenItIsForThisRound`: `after == L.index` with a fitting `placed` adopts it.
   - `aStaleCarriedRedrawIsIgnored`: `after == L.index - 1` redraws here.
@@ -238,24 +238,24 @@ leaves the player out.
   - `aZeroZeroCourtStopsToo`: another court has points and the player's has none. The player's court is confirmed at 0–0.
   - `leavingFromTheBenchKeepsItsCredit`: the player was in `L.sitOuts`, `L` is unchanged, and their compensation for `L` stands.
   - `markingAgainSettlesARacedRound`: P3 is away from `L.index` but on a court of `L` (built through T011's relaxed placement). Marking P3 again redraws `L` if nothing is played, and otherwise confirms P3's court.
-- [ ] T028 [P] [US2] Extend `SyncTests/TournamentAbsenceSyncTests.swift`:
+- [X] T028 [P] [US2] Extend `SyncTests/TournamentAbsenceSyncTests.swift`:
   - `midRoundEveryDeviceAgrees` (SC-004, SC-006): score court 0 to 9–7, mark a player on it away on the guest, and finish court 1 on the watch. All three agree, court 0 reads 9–7 and confirmed everywhere, and no other court's score changes.
   - `aDepartureThatRacedADrawRepartnersNothing` (SC-006, D-5): partition the guest from the host. The host draws the next round and scores a point on it, while the guest marks a player in that round as left. Rejoin. Every device holds the host's line-up for that round, the point stands, and `awayPlayersOnCourt(inRound:)` names the player.
 
 ### Implementation for User Story 2
 
-- [ ] T029 [US2] Complete `settingAway` in `RekkertCore/Tournament/TournamentEngine+Away.swift` with D-3 cases 2 and 3, the carried-placement rule, and "marking a player who is already away re-applies cases 2 and 3 to `L` and leaves `from` alone". Fill `awayPreview`'s `redrawsRoundInPlay` and `stoppingCourt`. **Done when** T027 passes.
-- [ ] T030 [US2] In `RekkertSync/MatchStore.swift`, `setAway` computes the redraw it will record when `tournament.canRedrawCurrentRound` and the player is in the round in play. It applies `settingAway` to its own state, then records `placed: RoundPlacement(result.rounds.last!)` with `after: rounds.count - 1`.
-- [ ] T031 [P] [US2] Add the US2 sentences to `RekkertCore/Presentation/AwayText.swift`, with tests in `CoreTests/AwayTextTests.swift`:
+- [X] T029 [US2] Complete `settingAway` in `RekkertCore/Tournament/TournamentEngine+Away.swift` with D-3 cases 2 and 3, the carried-placement rule, and "marking a player who is already away re-applies cases 2 and 3 to `L` and leaves `from` alone". Fill `awayPreview`'s `redrawsRoundInPlay` and `stoppingCourt`. **Done when** T027 passes.
+- [X] T030 [US2] In `RekkertSync/MatchStore.swift`, `setAway` computes the redraw it will record when `tournament.canRedrawCurrentRound` and the player is in the round in play. It applies `settingAway` to its own state, then records `placed: RoundPlacement(result.rounds.last!)` with `after: rounds.count - 1`.
+- [X] T031 [P] [US2] Add the US2 sentences to `RekkertCore/Presentation/AwayText.swift`, with tests in `CoreTests/AwayTextTests.swift`:
   - "Round 6 hasn't started, so it's drawn again without Eve."
   - "Court 2 stops at 9–7 and counts as it stands." (including 0–0)
   - the race subtitle "Still drawn on court 2 in round 6."
   - the race choices "Take Eve off round 6" and "Eve is back".
-- [ ] T032 [US2] Update `App/Sources/Views/WhosHereView.swift`:
+- [X] T032 [US2] Update `App/Sources/Views/WhosHereView.swift`:
   - **Any time.** Every present row is tappable while the tournament isn't finished, and US1's "once this round is over" footer goes.
   - **The confirmation.** Show `redrawsRoundInPlay` and `stoppingCourt`.
   - **The race row.** For players in `awayPlayersOnCourt(inRound: latestRoundIndex)`, show the warning glyph and subtitle, and a dialog with **Take … off round N**, which calls `setAway(id, isAway: true)` again. **… is back** arrives with US5.
-- [ ] T033 [US2] Run `SyncTests/TournamentAbsenceSyncTests.swift` (T028) and the whole `swift test --package-path Packages/RekkertKit`.
+- [X] T033 [US2] Run `SyncTests/TournamentAbsenceSyncTests.swift` (T028) and the whole `swift test --package-path Packages/RekkertKit`.
 
 **Checkpoint**: US1 and US2 together cover every moment someone can leave, with Principle II
 intact.

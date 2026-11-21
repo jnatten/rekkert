@@ -7,18 +7,59 @@ extension TournamentEngine {
         _ player: PlayerID, isAway: Bool, after: Int, placed: RoundPlacement?, in tournament: Tournament
     ) -> Tournament {
         guard !tournament.isLadder, !tournament.isFinished, tournament.player(player) != nil else { return tournament }
-        let last = tournament.currentRound
-        let isSettled = last.map { $0.isCancelled || tournament.isDone($0) } ?? true
-        let next = (last?.index ?? -1) + 1
         var marked = tournament
+        guard let last = tournament.currentRound, !last.isCancelled, !tournament.isDone(last) else {
+            // Between rounds: from the next one drawn.
+            guard isAway, !tournament.isAway(player) else { return tournament }
+            marked.absences.append(TournamentAbsence(player: player, from: tournament.rounds.count))
+            return marked
+        }
+        guard isAway else { return tournament }
 
-        if isAway {
-            guard !tournament.isAway(player), isSettled else { return tournament }
-            marked.absences.append(TournamentAbsence(player: player, from: next))
-        } else {
-            return tournament
+        if tournament.canRedrawCurrentRound {
+            // Nothing played yet, so nobody has walked onto it: drawn again without them, as
+            // picking the bench by hand does.
+            let isIn = last.matches.contains { $0.side(of: player) != nil } || last.sitOuts.contains(player)
+            if !tournament.isAway(player) {
+                marked.absences.append(TournamentAbsence(player: player, from: last.index))
+            } else if !isIn {
+                return tournament
+            }
+            return redrawingRoundInPlay(of: marked, keeping: last.sitOuts, after: after, placed: placed)
+        }
+
+        // Points on the board: their court stops where it stands and counts for all four.
+        if !tournament.isAway(player) {
+            marked.absences.append(TournamentAbsence(player: player, from: last.index + 1))
+        }
+        if let court = last.matches.firstIndex(where: { $0.side(of: player) != nil }),
+           !last.matches[court].isConfirmed, !tournament.status(of: last.matches[court], in: last).isFinished {
+            marked.rounds[last.index].matches[court].isConfirmed = true
         }
         return marked
+    }
+
+    /// The round in play drawn again for whoever is here for it, its bench kept as picks as far
+    /// as the new bench allows. The marking device's own redraw is taken when it is for this
+    /// round; otherwise it is drawn here, as `MatchStore.redrawRound` draws one. With too few
+    /// left for a court it is called off, which costs nobody anything since nothing was played.
+    private static func redrawingRoundInPlay(
+        of tournament: Tournament, keeping bench: [PlayerID], after: Int, placed: RoundPlacement?
+    ) -> Tournament {
+        guard let last = tournament.currentRound else { return tournament }
+        var base = tournament
+        _ = base.rounds.popLast()
+        let picks = Array(bench.filter { tournament.isPresent($0, inRound: last.index) }.prefix(base.benchSize))
+        let carried = after == last.index ? placed : nil
+        let sitOuts = TournamentEngine.sitOuts(for: tournament, picked: picks, redrawing: true) ?? picks
+        guard var redrawn = try? redrawingLastRound(of: tournament, sitOuts: sitOuts, placed: carried) else {
+            var calledOff = tournament
+            calledOff.rounds[last.index].isCancelled = true
+            return calledOff
+        }
+        redrawn.rounds[last.index].startedAt = last.startedAt
+        redrawn.rounds[last.index].clock = last.clock
+        return redrawn
     }
 
     /// What `settingAway` would do now, for the confirmation; nil when it would do nothing.
