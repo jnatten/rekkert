@@ -68,8 +68,6 @@ extension Tournament {
         case .rounds(let count):
             finalRound = counted.dropFirst(count - 1).first?.index
         case .fullRotation:
-            // Among whoever is still here: somebody who left can't be partnered any more, and a
-            // rotation waiting on them would never be done (spec 008, FR-009).
             let ids = Set(presentPlayers.map(\.id))
             var unpaired = Set(ids.flatMap { one in ids.filter { one < $0 }.map { PairKey(one, $0) } })
             var completedBy: Int?

@@ -116,8 +116,7 @@ public struct Tournament: Codable, Sendable, Hashable {
     /// go on being drawn without it, or the rounds already played would be re-partnered.
     public var benchOrder: BenchOrder
     public var warmupStartedAt: Date?
-    /// Who has left and for which rounds, in the order they were folded (spec 008). Changed only
-    /// by `TournamentEngine.settingAway`, never by a correction.
+    /// Changed only by `TournamentEngine.settingAway`, never by a correction.
     public var absences: [TournamentAbsence]
 
     public init(
@@ -162,7 +161,7 @@ public struct Tournament: Codable, Sendable, Hashable {
         absences = try container.decodeIfPresent([TournamentAbsence].self, forKey: .absences) ?? []
     }
 
-    /// A tournament nobody left encodes exactly as it did before anyone could.
+    /// Written by hand so a tournament nobody left encodes exactly as before.
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
@@ -205,7 +204,7 @@ public struct Tournament: Codable, Sendable, Hashable {
         min(config.courtCount, presentPlayers.count / 4)
     }
 
-    /// How many sit out the next round.
+    /// How many sit out each round.
     public var benchSize: Int {
         max(0, presentPlayers.count - playableCourts * 4)
     }
@@ -214,13 +213,11 @@ public struct Tournament: Codable, Sendable, Hashable {
         !absences.contains { $0.player == player && $0.covers(round: index) }
     }
 
-    /// The roster, in its order, less whoever is away for that round.
     public func present(inRound index: Int) -> [Player] {
         guard !absences.isEmpty else { return players }
         return players.filter { isPresent($0.id, inRound: index) }
     }
 
-    /// Who the next round is drawn for.
     public var presentPlayers: [Player] { present(inRound: rounds.count) }
 
     public func isAway(_ player: PlayerID) -> Bool {
@@ -229,24 +226,20 @@ public struct Tournament: Codable, Sendable, Hashable {
 
     public var hasAbsences: Bool { !absences.isEmpty }
 
-    /// Who missed that round: away for it, and on none of its courts.
     public func missing(inRound index: Int) -> [Player] {
         guard hasAbsences, let round = round(at: index) else { return [] }
         let onCourt = Set(round.matches.flatMap(\.allPlayers))
         return players.filter { !isPresent($0.id, inRound: index) && !onCourt.contains($0.id) }
     }
 
-    /// The rounds that player missed, numbered from 1, as the table shows them.
     public func awayStretches(of player: PlayerID) -> [AwayStretch] {
         absences.filter { $0.player == player }.map { AwayStretch(firstMissed: $0.from + 1, backFor: $0.until.map { $0 + 1 }) }
     }
 
-    /// An Americano or Mexicano that can't draw another round for want of four players here.
     public var isShortOfPlayers: Bool {
         !isLadder && !isFinished && presentPlayers.count < 4
     }
 
-    /// Players away for that round whom a draw that raced their leaving put on one of its courts.
     public func awayPlayersOnCourt(inRound index: Int) -> [PlayerID] {
         guard let round = round(at: index) else { return [] }
         return round.matches.flatMap(\.allPlayers).filter { !isPresent($0, inRound: index) }

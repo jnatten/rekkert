@@ -37,11 +37,9 @@ struct PairingHistory: Sendable {
         welcomeBack(in: tournament, upTo: tournament.rounds.count, done: &returned)
     }
 
-    /// Whoever is back for round `index` is put level with the least rested of those who play
-    /// that round, as if they had just sat one out: they play their first round back, then sit out
-    /// as often as everybody else, so the bench owes them neither a rest nor a game for the
-    /// rounds they missed (spec 008, D-6). Only the bench's bookkeeping: the table counts real
-    /// sit-outs.
+    /// A returner is put level with the least rested of those who play the round they are back
+    /// for, as if they had just sat one out, so the bench owes them neither a rest nor a game
+    /// (spec 008, D-6). Only the bench's bookkeeping: the table counts real sit-outs.
     private mutating func welcomeBack(in tournament: Tournament, upTo index: Int, done: inout Set<Int>) {
         for (position, absence) in tournament.absences.enumerated() {
             guard let until = absence.until, until <= index, done.insert(position).inserted else { continue }

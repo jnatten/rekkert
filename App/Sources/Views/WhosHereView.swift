@@ -1,9 +1,6 @@
 import RekkertCore
 import SwiftUI
 
-/// Who is still at an Americano or Mexicano. Marking somebody as gone takes them out of the
-/// draw: a round nothing has been played in is drawn again without them, and a court they leave
-/// part-way through stops where it stands (spec 008).
 struct WhosHereView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -83,7 +80,6 @@ struct WhosHereView: View {
         .disabled(tournament.isFinished)
     }
 
-    /// The court, numbered from 1, a draw that raced their leaving put them on in the round in play.
     private func racedCourt(of player: PlayerID, in tournament: Tournament) -> Int? {
         guard tournament.awayPlayersOnCourt(inRound: tournament.latestRoundIndex).contains(player),
               let court = tournament.court(of: player, round: tournament.latestRoundIndex) else { return nil }

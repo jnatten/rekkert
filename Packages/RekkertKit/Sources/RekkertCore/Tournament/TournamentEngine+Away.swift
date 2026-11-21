@@ -1,8 +1,6 @@
-/// Leaving an Americano or Mexicano early, and coming back (spec 008, D-3 and D-4).
 extension TournamentEngine {
-    /// What `setAway` folds to. Decided by the round in play as it stands here, so every device
-    /// folding the same log lands on the same tournament: `after` and `placed` only say whether
-    /// the redraw the marking device carried is for this round.
+    /// Decided by the round in play as it stands here, so every device folding the same log lands
+    /// on the same tournament; `after` only says whether the carried `placed` is for this round.
     public static func settingAway(
         _ player: PlayerID, isAway: Bool, after: Int, placed: RoundPlacement?, in tournament: Tournament
     ) -> Tournament {
@@ -10,15 +8,12 @@ extension TournamentEngine {
         guard isAway else { return comingBack(player, after: after, placed: placed, in: tournament) }
         var marked = tournament
         guard let last = tournament.currentRound, !last.isCancelled, !tournament.isDone(last) else {
-            // Between rounds: from the next one drawn.
             guard !tournament.isAway(player) else { return tournament }
             marked.absences.append(TournamentAbsence(player: player, from: tournament.rounds.count))
             return marked
         }
 
         if tournament.canRedrawCurrentRound {
-            // Nothing played yet, so nobody has walked onto it: drawn again without them, as
-            // picking the bench by hand does.
             let isIn = last.matches.contains { $0.side(of: player) != nil } || last.sitOuts.contains(player)
             if !tournament.isAway(player) {
                 marked.absences.append(TournamentAbsence(player: player, from: last.index))
@@ -28,7 +23,6 @@ extension TournamentEngine {
             return redrawingRoundInPlay(of: marked, keeping: last.sitOuts, after: after, placed: placed)
         }
 
-        // Points on the board: their court stops where it stands and counts for all four.
         if !tournament.isAway(player) {
             marked.absences.append(TournamentAbsence(player: player, from: last.index + 1))
         }
@@ -39,9 +33,6 @@ extension TournamentEngine {
         return marked
     }
 
-    /// Back from the next round, or for the round in play when nothing has been played in it.
-    /// Brought back before missing anything, the absence goes, and they are drawn as if never
-    /// marked.
     private static func comingBack(
         _ player: PlayerID, after: Int, placed: RoundPlacement?, in tournament: Tournament
     ) -> Tournament {
@@ -61,10 +52,9 @@ extension TournamentEngine {
         return redrawingRoundInPlay(of: back, keeping: last.sitOuts, after: after, placed: placed)
     }
 
-    /// The round in play drawn again for whoever is here for it, its bench kept as picks as far
-    /// as the new bench allows. The marking device's own redraw is taken when it is for this
-    /// round; otherwise it is drawn here, as `MatchStore.redrawRound` draws one. With too few
-    /// left for a court it is called off, which costs nobody anything since nothing was played.
+    /// The bench is kept as picks as far as the new one allows, since a round records only its
+    /// bench, not which of it was picked by hand. With too few left for a court the round is
+    /// called off, which costs nobody anything since nothing was played in it.
     private static func redrawingRoundInPlay(
         of tournament: Tournament, keeping bench: [PlayerID], after: Int, placed: RoundPlacement?
     ) -> Tournament {
@@ -84,7 +74,6 @@ extension TournamentEngine {
         return redrawn
     }
 
-    /// What `settingAway` would do now, for the confirmation; nil when it would do nothing.
     public static func awayPreview(_ player: PlayerID, isAway: Bool, in tournament: Tournament) -> AwayPreview? {
         let after = settingAway(player, isAway: isAway, after: tournament.rounds.count - 1, placed: nil, in: tournament)
         guard after != tournament else { return nil }

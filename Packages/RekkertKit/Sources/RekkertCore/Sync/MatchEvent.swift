@@ -54,11 +54,9 @@ public enum EventKind: Codable, Sendable, Hashable {
     /// A timed ladder round's countdown, paused, resumed or snoozed. The whole clock as the
     /// device that changed it worked it out, so two snoozes at once add their minutes once.
     case setRoundClock(round: Int, clock: RoundClock)
-    /// Marks a player of an Americano or Mexicano as gone, or back (spec 008). What it does is
-    /// decided by the round in play where it folds: `after` is the last round the device that
-    /// marked it held, and `placed` that device's redraw of it, taken only when it is still the
-    /// same round. Not undoable: bringing them back is the same event the other way round.
-    /// An older build reads it as `unrecognised`, which is why older builds are kept off.
+    /// A player of an Americano or Mexicano gone, or back (spec 008). `after` is the last round the
+    /// marking device held, and `placed` its redraw of it, taken only while that is still the round
+    /// in play. Not undoable. Older builds read it as `unrecognised`, so they are kept off.
     case setAway(player: PlayerID, isAway: Bool, after: Int, placed: RoundPlacement? = nil)
     /// Ends the session. `archive` is false when it is being thrown away rather than kept,
     /// and travels with the event so the other device does not file it either.

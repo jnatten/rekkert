@@ -9,7 +9,6 @@ public struct Standing: Sendable, Hashable, Identifiable {
     public var roundsWon = 0
     /// Ladder only: the court they finished the last round on, or are playing it on.
     public var court: Int?
-    /// The rounds they missed, once they have left (spec 008).
     public var away: [AwayStretch] = []
 
     public var id: PlayerID { player.id }

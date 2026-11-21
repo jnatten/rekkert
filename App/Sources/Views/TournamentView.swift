@@ -235,7 +235,6 @@ struct CourtListView: View {
             } else if tournament.isLadder {
                 Text(ladderFooter(tournament, round))
             } else if round.matches.allSatisfy(\.isConfirmed) {
-                // Every court: one stopped where it stood when its player left is only that court.
                 Text("This round is finished. Reopen it to change a score.")
             } else if model.store.canScore {
                 Text("Tap a court to set its score, or open the scoreboard to count point by point.")
@@ -332,8 +331,7 @@ struct CourtListView: View {
                             model.store.setRoundCancelled(round.index, false)
                         }
                     } else if round.matches.allSatisfy(\.isConfirmed), !round.isCancelled {
-                        // A round closed while nobody drew the next, as when the last court left
-                        // in it stopped because its player went home.
+                        // Closed without the next drawn: its last court stopped when its player left.
                         if round.index == tournament.latestRoundIndex, !tournament.isShortOfPlayers {
                             Button(
                                 isReached ? "Play another round" : "Draw the next round",

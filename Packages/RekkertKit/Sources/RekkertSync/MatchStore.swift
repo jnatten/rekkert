@@ -2981,11 +2981,8 @@ public final class MatchStore {
     /// the match is full instead.
     @ObservationIgnored private var refusedForNeed: [LinkID: Int] = [:]
 
-    /// The paired watch speaks an older protocol than the session in play needs, so the phone
-    /// holds the session back from it and says it needs updating.
     public private(set) var pairNeedsUpdate = false
 
-    /// The oldest protocol that can follow the session in play (`SessionState.sharingProtocolNeeded`).
     private var protocolNeeded: Int { state?.sharingProtocolNeeded ?? 1 }
 
     public var canEditPairingRules: Bool {
@@ -3000,8 +2997,6 @@ public final class MatchStore {
         record(.configure(.friendly(session)))
     }
 
-    /// Who's here… on an Americano or Mexicano: for anyone who may run rounds, and on a guest
-    /// only when its host can fold it.
     public var canMarkAway: Bool {
         guard canRunRounds, case .tournament(let tournament)? = state, !tournament.isLadder,
               !tournament.isFinished else { return false }
@@ -3009,8 +3004,8 @@ public final class MatchStore {
         return (hostDevice.flatMap { peerProtocols[$0] } ?? 1) >= Self.absenceProtocol
     }
 
-    /// Carries the round in play as this device draws it again, when leaving or coming back
-    /// redraws it: a Mexicano redraw reads the table, which a point racing it could change.
+    /// Carries the redrawn round in play: a Mexicano redraw reads the table, which a racing point
+    /// could change.
     public func setAway(_ player: PlayerID, isAway: Bool) {
         guard canMarkAway, case .tournament(let tournament)? = state else { return }
         let after = tournament.rounds.count - 1
@@ -3025,8 +3020,6 @@ public final class MatchStore {
         record(.setAway(player: player, isAway: isAway, after: after, placed: placed))
     }
 
-    /// On the host: the guests on now who speak older than `needed`, so would be turned away
-    /// if the session came to need it. Nothing elsewhere.
     public func olderPeersTurnedAway(ifNeeding needed: Int) -> Int {
         guard role == .host else { return 0 }
         let owners = transport.links.filter { !refusedLinks.contains($0) }.compactMap { linkOwners[$0] ?? farEnds[$0] }

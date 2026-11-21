@@ -205,10 +205,9 @@ public enum SessionState: Codable, Sendable, Hashable {
         return false
     }
 
-    /// The oldest sharing protocol that can follow this session: a build below it would draw it
-    /// differently, so it is kept off. 3 for a friendly with pairing rules (spec 006); 4 for a
-    /// tournament anyone has left, for the rest of it, since an older build would draw every
-    /// round since again without the absence (spec 008).
+    /// The oldest sharing protocol that draws this session as this build does. A tournament anyone
+    /// has left needs 4 for the rest of it: an older build would redraw every round since without
+    /// the absence.
     public var sharingProtocolNeeded: Int {
         switch self {
         case .friendly(let session) where !session.activeRules.isEmpty: 3
