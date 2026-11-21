@@ -146,6 +146,26 @@ takes at least as many rounds as the partnerships allow — 7 for 8 players on 2
 players sitting out the draw plans the turn and finishes it in exactly that many; with
 nobody sitting out it picks one round at a time and sometimes needs one more.
 
+Somebody going home early is marked under **Who's here…** on the courts screen, and the draw
+leaves them out from then on: the courts and the bench fit whoever is still there, and the
+confirmation says so in numbers before anything changes. Between rounds that starts with the
+next one. A round nothing has been played in yet is drawn again without them, as picking the
+bench does. A court they leave part-way stops where it stands and counts as it stands for all
+four, and the round closes once the other courts finish. They keep every point and sit-out
+credit they earned, earn nothing for the rounds they miss, and stay in the table, ranked by
+total as everyone is, with "Left after round 4" beside their name there, on the result, in
+History and on the TV. A full rotation then counts the partnerships among those still there,
+and with fewer than four left the courts screen offers to finish. They can be brought back at
+any time and play again from the next round, or from the round in play if it hasn't started:
+the bench treats them as just rested, so they play their first round back and sit out as often
+as everybody else after it. Marked and brought back before missing a round, nothing changes.
+Every Americano draw now carries where it put everybody, as Mexicano's does, so marking
+somebody gone on one phone while another draws a round never re-pairs a round people have
+walked onto: the player stays on that court, and **Who's here…** offers to take them off it.
+An older Rekkert would go on drawing them, so once anybody has left a tournament, phones and
+watches on an older build are kept off it for the rest of it, as they are from a friendly with
+pairing rules.
+
 On the phone, the court list is the main tournament screen: every court with its score,
 plus standings and round history. Scores can be tapped in point by point, typed, nudged
 with a stepper, or picked from a list of results — in "total points played" mode both
@@ -436,7 +456,8 @@ each can be given a level of its own or put back on the default.
 
 *Only score* is everything on a court: points, a typed or stepped score, the serve and the
 deciding point's side, and taking those back. Not the whistle, drawing or confirming a round,
-the round clock, who sits out, the change-ends rule or a friendly's pairing rules; and an Undo
+the round clock, who sits out, who has left a tournament, the change-ends rule or a friendly's
+pairing rules; and an Undo
 that would take back one of those is not offered. *Read-only* follows the match and changes nothing. Finishing it stays
 the host's whatever the level, as before, and so does the question a tournament asks when its
 planned rounds are played. A guest's watch goes by its phone's level.

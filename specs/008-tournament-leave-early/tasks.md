@@ -361,8 +361,8 @@ for rounds 3 and 4, and no round already played changes.
 
 **Purpose**: Help, docs, the gate, cross-build, and the screens tapped by hand.
 
-- [ ] T051 [P] Add the help item to `RekkertCore/Help/HelpCatalog.swift`, page `phone.rounds`: **Who's here…** with symbol `person.crop.circle.badge.xmark` and the text in screens §6. *(Done with US1, because `HelpTests` fails on any symbol drawn without a help item. The page already held 9, its limit, so it shares the sit-out item, "Change who sits out, and who's here", with the symbol in `also`. Extend its wording when US5 brings players back.)* Add the line to Americano and Mexicano in `RekkertCore/Help/ModeHelp.swift`. Run `HelpTests`.
-- [ ] T052 [P] Update `README.md`:
+- [X] T051 [P] Add the help item to `RekkertCore/Help/HelpCatalog.swift`, page `phone.rounds`: **Who's here…** with symbol `person.crop.circle.badge.xmark` and the text in screens §6. *(Done with US1, because `HelpTests` fails on any symbol drawn without a help item. The page already held 9, its limit, so it shares the sit-out item, "Change who sits out, and who's here", with the symbol in `also`. Extend its wording when US5 brings players back.)* Add the line to Americano and Mexicano in `RekkertCore/Help/ModeHelp.swift`. Run `HelpTests`.
+- [X] T052 [P] Update `README.md`:
   - **Americano / Mexicano**: a paragraph on leaving between rounds and mid-round, the table's label, coming back, and older builds being kept off;
   - **Who may do what**: "who has left" among the round-running actions Only score phones don't get.
 

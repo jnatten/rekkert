@@ -47,7 +47,7 @@ extension GameMode {
                 pickItWhen: "For a tournament where everybody partners everybody, on one court or more.",
                 points: [
                     "Rounds play to a target, 16 unless you pick another. Sitting out still scores half.",
-                    "Each round is drawn to avoid repeat partners and repeat opponents.",
+                    "Drawn to avoid repeat partners and opponents. Leaving early? Mark it in Who's here…",
                     "Play on, set a number of rounds, or stop once everyone has partnered everyone.",
                 ]
             )
@@ -57,7 +57,7 @@ extension GameMode {
                 points: [
                     "After every round the top four go on court 1, paired 1+4 against 2+3.",
                     "Points to a target, as in Americano. Play on, or set a number of rounds.",
-                    "Someone late? Before the first point you can change who sits out.",
+                    "Someone late, or leaving early? Change who sits out, or mark them gone in Who's here…",
                 ]
             )
         }
