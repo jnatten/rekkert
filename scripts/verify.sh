@@ -32,6 +32,18 @@ for file in $(grep -rlE 'public var links: \[LinkID\]' Packages/RekkertKit/Sourc
 done
 echo "  ok: every transport with links names their radio"
 
+echo "==> Assert nothing on the watch's board animates"
+# The app draws an animation frame by frame, and a watch that stops drawing part way through
+# one is left showing the in-between frame: a number that is a blur, or two rounds' names on
+# top of each other (bug shared-guest-half-board). No simulator is booted here, so this only
+# catches one coming back without its `compact`; scripts/board-at-rest.sh looks at the screen.
+if hits=$(grep -nE '\.(animation|contentTransition|transition)\(' Shared/ScoreButton.swift Shared/ScoreboardView.swift | grep -v 'compact'); then
+  echo "$hits"
+  echo "FAIL: on the watch's board that has to be off — say so with compact, and run scripts/board-at-rest.sh"
+  exit 1
+fi
+echo "  ok: every animation on the board is off for the watch"
+
 echo "==> Package tests (macOS, no simulator)"
 scripts/package-tests.sh
 

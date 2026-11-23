@@ -66,7 +66,12 @@ struct ScoreButton: View {
                     .minimumScaleFactor(0.4)
                     .lineLimit(1)
                     .foregroundStyle(.white)
-                    .contentTransition(.numericText())
+                    // Never on the wrist: the roll is drawn frame by frame, and a watch that stops
+                    // drawing part way through it is left showing a blur for a number. On the
+                    // number alone, or a round change would fade one round's names through the
+                    // next's.
+                    .contentTransition(compact ? .identity : .numericText())
+                    .animation(compact ? nil : .snappy, value: value)
 
                 serveSlot(showing: side == nearTeam)
             }
@@ -96,6 +101,5 @@ struct ScoreButton: View {
                     ? "\(teamName), \(value), \(servingPlayer.map { "\($0) serving" } ?? "serving")"
                     : "\(teamName), \(value)"
             )
-            .animation(.snappy, value: value)
     }
 }

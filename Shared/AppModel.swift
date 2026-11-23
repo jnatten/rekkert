@@ -742,6 +742,26 @@ final class AppModel {
                 store.tap(court: 0, team: .b)
             }
         }
+        // `-rekkert-demo-live 80` plays the tournament out by itself, a point every 80 ms and the
+        // next round drawn once one is played out, so `scripts/board-at-rest.sh` can catch the
+        // board in the middle of a change.
+        if let index = arguments.firstIndex(of: "-rekkert-demo-live"),
+           index + 1 < arguments.count, let pace = Int(arguments[index + 1]) {
+            Task { [store] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(max(pace, 20)))
+                    guard case .tournament(let tournament)? = store.state,
+                          let round = tournament.currentRound else { continue }
+                    let open = round.matches.filter { !tournament.status(of: $0, in: round).isFinished }
+                    if let match = open.randomElement() {
+                        store.tap(round: round.index, court: match.courtIndex, team: Bool.random() ? .a : .b)
+                    } else {
+                        store.setRoundConfirmed(round.index, true)
+                        store.nextRound()
+                    }
+                }
+            }
+        }
     }
     #endif
 

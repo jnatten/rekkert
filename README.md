@@ -901,6 +901,14 @@ refuses to start one.
 `.github/workflows/test.yml` runs `scripts/verify.sh` on every push, on any branch, unless
 the push only touches `docs/`, a Markdown file, the listing in `fastlane/` or the licence.
 
+Nothing on the watch's board animates. The app draws an animation frame by frame, and a
+watch that stops drawing part way through one goes on showing the in-between frame: a
+number that is a blur, or two rounds' names on top of each other. `verify.sh` checks that the
+board's two views still switch their animations off for the watch. `./scripts/board-at-rest.sh`
+looks at the screen on a simulator: an Americano plays itself (`-rekkert-demo-live 80`), the
+app's process is stopped at arbitrary moments, and a second later every half has to have its
+number. `--no-build` reuses the last build.
+
 The Live Activity shows on an iPhone simulator with a Dynamic Island once the app is sent
 to the background — `xcrun simctl launch <udid> com.apple.Preferences` does it. A screenshot
 hides the island, so record a second of video instead. A late tap timed to land after the
