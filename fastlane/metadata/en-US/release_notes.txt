@@ -1,17 +1,27 @@
-KEEP THE COURT TOGETHER BETWEEN MATCHES
+KEEP PLAYERS APART, OR TOGETHER, IN A FRIENDLY
 
-When a shared match ends, the host chooses to keep sharing for the next match or stop.
+Say who should never be partners, or who always should, to even the matches. Set it up with the players, change it during play from the match menu, and save it with a preset.
 
-Guests choose to stay for the next match or leave. When the host starts it, everyone on the share is told and follows along.
+Setup tells you how often the rules can't all be kept with the players you have, and every phone says so when a round breaks one.
 
-Start sharing before a match is on, so everyone can join while you set up.
+LEAVING AN AMERICANO OR MEXICANO EARLY
 
-Joining when no match is on waits until the host starts one, and leaving is one tap away.
+Somebody going home? Mark them under Who's here… on the courts screen. The draw leaves them out, and the courts and the bench fit whoever is still there.
 
-A share you forget stops on its own after 30 minutes.
+A round that hasn't started is drawn again without them, and a court they leave part-way stops where it stands. They keep their points and stay in the table, marked with when they left, and they can be brought back at any time.
 
-FIXES
+FAIRER ROUNDS
 
-On the Apple Watch SE (1st generation), Rekkert no longer crashes when it finds the host over Bluetooth, and it draws the same teams as the phones.
+In Americano, whenever somebody sits out, nobody partners the same player twice before everyone has partnered everyone.
 
-A workout picked up after the watch app restarts keeps recording heart rate and energy.
+Who sits out together changes from rotation to rotation, so the same people aren't benched side by side all evening.
+
+STEADIER SHARING
+
+The host no longer loses track of a guest whose phone sits quietly in a bag between points.
+
+A guest losing one of its two connections to the host no longer slows the court down.
+
+A full match tells whoever tries to join how many are already on.
+
+Phones and watches following a friendly with pairing rules, or a tournament someone has left, need this version.
