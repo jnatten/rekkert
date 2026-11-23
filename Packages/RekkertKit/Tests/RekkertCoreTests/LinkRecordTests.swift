@@ -124,6 +124,31 @@ struct LinkRecordTests {
         #expect(lines.map(\.link) == ["host A41D", "host A41D", "host A41D", "host A41D", "guest A41D", "radio"])
     }
 
+    /// Bug shared-guest-half-board: what each device was running, on a line of its own, and the
+    /// watch's last word in the header.
+    @Test func whatADeviceWasRunningComesBackAsWritten() {
+        let onThePhone = DeviceNote(app: "1.2 (82) 181886a", system: "iOS 27.2.1", model: "iPhone17,1", lowPower: false, reduceMotion: false)
+        let before = DeviceNote(app: "1.2 (79) 3c81acc", system: "watchOS 27.2", model: "Watch7,5", lowPower: false, reduceMotion: false)
+        let onTheWatch = DeviceNote(app: "1.2 (82)", system: "watchOS 27.2.1", model: "Watch7,5", lowPower: true, reduceMotion: true)
+        let entries = [
+            LinkRecordEntry(time: at(0), device: .phone, kind: .device(onThePhone)),
+            LinkRecordEntry(time: at(1), device: .watch, kind: .device(before)),
+            LinkRecordEntry(time: at(2), device: .watch, kind: .device(onTheWatch)),
+        ]
+        let text = LinkRecord(entries).export(header, now: at(60), in: calendar)
+        #expect(text.contains("device(1.2 (82) 181886a · iOS 27.2.1 · iPhone17,1 · lowPower off · reduceMotion off)"))
+        #expect(text.contains("device(1.2 (82) · watchOS 27.2.1 · Watch7,5 · lowPower on · reduceMotion on)"))
+        #expect(text.components(separatedBy: "\n").prefix(5).contains("Its watch: App 1.2 (82) · watchOS 27.2.1 · Watch7,5"))
+
+        let lines = LinkRecord.parse(text, in: calendar)
+        #expect(lines.map(\.kind) == entries.map(\.kind))
+        #expect(lines.map(\.link) == ["radio", "radio", "radio"])
+        #expect(lines.allSatisfy { $0.detail == nil && $0.leg == nil })
+
+        #expect(!LinkRecord([entries[0]]).export(header, now: at(60), in: calendar).contains("Its watch:"))
+        #expect(LinkEvent(text: "device(1.2 (82) · watchOS 27.2.1 · Watch7,5 · lowPower perhaps · reduceMotion on)") == nil)
+    }
+
     /// Spec 005, FR-001: where FR-010 or FR-010a times a point from somewhere other than the tap.
     @Test func linksAndHopsComeBackAsWritten() {
         let entries = [

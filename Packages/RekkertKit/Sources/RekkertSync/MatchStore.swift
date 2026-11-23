@@ -170,6 +170,8 @@ public final class MatchStore {
     @ObservationIgnored public var recorder: (any LinkRecording)?
     /// This device's battery level as the app reads it, for the record (spec 005, D-12).
     @ObservationIgnored public var batteryLevel: (() -> Double?)?
+    /// What this device is running as the app reads it, for the record.
+    @ObservationIgnored public var deviceNote: (() -> DeviceNote?)?
     /// The device on the far end of each link, as its first hello named it.
     @ObservationIgnored private var farEnds: [LinkID: DeviceID] = [:]
     /// This device's own events that came back to it over a link.
@@ -1395,6 +1397,7 @@ public final class MatchStore {
         while !Task.isCancelled {
             await sleep(participantTick)
             recorder?.offer(batteryLevel: batteryLevel?())
+            recorder?.offer(device: deviceNote?())
             guard role == .host else {
                 recordedOutOfReach = []
                 heardStates = []

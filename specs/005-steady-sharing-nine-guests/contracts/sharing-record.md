@@ -7,7 +7,7 @@
 - **The export format keeps its columns.** The radio is added to the link column, and the drop
   detail inside the kind, so `LinkRecord.parse` keeps reading older exports unchanged.
 - **Nothing new names a player, host, score or code** (Principle V). A delay is a number of
-  seconds; a battery reading is a percentage.
+  seconds; a battery reading is a percentage; a device row names a build, a system and a model.
 - **Delay entries are written in every build** (FR-001), not only debug builds.
 
 ## Row additions
@@ -22,6 +22,7 @@
 | A point tapped on a watch following its phone, on every other phone: also how long after that phone had it (FR-010) | `; link <seconds>s` or `; link unknown` after the delay | `pointArrived(0.412s; link 0.101s)` |
 | On a watch following its phone: also how long after that phone had the point (FR-010a) | `; hop <seconds>s` or `; hop unknown` after the delay | `pointArrived(0.700s; hop 0.290s)` |
 | A battery reading | `battery(<percent>%)`, on the `radio` link | `battery(83%)` |
+| What the device was running: at launch, once in each day, and whenever it changes (bug `shared-guest-half-board`) | `device(<version (build) commit> · <system> · <model> · lowPower on/off · reduceMotion on/off)`, on the `radio` link. The header gains `Its watch: App … · <system> · <model>` from the watch's last one | `device(1.2 (82) 181886a · watchOS 27.2.1 · Watch7,5 · lowPower off · reduceMotion off)` |
 | Reach on the host, with the radios up | Both radios up gives `bt+wifi` | `guest 255B bt+wifi  outOfReach` |
 
 ## The summary (FR-003, D-4)

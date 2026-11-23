@@ -13,4 +13,11 @@ struct CommitLabel: View {
 
     static let commit = (Bundle.main.object(forInfoDictionaryKey: "RekkertCommit") as? String)
         .flatMap { $0.isEmpty ? nil : $0 }
+
+    /// `1.2 (82) 181886a`: version, build and commit, as the sharing record writes them.
+    static let build = [
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?",
+        "(\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"))",
+        commit ?? "",
+    ].joined(separator: " ").trimmingCharacters(in: .whitespaces)
 }

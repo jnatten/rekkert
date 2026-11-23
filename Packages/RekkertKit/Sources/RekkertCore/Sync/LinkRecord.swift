@@ -18,10 +18,49 @@ public enum LinkRadio: String, Codable, Sendable, Hashable, Comparable {
     }
 }
 
+/// What a device was running and how it was set, for the sharing record: enough to tell one
+/// evening's watch from another's, and nothing that says whose it is.
+public struct DeviceNote: Codable, Sendable, Hashable {
+    /// `1.2 (82) 181886a`: version, build and commit.
+    public var app: String
+    /// `watchOS 27.2.1`
+    public var system: String
+    /// `Watch7,5`
+    public var model: String
+    public var lowPower: Bool
+    public var reduceMotion: Bool
+
+    public init(app: String, system: String, model: String, lowPower: Bool, reduceMotion: Bool) {
+        self.app = app
+        self.system = system
+        self.model = model
+        self.lowPower = lowPower
+        self.reduceMotion = reduceMotion
+    }
+
+    private static let separator = " · "
+
+    /// As an export reads it: `1.2 (82) 181886a · watchOS 27.2.1 · Watch7,5 · lowPower off · reduceMotion off`.
+    public var text: String {
+        [app, system, model, "lowPower \(lowPower ? "on" : "off")", "reduceMotion \(reduceMotion ? "on" : "off")"]
+            .joined(separator: Self.separator)
+    }
+
+    public init?(text: String) {
+        let parts = text.components(separatedBy: Self.separator)
+        let switches: [String: Bool] = ["on": true, "off": false]
+        guard parts.count == 5,
+              parts[3].hasPrefix("lowPower "), let lowPower = switches[String(parts[3].dropFirst("lowPower ".count))],
+              parts[4].hasPrefix("reduceMotion "), let reduceMotion = switches[String(parts[4].dropFirst("reduceMotion ".count))]
+        else { return nil }
+        self.init(app: parts[0], system: parts[1], model: parts[2], lowPower: lowPower, reduceMotion: reduceMotion)
+    }
+}
+
 /// Something that happened to one of a device's links, for the sharing record.
 ///
 /// Nothing in it can carry a player's name, a score or the code: the kinds are fixed, and
-/// what goes with them is an id, a count or a time.
+/// what goes with them is an id, a count or a time, or what the device itself was running.
 public struct LinkRecordEntry: Codable, Sendable, Hashable, Identifiable {
     public enum Device: String, Codable, Sendable, Hashable {
         case phone, watch
@@ -124,6 +163,9 @@ public enum LinkEvent: Codable, Sendable, Hashable {
     case pointArrived(latency: TimeInterval?)
     /// The device's battery, 0 to 1.
     case battery(level: Double)
+    /// What the device was running, so a fault seen on one watch can be set against its build,
+    /// its system and how it was set (bug shared-guest-half-board).
+    case device(DeviceNote)
     case endOfMatchAsked
     case endOfMatchAnswered(BetweenMatchesAnswer.Choice)
     case endOfMatchUnanswered
@@ -159,6 +201,7 @@ public enum LinkEvent: Codable, Sendable, Hashable {
         case .pointArrived(let latency?): "pointArrived(\(String(format: "%.3f", latency))s)"
         case .pointArrived(nil): "pointArrived(unknown)"
         case .battery(let level): "battery(\(Int((level * 100).rounded()))%)"
+        case .device(let note): "device(\(note.text))"
         case .endOfMatchAsked: "endOfMatchAsked"
         case .endOfMatchAnswered(let choice): "endOfMatchAnswered(\(choice.rawValue))"
         case .endOfMatchUnanswered: "endOfMatchUnanswered"
@@ -190,6 +233,8 @@ public enum LinkEvent: Codable, Sendable, Hashable {
             self = .pointArrived(latency: latency)
         case ("battery", let argument?): guard let percent = Double(argument.dropLast()) else { return nil }
             self = .battery(level: percent / 100)
+        case ("device", let argument?): guard let note = DeviceNote(text: argument) else { return nil }
+            self = .device(note)
         case ("endOfMatchAnswered", let argument?): guard let choice = BetweenMatchesAnswer.Choice(rawValue: argument) else { return nil }
             self = .endOfMatchAnswered(choice)
         case ("newMatchAnswered", let argument?): guard let choice = BetweenMatchesAnswer.Choice(rawValue: argument) else { return nil }
@@ -291,6 +336,15 @@ public struct LinkRecord: Sendable, Hashable {
                 .joined(separator: " · "),
             "Covers \(Self.day(of: oldest, in: calendar)) to \(Self.day(of: now, in: calendar))",
         ]
+        // The phone's own line above is as it is now. The watch's is as it last said, which is
+        // all the phone knows of it.
+        let watchNote = entries.reversed().lazy.compactMap { entry -> DeviceNote? in
+            guard entry.device == .watch, case .device(let note) = entry.kind else { return nil }
+            return note
+        }.first
+        if let watchNote {
+            lines.insert("Its watch: App \(watchNote.app) · \(watchNote.system) · \(watchNote.model)", at: 3)
+        }
         if let upTo = header.watchUpTo {
             let parts = calendar.dateComponents([.hour, .minute], from: upTo)
             lines.append(String(format: "Watch entries up to %02d:%02d (not in touch since)", parts.hour ?? 0, parts.minute ?? 0))

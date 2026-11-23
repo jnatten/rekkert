@@ -91,6 +91,7 @@ final class AppModel {
         UIDevice.current.isBatteryMonitoringEnabled = true
         store.batteryLevel = { Double(UIDevice.current.batteryLevel) }
         #endif
+        store.deviceNote = { AppModel.deviceNote }
         self.store = store
         let workout = WorkoutController()
         self.workout = workout
@@ -153,9 +154,38 @@ final class AppModel {
         #endif
     }
 
+    /// What this device is running and how it is set, for the sharing record.
+    private static var deviceNote: DeviceNote {
+        #if os(watchOS)
+        let device = WKInterfaceDevice.current()
+        let reduceMotion = WKAccessibilityIsReduceMotionEnabled()
+        #else
+        let device = UIDevice.current
+        let reduceMotion = UIAccessibility.isReduceMotionEnabled
+        #endif
+        return DeviceNote(
+            app: CommitLabel.build,
+            system: "\(device.systemName) \(device.systemVersion)",
+            model: hardwareModel,
+            lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled,
+            reduceMotion: reduceMotion
+        )
+    }
+
+    /// `Watch7,5`, or the one a simulator is standing in for.
+    private static let hardwareModel: String = {
+        if let simulated = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] { return simulated }
+        var system = utsname()
+        uname(&system)
+        return withUnsafeBytes(of: &system.machine) { bytes in
+            String(decoding: bytes.prefix { $0 != 0 }, as: UTF8.self)
+        }
+    }()
+
     func start() {
         guard runTask == nil else { return }
         recorder.note(.launched(AppModel.launchedAs))
+        recorder.offer(device: AppModel.deviceNote)
         runTask = Task { [store] in await store.run() }
         // A workout is between this device and the one in the same pocket. `MatchStore`
         // carries the messages and holds no opinion about them; the controller has the

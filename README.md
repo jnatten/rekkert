@@ -868,7 +868,10 @@ record notes it as `link`. A watch notes how long after its phone had each point
 `hop`, and the summary gives those hops apart from the shared link's delays. A clock set by hand, or a point from a 1.1 device that says
 nothing of its clock, reads `unknown`. Each link entry names its radio, `bt` or `wifi`, and a
 Wi-Fi drop says why in one short code, such as `ETIMEDOUT`, never the error's own text. The
-battery level is noted when sharing starts and stops, and every ten minutes otherwise.
+battery level is noted when sharing starts and stops, and every ten minutes otherwise. Each
+device also notes what it is running, as `device(…)`: its build, system and model, and whether
+Low Power Mode and Reduce Motion are on. That goes in at launch, once in each day, and whenever
+one of them changes, and the export's header repeats the watch's last one.
 
 Each stretch of sharing, from sharing or joining to stopping or leaving, gets a summary at its
 head, on screen and in the export: the share of points within a second, the slowest, drops per

@@ -6,10 +6,12 @@ import RekkertCore
 public protocol LinkRecording: AnyObject {
     func record(_ kind: LinkEvent, link: LinkRecordEntry.Link, session: UUID?, radios: [LinkRadio]?, detail: String?, leg: LinkRecordEntry.Leg?)
     func offer(batteryLevel level: Double?)
+    func offer(device current: DeviceNote?)
 }
 
 extension LinkRecording {
     public func offer(batteryLevel level: Double?) {}
+    public func offer(device current: DeviceNote?) {}
 
     public func note(
         _ kind: LinkEvent, on link: LinkRecordEntry.Link = .radio, in session: UUID? = nil,
@@ -39,6 +41,7 @@ public final class LinkRecorder: LinkRecording {
     static let batteryInterval: TimeInterval = 600
     private var lastBatteryAt: Date?
     private var batteryDue = false
+    private var notedDevice: (note: DeviceNote, day: String)?
 
     public init(
         directory: URL, device: LinkRecordEntry.Device, now: @escaping @Sendable () -> Date = { Date() },
@@ -85,6 +88,17 @@ public final class LinkRecorder: LinkRecording {
         batteryDue = false
         lastBatteryAt = moment
         note(.battery(level: level))
+    }
+
+    /// What the device is running, handed over as often as the battery is. It goes in the record
+    /// at launch, whenever it has changed, and once in each day's file, so a day read alone
+    /// still says what wrote it.
+    public func offer(device current: DeviceNote?) {
+        guard let current else { return }
+        let day = LinkRecord.day(of: now(), in: calendar)
+        if let notedDevice, notedDevice.note == current, notedDevice.day == day { return }
+        notedDevice = (current, day)
+        note(.device(current))
     }
 
     /// Both halves of the pair, merged, once anything older than a week has gone.

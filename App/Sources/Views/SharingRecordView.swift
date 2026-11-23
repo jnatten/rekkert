@@ -65,11 +65,7 @@ struct SharingRecordView: View {
         let watchUpTo = model.store.isPairReachable ? nil : model.recorder.watchUpTo
         sections = record.sections(watchUpTo: watchUpTo)
         let header = LinkRecord.Header(
-            app: [
-                Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?",
-                "(\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"))",
-                CommitLabel.commit ?? "",
-            ].joined(separator: " ").trimmingCharacters(in: .whitespaces),
+            app: CommitLabel.build,
             phoneSystem: "iOS \(UIDevice.current.systemVersion)",
             phone: DeviceIdentity.current(),
             watch: model.store.pairDevice,
